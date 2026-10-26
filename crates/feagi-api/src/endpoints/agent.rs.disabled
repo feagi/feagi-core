@@ -97,8 +97,6 @@ fn derive_capabilities_from_visualization_capability(
     Ok(vec![RegistrationCapabilities::ReceiveNeuronVisualizations])
 }
 
-#[cfg(feature = "feagi-agent")]
-#[allow(dead_code)]
 fn parse_capability_rate_hz(
     capabilities: &HashMap<String, serde_json::Value>,
     capability_key: &str,
@@ -287,6 +285,38 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
+    // Validate requested publish rates against the runtime burst frequency before
+    // registering anything.
+    let runtime_status = state
+        .runtime_service
+        .get_status()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to read runtime status: {}", e)))?;
+    let burst_frequency_hz = runtime_status.frequency_hz;
+    if burst_frequency_hz <= 0.0 {
+        return Err(ApiError::internal(
+            "Invalid burst frequency reported by runtime service".to_string(),
+        ));
+    }
+    let motor_rate_hz = parse_capability_rate_hz(&request.capabilities, "motor")?;
+    if let Some(rate) = motor_rate_hz {
+        if rate > burst_frequency_hz {
+            return Err(ApiError::invalid_input(format!(
+                "motor rate_hz {} exceeds burst frequency {}",
+                rate, burst_frequency_hz
+            )));
+        }
+    }
+    let visualization_rate_hz = parse_capability_rate_hz(&request.capabilities, "visualization")?;
+    if let Some(rate) = visualization_rate_hz {
+        if rate > burst_frequency_hz {
+            return Err(ApiError::invalid_input(format!(
+                "visualization rate_hz {} exceeds burst frequency {}",
+                rate, burst_frequency_hz
+            )));
+        }
+    }
+
     // Extract device_registrations from capabilities
     let device_registrations_opt = request
         .capabilities
@@ -321,30 +351,43 @@ pub async fn register_agent(
         auto_create_cortical_areas_from_device_registrations(&state, &device_regs).await;
     }
 
-    // Register visualization subscription if visualization capability is present
-    if let Some(viz) = request.capabilities.get("visualization") {
-        if let Some(rate_hz) = viz.get("rate_hz").and_then(|v| v.as_f64()) {
-            if rate_hz > 0.0 {
-                match state
-                    .runtime_service
-                    .register_visualization_subscriptions(&request.agent_id, rate_hz)
-                    .await
-                {
-                    Ok(_) => {
-                        info!(
-                            "✅ [API] Registered visualization subscription for agent '{}' at {}Hz",
-                            request.agent_id, rate_hz
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "⚠️  [API] Failed to register visualization subscription for agent '{}': {}",
-                            request.agent_id, e
-                        );
-                    }
-                }
-            }
+    // Register motor subscriptions when output units are declared
+    if let Some(device_regs) = &device_registrations_opt {
+        let output_units_present = device_regs
+            .get("output_units_and_decoder_properties")
+            .and_then(|v| v.as_object())
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        if output_units_present {
+            let cortical_ids =
+                crate::common::agent_registration::derive_motor_cortical_ids_from_device_registrations(
+                    device_regs,
+                )
+                .map_err(ApiError::invalid_input)?;
+            state
+                .runtime_service
+                .register_motor_subscriptions(
+                    &request.agent_id,
+                    cortical_ids.into_iter().collect(),
+                    motor_rate_hz.unwrap_or(burst_frequency_hz),
+                )
+                .await
+                .map_err(ApiError::from)?;
         }
+    }
+
+    // Register visualization subscription if visualization capability is present
+    if request.capabilities.contains_key("visualization") {
+        let rate_hz = visualization_rate_hz.unwrap_or(burst_frequency_hz);
+        state
+            .runtime_service
+            .register_visualization_subscriptions(&request.agent_id, rate_hz)
+            .await
+            .map_err(ApiError::from)?;
+        info!(
+            "✅ [API] Registered visualization subscription for agent '{}' at {}Hz",
+            request.agent_id, rate_hz
+        );
     }
 
     // Get available endpoints from handler and build TransportConfig objects
