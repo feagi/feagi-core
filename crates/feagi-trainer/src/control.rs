@@ -178,7 +178,7 @@ pub trait RunControl {
     ///
     /// # Errors
     /// Propagates the rollout error (including [`TrainerError::Cancelled`] on cooperative stop); a
-    /// `Failed` event is emitted before the error is returned.
+    /// `Cancelled` event (other errors: `Failed`) is emitted before the error is returned.
     fn execute(&mut self, events: &mut dyn RunEventSink) -> Result<RunSummary, TrainerError>;
 }
 
@@ -256,6 +256,16 @@ where
                     self.status = RunStatus::Completed;
                 }
                 Ok(summary)
+            }
+            Err(TrainerError::Cancelled(message)) => {
+                events.emit(RunEvent::new(
+                    self.run_id.clone(),
+                    RunEventKind::Cancelled {
+                        message: message.clone(),
+                    },
+                ));
+                self.status = RunStatus::Cancelled;
+                Err(TrainerError::Cancelled(message))
             }
             Err(error) => {
                 events.emit(RunEvent::new(
@@ -487,6 +497,10 @@ mod tests {
 
         let error = control.execute(&mut sink).unwrap_err();
         assert!(matches!(error, TrainerError::Cancelled(_)));
-        assert_eq!(control.status(), RunStatus::Failed);
+        assert_eq!(control.status(), RunStatus::Cancelled);
+        assert!(matches!(
+            event_kinds(&sink).as_slice(),
+            [RunEventKind::Running, RunEventKind::Cancelled { .. }]
+        ));
     }
 }

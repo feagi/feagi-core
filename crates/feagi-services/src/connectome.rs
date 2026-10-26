@@ -590,6 +590,62 @@ mod tests {
         assert_eq!(from_serialized.burst_count, snapshot.burst_count);
     }
 
+    /// A learned fractional weight (R-STDP can leave 0.2115 under max_weight 30) must
+    /// survive save and load bit-for-bit in both the lite semantic edges and the full
+    /// synapse array. Weights are `f32` end to end; there is no quantization.
+    #[test]
+    fn fractional_synapse_weights_roundtrip_lite_and_full() {
+        let weights = [0.2115f32, 30.0, 0.0];
+        let reference = |z: u32| SerializableNeuronReference::Regular {
+            cortical_id: "csrc0001".to_string(),
+            x: 0,
+            y: 0,
+            z,
+            neuron_index: 0,
+        };
+        let mut snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: ahash::AHashMap::new(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: weights
+                .iter()
+                .enumerate()
+                .map(|(i, &weight)| SerializableSemanticSynapse {
+                    source: reference(i as u32),
+                    target: reference(10 + i as u32),
+                    weight,
+                    postsynaptic_potential: 25.0,
+                    synapse_type: 0,
+                    delay_bursts: 1,
+                    edge_flags: 0,
+                    eligibility_trace: 0.0,
+                })
+                .collect(),
+        };
+        let mut synapses = SerializableSynapseArray::new(3);
+        synapses.count = 3;
+        synapses.weights = weights.to_vec();
+        snapshot.synapses = synapses;
+
+        let loaded =
+            load_connectome_from_bytes(&save_connectome_to_bytes(&snapshot).unwrap()).unwrap();
+        assert_eq!(&loaded.synapses.weights[..3], &weights);
+        let lite: Vec<f32> = loaded.lite_synapses.iter().map(|s| s.weight).collect();
+        assert_eq!(lite, weights.to_vec());
+    }
+
     #[test]
     fn test_save_load_roundtrip_lite_with_memory_and_plasticity_payload() {
         let (current_genome, _) = feagi_evolutionary::migrate_genome_json_to_current(

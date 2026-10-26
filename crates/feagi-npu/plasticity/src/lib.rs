@@ -54,11 +54,13 @@ pub use episodic_scan::{
     spatial_signature_hash, window_relative_coords, ScanKernel, ScanWindow,
 };
 pub use memory_neuron_array::{
-    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronStats,
+    LtmEviction, MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
+    MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron,
 };
 pub use memory_stats_cache::{
     create_memory_stats_cache, get_area_stats, get_stats_snapshot, init_memory_area,
-    on_neuron_created, on_neuron_deleted, remove_memory_area, MemoryAreaStats, MemoryStatsCache,
+    on_creation_failed, on_neuron_created, on_neuron_deleted, on_neuron_evicted,
+    remove_memory_area, MemoryAreaStats, MemoryPoolCounters, MemoryPoolSnapshot, MemoryStatsCache,
 };
 pub use mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding, MpFrame};
 pub use neuron_id_manager::{

@@ -20,6 +20,7 @@ pub mod executor;
 pub mod executor_stream;
 pub mod metrics;
 pub mod planned_samples;
+pub mod plasticity_freeze;
 pub mod plugins;
 pub mod pole_balance;
 pub mod reach_hold;

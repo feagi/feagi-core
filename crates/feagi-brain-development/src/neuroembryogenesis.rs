@@ -1275,7 +1275,7 @@ impl Neuroembryogenesis {
         #[cfg(feature = "plasticity")]
         {
             use feagi_evolutionary::extract_memory_properties;
-            use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+            use feagi_npu_plasticity::PlasticityExecutor;
 
             let manager = self.connectome_manager.read();
             if let Some(executor) = manager.get_plasticity_executor() {
@@ -1323,12 +1323,7 @@ impl Neuroembryogenesis {
                             }
 
                             if let Ok(exec) = executor.lock() {
-                                let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                    initial_lifespan: mem_props.init_lifespan,
-                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                    longterm_threshold: mem_props.longterm_threshold,
-                                    max_reactivations: 1000,
-                                };
+                                let lifecycle_config = crate::memory_lifecycle_config(&mem_props);
 
                                 let mp_mode =
                                     match crate::memory_mp_mode(&area.properties, &mem_props) {

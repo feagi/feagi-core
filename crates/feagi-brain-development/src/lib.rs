@@ -84,7 +84,7 @@ pub use connectome_manager::{BrainRegionIoRegistry, ConnectomeConfig, Connectome
 pub use neuroembryogenesis::{DevelopmentProgress, DevelopmentStage, Neuroembryogenesis};
 
 #[cfg(feature = "plasticity")]
-pub use memory_mp_mode::memory_mp_mode;
+pub use memory_mp_mode::{memory_lifecycle_config, memory_mp_mode};
 
 // Re-export cortical type utilities (Phase 3)
 pub use cortical_type_utils::{

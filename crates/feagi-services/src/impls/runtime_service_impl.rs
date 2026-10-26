@@ -351,6 +351,11 @@ impl RuntimeService for RuntimeServiceImpl {
         }
     }
 
+    async fn get_fire_queue_counts(&self) -> ServiceResult<Vec<(u32, u32)>> {
+        let runner = self.burst_runner.read();
+        Ok(runner.get_fire_queue_counts().unwrap_or_default())
+    }
+
     async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>> {
         debug!("[NPU-LOCK] RUNTIME-SERVICE: get_fire_ledger_configs() called - this acquires NPU lock!");
         let runner = self.burst_runner.read();

@@ -345,10 +345,10 @@ mod tests {
 
         let (_genome, report) = load_genome_with_report(json).unwrap();
         assert_eq!(report.from_version.as_u32(), 2);
-        assert_eq!(report.to_version.as_u32(), 6);
+        assert_eq!(report.to_version.as_u32(), 7);
         assert_eq!(
             report.migrators_applied,
-            vec!["v2_to_v3", "v3_to_v4", "v4_to_v5", "v5_to_v6"]
+            vec!["v2_to_v3", "v3_to_v4", "v4_to_v5", "v5_to_v6", "v6_to_v7"]
         );
         // V4Validator is a placeholder today; clean report expected.
         assert!(report.is_blocking_clean());
@@ -393,7 +393,7 @@ mod tests {
 
         let (genome, report) = load_genome_with_report(json).unwrap();
         assert!(report.is_blocking_clean());
-        assert_eq!(report.to_version.as_u32(), 6);
+        assert_eq!(report.to_version.as_u32(), 7);
         let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
         assert!(migrated["brain_regions"]["root"].get("areas").is_none());
         let membership = migrated["brain_regions"]["root"]["cortical_areas"]
@@ -462,9 +462,8 @@ mod tests {
         let (genome, report) = load_genome_with_report(json).unwrap();
         assert!(report.is_blocking_clean());
         assert_eq!(report.from_version.as_u32(), 6);
-        assert_eq!(report.to_version.as_u32(), 6);
-        assert!(report.migrators_applied.is_empty());
-        assert!(report.normalizers_applied.contains(&"v6_normalizer"));
+        assert_eq!(report.to_version.as_u32(), 7);
+        assert_eq!(report.migrators_applied, vec!["v6_to_v7"]);
         let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
         assert!(migrated["brain_regions"]["root"].get("areas").is_none());
         let region = genome.brain_regions.values().next().unwrap();

@@ -407,6 +407,7 @@ where
                 preview_name,
                 predicted_class,
                 class_scores,
+                stand: None,
             },
         ));
 

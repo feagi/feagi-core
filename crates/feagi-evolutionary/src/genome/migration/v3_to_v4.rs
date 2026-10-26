@@ -160,7 +160,7 @@ fn collect_sources(area: &Value, sources: &mut BTreeMap<String, f32>) {
     }
 }
 
-fn next_driver_serial(blueprint: &Map<String, Value>) -> u32 {
+pub(crate) fn next_driver_serial(blueprint: &Map<String, Value>) -> u32 {
     let mut serial = 1u32;
     for key in blueprint.keys() {
         if let Ok(id) = CorticalID::try_from_base_64(key) {
@@ -174,7 +174,7 @@ fn next_driver_serial(blueprint: &Map<String, Value>) -> u32 {
     serial
 }
 
-fn sanitize_id(source_id: &str) -> String {
+pub(crate) fn sanitize_id(source_id: &str) -> String {
     let mut out = String::new();
     for ch in source_id.chars() {
         if ch.is_ascii_alphanumeric() || ch == '_' {
@@ -189,7 +189,7 @@ fn sanitize_id(source_id: &str) -> String {
     out
 }
 
-fn driver_area(instance_id: &str, y: i32) -> Value {
+pub(crate) fn driver_area(instance_id: &str, y: i32) -> Value {
     json!({
         "cortical_name": format!("{instance_id} driver"),
         "block_boundaries": [1, 1, 1],
@@ -209,7 +209,7 @@ fn driver_area(instance_id: &str, y: i32) -> Value {
     })
 }
 
-fn wire_source_to_driver(
+pub(crate) fn wire_source_to_driver(
     blueprint: &mut Map<String, Value>,
     source_id: &str,
     driver_id: &str,
@@ -322,7 +322,7 @@ fn retarget_classifier_affect(
     }
 }
 
-fn add_drivers_to_root(root: &mut Map<String, Value>, driver_ids: &[String]) {
+pub(crate) fn add_drivers_to_root(root: &mut Map<String, Value>, driver_ids: &[String]) {
     let root_id_field = root
         .get("brain_regions_root")
         .and_then(|v| v.as_str())

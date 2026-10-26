@@ -186,6 +186,7 @@ where
                     preview_name: None,
                     predicted_class: None,
                     class_scores: Vec::new(),
+                    stand: None,
                 },
             ));
         }
@@ -206,6 +207,7 @@ where
                 preview_name: None,
                 predicted_class: None,
                 class_scores: Vec::new(),
+                stand: None,
             },
         ));
     }
@@ -296,6 +298,7 @@ where
                     preview_name: None,
                     predicted_class: None,
                     class_scores: Vec::new(),
+                    stand: None,
                 },
             ));
             let Some(&class_id) = hold_by_tick.get(&tick) else {
@@ -346,6 +349,7 @@ where
                     preview_name: None,
                     predicted_class: None,
                     class_scores: Vec::new(),
+                    stand: None,
                 },
             ));
         }

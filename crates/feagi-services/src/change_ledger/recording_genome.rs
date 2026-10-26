@@ -157,4 +157,8 @@ impl GenomeService for RecordingGenomeService {
     async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()> {
         self.inner.delete_modulator(id, force).await
     }
+
+    async fn set_simulation_timestep(&self, timestep_s: f64) -> ServiceResult<f64> {
+        self.inner.set_simulation_timestep(timestep_s).await
+    }
 }

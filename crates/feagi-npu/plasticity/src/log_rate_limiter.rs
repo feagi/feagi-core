@@ -14,6 +14,7 @@
 //! based on burst timestep, not wall-clock time, so behavior is deterministic.
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 /// Emits on first occurrence of a key, then at most once every `period_bursts`.
 pub struct BurstLogRateLimiter {
@@ -59,6 +60,55 @@ impl BurstLogRateLimiter {
                     self.last_emitted_timestep.insert(key, current_timestep);
                     Some(count)
                 } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+/// Emits on first occurrence of a key, then at most once per wall-clock `period`.
+///
+/// Counterpart of [`BurstLogRateLimiter`] for events that are not tied to burst
+/// numbers. The caller passes `now`, so tests control time.
+pub struct TimeLogRateLimiter {
+    period: Duration,
+    last_emitted: HashMap<u32, Instant>,
+    suppressed_since_emit: HashMap<u32, u64>,
+}
+
+impl TimeLogRateLimiter {
+    /// `period` of zero emits on every call.
+    pub fn new(period: Duration) -> Self {
+        Self {
+            period,
+            last_emitted: HashMap::new(),
+            suppressed_since_emit: HashMap::new(),
+        }
+    }
+
+    /// Returns `Some(suppressed_count)` when the caller should emit a line. The count is
+    /// how many calls were skipped since the previous emit for `key` (`0` on the first).
+    pub fn should_emit(&mut self, key: u32, now: Instant) -> Option<u64> {
+        if self.period.is_zero() {
+            return Some(0);
+        }
+        match self.last_emitted.get(&key).copied() {
+            None => {
+                self.last_emitted.insert(key, now);
+                self.suppressed_since_emit.insert(key, 0);
+                Some(0)
+            }
+            Some(last) => {
+                let suppressed = self.suppressed_since_emit.entry(key).or_insert(0);
+                if now.saturating_duration_since(last) >= self.period {
+                    let count = *suppressed;
+                    *suppressed = 0;
+                    self.last_emitted.insert(key, now);
+                    Some(count)
+                } else {
+                    // Only silent calls count; the emitting call is not one of them.
+                    *suppressed = suppressed.saturating_add(1);
                     None
                 }
             }
@@ -119,5 +169,35 @@ mod tests {
         assert_eq!(limiter.should_emit(7, 5), Some(3));
         assert_eq!(limiter.should_emit(7, 6), None);
         assert_eq!(limiter.should_emit(7, 10), Some(2));
+    }
+
+    #[test]
+    fn time_limiter_allows_one_line_per_period_with_suppressed_count() {
+        let t0 = Instant::now();
+        let mut limiter = TimeLogRateLimiter::new(Duration::from_secs(10));
+        assert_eq!(limiter.should_emit(5, t0), Some(0));
+        assert_eq!(limiter.should_emit(5, t0 + Duration::from_secs(1)), None);
+        assert_eq!(limiter.should_emit(5, t0 + Duration::from_secs(9)), None);
+        // A different area is independent.
+        assert_eq!(limiter.should_emit(6, t0 + Duration::from_secs(9)), Some(0));
+        // Ten seconds after the last emit: emit again, reporting the two silent calls.
+        assert_eq!(
+            limiter.should_emit(5, t0 + Duration::from_secs(10)),
+            Some(2)
+        );
+        // The window restarts from that emit.
+        assert_eq!(limiter.should_emit(5, t0 + Duration::from_secs(15)), None);
+        assert_eq!(
+            limiter.should_emit(5, t0 + Duration::from_secs(20)),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn time_limiter_zero_period_emits_every_call() {
+        let t0 = Instant::now();
+        let mut limiter = TimeLogRateLimiter::new(Duration::ZERO);
+        assert_eq!(limiter.should_emit(1, t0), Some(0));
+        assert_eq!(limiter.should_emit(1, t0), Some(0));
     }
 }

@@ -421,6 +421,7 @@ pub fn run_pole_phase(
                 preview_name: Some(format!("{} seed {seed}", run.phase)),
                 predicted_class: None,
                 class_scores: Vec::new(),
+                stand: None,
             },
         ));
     }

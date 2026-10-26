@@ -566,7 +566,7 @@ mod tests {
         .expect("parse migrated genome");
 
         assert_eq!(result.report.source_genome_schema_version, Some(2));
-        assert_eq!(result.report.target_genome_schema_version, Some(6));
+        assert_eq!(result.report.target_genome_schema_version, Some(7));
         assert!(result
             .report
             .migration_steps
@@ -583,7 +583,7 @@ mod tests {
             .report
             .migration_steps
             .contains(&"genome:v5_to_v6".to_string()));
-        assert_eq!(migrated_genome["genome_schema_version"], 6);
+        assert_eq!(migrated_genome["genome_schema_version"], 7);
         assert!(migrated_snapshot
             .metadata
             .tags

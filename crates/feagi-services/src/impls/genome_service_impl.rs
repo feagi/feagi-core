@@ -110,6 +110,12 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
         .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
     defaults
+        .entry(feagi_evolutionary::MEMORY_NEURON_CAP_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.memory_neuron_cap));
+    defaults
+        .entry(feagi_evolutionary::LTM_EVICTION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.ltm_eviction.as_str()));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -129,11 +135,13 @@ fn validate_mp_encoding_update(
     current: &HashMap<String, Value>,
     changes: &HashMap<String, Value>,
 ) -> ServiceResult<()> {
-    const MP_KEYS: [&str; 4] = [
+    const MP_KEYS: [&str; 6] = [
         feagi_evolutionary::MP_LEARNING_ENABLED_KEY,
         feagi_evolutionary::MP_CHANGE_MODE_KEY,
         feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY,
         feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY,
+        feagi_evolutionary::MEMORY_NEURON_CAP_KEY,
+        feagi_evolutionary::LTM_EVICTION_KEY,
     ];
     if !changes.keys().any(|k| MP_KEYS.contains(&k.as_str())) {
         return Ok(());
@@ -374,6 +382,19 @@ pub fn sync_runtime_genome_from_connectome(
                 .insert(*cortical_id, conn_area.clone());
         }
     }
+}
+
+/// Whether the area is a memory area in this genome.
+fn area_is_memory(
+    genome: Option<&feagi_evolutionary::RuntimeGenome>,
+    cortical_id: &CorticalID,
+) -> bool {
+    genome
+        .and_then(|genome| genome.cortical_areas.get(cortical_id))
+        .is_some_and(|area| {
+            matches!(area.cortical_type, CorticalAreaType::Memory(_))
+                || area.properties.get("is_mem_type").and_then(|v| v.as_bool()) == Some(true)
+        })
 }
 
 /// Collect architecture indexes used by connectome snapshots and completeness checks.
@@ -1262,6 +1283,42 @@ impl GenomeService for GenomeServiceImpl {
                 ));
             }
         }
+        if let Some(list) = changes.get("modulators").and_then(|value| value.as_array()) {
+            // Area subscriptions take `neuro.*` modulators only; synaptic ones belong on mapping
+            // rules. Unknown ids would be stored and then ignored by the burst engine.
+            let genome = self.current_genome.read();
+            for id in list.iter().filter_map(|value| value.as_str()) {
+                let kind = genome
+                    .as_ref()
+                    .and_then(|genome| genome.modulators.get(id))
+                    .map(|instance| instance.kind);
+                match kind {
+                    None => {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "modulator '{id}' on area {cortical_id} is not defined in \
+                             genome.modulators"
+                        )));
+                    }
+                    Some(kind) if !kind.is_area_level() => {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "modulator '{id}' ({}) on area {cortical_id} is synaptic; areas \
+                             subscribe to `neuro.*` and `memory.formation` modulators only. Put it \
+                             on a mapping rule instead.",
+                            kind.as_str()
+                        )));
+                    }
+                    Some(feagi_structures::genomic::ModulatorKind::MemoryFormation)
+                        if !area_is_memory(genome.as_ref(), &cortical_id_typed_for_lock) =>
+                    {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "modulator '{id}' (memory.formation) cannot subscribe area \
+                             {cortical_id}: it is not a memory area"
+                        )));
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
         if let Some(enabled) = changes.get("spike_train").and_then(|value| value.as_bool()) {
             let limit = spike_train_limit_from_changes(&changes).or_else(|| {
                 let genome = self.current_genome.read();
@@ -1298,6 +1355,16 @@ impl GenomeService for GenomeServiceImpl {
                         "{key} must be in 0..=1 (fraction of bursts a neuron may fire, not percent); got {excitability}"
                     )));
                 }
+            }
+        }
+
+        // Reject a malformed homeostat config before anything is applied; null clears it.
+        if let Some(value) = changes.get("rate_modulated_leak") {
+            if !value.is_null() {
+                feagi_npu_burst_engine::rate_modulated_leak::RateModulatedLeakConfig::validate(
+                    value,
+                )
+                .map_err(ServiceError::InvalidInput)?;
             }
         }
         let needs_modulator_sync = changes.contains_key("modulators")
@@ -1590,6 +1657,20 @@ impl GenomeService for GenomeServiceImpl {
         self.get_modulator(id).await
     }
 
+    async fn set_simulation_timestep(&self, timestep_s: f64) -> ServiceResult<f64> {
+        if !timestep_s.is_finite() || timestep_s <= 0.0 || !(1.0 / timestep_s).is_finite() {
+            return Err(ServiceError::InvalidInput(format!(
+                "simulation_timestep must be finite and > 0 seconds, got {timestep_s}"
+            )));
+        }
+        let mut genome = self.current_genome.write();
+        let genome = genome
+            .as_mut()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        genome.physiology.simulation_timestep = timestep_s;
+        Ok(genome.physiology.simulation_timestep)
+    }
+
     async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()> {
         if new_id.is_empty() {
             return Err(ServiceError::InvalidInput(
@@ -1614,6 +1695,12 @@ impl GenomeService for GenomeServiceImpl {
             }
             rewrite_modulator_id(genome, old_id, &new_id);
         }
+        // Registered mappings hold the old id in the engine's group table; rewrite it so they
+        // stay modulated, then push the renamed bindings and area subscriptions.
+        self.connectome
+            .read()
+            .rename_modulator_in_runtime(old_id, &new_id)
+            .map_err(|err| ServiceError::Backend(err.to_string()))?;
         self.push_modulator_bindings()?;
         Ok(())
     }
@@ -1701,6 +1788,11 @@ impl GenomeService for GenomeServiceImpl {
                 }
             }
         }
+        // Mappings registered earlier keep the deleted id in the engine's group table.
+        self.connectome
+            .read()
+            .remove_modulator_from_runtime(id)
+            .map_err(|err| ServiceError::Backend(err.to_string()))?;
         self.push_modulator_bindings()?;
         Ok(())
     }
@@ -2289,7 +2381,11 @@ impl GenomeServiceImpl {
                             }
                         }
                         // Validated up front by validate_mp_encoding_update.
-                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                        "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
 
@@ -2613,7 +2709,11 @@ impl GenomeServiceImpl {
                             }
                         }
                         // Validated up front by validate_mp_encoding_update.
-                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                        "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -2998,12 +3098,14 @@ impl GenomeServiceImpl {
                         | "mp_change_mode"
                         | "mp_delta_quantization"
                         | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction"
                 )
             });
 
             if memory_param_changed {
                 use feagi_evolutionary::extract_memory_properties;
-                use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+                use feagi_npu_plasticity::PlasticityExecutor;
 
                 let mut manager = self.connectome.write();
                 if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
@@ -3059,12 +3161,10 @@ impl GenomeServiceImpl {
                                     .get_episodic_memory_upstream_cortical_areas(
                                         &cortical_id_typed,
                                     );
-                                let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                    initial_lifespan: mem_props.init_lifespan,
-                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                    longterm_threshold: mem_props.longterm_threshold,
-                                    max_reactivations: 1000,
-                                };
+                                // Re-registering replaces the area's settings only; the
+                                // plasticity service keeps the area's existing neurons.
+                                let lifecycle_config =
+                                    feagi_brain_development::memory_lifecycle_config(&mem_props);
 
                                 match mp_mode {
                                     Ok(mp_mode) => exec.register_memory_area(
@@ -4978,6 +5078,10 @@ impl GenomeServiceImpl {
                     &area.properties,
                 )
                 .map(|p| p.mp_ratio_quantization),
+                memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.memory_neuron_cap),
+                ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.ltm_eviction.as_str().to_string()),
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
@@ -5182,6 +5286,10 @@ impl GenomeServiceImpl {
                 .map(|p| p.mp_delta_quantization),
             mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.mp_ratio_quantization),
+            memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.memory_neuron_cap),
+            ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.ltm_eviction.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -5387,6 +5495,10 @@ impl GenomeServiceImpl {
                 .map(|p| p.mp_delta_quantization),
             mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.mp_ratio_quantization),
+            memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.memory_neuron_cap),
+            ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.ltm_eviction.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -5599,6 +5711,136 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn memory_cap_and_eviction_survive_update_and_genome_save() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use crate::types::SaveGenomeParams;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let mem_id = CorticalID::try_from_bytes(b"mmemev01").unwrap();
+        let mut mem = CorticalArea::new(
+            mem_id,
+            10,
+            "evict-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "evict-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([mem_id]);
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_brain_region(region, None).unwrap();
+            manager.add_cortical_area(mem).unwrap();
+        }
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(Arc::clone(&connectome), queue);
+
+        // Defaults before any update.
+        let before = connectome
+            .read()
+            .get_cortical_area(&mem_id)
+            .and_then(|a| feagi_evolutionary::extract_memory_properties(&a.properties))
+            .unwrap();
+        assert_eq!(before.memory_neuron_cap, 0);
+        assert_eq!(before.ltm_eviction.as_str(), "lru");
+
+        // A bad value is rejected and changes nothing.
+        let bad = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([("ltm_eviction".to_string(), serde_json::json!("oldest"))]),
+            )
+            .await
+            .expect_err("unknown eviction mode must be rejected");
+        assert!(
+            matches!(bad, super::ServiceError::InvalidInput(_)),
+            "{bad:?}"
+        );
+
+        let info = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([
+                    ("memory_neuron_cap".to_string(), serde_json::json!(120)),
+                    ("ltm_eviction".to_string(), serde_json::json!("none")),
+                ]),
+            )
+            .await
+            .expect("update memory cap and eviction");
+        assert_eq!(info.memory_neuron_cap, Some(120));
+        assert_eq!(info.ltm_eviction.as_deref(), Some("none"));
+        let wire = serde_json::to_value(&info).unwrap();
+        assert_eq!(wire["memory_neuron_cap"], serde_json::json!(120));
+        assert_eq!(wire["ltm_eviction"], serde_json::json!("none"));
+
+        let after = connectome
+            .read()
+            .get_cortical_area(&mem_id)
+            .and_then(|a| feagi_evolutionary::extract_memory_properties(&a.properties))
+            .unwrap();
+        assert_eq!(after.memory_neuron_cap, 120);
+        assert_eq!(after.ltm_eviction.as_str(), "none");
+
+        // Serialized back out through the genome save (it rebuilds from the live areas).
+        *svc.get_current_genome_arc().write() = Some(feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "stale".to_string(),
+                genome_title: "stale".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        });
+        let json = svc
+            .save_genome(SaveGenomeParams {
+                genome_id: Some("evict".to_string()),
+                genome_title: Some("Evict".to_string()),
+            })
+            .await
+            .expect("save_genome");
+        let loaded = feagi_evolutionary::load_genome_from_json(&json).expect("reload genome");
+        let reloaded = feagi_evolutionary::extract_memory_properties(
+            &loaded.cortical_areas[&mem_id].properties,
+        )
+        .unwrap();
+        assert_eq!(reloaded.memory_neuron_cap, 120);
+        assert_eq!(reloaded.ltm_eviction.as_str(), "none");
+    }
+
+    #[tokio::test]
     async fn update_cortical_area_rejects_out_of_range_excitability() {
         use super::GenomeServiceImpl;
         use crate::traits::GenomeService;
@@ -5652,6 +5894,78 @@ mod tests {
             .drain_all()
             .iter()
             .any(|u| u.parameter_name == "neuron_excitability"));
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rejects_invalid_rate_modulated_leak() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"crmlval1").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            10,
+            "rml-validation-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome.clone(), queue.clone());
+
+        let bad_configs = [
+            serde_json::json!({ "enabled": true, "rate_ema_tau_bursts": 0.0 }),
+            serde_json::json!({ "enabled": true, "gain": -1.0 }),
+            serde_json::json!({ "enabled": true, "leak_min": 0.9, "leak_max": 0.1 }),
+            serde_json::json!("on"),
+        ];
+        for bad in bad_configs {
+            let err = svc
+                .update_cortical_area(
+                    &area_id.as_base_64(),
+                    HashMap::from([("rate_modulated_leak".to_string(), bad.clone())]),
+                )
+                .await
+                .expect_err("invalid rate_modulated_leak must be rejected");
+            assert!(
+                matches!(err, super::ServiceError::InvalidInput(_)),
+                "{bad}: got {err:?}"
+            );
+        }
+        assert!(
+            queue.drain_all().is_empty(),
+            "rejected update must queue nothing"
+        );
+        assert!(
+            !connectome
+                .read()
+                .get_cortical_area(&area_id)
+                .expect("area")
+                .properties
+                .contains_key("rate_modulated_leak"),
+            "rejected update must not touch the area"
+        );
+
+        svc.update_cortical_area(
+            &area_id.as_base_64(),
+            HashMap::from([(
+                "rate_modulated_leak".to_string(),
+                serde_json::json!({ "enabled": true, "gain": 0.1 }),
+            )]),
+        )
+        .await
+        .expect("valid rate_modulated_leak is accepted");
     }
 
     #[tokio::test]
@@ -5759,6 +6073,260 @@ mod tests {
             vec!["damp".to_string()],
             "area modulator subscription must be pushed to the burst engine"
         );
+    }
+
+    /// Genome with one subscriber area, a `synaptic.reward` modulator ("pleasure") and a
+    /// `neuro.firing_probability` modulator ("damp"), each with a driver area, over a live NPU.
+    fn modulator_runtime_fixture() -> (
+        super::GenomeServiceImpl,
+        std::sync::Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        feagi_structures::genomic::cortical_area::CorticalID,
+        u32,
+    ) {
+        use super::GenomeServiceImpl;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use feagi_structures::genomic::ModulatorKind;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "modulator-rename-npu",
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        let mk = |id: CorticalID, name: &str, kind: CorticalAreaType| {
+            CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                kind,
+            )
+            .unwrap()
+        };
+        let area_id = CorticalID::try_from_bytes(b"cmodrn01").unwrap();
+        let pleasure_driver = CorticalID::modulator_driver(0);
+        let damp_driver = CorticalID::modulator_driver(1);
+        let area = mk(
+            area_id,
+            "subscriber",
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        );
+        let drivers = [
+            mk(pleasure_driver, "pleasure", CorticalAreaType::Modulator),
+            mk(damp_driver, "damp", CorticalAreaType::Modulator),
+        ];
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(area.clone()).unwrap();
+            for driver in &drivers {
+                manager.add_cortical_area(driver.clone()).unwrap();
+            }
+        }
+        let area_idx = connectome.read().get_cortical_idx(&area_id).unwrap();
+        let instance = |kind, driver_cortical_id| feagi_evolutionary::ModulatorInstance {
+            kind,
+            magnitude_percent: 100.0,
+            effect_duration_bursts: 1,
+            rest_bursts: 0,
+            graded: false,
+            full_scale_potential: None,
+            driver_cortical_id,
+        };
+        let mut modulators = feagi_evolutionary::ModulatorRegistry::new();
+        modulators.insert(
+            "pleasure".to_string(),
+            instance(ModulatorKind::Reward, pleasure_driver),
+        );
+        modulators.insert(
+            "damp".to_string(),
+            instance(ModulatorKind::FiringProbability, damp_driver),
+        );
+        let mut cortical_areas = HashMap::from([(area_id, area)]);
+        for driver in drivers {
+            cortical_areas.insert(driver.cortical_id, driver);
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators,
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc = GenomeServiceImpl::new(connectome);
+        *svc.get_current_genome_arc().write() = Some(genome);
+        (svc, dyn_npu, area_id, area_idx)
+    }
+
+    #[tokio::test]
+    async fn modulator_rename_and_force_delete_update_runtime_groups_and_subscriptions() {
+        use crate::traits::GenomeService;
+
+        let (svc, npu, area_id, area_idx) = modulator_runtime_fixture();
+        svc.update_cortical_area(
+            &area_id.as_base_64(),
+            std::collections::HashMap::from([(
+                "modulators".to_string(),
+                serde_json::json!(["damp"]),
+            )]),
+        )
+        .await
+        .expect("subscribe area to neuromodulator");
+        // A mapping rule listing "pleasure" is registered by allocating its modulation group.
+        let group = npu
+            .lock()
+            .unwrap()
+            .allocate_modulation_group(&["pleasure".to_string()]);
+        assert_ne!(group, 0, "pleasure must resolve to a synaptic group");
+
+        svc.rename_modulator("pleasure", "joy".to_string())
+            .await
+            .expect("rename synaptic modulator");
+        svc.rename_modulator("damp", "calm".to_string())
+            .await
+            .expect("rename neuro modulator");
+        {
+            let npu = npu.lock().unwrap();
+            assert_eq!(
+                npu.modulation_group_instance_ids(group),
+                vec!["joy".to_string()],
+                "group table must follow the rename"
+            );
+            assert_eq!(
+                npu.modulator_area_subscriptions(area_idx),
+                vec!["calm".to_string()],
+                "area subscription must follow the rename"
+            );
+        }
+
+        svc.delete_modulator("joy", true)
+            .await
+            .expect("force delete synaptic modulator");
+        svc.delete_modulator("calm", true)
+            .await
+            .expect("force delete neuro modulator");
+        let npu = npu.lock().unwrap();
+        assert!(
+            npu.modulation_group_instance_ids(group).is_empty(),
+            "deleted id must leave the group table"
+        );
+        assert!(npu.modulator_area_subscriptions(area_idx).is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rejects_unknown_and_synaptic_modulator_ids() {
+        use crate::traits::GenomeService;
+        use crate::types::ServiceError;
+
+        let (svc, _npu, area_id, _idx) = modulator_runtime_fixture();
+        let id = area_id.as_base_64();
+        for (ids, needle) in [
+            (serde_json::json!(["ghost"]), "ghost"),
+            (serde_json::json!(["damp", "ghost"]), "ghost"),
+            (serde_json::json!(["pleasure"]), "pleasure"),
+            (serde_json::json!(["damp", "pleasure"]), "pleasure"),
+        ] {
+            let err = svc
+                .update_cortical_area(
+                    &id,
+                    std::collections::HashMap::from([("modulators".to_string(), ids.clone())]),
+                )
+                .await
+                .expect_err("invalid area modulator list must be rejected");
+            match err {
+                ServiceError::InvalidInput(message) => {
+                    assert!(message.contains(needle), "{ids}: {message}");
+                }
+                other => panic!("expected InvalidInput for {ids}, got {other:?}"),
+            }
+        }
+        svc.update_cortical_area(
+            &id,
+            std::collections::HashMap::from([(
+                "modulators".to_string(),
+                serde_json::json!(["damp"]),
+            )]),
+        )
+        .await
+        .expect("a defined neuro.* id is accepted");
+        svc.update_cortical_area(
+            &id,
+            std::collections::HashMap::from([("modulators".to_string(), serde_json::json!([]))]),
+        )
+        .await
+        .expect("clearing subscriptions is accepted");
+    }
+
+    #[tokio::test]
+    async fn memory_formation_is_listed_and_rejected_on_non_memory_areas() {
+        use crate::traits::GenomeService;
+        use crate::types::ServiceError;
+
+        let (svc, _npu, area_id, _idx) = modulator_runtime_fixture();
+        let types = svc.list_modulator_types().await.unwrap();
+        assert!(types.contains(&"memory.formation".to_string()), "{types:?}");
+        {
+            let arc = svc.get_current_genome_arc();
+            let mut guard = arc.write();
+            let genome = guard.as_mut().unwrap();
+            genome.modulators.insert(
+                "forget_none".to_string(),
+                feagi_evolutionary::ModulatorInstance {
+                    kind: feagi_structures::genomic::ModulatorKind::MemoryFormation,
+                    magnitude_percent: -100.0,
+                    effect_duration_bursts: 1,
+                    rest_bursts: 0,
+                    graded: false,
+                    full_scale_potential: None,
+                    driver_cortical_id:
+                        feagi_structures::genomic::cortical_area::CorticalID::modulator_driver(1),
+                },
+            );
+        }
+        let err = svc
+            .update_cortical_area(
+                &area_id.as_base_64(),
+                std::collections::HashMap::from([(
+                    "modulators".to_string(),
+                    serde_json::json!(["forget_none"]),
+                )]),
+            )
+            .await
+            .expect_err("a non-memory area must not subscribe to memory.formation");
+        match err {
+            ServiceError::InvalidInput(message) => {
+                assert!(message.contains("not a memory area"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
     }
 
     #[tokio::test]

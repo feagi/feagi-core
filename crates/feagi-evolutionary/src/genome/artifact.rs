@@ -151,7 +151,7 @@ mod tests {
             .expect("existing schema chain should migrate decoded genome");
 
         assert_eq!(report.from_version.as_u32(), 2);
-        assert_eq!(report.to_version.as_u32(), 6);
-        assert_eq!(migrated["genome_schema_version"], 6);
+        assert_eq!(report.to_version.as_u32(), 7);
+        assert_eq!(migrated["genome_schema_version"], 7);
     }
 }

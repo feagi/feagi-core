@@ -523,6 +523,25 @@ impl ConnectomeService for WasmConnectomeService {
             })
     }
 
+    async fn reset_mapping_weights(
+        &self,
+        _src_area_id: &str,
+        _dst_area_id: &str,
+    ) -> ServiceResult<MappingWeightsResetInfo> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn reset_area_incoming_weights(
+        &self,
+        _dst_area_id: &str,
+    ) -> ServiceResult<AreaIncomingWeightsResetInfo> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn delete_classifier(&self, _classifier_id: &str) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),

@@ -25,6 +25,12 @@ pub enum ModulatorKind {
     Reward,
     /// STDP / R-STDP eta of the mapping. `eta * (1 + signal)`.
     LearningRate,
+    /// Open/closed switch on the subscribed mapping. Transmission is 0 unless a
+    /// gate instance in the group has an active driver; then the factor is the signal.
+    Gate,
+    /// Memory formation switch on a subscribed memory area. Factor is
+    /// `clamp(1 + signal, 0, 1)`; at 0 the area forms no new memory neurons.
+    MemoryFormation,
 }
 
 impl ModulatorKind {
@@ -37,6 +43,8 @@ impl ModulatorKind {
             Self::TransmissionGain => "synaptic.transmission_gain",
             Self::Reward => "synaptic.reward",
             Self::LearningRate => "synaptic.learning_rate",
+            Self::Gate => "synaptic.gate",
+            Self::MemoryFormation => "memory.formation",
         }
     }
 
@@ -49,6 +57,8 @@ impl ModulatorKind {
             "synaptic.transmission_gain" => Ok(Self::TransmissionGain),
             "synaptic.reward" => Ok(Self::Reward),
             "synaptic.learning_rate" => Ok(Self::LearningRate),
+            "synaptic.gate" => Ok(Self::Gate),
+            "memory.formation" => Ok(Self::MemoryFormation),
             other => Err(format!("unknown modulator type '{other}'")),
         }
     }
@@ -62,6 +72,8 @@ impl ModulatorKind {
             Self::TransmissionGain,
             Self::Reward,
             Self::LearningRate,
+            Self::Gate,
+            Self::MemoryFormation,
         ]
     }
 
@@ -73,9 +85,14 @@ impl ModulatorKind {
         )
     }
 
+    /// Kinds that subscribe on cortical areas: `neuro.*` and `memory.formation`.
+    pub fn is_area_level(self) -> bool {
+        self.is_neuromodulator() || self == Self::MemoryFormation
+    }
+
     /// Synaptic modulators subscribe on mapping rules.
     pub fn is_synaptic(self) -> bool {
-        !self.is_neuromodulator()
+        !self.is_area_level()
     }
 
     /// Reward combines by addition. Every other kind combines by multiplication.
@@ -177,6 +194,18 @@ pub fn multiplicative_factor(signals: &[f32]) -> f32 {
         .fold(1.0_f32, |acc, signal| acc * (1.0 + signal))
 }
 
+/// Transmission factor of a group's gate instances: the largest signal (open if
+/// any gate is open), never below 0. A silent driver has signal 0, so the gate is closed.
+pub fn gate_factor(signals: &[f32]) -> f32 {
+    signals.iter().copied().fold(0.0_f32, f32::max)
+}
+
+/// Memory formation factor: product of `(1 + signal)` clamped to `[0, 1]`.
+/// 0 means the area forms no new memory neurons.
+pub fn memory_formation_factor(signals: &[f32]) -> f32 {
+    multiplicative_factor(signals).clamp(0.0, 1.0)
+}
+
 /// Sum of reward signals. Reward does not use the multiplicative factor.
 pub fn summed_reward(signals: &[f32]) -> f32 {
     signals.iter().sum()
@@ -192,7 +221,9 @@ pub fn scale_baseline(kind: ModulatorKind, baseline: f32, factor: f32) -> f32 {
         ModulatorKind::Leak | ModulatorKind::FiringProbability => value.clamp(0.0, 1.0),
         ModulatorKind::FiringThreshold
         | ModulatorKind::TransmissionGain
-        | ModulatorKind::LearningRate => value.max(0.0),
+        | ModulatorKind::LearningRate
+        | ModulatorKind::Gate
+        | ModulatorKind::MemoryFormation => value.max(0.0),
         ModulatorKind::Reward => value,
     }
 }
@@ -259,5 +290,39 @@ mod tests {
         for kind in ModulatorKind::all() {
             assert_eq!(ModulatorKind::parse(kind.as_str()).unwrap(), *kind);
         }
+    }
+
+    #[test]
+    fn gate_kind_is_synaptic_and_parses() {
+        assert_eq!(
+            ModulatorKind::parse("synaptic.gate").unwrap(),
+            ModulatorKind::Gate
+        );
+        assert_eq!(ModulatorKind::Gate.as_str(), "synaptic.gate");
+        assert!(ModulatorKind::Gate.is_synaptic());
+        assert!(!ModulatorKind::Gate.combines_by_addition());
+    }
+
+    #[test]
+    fn gate_factor_is_closed_when_silent_and_open_if_any_open() {
+        assert_eq!(gate_factor(&[0.0]), 0.0);
+        assert_eq!(gate_factor(&[0.0, 1.0]), 1.0);
+        assert!((gate_factor(&[0.5, 0.25]) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn memory_formation_is_area_level_and_clamped() {
+        assert_eq!(
+            ModulatorKind::parse("memory.formation").unwrap(),
+            ModulatorKind::MemoryFormation
+        );
+        assert!(ModulatorKind::MemoryFormation.is_area_level());
+        assert!(!ModulatorKind::MemoryFormation.is_synaptic());
+        assert!(!ModulatorKind::MemoryFormation.is_neuromodulator());
+        assert_eq!(memory_formation_factor(&[-1.0]), 0.0);
+        assert_eq!(memory_formation_factor(&[0.0]), 1.0);
+        assert_eq!(memory_formation_factor(&[0.5]), 1.0);
+        assert!((memory_formation_factor(&[-0.25]) - 0.75).abs() < 1e-6);
+        assert_eq!(memory_formation_factor(&[]), 1.0);
     }
 }

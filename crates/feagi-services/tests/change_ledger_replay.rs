@@ -262,6 +262,11 @@ impl GenomeService for LoadOnlyGenomeService {
     async fn delete_modulator(&self, _id: &str, _force: bool) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented("delete modulator".to_string()))
     }
+    async fn set_simulation_timestep(&self, _timestep_s: f64) -> ServiceResult<f64> {
+        Err(ServiceError::NotImplemented(
+            "set simulation timestep".to_string(),
+        ))
+    }
 }
 
 #[tokio::test]

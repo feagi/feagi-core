@@ -641,8 +641,19 @@ impl BurstLoopRunner {
     // PNS is now passed directly in constructor for pure Rust-to-Rust communication
 
     /// Set burst frequency (can be called while running - thread-safe)
+    ///
+    /// Agents whose motor output rate was following the old burst frequency (registration
+    /// sets it to the burst rate) follow the new one; a rate set below the burst rate stays.
     pub fn set_frequency(&mut self, frequency_hz: f64) {
-        *self.frequency_hz.lock().unwrap() = frequency_hz;
+        let old_frequency_hz =
+            std::mem::replace(&mut *self.frequency_hz.lock().unwrap(), frequency_hz);
+        if frequency_hz.is_finite() && frequency_hz > 0.0 {
+            for rate in self.motor_output_rates_hz.write().values_mut() {
+                if (*rate - old_frequency_hz).abs() <= 1e-9 * old_frequency_hz.abs().max(1.0) {
+                    *rate = frequency_hz;
+                }
+            }
+        }
         info!("[BURST-RUNNER] Frequency set to {:.2} Hz", frequency_hz);
     }
 
@@ -862,6 +873,20 @@ impl BurstLoopRunner {
         cached.map(|arc| (*arc).clone())
     }
 
+    /// Fired-neuron count per cortical area in the last cached burst.
+    /// Reads lengths from the shared sample; no neuron data is copied.
+    pub fn get_fire_queue_counts(&self) -> Option<Vec<(u32, u32)>> {
+        let cached = self.cached_fire_queue.lock().unwrap().clone();
+        cached.map(|sample| {
+            sample
+                .iter()
+                .map(|(cortical_idx, (neuron_ids, _, _, _, _))| {
+                    (*cortical_idx, neuron_ids.len() as u32)
+                })
+                .collect()
+        })
+    }
+
     /// Get Fire Ledger window configurations for all cortical areas
     pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         let lock_start = std::time::Instant::now();
@@ -1060,9 +1085,16 @@ fn aggregate_into_visualization_chunks(
 /// This eliminates ~1 MB allocation per burst @ 10 Hz = ~10 MB/sec saved
 ///
 /// Filter by cortical_id strings (e.g., "omot00"), matching sensory stream pattern
+///
+/// `burst_id` is written to the container header's 16-bit increment counter (low 16 bits of
+/// the burst number, wrapping). When no neuron survived the filter this returns an empty
+/// `Vec` unless `emit_empty_frame` is set, in which case it returns a valid container holding
+/// one XYZP struct with zero cortical areas ("no motor change" for the receiver).
 fn encode_fire_data_to_xyzp(
     fire_data: RawFireQueueSnapshot,
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
+    burst_id: u16,
+    emit_empty_frame: bool,
 ) -> Result<Vec<u8>, String> {
     use feagi_structures::genomic::cortical_area::CorticalID;
     use feagi_structures::neuron_voxels::xyzp::{
@@ -1166,7 +1198,7 @@ fn encode_fire_data_to_xyzp(
     }
 
     // Check if we have any data to send
-    if cortical_mapped.mappings.is_empty() {
+    if cortical_mapped.mappings.is_empty() && !emit_empty_frame {
         // No neurons fired in any subscribed area - return empty buffer
         return Ok(Vec::new());
     }
@@ -1181,7 +1213,7 @@ fn encode_fire_data_to_xyzp(
 
     let mut byte_container = FeagiByteContainer::new_empty();
     byte_container
-        .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
+        .overwrite_byte_data_with_single_struct_data(&cortical_mapped, burst_id)
         .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
 
     // Extract bytes from container
@@ -2774,7 +2806,7 @@ fn burst_loop(
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
                     // two independent serialization paths (maintenance + performance nightmare).
                     if has_shm_writer {
-                        match encode_fire_data_to_xyzp(raw_snapshot, None) {
+                        match encode_fire_data_to_xyzp(raw_snapshot, None, 0, false) {
                             Ok(buffer) => {
                                 let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
                                 if let Some(writer) = viz_writer_lock.as_mut() {
@@ -2860,8 +2892,11 @@ fn burst_loop(
         if needs_motor {
             debug!("[BURST-LOOP] 🎮 MOTOR: Starting motor output generation (shared_fire_data available={})", shared_fire_data_opt.is_some());
 
-            // Use shared fire data from above (Arc - zero cost!)
-            if let Some(ref fire_data_arc) = shared_fire_data_opt {
+            // Use shared fire data from above (Arc - zero cost!). A burst in which nothing fired has
+            // no fire queue sample; motor still publishes an (empty) frame per subscribed agent.
+            {
+                let empty_fire_data: Arc<FireQueueSample> = Arc::new(ahash::AHashMap::new());
+                let fire_data_arc = shared_fire_data_opt.as_ref().unwrap_or(&empty_fire_data);
                 // Read subscriptions first so logs reflect whether motor output is actually in use.
                 let subscriptions = motor_subscriptions.read();
                 let has_motor_subscriptions = !subscriptions.is_empty();
@@ -3093,16 +3128,24 @@ fn burst_loop(
 
                         let encode_start = Instant::now();
                         // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
-                        match encode_fire_data_to_xyzp(motor_snapshot.clone(), cortical_id_filter) {
+                        // Every burst produces a frame for every subscribed agent, even when nothing
+                        // fired (empty XYZP struct), so lock-step receivers get one frame per burst.
+                        let motor_burst_id = (burst_num & 0xFFFF) as u16;
+                        match encode_fire_data_to_xyzp(
+                            motor_snapshot.clone(),
+                            cortical_id_filter,
+                            motor_burst_id,
+                            true,
+                        ) {
                             Ok(motor_bytes) => {
                                 debug!(
                                     "[BURST-LOOP] 🎮 MOTOR: Encoded {} bytes for agent '{}'",
                                     motor_bytes.len(),
                                     agent_id
                                 );
-                                // Skip if no data (no neurons fired in subscribed areas)
+                                // Never empty: an idle burst is an empty XYZP frame (see encoder).
                                 if motor_bytes.is_empty() {
-                                    debug!("[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' - no matching neurons", agent_id);
+                                    debug!("[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' - encoder returned no bytes", agent_id);
                                     continue;
                                 }
 
@@ -3221,14 +3264,6 @@ fn burst_loop(
                     for (agent_id, stats) in tap_per_agent {
                         tap.per_agent.insert(agent_id, stats);
                     }
-                }
-            } else {
-                // No fire data available
-                static MOTOR_NO_DATA_LOGGED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !MOTOR_NO_DATA_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("[BURST-LOOP] 🎮 MOTOR: No fire data available (shared_fire_data_opt is None)");
-                    MOTOR_NO_DATA_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
             }
         } else {
@@ -3558,6 +3593,147 @@ mod tests {
             "Expected neuron {} to appear in cached fire queue for cortical_idx=3",
             neuron.0
         );
+    }
+
+    #[test]
+    fn test_empty_motor_frame_is_valid_empty_xyzp_with_burst_id() {
+        use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+
+        let mut filter = ahash::AHashSet::new();
+        filter.insert("omot00".to_string());
+        let bytes =
+            encode_fire_data_to_xyzp(RawFireQueueSnapshot::new(), Some(&filter), 0x1234, true)
+                .unwrap();
+        assert!(!bytes.is_empty());
+
+        // Same call without the emit flag keeps the old behavior (viz path).
+        assert!(
+            encode_fire_data_to_xyzp(RawFireQueueSnapshot::new(), Some(&filter), 7, false)
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut container = FeagiByteContainer::new_empty();
+        container.try_write_data_by_copy_and_verify(&bytes).unwrap();
+        assert_eq!(container.get_increment_counter().unwrap(), 0x1234);
+        assert_eq!(
+            container.get_contained_struct_types(),
+            vec![FeagiByteStructureType::NeuronCategoricalXYZP]
+        );
+
+        // Decoding an empty frame into a populated receiver clears it (no stale replay).
+        let mut receiver = CorticalMappedXYZPNeuronVoxels::new();
+        let id = CoreCorticalType::Death.to_cortical_id();
+        receiver
+            .ensure_clear_and_borrow_mut(&id)
+            .push_raw(0, 0, 0, 1.0);
+        assert_eq!(receiver.mappings.len(), 1);
+        assert!(container
+            .try_update_struct_from_first_found_struct_of_type(&mut receiver)
+            .unwrap());
+        assert!(receiver.mappings.values().all(|a| a.is_empty()));
+    }
+
+    #[test]
+    fn test_motor_frame_published_every_burst_when_nothing_fires() {
+        use feagi_serialization::FeagiByteContainer;
+
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue_for_agent(
+                &self,
+                _agent_id: &str,
+                _fire_data: RawFireQueueSnapshot,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        struct CountingMotor(Arc<Mutex<Vec<Vec<u8>>>>);
+        impl MotorPublisher for CountingMotor {
+            fn publish_motor(&self, _agent_id: &str, data: &[u8]) -> Result<(), String> {
+                self.0.lock().unwrap().push(data.to_vec());
+                Ok(())
+            }
+        }
+
+        let rust_npu = <crate::RustNPU<
+            feagi_npu_runtime::StdRuntime,
+            f32,
+            crate::backend::CPUBackend,
+        >>::new_cpu_only(1000, 10000, 20);
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
+        let frames = Arc::new(Mutex::new(Vec::new()));
+        let motor = Arc::new(Mutex::new(CountingMotor(frames.clone())));
+        let mut runner =
+            BurstLoopRunner::new::<NoViz, CountingMotor>(npu, None, Some(motor), 100.0);
+        let mut ids = ahash::AHashSet::new();
+        ids.insert("omot00".to_string());
+        runner.register_motor_subscriptions("agent-a".to_string(), ids);
+
+        runner.start().unwrap();
+        thread::sleep(Duration::from_millis(400));
+        runner.stop();
+
+        let bursts = runner.get_burst_count();
+        let frames = frames.lock().unwrap();
+        assert!(bursts >= 10, "expected >= 10 bursts, got {bursts}");
+        assert!(
+            frames.len() as u64 + 2 >= bursts,
+            "frames {} vs bursts {}: a motor frame must be published every burst",
+            frames.len(),
+            bursts
+        );
+        let mut last_id: Option<u16> = None;
+        for bytes in frames.iter() {
+            let mut container = FeagiByteContainer::new_empty();
+            container.try_write_data_by_copy_and_verify(bytes).unwrap();
+            let id = container.get_increment_counter().unwrap();
+            if let Some(prev) = last_id {
+                assert_eq!(id, prev.wrapping_add(1), "burst ids must be consecutive");
+            }
+            last_id = Some(id);
+        }
+    }
+
+    #[test]
+    fn test_motor_rate_following_burst_rate_tracks_frequency_changes() {
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue_for_agent(
+                &self,
+                _agent_id: &str,
+                _fire_data: RawFireQueueSnapshot,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        struct NoMotor;
+        impl MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        let rust_npu = <crate::RustNPU<
+            feagi_npu_runtime::StdRuntime,
+            f32,
+            crate::backend::CPUBackend,
+        >>::new_cpu_only(1000, 10000, 20);
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
+        let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
+        let ids: ahash::AHashSet<String> = ["omot00".to_string()].into_iter().collect();
+        runner
+            .register_motor_subscriptions_with_rate("follows".to_string(), ids.clone(), 10.0)
+            .unwrap();
+        runner
+            .register_motor_subscriptions_with_rate("slow".to_string(), ids, 5.0)
+            .unwrap();
+        runner.set_frequency(200.0);
+        let rates = runner.motor_output_rates_hz.read();
+        assert_eq!(rates.get("follows").copied(), Some(200.0));
+        assert_eq!(rates.get("slow").copied(), Some(5.0));
     }
 
     #[test]

@@ -154,4 +154,10 @@ impl GenomeService for WasmGenomeService {
             "WASM mode is read-only".to_string(),
         ))
     }
+
+    async fn set_simulation_timestep(&self, _timestep_s: f64) -> ServiceResult<f64> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
 }

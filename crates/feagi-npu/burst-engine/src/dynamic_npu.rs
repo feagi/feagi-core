@@ -650,6 +650,21 @@ where
         dispatch_mut!(self, remove_rate_modulated_leak(cortical_idx));
     }
 
+    /// Whether a cortical area is registered with the homeostat.
+    pub fn has_rate_modulated_leak(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, has_rate_modulated_leak(cortical_idx))
+    }
+
+    /// Whether the modulator engine treats a cortical area as a homeostatic leak area.
+    pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, is_homeostatic_leak_area(cortical_idx))
+    }
+
+    /// Clear the whole homeostat registry.
+    pub fn clear_rate_modulated_leak(&mut self) {
+        dispatch_mut!(self, clear_rate_modulated_leak());
+    }
+
     pub fn update_cortical_area_excitability(
         &mut self,
         cortical_area: u32,
@@ -708,6 +723,10 @@ where
 
     pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
         dispatch_mut!(self, forget_dynamic_memory_neuron_mappings(cortical_idx))
+    }
+
+    pub fn remove_memory_neuron_runtime_state(&mut self, removals: &[(u32, u32)]) -> usize {
+        dispatch_mut!(self, remove_memory_neuron_runtime_state(removals))
     }
 
     pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
@@ -772,6 +791,10 @@ where
         dispatch!(self, set_spike_train_areas(areas))
     }
 
+    pub fn memory_formation_suppressed(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, memory_formation_suppressed(cortical_idx))
+    }
+
     pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
         dispatch!(self, modulator_area_subscriptions(cortical_idx))
     }
@@ -782,6 +805,22 @@ where
 
     pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
         dispatch!(self, allocate_modulation_group(instance_ids))
+    }
+
+    pub fn rename_modulator_instance(&self, old_id: &str, new_id: &str) {
+        dispatch!(self, rename_modulator_instance(old_id, new_id))
+    }
+
+    pub fn remove_modulator_instance(&self, id: &str) {
+        dispatch!(self, remove_modulator_instance(id))
+    }
+
+    pub fn modulation_group_instance_ids(&self, group: u16) -> Vec<String> {
+        dispatch!(self, modulation_group_instance_ids(group))
+    }
+
+    pub fn modulator_ids_include_reward(&self, instance_ids: &[String]) -> bool {
+        dispatch!(self, modulator_ids_include_reward(instance_ids))
     }
 
     pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
@@ -821,29 +860,6 @@ where
         dispatch_mut!(
             self,
             unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx)
-        )
-    }
-
-    pub fn register_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-        gate_cortical_idx: u32,
-    ) -> Result<()> {
-        dispatch_mut!(
-            self,
-            register_gate_mapping(src_cortical_idx, dst_cortical_idx, gate_cortical_idx)
-        )
-    }
-
-    pub fn unregister_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-    ) -> bool {
-        dispatch_mut!(
-            self,
-            unregister_gate_mapping(src_cortical_idx, dst_cortical_idx)
         )
     }
 
@@ -1009,6 +1025,20 @@ where
     /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
         dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
+    }
+
+    /// Reset learned synapse weights of mapping `src -> dst` to `weight` and clear eligibility traces.
+    /// Returns the number of synapses reset.
+    pub fn reset_mapping_synapse_weights(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            reset_mapping_synapse_weights(src_cortical_idx, dst_cortical_idx, weight)
+        )
     }
 
     /// Remove pending delayed synaptic PSP and associative-memory schedule entries for these targets.

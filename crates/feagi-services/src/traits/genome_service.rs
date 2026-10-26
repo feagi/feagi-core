@@ -161,4 +161,12 @@ pub trait GenomeService: Send + Sync {
 
     /// Delete the instance and its driver. Without `force`, subscribers reject the delete.
     async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()>;
+
+    /// Write `physiology.simulation_timestep` (seconds) into the stored in-memory genome so a
+    /// later save, download or connectome export carries it. Does not touch the running burst
+    /// engine; the caller applies the rate. Returns the stored value.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidInput` - not finite, not > 0, or no genome is loaded
+    async fn set_simulation_timestep(&self, timestep_s: f64) -> ServiceResult<f64>;
 }

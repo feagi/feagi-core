@@ -97,6 +97,41 @@ pub const MP_DELTA_QUANTIZATION_KEY: &str = "mp_delta_quantization";
 pub const MP_RATIO_QUANTIZATION_KEY: &str = "mp_ratio_quantization";
 /// Genome key for replay-oriented MP learning.
 pub const MP_LEARNING_ENABLED_KEY: &str = "mp_learning_enabled";
+/// Genome key for the most memory neurons (short-term plus long-term) one memory area may hold.
+/// `0` means no per-area cap; only the shared memory pool limits the area.
+pub const MEMORY_NEURON_CAP_KEY: &str = "memory_neuron_cap";
+/// Genome key selecting what a memory area does when its cap or the shared pool is full.
+pub const LTM_EVICTION_KEY: &str = "ltm_eviction";
+
+/// What a memory area does when it cannot get a slot for a new neuron.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LtmEvictionMode {
+    /// Evict one of the area's neurons (lowest-lifespan short-term first, otherwise the
+    /// least recently activated long-term neuron) and create the new one.
+    #[default]
+    Lru,
+    /// Never evict: creation fails when the area cap or the pool is full.
+    None,
+}
+
+impl LtmEvictionMode {
+    /// Canonical genome string for this mode.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            LtmEvictionMode::Lru => "lru",
+            LtmEvictionMode::None => "none",
+        }
+    }
+
+    /// Parse a canonical genome string.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "lru" => Some(LtmEvictionMode::Lru),
+            "none" => Some(LtmEvictionMode::None),
+            _ => None,
+        }
+    }
+}
 
 /// Change-based membrane potential encoding for a memory area.
 ///
@@ -169,6 +204,27 @@ pub fn validate_memory_mp_properties(properties: &HashMap<String, Value>) -> Res
         }
     }
 
+    match properties.get(LTM_EVICTION_KEY) {
+        None | Some(Value::Null) => {}
+        Some(Value::String(s)) if LtmEvictionMode::parse(s).is_some() => {}
+        Some(other) => {
+            return Err(format!(
+                "{LTM_EVICTION_KEY} must be 'lru' or 'none', got {other}"
+            ))
+        }
+    }
+    match properties.get(MEMORY_NEURON_CAP_KEY) {
+        None | Some(Value::Null) => {}
+        Some(value) => {
+            if value.as_u64().is_none_or(|v| v > u64::from(u32::MAX)) {
+                return Err(format!(
+                    "{MEMORY_NEURON_CAP_KEY} must be a whole number from 0 to {}, got {value}",
+                    u32::MAX
+                ));
+            }
+        }
+    }
+
     let mp_learning = match properties.get(MP_LEARNING_ENABLED_KEY) {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => *b,
@@ -210,6 +266,10 @@ pub struct MemoryAreaProperties {
     pub min_window_activity: u32,
     /// Skip the entire field scan when current-burst density exceeds this fraction (0.0-1.0).
     pub scan_skip_density: f32,
+    /// Most memory neurons (short-term plus long-term) this area may hold; `0` = no cap.
+    pub memory_neuron_cap: u32,
+    /// What the area does when its cap or the shared pool leaves no free slot.
+    pub ltm_eviction: LtmEvictionMode,
 }
 
 impl Default for MemoryAreaProperties {
@@ -227,6 +287,8 @@ impl Default for MemoryAreaProperties {
             mp_ratio_quantization: 20.0,
             min_window_activity: 1,
             scan_skip_density: 1.0,
+            memory_neuron_cap: 0,
+            ltm_eviction: LtmEvictionMode::Lru,
         }
     }
 }
@@ -263,6 +325,20 @@ pub fn extract_memory_properties(
                 MP_CHANGE_MODE_KEY, s
             );
             MpChangeMode::None
+        }),
+    };
+
+    let ltm_eviction = match properties.get(LTM_EVICTION_KEY).and_then(|v| v.as_str()) {
+        None => defaults.ltm_eviction,
+        Some(s) => LtmEvictionMode::parse(s).unwrap_or_else(|| {
+            // @architecture:acceptable - emergency fallback; validate_memory_mp_properties
+            // rejects unknown values at genome load and API update.
+            error!(
+                target: "feagi-evolutionary",
+                "Unknown {} '{}'; falling back to '{}'",
+                LTM_EVICTION_KEY, s, defaults.ltm_eviction.as_str()
+            );
+            defaults.ltm_eviction
         }),
     };
 
@@ -309,6 +385,12 @@ pub fn extract_memory_properties(
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0)
             .clamp(0.0, 1.0) as f32,
+        memory_neuron_cap: properties
+            .get(MEMORY_NEURON_CAP_KEY)
+            .and_then(|v| v.as_u64())
+            .map(|v| v.min(u64::from(u32::MAX)) as u32)
+            .unwrap_or(defaults.memory_neuron_cap),
+        ltm_eviction,
     })
 }
 

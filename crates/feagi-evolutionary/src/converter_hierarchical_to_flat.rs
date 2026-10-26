@@ -330,6 +330,8 @@ fn convert_properties_to_flat(
         ("mp_ratio_quantization", ("mprtq-f", "cx")),
         ("min_window_activity", ("mnwin-i", "cx")),
         ("scan_skip_density", ("scnsk-f", "cx")),
+        ("memory_neuron_cap", ("memcap-i", "cx")),
+        ("ltm_eviction", ("ltmevc-t", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),

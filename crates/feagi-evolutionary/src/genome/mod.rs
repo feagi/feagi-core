@@ -44,7 +44,7 @@ pub use loader::{
 };
 pub use migration::{
     ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
-    V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator, V5ToV6Migrator,
+    V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator, V5ToV6Migrator, V6ToV7Migrator,
 };
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
 pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer, V6Normalizer};
@@ -60,7 +60,7 @@ pub use schema::{
 };
 pub use signatures::generate_signatures;
 pub use validators::{
-    V3Validator, V4Validator, V5Validator, V6Validator, ValidationReport, Validator,
+    V3Validator, V4Validator, V5Validator, V6Validator, V7Validator, ValidationReport, Validator,
 };
 
 /// Build the canonical chain registry: the **full** migrator chain, all
@@ -95,6 +95,10 @@ pub fn default_chain_registry() -> ChainRegistry {
         .expect("V5ToV6Migrator is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry
+        .register_migrator(Box::new(V6ToV7Migrator::new()))
+        .expect("V6ToV7Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
         .register_normalizer(Box::new(V3Normalizer::new()))
         .expect("V3Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
 
@@ -106,6 +110,7 @@ pub fn default_chain_registry() -> ChainRegistry {
     registry.register_validator(Box::new(V4Validator::new()));
     registry.register_validator(Box::new(V5Validator::new()));
     registry.register_validator(Box::new(V6Validator::new()));
+    registry.register_validator(Box::new(V7Validator::new()));
 
     registry
 }

@@ -32,7 +32,9 @@ pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult
     }
 }
 
-/// Set the simulation timestep in seconds (converted to burst frequency).
+/// Set the simulation timestep in seconds: stored in the genome's physiology AND applied live as
+/// burst frequency 1/timestep Hz (same behavior as `PUT /v1/physiology/`). Body:
+/// `{"simulation_timestep": 0.025}`. Contrast `PUT /v1/burst_engine/config`, which is live only.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/simulation_timestep",
@@ -42,19 +44,13 @@ pub async fn post_simulation_timestep(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, f64>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    let runtime_service = state.runtime_service.as_ref();
-
     if let Some(&timestep) = request.get("simulation_timestep") {
-        // Convert timestep (seconds) to frequency (Hz)
-        let frequency = if timestep > 0.0 { 1.0 / timestep } else { 0.0 };
-
-        match runtime_service.set_frequency(frequency).await {
-            Ok(_) => Ok(Json(HashMap::from([(
-                "message".to_string(),
-                format!("Timestep set to {}", timestep),
-            )]))),
-            Err(e) => Err(ApiError::internal(format!("Failed to set timestep: {}", e))),
-        }
+        let stored =
+            crate::endpoints::physiology::apply_simulation_timestep(&state, timestep).await?;
+        Ok(Json(HashMap::from([(
+            "message".to_string(),
+            format!("Timestep set to {}", stored),
+        )])))
     } else {
         Err(ApiError::invalid_input("simulation_timestep required"))
     }
@@ -258,6 +254,47 @@ pub async fn get_fire_queue(
 
     debug!(target: "feagi-api", "GET /fire_queue - returned {} fired neurons", total_fired);
 
+    Ok(Json(response))
+}
+
+/// Fired-neuron count per cortical area in the latest sampled burst.
+///
+/// Lightweight variant of `/v1/burst_engine/fire_queue` for live monitors: no neuron
+/// data is copied or serialized and no cortical id lookup is done. Areas are keyed by
+/// `cortical_idx` and sorted by it.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_queue/counts",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Per-area fired counts", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fire_queue_counts(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    let mut counts = runtime_service
+        .get_fire_queue_counts()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue counts: {}", e)))?;
+    let timestep = runtime_service
+        .get_burst_count()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+    counts.sort_unstable_by_key(|(cortical_idx, _)| *cortical_idx);
+    let total_fired: u64 = counts.iter().map(|(_, fired)| u64::from(*fired)).sum();
+    let areas: Vec<serde_json::Value> = counts
+        .into_iter()
+        .map(|(idx, fired)| serde_json::json!({ "idx": idx, "fired": fired }))
+        .collect();
+
+    let mut response = HashMap::new();
+    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    response.insert("total_fired".to_string(), serde_json::json!(total_fired));
+    response.insert("areas".to_string(), serde_json::json!(areas));
     Ok(Json(response))
 }
 
@@ -1035,6 +1072,10 @@ pub async fn get_config(
 }
 
 /// Update burst engine configuration including frequency and timing parameters.
+///
+/// LIVE ONLY: changes the running engine and leaves the stored genome's
+/// `physiology.simulation_timestep` unchanged (a save or export still carries the genome's
+/// value). To store a rate in the genome and apply it live, use `PUT /v1/physiology/`.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/config",

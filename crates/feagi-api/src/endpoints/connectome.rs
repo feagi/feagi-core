@@ -466,12 +466,29 @@ pub async fn get_cortical_area_neurons(
     Ok(Json(neuron_ids))
 }
 
+/// Neuron ids whose synapses belong to an area listing.
+///
+/// Dense storage ids come from `list_neurons_in_area`. Dynamic memory neurons
+/// live outside that array. Leaving them out makes an associative mapping
+/// report 0 synapses after those neurons co-fire and grow edges.
+pub(crate) fn synapse_query_neuron_ids(dense_ids: &[u32], memory_ids: &[u32]) -> Vec<u32> {
+    let mut ids = Vec::with_capacity(dense_ids.len().saturating_add(memory_ids.len()));
+    let mut seen =
+        std::collections::HashSet::with_capacity(dense_ids.len().saturating_add(memory_ids.len()));
+    for id in dense_ids.iter().chain(memory_ids.iter()) {
+        if seen.insert(*id) {
+            ids.push(*id);
+        }
+    }
+    ids
+}
+
 /// GET /v1/connectome/{cortical_area_id}/synapses
 ///
 /// **Outgoing synapses only**: edges whose **source** is a neuron in
-/// `cortical_area_id`. To list **IPU→OPU** afferent synapses, use
-/// [`get_area_synapses_incoming`] instead; destination motor areas are usually
-/// dominated by the latter.
+/// `cortical_area_id`, including dynamic memory neurons mapped into the area.
+/// To list **IPU→OPU** afferent synapses, use [`get_area_synapses_incoming`]
+/// instead; destination motor areas are usually dominated by the latter.
 #[utoipa::path(
     get,
     path = "/v1/connectome/{cortical_area_id}/synapses",
@@ -529,9 +546,12 @@ pub async fn get_area_synapses(
         lock_wait.as_secs_f64() * 1000.0
     );
 
+    let dense_ids: Vec<u32> = neurons.iter().map(|neuron| neuron.id as u32).collect();
+    let memory_ids = npu_lock.dynamic_memory_neuron_ids_in_area(cortical_idx);
+    let neuron_ids = synapse_query_neuron_ids(&dense_ids, &memory_ids);
+
     let mut all_synapses = Vec::new();
-    for neuron_info in &neurons {
-        let neuron_id = neuron_info.id as u32;
+    for neuron_id in neuron_ids {
         let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
 
         for (target_id, weight, psp, synapse_type) in outgoing {
@@ -552,10 +572,11 @@ pub async fn get_area_synapses(
 /// GET /v1/connectome/{cortical_area_id}/synapses/incoming
 ///
 /// Lists **afferent** synapses whose **post-synaptic** targets are neurons in
-/// `cortical_area_id`. Complements [`get_area_synapses`], which returns only
-/// **efferent** (outgoing) edges from this area. OPUs and other destinations
-/// are primarily driven by incoming IPU→OPU plastic synapses, so the outgoing
-/// endpoint can legitimately be empty at 200 with count 0.
+/// `cortical_area_id`, including dynamic memory neurons mapped into the area.
+/// Complements [`get_area_synapses`], which returns only **efferent** (outgoing)
+/// edges from this area. OPUs and other destinations are primarily driven by
+/// incoming IPU→OPU plastic synapses, so the outgoing endpoint can legitimately
+/// be empty at 200 with count 0.
 #[utoipa::path(
     get,
     path = "/v1/connectome/{cortical_area_id}/synapses/incoming",
@@ -570,10 +591,11 @@ pub async fn get_area_synapses_incoming(
     let connectome_service = state.connectome_service.as_ref();
     let neuron_service = state.neuron_service.as_ref();
 
-    let _area_info = connectome_service
+    let area_info = connectome_service
         .get_cortical_area(&area_id)
         .await
         .map_err(|_| ApiError::not_found("CorticalArea", &area_id))?;
+    let cortical_idx = area_info.cortical_idx;
 
     let neurons = neuron_service
         .list_neurons_in_area(&area_id, None)
@@ -598,9 +620,12 @@ pub async fn get_area_synapses_incoming(
         .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
     let npu_lock = npu_arc.lock().unwrap();
 
+    let dense_ids: Vec<u32> = neurons.iter().map(|neuron| neuron.id as u32).collect();
+    let memory_ids = npu_lock.dynamic_memory_neuron_ids_in_area(cortical_idx);
+    let neuron_ids = synapse_query_neuron_ids(&dense_ids, &memory_ids);
+
     let mut all_synapses = Vec::new();
-    for neuron_info in &neurons {
-        let neuron_id = neuron_info.id as u32;
+    for neuron_id in neuron_ids {
         let incoming = npu_lock.get_incoming_synapses(neuron_id);
 
         for (source_id, weight, psp, synapse_type) in incoming {
@@ -1601,8 +1626,14 @@ fn load_connectome_snapshot_from_bytes(
 mod tests {
     use super::{
         connectome_dir, connectome_file_name, connectome_save_path, list_connectome_directory,
-        resolve_connectome_file_name, save_connectome_snapshot,
+        resolve_connectome_file_name, save_connectome_snapshot, synapse_query_neuron_ids,
     };
+
+    #[test]
+    fn synapse_query_includes_memory_ids_absent_from_dense_storage() {
+        let ids = synapse_query_neuron_ids(&[4, 9], &[50_000_010, 9]);
+        assert_eq!(ids, vec![4, 9, 50_000_010]);
+    }
     use feagi_npu_neural::types::connectome::{
         ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray, SerializableSynapseArray,
     };

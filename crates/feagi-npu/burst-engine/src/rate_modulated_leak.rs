@@ -64,19 +64,61 @@ pub struct RateModulatedLeakRegistry {
 }
 
 impl RateModulatedLeakConfig {
+    /// Validate an enabled config. `Ok(None)` when disabled; `Err` names the offending field.
+    pub fn validate(value: &Value) -> Result<Option<Self>, String> {
+        let obj = value
+            .as_object()
+            .ok_or_else(|| "rate_modulated_leak must be a JSON object".to_string())?;
+        match obj.get("enabled") {
+            None => return Ok(None),
+            Some(Value::Bool(false)) => return Ok(None),
+            Some(Value::Bool(true)) => {}
+            Some(_) => return Err("rate_modulated_leak.enabled must be a boolean".to_string()),
+        }
+        let cfg: Self = serde_json::from_value(value.clone())
+            .map_err(|e| format!("rate_modulated_leak has invalid field types: {e}"))?;
+        if !cfg.rate_ema_tau_bursts.is_finite() || cfg.rate_ema_tau_bursts <= 0.0 {
+            return Err(format!(
+                "rate_modulated_leak.rate_ema_tau_bursts must be finite and > 0 (got {})",
+                cfg.rate_ema_tau_bursts
+            ));
+        }
+        if !cfg.gain.is_finite() || cfg.gain < 0.0 {
+            return Err(format!(
+                "rate_modulated_leak.gain must be finite and >= 0 (got {})",
+                cfg.gain
+            ));
+        }
+        if !(0.0..=1.0).contains(&cfg.target_firing_per_burst) {
+            return Err(format!(
+                "rate_modulated_leak.target_firing_per_burst must be in [0, 1] (got {})",
+                cfg.target_firing_per_burst
+            ));
+        }
+        if !(0.0..=1.0).contains(&cfg.leak_min) {
+            return Err(format!(
+                "rate_modulated_leak.leak_min must be finite and in [0, 1] (got {})",
+                cfg.leak_min
+            ));
+        }
+        if !(0.0..=1.0).contains(&cfg.leak_max) {
+            return Err(format!(
+                "rate_modulated_leak.leak_max must be finite and in [0, 1] (got {})",
+                cfg.leak_max
+            ));
+        }
+        if cfg.leak_min > cfg.leak_max {
+            return Err(format!(
+                "rate_modulated_leak.leak_min ({}) must be <= leak_max ({})",
+                cfg.leak_min, cfg.leak_max
+            ));
+        }
+        Ok(Some(cfg))
+    }
+
     /// Parse or return `None` for invalid or disabled configs.
     pub fn parse_from_cortical_property(value: &Value) -> Option<Self> {
-        let cfg: Self = serde_json::from_value(value.clone()).ok()?;
-        if !cfg.enabled {
-            return None;
-        }
-        if !cfg.rate_ema_tau_bursts.is_finite() || cfg.rate_ema_tau_bursts <= 0.0 {
-            return None;
-        }
-        if !cfg.gain.is_finite() {
-            return None;
-        }
-        Some(cfg)
+        Self::validate(value).ok().flatten()
     }
 }
 
@@ -85,8 +127,29 @@ impl RateModulatedLeakRegistry {
         self.areas.is_empty()
     }
 
+    pub fn contains(&self, cortical_idx: u32) -> bool {
+        self.areas.contains_key(&cortical_idx)
+    }
+
     pub fn remove(&mut self, cortical_idx: u32) {
         self.areas.remove(&cortical_idx);
+    }
+
+    /// Drop every registration.
+    pub fn clear(&mut self) {
+        self.areas.clear();
+    }
+
+    /// Restart the homeostat for an area from `leak` after an explicit leak edit.
+    /// Keeps the rate EMA; the next update step moves from this value.
+    pub fn reseed_leak(&mut self, cortical_idx: u32, leak: f32) {
+        if !leak.is_finite() {
+            return;
+        }
+        if let Some(st) = self.areas.get_mut(&cortical_idx) {
+            let g = leak.clamp(0.0, 1.0);
+            st.g_leak.iter_mut().for_each(|x| *x = g);
+        }
     }
 
     /// Replace registration for a cortical area, or remove if `value` is not an enabled, valid object.
@@ -130,9 +193,8 @@ impl RateModulatedLeakRegistry {
         }
         for (cortical_idx, st) in self.areas.iter_mut() {
             let n_period = st.config.update_every_n_bursts.max(1) as u64;
-            if (burst_count % n_period) != 0 {
-                continue;
-            }
+            // EMA samples every burst; only the leak step is gated by the cadence.
+            let leak_step_due = (burst_count % n_period) == 0;
             let tau_r = st.config.rate_ema_tau_bursts;
             if !tau_r.is_finite() || tau_r <= 0.0 {
                 continue;
@@ -167,6 +229,9 @@ impl RateModulatedLeakRegistry {
                 }
                 let fired: f32 = if first_bm.contains(nid) { 1.0 } else { 0.0 };
                 st.r_ema[j] = (1.0 - alpha_r) * st.r_ema[j] + alpha_r * fired;
+                if !leak_step_due {
+                    continue;
+                }
                 let e: f32 = st.r_ema[j] - t;
                 st.g_leak[j] = (st.g_leak[j] + gain * e).clamp(g_min, g_max);
                 let g: f32 = st.g_leak[j].clamp(0.0, 1.0);
@@ -397,6 +462,47 @@ mod tests {
         );
     }
 
+    /// Cadence aliasing: a neuron that fires on bursts 1,2,4,5 (never on update bursts 3,6)
+    /// has true rate ~0.67 > target 0.1 (tau 3 keeps the EMA from decaying to ~0 by each silent update burst), so a correct homeostat raises leak.
+    #[test]
+    fn apply_burstal_cadence_aliasing_does_not_hide_firing() {
+        let neuron_idx: usize = 2;
+        let cortical = 13u32;
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(
+            cortical,
+            &json!({
+                "enabled": true,
+                "target_firing_per_burst": 0.1,
+                "rate_ema_tau_bursts": 3.0,
+                "gain": 0.05,
+                "leak_min": 0.0,
+                "leak_max": 1.0,
+                "update_every_n_bursts": 3,
+            }),
+            0.2,
+            vec![neuron_idx],
+        );
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(cortical, 16).unwrap();
+        let mut leaks = vec![0.0_f32; 8];
+        leaks[neuron_idx] = 0.2;
+        for t in 1..=6u64 {
+            if t % 3 == 0 {
+                archive_burst_silent(&mut ledger, t);
+            } else {
+                archive_burst_fires(&mut ledger, t, cortical, &[neuron_idx as u32]);
+            }
+            reg.apply_burstal(t, &ledger, &mut leaks);
+        }
+        println!("aliasing leak after 6 bursts: {}", leaks[neuron_idx]);
+        assert!(
+            leaks[neuron_idx] > 0.2,
+            "firing rate 0.67 > target 0.1 should raise leak above 0.2; got {}",
+            leaks[neuron_idx]
+        );
+    }
+
     #[test]
     fn apply_burstal_update_every_n_bursts_cadence() {
         let neuron_idx: usize = 2;
@@ -433,8 +539,8 @@ mod tests {
             "leak should move after bursts with cadence-3 updates; got {}",
             leaks[neuron_idx]
         );
-        // Bursts 1,2,4,5 skip (t % 3 != 0); 3 and 6 apply — two updates from same r_ema trajectory
-        // as two-step would be wrong if every burst applied; we only assert non-trivial change vs 0.2.
+        // The EMA is sampled every burst; the leak step applies only on bursts 3 and 6 (t % 3 == 0).
+        // Assert a non-trivial rise vs 0.2.
         assert!(leaks[neuron_idx] > 0.2, "{}", leaks[neuron_idx]);
     }
 
@@ -679,5 +785,93 @@ mod tests {
         let mut leaks = vec![0.0_f32; 16];
         reg.apply_burstal(1, &ledger, &mut leaks);
         assert!((leaks[neuron_idx] - 1.0).abs() < 1e-5);
+    }
+
+    fn enabled_with(field: &str, v: Value) -> Value {
+        let mut o = json!({ "enabled": true });
+        o[field] = v;
+        o
+    }
+
+    #[test]
+    fn validate_disabled_is_ok_none() {
+        assert!(matches!(
+            RateModulatedLeakConfig::validate(&json!({ "enabled": false, "gain": -5.0 })),
+            Ok(None)
+        ));
+        assert!(matches!(
+            RateModulatedLeakConfig::validate(&json!({})),
+            Ok(None)
+        ));
+    }
+
+    #[test]
+    fn validate_enabled_defaults_ok() {
+        let c = RateModulatedLeakConfig::validate(&json!({ "enabled": true })).unwrap();
+        assert!(c.is_some());
+    }
+
+    #[test]
+    fn validate_rejects_each_bad_field() {
+        let cases = [
+            ("rate_ema_tau_bursts", json!(0.0), "rate_ema_tau_bursts"),
+            ("rate_ema_tau_bursts", json!(-1.0), "rate_ema_tau_bursts"),
+            ("gain", json!(-0.1), "gain"),
+            (
+                "target_firing_per_burst",
+                json!(1.5),
+                "target_firing_per_burst",
+            ),
+            (
+                "target_firing_per_burst",
+                json!(-0.1),
+                "target_firing_per_burst",
+            ),
+            ("leak_min", json!(-0.1), "leak_min"),
+            ("leak_min", json!(1.2), "leak_min"),
+            ("leak_max", json!(1.2), "leak_max"),
+            ("leak_max", json!(-0.2), "leak_max"),
+            ("gain", json!("high"), "invalid field types"),
+        ];
+        for (field, val, needle) in cases {
+            let err = RateModulatedLeakConfig::validate(&enabled_with(field, val.clone()))
+                .expect_err(&format!("{field}={val} should be rejected"));
+            assert!(err.contains(needle), "{field}={val}: {err}");
+        }
+    }
+
+    #[test]
+    fn validate_rejects_min_above_max_and_non_object() {
+        let v = json!({ "enabled": true, "leak_min": 0.6, "leak_max": 0.3 });
+        let err = RateModulatedLeakConfig::validate(&v).unwrap_err();
+        assert!(
+            err.contains("leak_min") && err.contains("leak_max"),
+            "{err}"
+        );
+        assert!(RateModulatedLeakConfig::validate(&json!("on")).is_err());
+        assert!(RateModulatedLeakConfig::validate(&json!(true)).is_err());
+        assert!(RateModulatedLeakConfig::validate(&json!({ "enabled": "yes" })).is_err());
+    }
+
+    #[test]
+    fn parse_from_property_invalid_is_none() {
+        let v = json!({ "enabled": true, "gain": -1.0 });
+        assert!(RateModulatedLeakConfig::parse_from_cortical_property(&v).is_none());
+    }
+
+    #[test]
+    fn reseed_leak_sets_all_g_leak_and_keeps_r_ema() {
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(7, &json!({ "enabled": true }), 0.1, vec![0, 1]);
+        reg.areas.get_mut(&7).unwrap().r_ema = vec![0.4, 0.6];
+        reg.reseed_leak(7, 1.7);
+        let st = &reg.areas[&7];
+        assert_eq!(st.g_leak, vec![1.0, 1.0]);
+        assert_eq!(st.r_ema, vec![0.4, 0.6]);
+        reg.reseed_leak(7, 0.25);
+        assert_eq!(reg.areas[&7].g_leak, vec![0.25, 0.25]);
+        reg.reseed_leak(99, 0.5); // unknown area: no-op
+        reg.clear();
+        assert!(reg.is_empty());
     }
 }
