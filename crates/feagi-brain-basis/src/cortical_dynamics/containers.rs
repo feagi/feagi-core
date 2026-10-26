@@ -2,6 +2,7 @@ use crate::cortical_dynamics::model::data_structs::cortical_area_property_flags:
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::collections::par_data::par_data::ParDataStore;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use feagi_basis::prelude::ParData;
 use crate::cortical_dynamics::model::cortical_dynamics_model::{CorticalDynamicsModel, CorticalAreaModelNeuronSpecification};
 use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
 
@@ -35,13 +36,12 @@ where
     FIQ: FeagiIndexQuantization,
     CDQ: CorticalDynamicsQuantization,
     CDM: CorticalDynamicsModel<CDQ>,
-    Storage: ParDataStore
+    Storage: ParDataStore<Elem=CDM::NeuronDataInternal>
+
 {
-    /// The per neuron level data that should be saved to the connectome
-    pub neuron_data_internal:
-        <CDM::NeuronDataInternal as CorticalAreaModelNeuronSpecification<CDQ>>::Parallelized<FIQ, Storage>
-    
-    // No universal data that is intended to be saved in storage
+    /// Per Neuron Data that should be saved
+    pub neuron_data_internal: ParData<FIQ::NeuronIndexQuant, Storage>,
+    _p: core::marker::PhantomData<(CDM, CDQ)>
 }
 
 //endregion

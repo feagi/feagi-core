@@ -1,7 +1,4 @@
-use crate::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_basis::collections::par_data::par_data::ParDataStore;
 use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
 // NOTE: How this works is a sub trait is made FIRST per cortical area model, then
 // there are implementations under that
@@ -47,29 +44,15 @@ where
 //region Specifications
 
 /// A Cortical Area Model Specification at the cortical level, typed as singular elements
-pub trait CorticalAreaModelCorticalSpecification<MPQ: MembranePotentialQuantization> {
+pub trait CorticalAreaModelCorticalSpecification<CDQ: CorticalDynamicsQuantization> {
     // Any cortical area model data should be defined here (for the specification)
 }
 
+
+
 /// A Cortical Area Model Specification at the neuron level, typed as singular elements
-pub trait CorticalAreaModelNeuronSpecification<MPQ: MembranePotentialQuantization> {
-    /// Instead of singular element types, get them as some form of linear collection
-    type Parallelized<
-        FIQ: FeagiIndexQuantization,
-        Storage: ParDataStore
-    >: CorticalAreaModelNeuronParallelizedSpecification<MPQ, FIQ, Storage>;
-}
+pub trait CorticalAreaModelNeuronSpecification<CDQ: CorticalDynamicsQuantization> {}
 
 
-/// Should have the same types as `CorticalAreaQuantizationNeuronSpecification` but as
-/// `ParData` element types (a linear collection of them)
-pub trait CorticalAreaModelNeuronParallelizedSpecification<
-    MPQ: MembranePotentialQuantization,
-    FIQ: FeagiIndexQuantization,
-    Storage: ParDataStore>
-{
-    // Define the same types here with the same name
-    // but using ParData<FIQ::NeuronIndexQuant, CollectionType<Element>>
-}
 
 

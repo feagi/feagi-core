@@ -127,10 +127,6 @@ impl CorticalDynamicsQuantizationTemplate {
     /// Generate the model's quantization trait, a marker struct implementing it per
     /// implementation, and the model's data structs
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
-        let brain_basis = brain_basis_path();
-        let quantization_trait = quote!(#brain_basis::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization);
-        let membrane_trait = quote!(#brain_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization);
-
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
         let model_struct = self.model_struct_name();
@@ -157,11 +153,11 @@ impl CorticalDynamicsQuantizationTemplate {
 
                 unsafe impl ::core::marker::Send for #struct_name {}
 
-                impl #membrane_trait for #struct_name {
+                impl MembranePotentialQuantization for #struct_name {
                     type MembranePotentialQuant = #membrane_potential_quant;
                 }
 
-                impl #quantization_trait for #struct_name {
+                impl CorticalDynamicsQuantization for #struct_name {
                     type Model = #model_struct<Self>;
                 }
 
@@ -196,7 +192,7 @@ impl CorticalDynamicsQuantizationTemplate {
 
         quote! {
             #( #model_attributes )*
-            pub trait #model_trait: #quantization_trait {
+            pub trait #model_trait: CorticalDynamicsQuantization {
                 #( #associated_types )*
             }
 
@@ -436,13 +432,3 @@ fn parse_data_struct_fields(
 
 //region Generated Code Paths
 
-// NOTE: Generated code names everything by absolute path through `feagi_brain_basis`, so it
-// compiles wherever a template is defined. `feagi_brain_basis` declares
-// `extern crate self as feagi_brain_basis` so these paths also resolve inside of it
-
-/// Absolute path to the `feagi_brain_basis` crate
-pub fn brain_basis_path() -> proc_macro2::TokenStream {
-    quote!(::feagi_brain_basis)
-}
-
-//endregion

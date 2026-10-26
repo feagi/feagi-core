@@ -1,6 +1,7 @@
+use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
 use half::{bf16, f16};
-use feagi_basis::prelude::QuantizedDecimalUnwrappedTrait;
-use crate::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
+use crate::cortical_dynamics::model::cortical_dynamics_model::{CorticalAreaModelCorticalSpecification, CorticalAreaModelNeuronSpecification, CorticalDynamicsModel};
 use crate::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 
 pub struct CorticalDynamicsModelCorePower<CDQ>(core::marker::PhantomData<CDQ>)
@@ -10,54 +11,87 @@ impl<CDQ> CorticalDynamicsModel<CDQ> for CorticalDynamicsModelCorePower<CDQ>
 where
     CDQ: CorticalDynamicsQuantizationCorePower
 {
-    type CorticalDataProperties = ();
-    type CorticalDataInternal = ();
-    type CorticalDataScratch = ();
-    type CorticalFunctionContext = ();
-    type NeuronDataInternal = ();
-    type NeuronDataScratch = ();
+    type CorticalDataProperties = CorticalDataPropertiesCorePower<CDQ>;
+    type CorticalDataInternal = CorticalDataInternalCorePower<CDQ>;
+    type CorticalDataScratch = CorticalDataScratchCorePower<CDQ>;
+    type CorticalFunctionContext = CorticalFunctionContextCorePower<CDQ>;
+    type NeuronDataInternal = NeuronDataInternalCorePower<CDQ>;
+    type NeuronDataScratch = NeuronDataScratchCorePower<CDQ>;
 }
 
 
 define_cortical_dynamics_quantization_template! {
     /// Quantization For the Core Power type
     CorePower: {
-        T1: QuantizedDecimalUnwrappedTrait,
-        T2: QuantizedDecimalUnwrappedTrait,
+
      }
 
      implementations: {
          Float16: {
              MembranePotentialQuant: f16,
-            T1: f32,
-            T2: f32,
          }
 
         BFloat16: {
              MembranePotentialQuant: bf16,
-            T1: f32,
-            T2: f32,
          }
 
          Float32: {
              MembranePotentialQuant: f32,
-            T1: f32,
-            T2: f32,
          }
 
          Float64: {
              MembranePotentialQuant: f64,
-            T1: f32,
-            T2: f32,
          }
      }
-
-    CorticalDataProperties: {
-        t_1: T1
-    }
  }
 
 cortical_dynamics_quantization_core_power_template!(expand_cortical_dynamics_quantization);
+
+pub struct CorticalDataPropertiesCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelCorticalSpecification<CDQ> for CorticalDataPropertiesCorePower<CDQ> {}
+
+pub struct CorticalDataInternalCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelCorticalSpecification<CDQ> for CorticalDataInternalCorePower<CDQ> {}
+
+
+pub struct CorticalDataScratchCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelCorticalSpecification<CDQ> for CorticalDataScratchCorePower<CDQ> {}
+
+pub struct CorticalFunctionContextCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelCorticalSpecification<CDQ> for CorticalFunctionContextCorePower<CDQ> {}
+
+
+
+
+
+pub struct NeuronDataInternalCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelNeuronSpecification<CDQ> for NeuronDataInternalCorePower<CDQ> {
+    
+}
+
+
+pub struct NeuronDataScratchCorePower<CDQ: CorticalDynamicsQuantizationCorePower> {
+    _p: core::marker::PhantomData<CDQ>,
+}
+
+impl<CDQ: CorticalDynamicsQuantizationCorePower> CorticalAreaModelNeuronSpecification<CDQ> for NeuronDataScratchCorePower<CDQ> {
+
+}
 
 
 
