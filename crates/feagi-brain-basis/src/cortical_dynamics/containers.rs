@@ -5,6 +5,8 @@ use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use crate::cortical_dynamics::model::cortical_dynamics_model::{CorticalDynamicsModel, CorticalAreaModelNeuronSpecification};
 use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
 
+
+//region Storage
 /// Generic struct that contains the storable (AKA not scratch) data for a given cortical area
 /// model type and quantization
 pub struct CorticalDynamicsCorticalStorage<CDM, CDQ>
@@ -42,7 +44,7 @@ where
     // No universal data that is intended to be saved in storage
 }
 
-
+//endregion
 
 
 

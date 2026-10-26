@@ -60,6 +60,7 @@ pub trait CorticalAreaModelNeuronSpecification<MPQ: MembranePotentialQuantizatio
     >: CorticalAreaModelNeuronParallelizedSpecification<MPQ, FIQ, Storage>;
 }
 
+
 /// Should have the same types as `CorticalAreaQuantizationNeuronSpecification` but as
 /// `ParData` element types (a linear collection of them)
 pub trait CorticalAreaModelNeuronParallelizedSpecification<
@@ -70,5 +71,27 @@ pub trait CorticalAreaModelNeuronParallelizedSpecification<
     // Define the same types here with the same name
     // but using ParData<FIQ::NeuronIndexQuant, CollectionType<Element>>
 }
+
+//region Null Implementation
+
+
+/// Null implementation
+impl<MPQ: MembranePotentialQuantization> CorticalAreaModelCorticalSpecification<MPQ> for () {}
+
+
+/// Null implementation
+impl<MPQ: MembranePotentialQuantization> CorticalAreaModelNeuronSpecification<MPQ> for ()
+{ type Parallelized<FIQ: FeagiIndexQuantization, Storage: ParDataStore> = (); }
+
+
+/// Null implementation
+impl<
+    MPQ: MembranePotentialQuantization,
+    FIQ: FeagiIndexQuantization,
+    Storage: ParDataStore
+> CorticalAreaModelNeuronParallelizedSpecification<MPQ, FIQ, Storage> for () {}
+
+//endregion
+
 
 //endregion

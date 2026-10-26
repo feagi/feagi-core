@@ -116,6 +116,7 @@ members = [
     "crates/feagi-basis/feagi-basis-proc-common",
 
     "crates/feagi-brain-basis",
+    "crates/feagi-brain-basis/feagi-brain-basis-proc",
     "crates/feagi-brain-processing",
     "crates/feagi-brain-processing/burst-engines/feagi-npu-burst-basis",
     "crates/feagi-brain-processing/burst-engines/feagi-npu-burst-rayon",

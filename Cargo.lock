@@ -715,6 +715,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-brain-basis-proc"
+version = "0.1.1"
+dependencies = [
+ "feagi-macro-components",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "feagi-brain-processing"
 version = "0.1.1"
 dependencies = [

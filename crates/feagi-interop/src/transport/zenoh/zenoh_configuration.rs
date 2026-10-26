@@ -23,6 +23,11 @@ impl ZenohConfigurationBuilder {
         self.building_config.ws_client_target = Some(socket)
     }
 
+    #[cfg(feature = "std")] // TODO also feature for shm
+    pub fn set_shared_memory(&mut self, allow_shm: bool) {
+        self.building_config.enable_memory_sharing = allow_shm;
+    }
+
     /// Errors with `NothingEnabled` if no way of connecting to other nodes was enabled
     pub fn build(self) -> Result<ZenohConfiguration, ZenohConfigurationError> {
         let config = &self.building_config;
@@ -48,7 +53,8 @@ pub struct ZenohConfiguration {
     /// a config that is calling for features that arent enabled, we can return a descript
     /// error later
     ws_server_bind: Option<SocketAddr>,
-    ws_client_target: Option<SocketAddr>
+    ws_client_target: Option<SocketAddr>,
+    enable_memory_sharing: bool,
 
 
 }
