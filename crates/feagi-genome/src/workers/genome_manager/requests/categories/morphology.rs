@@ -54,6 +54,7 @@ define_request_message_category! {
             path: "morphologies",
             description: "Get all morphology definitions with their complete configurations",
             alloc_only: true,
+            flatten: true,
             response: {
                 morphologies: HashMap<String, MorphologyDefinition>, "Definitions, keyed by name",
             },

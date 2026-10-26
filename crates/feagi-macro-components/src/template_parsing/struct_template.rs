@@ -28,12 +28,14 @@ impl StructTemplate {
     }
 
     /// Outputs a token stream that generates this definition as a struct, with name, optional
-    /// comment, visibility (of the struct and its fields), and any attributes such as derives
+    /// comment, visibility (of the struct and its fields), any attributes such as derives, and
+    /// attributes put on every field
     pub fn generate_rust_struct(
         &self,
         struct_name: Ident,
         description: Option<LitStr>,
         attributes: proc_macro2::TokenStream,
+        field_attributes: proc_macro2::TokenStream,
         visibility: RustVisibility,
     ) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
@@ -52,10 +54,12 @@ impl StructTemplate {
             if let Some(comment) = optional_comment {
                 properties.extend(quote! {
                     #[doc = #comment]
+                    #field_attributes
                     #visibility #name: #property_type,
                 })
             } else {
                 properties.extend(quote! {
+                    #field_attributes
                     #visibility #name: #property_type,
                 })
             }

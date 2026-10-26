@@ -55,6 +55,7 @@ define_request_message_category! {
             },
             description: "Get all brain regions with their member cortical areas and child regions",
             alloc_only: true,
+            flatten: true,
             response: {
                 regions: HashMap<String, RegionMembersEntry>,
             },

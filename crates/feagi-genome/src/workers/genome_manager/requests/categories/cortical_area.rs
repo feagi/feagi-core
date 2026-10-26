@@ -190,6 +190,7 @@ define_request_message_category! {
             path: "ipu",
             description: "List the IDs of all IPU (sensory) cortical areas",
             alloc_only: true,
+            flatten: true,
             response: {
                 cortical_ids: Vec<Base64EncodedCorticalID>, "IDs of all IPU cortical areas",
             },
@@ -198,6 +199,7 @@ define_request_message_category! {
             path: "opu",
             description: "List the IDs of all OPU (motor) cortical areas",
             alloc_only: true,
+            flatten: true,
             response: {
                 cortical_ids: Vec<Base64EncodedCorticalID>, "IDs of all OPU cortical areas",
             },
@@ -206,6 +208,7 @@ define_request_message_category! {
             path: "ipu/types",
             description: "Get metadata (encodings, formats, units, topology) for every available IPU type",
             alloc_only: true,
+            flatten: true,
             response: {
                 types: HashMap<String, CorticalTypeMetadata>, "Metadata keyed by IPU type key (e.g. 'isvi')",
             },
@@ -214,6 +217,7 @@ define_request_message_category! {
             path: "opu/types",
             description: "Get metadata (encodings, formats, units, topology) for every available OPU type",
             alloc_only: true,
+            flatten: true,
             response: {
                 types: HashMap<String, CorticalTypeMetadata>, "Metadata keyed by OPU type key (e.g. 'omot')",
             },

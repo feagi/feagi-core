@@ -80,6 +80,7 @@ impl FeagiRequestMessageRustStructNames {
 ///     },
 ///     description: "Description String",
 ///     alloc_only: true,                  (optional, defaults to false)
+///     flatten: true,                     (optional, defaults to false)
 ///     payload: {                         (optional, Read messages send it as the URL query in REST)
 ///         property_name: Type, "optional_comment",
 ///     },
@@ -96,6 +97,9 @@ pub struct FeagiRequestMessage<const METHOD_TYPE_U8: FeagiRequestMessageU8> {
     /// with its `alloc` feature. When false, the template author confirms the message works
     /// without an allocator
     pub alloc_only: bool,
+    /// Every field of the payload and response structs is `#[serde(flatten)]`, collapsing the
+    /// top layer of their serialized form
+    pub flatten: bool,
     pub payload: StructTemplate,
     pub response: StructTemplate,
     pub error: MessageErrorTemplate,
@@ -178,6 +182,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         let request_module = quote!(#basis::feagi_message::request);
         let payloads = quote!(#request_module::feagi_request_response_payloads);
         let specification_derives = serde_data_derive_attributes();
+        let body_field_attributes = if self.flatten { quote!(#[serde(flatten)]) } else { quote!() };
         let mut output = proc_macro2::TokenStream::new();
 
         // Every field of the message, from all of its request specifications
@@ -187,6 +192,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                                           struct_name: syn::Ident,
                                           trait_path: proc_macro2::TokenStream,
                                           argument: syn::Ident,
+                                          field_attributes: proc_macro2::TokenStream,
                                           output: &mut proc_macro2::TokenStream|
          -> Specification {
             if template.is_empty() {
@@ -208,7 +214,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 decompose_fields.extend(quote!(#field_name: self.#field_name,));
             }
 
-            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), RustVisibility::Public));
+            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), field_attributes, RustVisibility::Public));
             output.extend(quote! {
                 impl #trait_path for #struct_name {}
             });
@@ -226,6 +232,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             names.feagi_message_parameter_specification_struct_name(),
             quote!(#basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameters),
             format_ident!("parameters"),
+            quote!(),
             &mut output,
         );
         let payload = generate_specification(
@@ -233,6 +240,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             names.feagi_message_payload_specification_struct_name(),
             quote!(#payloads::FeagiRequestPayload),
             format_ident!("request_payload"),
+            body_field_attributes.clone(),
             &mut output,
         );
 
@@ -247,7 +255,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             let mut template = self.response.clone();
             template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
             let struct_name = names.feagi_message_response_specification_struct_name();
-            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), RustVisibility::Public));
+            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), body_field_attributes, RustVisibility::Public));
             output.extend(quote! {
                 impl #payloads::FeagiResponsePayload for #struct_name {}
             });
@@ -261,6 +269,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             message_name.clone(),
             Some(self.description.clone()),
             quote!(#[derive(Clone, Debug)]),
+            quote!(),
             RustVisibility::Public,
         ));
 
@@ -374,6 +383,7 @@ mod kw {
     syn::custom_keyword!(path_item_descriptions);
     syn::custom_keyword!(description);
     syn::custom_keyword!(alloc_only);
+    syn::custom_keyword!(flatten);
     syn::custom_keyword!(payload);
     syn::custom_keyword!(response);
     syn::custom_keyword!(error);
@@ -398,6 +408,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
         let mut path_item_descriptions = None;
         let mut description = None;
         let mut alloc_only = None;
+        let mut flatten = None;
         let mut payload = None;
         let mut response = None;
         let mut error = None;
@@ -423,6 +434,11 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
                 members.parse::<Token![:]>()?;
                 let value: LitBool = members.parse()?;
                 set_once(&mut alloc_only, value.value, "alloc_only", span)?;
+            } else if lookahead.peek(kw::flatten) {
+                members.parse::<kw::flatten>()?;
+                members.parse::<Token![:]>()?;
+                let value: LitBool = members.parse()?;
+                set_once(&mut flatten, value.value, "flatten", span)?;
             } else if lookahead.peek(kw::payload) {
                 members.parse::<kw::payload>()?;
                 members.parse::<Token![:]>()?;
@@ -457,6 +473,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
             path_item_descriptions: path_item_descriptions.unwrap_or_else(PropertyDescriptors::new_empty),
             description,
             alloc_only: alloc_only.unwrap_or(false),
+            flatten: flatten.unwrap_or(false),
             payload: payload.unwrap_or_else(StructTemplate::new_empty),
             response: response.unwrap_or_else(StructTemplate::new_empty),
             error: error.unwrap_or(MessageErrorTemplate::Default),
