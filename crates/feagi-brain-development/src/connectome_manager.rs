@@ -2809,6 +2809,19 @@ impl ConnectomeManager {
         memory_area_id: &CorticalID,
         twin_id: &CorticalID,
     ) -> BduResult<()> {
+        self.write_memory_twin_episodic_mapping(memory_area_id, twin_id, true)
+    }
+
+    /// Write the memory-to-twin episodic rule. With `regenerate` the pair's synapses are pruned
+    /// and rebuilt from the rules; the connectome-restore path passes `false` because the
+    /// snapshot already holds those synapses (including long-term memory neuron edges onto the
+    /// twin, which synaptogenesis cannot recreate and a prune would destroy).
+    fn write_memory_twin_episodic_mapping(
+        &mut self,
+        memory_area_id: &CorticalID,
+        twin_id: &CorticalID,
+        regenerate: bool,
+    ) -> BduResult<()> {
         if !self.morphology_registry.contains("episodic_memory") {
             feagi_evolutionary::add_core_morphologies(&mut self.morphology_registry);
         }
@@ -2824,7 +2837,9 @@ impl ConnectomeManager {
             "plasticity_window": 0,
         })];
         self.update_cortical_mapping(memory_area_id, twin_id, mapping_data)?;
-        let _ = self.regenerate_synapses_for_mapping(memory_area_id, twin_id)?;
+        if regenerate {
+            let _ = self.regenerate_synapses_for_mapping(memory_area_id, twin_id)?;
+        }
         // Update cortical area hash so BV refreshes area details (outgoing mappings).
         self.refresh_cortical_area_hashes(true, false);
         Ok(())
@@ -6918,7 +6933,8 @@ impl ConnectomeManager {
             .and_then(|map| map.get(&twin_id.as_base_64()))
             .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "episodic_memory"));
         if !has_replay {
-            self.ensure_memory_twin_episodic_mapping(memory_area_id, twin_id)?;
+            // Restore path: keep the synapses the connectome snapshot already carries.
+            self.write_memory_twin_episodic_mapping(memory_area_id, twin_id, false)?;
         }
         self.assign_generated_twin_region(twin_id, upstream_area_id, memory_area_id)?;
         Ok(())

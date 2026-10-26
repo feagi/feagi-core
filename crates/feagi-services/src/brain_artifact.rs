@@ -640,7 +640,7 @@ mod tests {
 
         let result = validate_and_migrate_brain_artifact(&bytes).expect("migrate both-key genome");
         assert!(result.report.valid);
-        assert_eq!(result.report.target_genome_schema_version, Some(6));
+        assert_eq!(result.report.target_genome_schema_version, Some(7));
 
         let migrated_snapshot =
             load_connectome_from_bytes(&result.artifact_bytes).expect("decode migrated artifact");
@@ -690,7 +690,7 @@ mod tests {
             validate_and_migrate_brain_artifact(&bytes).expect("current genome with areas folds");
         assert!(result.report.valid);
         assert_eq!(result.report.source_genome_schema_version, Some(6));
-        assert_eq!(result.report.target_genome_schema_version, Some(6));
+        assert_eq!(result.report.target_genome_schema_version, Some(7));
 
         let migrated_snapshot =
             load_connectome_from_bytes(&result.artifact_bytes).expect("decode migrated artifact");
