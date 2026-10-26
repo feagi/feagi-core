@@ -7505,7 +7505,7 @@ mod tests {
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
         };
 
-        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock();
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
 
         let src_id = CorticalID::try_from_bytes(b"cgstat01").unwrap();
         let src = CorticalArea::new(

@@ -265,7 +265,9 @@ fn controller_surfaces_cancellation_as_cancelled() {
     // Running first, Cancelled last; no Completed, no Failed.
     assert!(matches!(kinds.first(), Some(RunEventKind::Running)));
     assert!(matches!(kinds.last(), Some(RunEventKind::Cancelled { .. })));
-    assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Failed { .. })));
+    assert!(!kinds
+        .iter()
+        .any(|k| matches!(k, RunEventKind::Failed { .. })));
     assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Completed)));
 }
 

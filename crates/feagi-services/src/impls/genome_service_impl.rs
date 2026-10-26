@@ -5656,7 +5656,7 @@ mod tests {
             Arc::new(TracingMutex::new(DynamicNPU::F32(npu), name))
         }
 
-        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock();
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
 
         // Neuroembryogenesis develops into the process-wide ConnectomeManager, which
         // has no NPU in a unit test until one is attached.
@@ -5684,10 +5684,12 @@ mod tests {
             .expect("load genome");
         assert!(info.genome_num.is_some());
 
-        let state = StateManager::instance();
-        let state = state.read();
-        assert_eq!(state.get_genome_state(), GenomeState::Loaded);
-        assert_eq!(state.get_core_state().get_genome_validity(), Some(true));
+        {
+            let state = StateManager::instance();
+            let state = state.read();
+            assert_eq!(state.get_genome_state(), GenomeState::Loaded);
+            assert_eq!(state.get_core_state().get_genome_validity(), Some(true));
+        }
 
         // A load that fails leaves the error visible instead of a stale "loaded".
         let err = service
@@ -5696,7 +5698,10 @@ mod tests {
             })
             .await;
         assert!(err.is_err());
-        assert_eq!(state.get_genome_state(), GenomeState::Error);
+        assert_eq!(
+            StateManager::instance().read().get_genome_state(),
+            GenomeState::Error
+        );
     }
 
     #[test]

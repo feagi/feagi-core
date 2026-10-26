@@ -1472,7 +1472,7 @@ pub async fn get_registration_diff(
             let mut rows: Vec<(String, serde_json::Value)> = handler_guard
                 .get_device_registrations_by_agent_store()
                 .iter()
-                .filter(|(agent_id, _)| agent_filter.map_or(true, |wanted| **agent_id == wanted))
+                .filter(|(agent_id, _)| agent_filter.is_none_or(|wanted| **agent_id == wanted))
                 .map(|(agent_id, regs)| (agent_id.to_base64(), regs.clone()))
                 .collect();
             rows.sort_by(|a, b| a.0.cmp(&b.0));

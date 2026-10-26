@@ -40,7 +40,8 @@ struct FireHistorySubscription {
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
     paused: Arc<RwLock<bool>>,
-    fire_history_subscriptions: parking_lot::Mutex<std::collections::HashMap<u32, FireHistorySubscription>>,
+    fire_history_subscriptions:
+        parking_lot::Mutex<std::collections::HashMap<u32, FireHistorySubscription>>,
     /// Only present when `plasticity` feature is enabled (used in `reset_cortical_area_states`).
     #[cfg(feature = "plasticity")]
     plasticity_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
@@ -127,12 +128,10 @@ impl RuntimeServiceImpl {
         let mut windows = Vec::with_capacity(areas.len());
         for &idx in areas {
             let current = npu.get_fire_ledger_window_size(idx).ok();
-            let entry = subs
-                .entry(idx)
-                .or_insert_with(|| FireHistorySubscription {
-                    prior_window: current,
-                    last_access: now,
-                });
+            let entry = subs.entry(idx).or_insert_with(|| FireHistorySubscription {
+                prior_window: current,
+                last_access: now,
+            });
             entry.last_access = now;
             let window = match current {
                 Some(window) if window >= bursts => window,
@@ -237,9 +236,14 @@ impl RuntimeService for RuntimeServiceImpl {
         let current_burst = npu.get_burst_count();
         let mut out = Vec::with_capacity(windows.len());
         for (idx, window) in windows {
-            let frames = npu.get_fire_ledger_recent_frames(idx, bursts).map_err(|e| {
-                ServiceError::Backend(format!("Fire history read failed for area {}: {}", idx, e))
-            })?;
+            let frames = npu
+                .get_fire_ledger_recent_frames(idx, bursts)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Fire history read failed for area {}: {}",
+                        idx, e
+                    ))
+                })?;
             let frames = frames
                 .into_iter()
                 .map(|(burst, bitmap)| FireHistoryFrame {
@@ -747,10 +751,27 @@ mod fire_history_tests {
         .unwrap();
         rust_npu.register_cortical_area(
             AREA,
-            CorticalID::try_from_bytes(b"cfirehis").unwrap().as_base_64(),
+            CorticalID::try_from_bytes(b"cfirehis")
+                .unwrap()
+                .as_base_64(),
         );
         let neuron = rust_npu
-            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, AREA, 1, 2, 3)
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                true,
+                AREA,
+                1,
+                2,
+                3,
+            )
             .unwrap()
             .0;
         let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
@@ -765,7 +786,10 @@ mod fire_history_tests {
     fn burst(npu: &Arc<TracingMutex<DynamicNPU>>, neuron: u32, fire: bool) {
         let mut npu = npu.lock().unwrap();
         if fire {
-            npu.inject_sensory_with_potentials(&[(feagi_npu_neural::types::NeuronId(neuron), 128.0)]);
+            npu.inject_sensory_with_potentials(&[(
+                feagi_npu_neural::types::NeuronId(neuron),
+                128.0,
+            )]);
         }
         npu.process_burst().unwrap();
     }
@@ -799,7 +823,10 @@ mod fire_history_tests {
                 voxel: Some((1, 2, 3))
             }]
         );
-        assert!(area.frames[1].neurons.is_empty(), "silent burst is an explicit empty frame");
+        assert!(
+            area.frames[1].neurons.is_empty(),
+            "silent burst is an explicit empty frame"
+        );
         assert_eq!(area.frames[2].neurons.len(), 1);
 
         // A smaller read keeps the window, a larger read grows it.
@@ -813,7 +840,10 @@ mod fire_history_tests {
         assert_eq!(svc.unsubscribe_fire_history(&[AREA, 77]).await.unwrap(), 1);
         assert!(svc.fire_history_subscriptions().is_empty());
         assert!(
-            npu.lock().unwrap().get_fire_ledger_window_size(AREA).is_err(),
+            npu.lock()
+                .unwrap()
+                .get_fire_ledger_window_size(AREA)
+                .is_err(),
             "area untracked again after unsubscribe"
         );
     }
@@ -829,12 +859,21 @@ mod fire_history_tests {
         let windows = svc.subscribe_fire_history(&[AREA], 2).await.unwrap();
         assert_eq!(windows, vec![(AREA, 8)], "plasticity window kept");
         svc.subscribe_fire_history(&[AREA], 12).await.unwrap();
-        assert_eq!(npu.lock().unwrap().get_fire_ledger_window_size(AREA).unwrap(), 12);
+        assert_eq!(
+            npu.lock()
+                .unwrap()
+                .get_fire_ledger_window_size(AREA)
+                .unwrap(),
+            12
+        );
         assert_eq!(svc.fire_history_subscriptions()[0].1, Some(8));
 
         svc.unsubscribe_fire_history(&[AREA]).await.unwrap();
         assert_eq!(
-            npu.lock().unwrap().get_fire_ledger_window_size(AREA).unwrap(),
+            npu.lock()
+                .unwrap()
+                .get_fire_ledger_window_size(AREA)
+                .unwrap(),
             8,
             "prior window restored"
         );

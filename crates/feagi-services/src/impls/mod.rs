@@ -30,4 +30,5 @@ pub use system_service_impl::SystemServiceImpl;
 /// Serializes tests that assert on the process-wide `StateManager` genome state,
 /// which every genome/connectome load in this test binary writes to.
 #[cfg(test)]
-pub(crate) static GENOME_STATE_TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+pub(crate) static GENOME_STATE_TEST_LOCK: tokio::sync::Mutex<()> =
+    tokio::sync::Mutex::const_new(());

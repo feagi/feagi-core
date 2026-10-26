@@ -1239,9 +1239,9 @@ pub const FIRE_HISTORY_MAX_BURSTS: usize = 2000;
 pub const FIRE_HISTORY_DEFAULT_BURSTS: usize = 100;
 
 fn parse_fire_history_areas(params: &HashMap<String, String>) -> ApiResult<Vec<String>> {
-    let raw = params
-        .get("areas")
-        .ok_or_else(|| ApiError::invalid_input("areas query parameter required (comma-separated cortical ids)"))?;
+    let raw = params.get("areas").ok_or_else(|| {
+        ApiError::invalid_input("areas query parameter required (comma-separated cortical ids)")
+    })?;
     let mut areas: Vec<String> = Vec::new();
     for id in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
         if !areas.iter().any(|existing| existing == id) {
@@ -1249,7 +1249,9 @@ fn parse_fire_history_areas(params: &HashMap<String, String>) -> ApiResult<Vec<S
         }
     }
     if areas.is_empty() {
-        return Err(ApiError::invalid_input("areas must list at least one cortical id"));
+        return Err(ApiError::invalid_input(
+            "areas must list at least one cortical id",
+        ));
     }
     if areas.len() > FIRE_HISTORY_MAX_AREAS {
         return Err(ApiError::invalid_input(format!(
@@ -1264,9 +1266,9 @@ fn parse_fire_history_areas(params: &HashMap<String, String>) -> ApiResult<Vec<S
 fn parse_fire_history_bursts(params: &HashMap<String, String>) -> ApiResult<usize> {
     let bursts = match params.get("bursts") {
         None => FIRE_HISTORY_DEFAULT_BURSTS,
-        Some(raw) => raw
-            .parse::<usize>()
-            .map_err(|_| ApiError::invalid_input(format!("bursts must be a positive integer, got '{raw}'")))?,
+        Some(raw) => raw.parse::<usize>().map_err(|_| {
+            ApiError::invalid_input(format!("bursts must be a positive integer, got '{raw}'"))
+        })?,
     };
     if bursts == 0 || bursts > FIRE_HISTORY_MAX_BURSTS {
         return Err(ApiError::invalid_input(format!(
@@ -1338,7 +1340,10 @@ pub async fn get_fire_history(
     let resolved = resolve_fire_history_areas(&state, &ids).await?;
     let idxs: Vec<u32> = resolved.iter().map(|(idx, _, _)| *idx).collect();
 
-    let history = state.runtime_service.get_fire_history(&idxs, bursts).await?;
+    let history = state
+        .runtime_service
+        .get_fire_history(&idxs, bursts)
+        .await?;
 
     let mut areas: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     for (idx, id, name) in &resolved {
@@ -1376,13 +1381,24 @@ pub async fn get_fire_history(
     }
 
     let mut response = HashMap::new();
-    response.insert("current_burst".to_string(), serde_json::json!(history.current_burst));
+    response.insert(
+        "current_burst".to_string(),
+        serde_json::json!(history.current_burst),
+    );
     response.insert("bursts".to_string(), serde_json::json!(bursts));
-    response.insert("max_bursts".to_string(), serde_json::json!(FIRE_HISTORY_MAX_BURSTS));
-    response.insert("max_areas".to_string(), serde_json::json!(FIRE_HISTORY_MAX_AREAS));
+    response.insert(
+        "max_bursts".to_string(),
+        serde_json::json!(FIRE_HISTORY_MAX_BURSTS),
+    );
+    response.insert(
+        "max_areas".to_string(),
+        serde_json::json!(FIRE_HISTORY_MAX_AREAS),
+    );
     response.insert(
         "subscription_ttl_s".to_string(),
-        serde_json::json!(feagi_services::traits::runtime_service::FIRE_HISTORY_SUBSCRIPTION_TTL.as_secs()),
+        serde_json::json!(
+            feagi_services::traits::runtime_service::FIRE_HISTORY_SUBSCRIPTION_TTL.as_secs()
+        ),
     );
     response.insert("areas".to_string(), serde_json::Value::Object(areas));
     Ok(Json(response))
@@ -1412,7 +1428,10 @@ pub async fn delete_fire_history(
     let ids = parse_fire_history_areas(&params)?;
     let resolved = resolve_fire_history_areas(&state, &ids).await?;
     let idxs: Vec<u32> = resolved.iter().map(|(idx, _, _)| *idx).collect();
-    let dropped = state.runtime_service.unsubscribe_fire_history(&idxs).await?;
+    let dropped = state
+        .runtime_service
+        .unsubscribe_fire_history(&idxs)
+        .await?;
     let mut response = HashMap::new();
     response.insert("unsubscribed".to_string(), serde_json::json!(dropped));
     response.insert("areas".to_string(), serde_json::json!(ids));

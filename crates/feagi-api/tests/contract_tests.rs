@@ -659,7 +659,7 @@ static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 /// Serializes tests that load a genome (successfully or not): every load writes the
 /// process-wide `StateManager` genome state that `health_check` reports.
-static GENOME_STATE_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+static GENOME_STATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Attach an NPU to the process-wide ConnectomeManager, which `load_genome` develops
 /// into. Test states use isolated managers, so the singleton has none by default.
@@ -678,7 +678,7 @@ fn ensure_singleton_connectome_has_npu() {
 
 #[tokio::test]
 async fn test_health_check_reports_genome_loaded_after_service_load() {
-    let _genome_state = GENOME_STATE_LOCK.lock();
+    let _genome_state = GENOME_STATE_LOCK.lock().await;
     ensure_singleton_connectome_has_npu();
     let state = build_test_state();
 
@@ -2572,7 +2572,7 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
     // Two registrations with fresh agent ids, like a controller restarting twice.
     for seed in [11u8, 12u8] {
         let agent_id = AgentID::new([seed; AgentID::NUMBER_BYTES]);
-        register_agent(
+        let _ = register_agent(
             ApiStateExtract(state.clone()),
             ApiJson(registration_request_with(&agent_id, registrations.clone())),
         )
@@ -2694,7 +2694,7 @@ async fn test_registration_against_existing_area_leaves_burst_frequency_unchange
     assert_eq!(before, 40.0);
 
     let agent_id = AgentID::new([21u8; AgentID::NUMBER_BYTES]);
-    register_agent(
+    let _ = register_agent(
         ApiStateExtract(state.clone()),
         ApiJson(registration_request_with(&agent_id, registrations)),
     )
@@ -2721,7 +2721,7 @@ async fn test_registration_against_existing_area_leaves_burst_frequency_unchange
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_until_reregister() {
-    let _genome_state = GENOME_STATE_LOCK.lock();
+    let _genome_state = GENOME_STATE_LOCK.lock().await;
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
@@ -2924,7 +2924,7 @@ fn test_device_registration_store_compare_flags_stale_segmented_vision() {
 #[tokio::test]
 #[ignore = "real transport path can hang in CI; run manually for websocket validation"]
 async fn test_genome_transition_realtime_transport_requires_reregistration() {
-    let _genome_state = GENOME_STATE_LOCK.lock();
+    let _genome_state = GENOME_STATE_LOCK.lock().await;
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
