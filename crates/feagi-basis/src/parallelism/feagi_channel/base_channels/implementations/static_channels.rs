@@ -1,5 +1,5 @@
 use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
+use crate::parallelism::feagi_channel::base_channels::base_errors::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 
 // TODO: Disabled until thingbuf can construct a StaticChannel with a custom recycle policy.

@@ -3,3 +3,4 @@
 
 pub mod base_channels;
 pub mod implementations;
+pub mod base_errors;

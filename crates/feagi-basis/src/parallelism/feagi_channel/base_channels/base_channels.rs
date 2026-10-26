@@ -1,7 +1,6 @@
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
+use crate::parallelism::feagi_channel::base_channels::base_errors::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use core::ops::DerefMut;
-
 // NOTE: These traits are implemented directly on thingbuf's channel halves. They exist so code
 // can be generic over heap allocated and static channels, which thingbuf has no common trait for
 // TODO maybe thingbuf should have a common trait over that?
@@ -19,9 +18,7 @@ pub trait FeagiChannelBuilder<T: Recyclable> {
 
 /// Sending half of a feagi channel
 pub trait FeagiChannelTransmitter<T: Recyclable> {
-    /// Guard over a claimed slot, written in place. The slot is published to the receiver when
-    /// the guard drops, even if nothing was written, so keep it short-lived and never hold it
-    /// across an await point
+    /// Guard over a claimed slot, written in place
     type SendGuard<'a>: DerefMut<Target = T>
     where
         Self: 'a;
@@ -48,9 +45,7 @@ pub trait FeagiChannelTransmitter<T: Recyclable> {
 
 /// Receiving half of a feagi channel.
 pub trait FeagiChannelReceiver<T: Recyclable> {
-    /// Guard over a received slot, read in place. The slot is released back to the channel
-    /// for recycling when the guard drops, so keep it short-lived and never hold it across an
-    /// await point
+    /// Guard over a received slot, read in place
     type RecvGuard<'a>: DerefMut<Target = T>
     where
         Self: 'a;

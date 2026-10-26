@@ -2,18 +2,18 @@
 
 // TODO allow reconfiguring poll rate as a config var?
 
-use core::future::Future;
-use core::marker::PhantomData;
-use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use crate::transport::rest::server::error::FeagiRestServerError;
 use crate::transport::rest::server::server_basis::routing::RestCategoryRoutes;
 use crate::transport::rest::server::server_basis::{build_router_with_routes, GroupRestRoutes, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
+use core::future::Future;
+use core::marker::PhantomData;
+use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 //region Local Configs
 
@@ -110,7 +110,7 @@ where
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {}
 }
 
 //endregion

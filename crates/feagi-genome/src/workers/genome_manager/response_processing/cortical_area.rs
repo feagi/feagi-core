@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
 use crate::workers::genome_manager::requests::categories::cortical_area::{CorticalAreaRequestCategory, CorticalAreaRequests, CorticalAreaResponses, ReadCorticalAreaGeometryFeagiRequestMessageResponse, ReadCorticalMapDetailedFeagiRequestMessageResponse, ReadIpuTypesFeagiRequestMessageResponse, ReadOpuTypesFeagiRequestMessageResponse};

@@ -9,18 +9,17 @@ use std::time::Duration;
 
 use feagi_basis::parallelism::block_on_thread;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use feagi_basis::parallelism::feagi_channel::base_channels::base_errors::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
-use feagi_basis::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError, FeagiRequestError};
 use feagi_basis::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{
-    FeagiRequestResponseChannelsAllocBackend, FeagiRequesterAlloc, FeagiResponderAlloc,
-};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiRequesterAlloc, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiWorkerSpawnError;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
 
 //region Helpers
 
@@ -138,7 +137,7 @@ fn recyclable_result_starts_ok_and_recycles_inner_value() {
 
 #[test]
 fn dynamic_channel_try_send_and_try_recv_in_order() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(4).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(4);
     for value in 0..4 {
         FeagiChannelTransmitter::try_send(&sender, Number(value)).unwrap();
     }
@@ -149,7 +148,7 @@ fn dynamic_channel_try_send_and_try_recv_in_order() {
 
 #[test]
 fn dynamic_channel_helpers_track_queue_state() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(2);
     assert_eq!(FeagiChannelTransmitter::capacity(&sender), 2);
     assert_eq!(FeagiChannelReceiver::capacity(&receiver), 2);
     assert!(FeagiChannelTransmitter::is_empty(&sender) && FeagiChannelReceiver::is_empty(&receiver));
@@ -173,7 +172,7 @@ fn dynamic_channel_helpers_track_queue_state() {
 
 #[test]
 fn dynamic_channel_try_send_errors_when_full() {
-    let (sender, _receiver) = FeagiChannelAllocBuilder::<Number>::new(1).create_channels();
+    let (sender, _receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(1);
     FeagiChannelTransmitter::try_send(&sender, Number(1)).unwrap();
     assert!(matches!(
         FeagiChannelTransmitter::try_send(&sender, Number(2)),
@@ -187,7 +186,7 @@ fn dynamic_channel_try_send_errors_when_full() {
 
 #[test]
 fn dynamic_channel_try_recv_errors_when_empty() {
-    let (_sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(1).create_channels();
+    let (_sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(1);
     assert!(matches!(
         FeagiChannelReceiver::try_recv(&receiver),
         Err(FeagiChannelReceiveError::ChannelEmpty)
@@ -200,7 +199,7 @@ fn dynamic_channel_try_recv_errors_when_empty() {
 
 #[test]
 fn dynamic_channel_send_errors_once_receiver_dropped() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(2);
     drop(receiver);
     assert!(matches!(
         FeagiChannelTransmitter::try_send(&sender, Number(1)),
@@ -218,7 +217,7 @@ fn dynamic_channel_send_errors_once_receiver_dropped() {
 
 #[test]
 fn dynamic_channel_drains_queue_before_reporting_closed() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(2);
     FeagiChannelTransmitter::try_send(&sender, Number(7)).unwrap();
     drop(sender);
     // TODO: Restore with `FeagiChannelReceiver::is_closed`, disabled due to a thingbuf 0.1.6 bug
@@ -236,7 +235,7 @@ fn dynamic_channel_drains_queue_before_reporting_closed() {
 
 #[test]
 fn dynamic_channel_closes_only_after_every_cloned_sender_dropped() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(2);
     let second_sender = sender.clone();
     drop(sender);
     // TODO: Restore with `FeagiChannelReceiver::is_closed`, disabled due to a thingbuf 0.1.6 bug.
@@ -258,7 +257,7 @@ fn dynamic_channel_closes_only_after_every_cloned_sender_dropped() {
 
 #[test]
 fn dynamic_channel_async_send_and_recv_across_threads() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(2);
     let producers: Vec<_> = (0..4u64)
         .map(|producer| {
             let sender = sender.clone();
@@ -291,20 +290,6 @@ fn dynamic_channel_async_send_and_recv_across_threads() {
     assert_eq!(received, expected);
 }
 
-#[test]
-fn dynamic_builder_creates_independent_channels() {
-    let builder = FeagiChannelAllocBuilder::<Number>::new(1);
-    let (first_sender, first_receiver) = builder.create_channels();
-    let (second_sender, second_receiver) = builder.create_channels();
-    FeagiChannelTransmitter::try_send(&first_sender, Number(1)).unwrap();
-    assert!(matches!(
-        FeagiChannelReceiver::try_recv(&second_receiver),
-        Err(FeagiChannelReceiveError::ChannelEmpty)
-    ));
-    FeagiChannelTransmitter::try_send(&second_sender, Number(2)).unwrap();
-    assert_eq!(FeagiChannelReceiver::try_recv(&first_receiver).unwrap(), Number(1));
-    assert_eq!(FeagiChannelReceiver::try_recv(&second_receiver).unwrap(), Number(2));
-}
 
 //endregion
 
@@ -312,7 +297,7 @@ fn dynamic_builder_creates_independent_channels() {
 
 #[test]
 fn send_ref_and_recv_ref_reuse_the_slot_value() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::new(1).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::create_channels(1);
 
     {
         let mut slot = FeagiChannelTransmitter::try_send_ref(&sender).unwrap();
@@ -332,7 +317,7 @@ fn send_ref_and_recv_ref_reuse_the_slot_value() {
 
 #[test]
 fn by_value_recv_replaces_the_slot_value() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::new(1).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::create_channels(1);
     {
         let mut slot = FeagiChannelTransmitter::try_send_ref(&sender).unwrap();
         slot.values.extend_from_slice(&[1, 2, 3]);
@@ -347,7 +332,7 @@ fn by_value_recv_replaces_the_slot_value() {
 
 #[test]
 fn dropping_unwritten_send_ref_still_publishes_slot() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::new(1).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::create_channels(1);
     drop(FeagiChannelTransmitter::try_send_ref(&sender).unwrap());
     let slot = FeagiChannelReceiver::try_recv_ref(&receiver).unwrap();
     assert!(slot.values.is_empty());
@@ -355,7 +340,7 @@ fn dropping_unwritten_send_ref_still_publishes_slot() {
 
 #[test]
 fn async_ref_methods_round_trip() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::new(1).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Buffer>::create_channels(1);
     let producer = std::thread::spawn(move || {
         block_on_thread(async {
             for value in 0..10u32 {
@@ -386,7 +371,7 @@ fn block_on_thread_returns_ready_output() {
 
 #[test]
 fn block_on_thread_wakes_when_another_thread_sends() {
-    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(1).create_channels();
+    let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(1);
     let producer = std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(20));
         FeagiChannelTransmitter::try_send(&sender, Number(9)).unwrap();
@@ -475,7 +460,7 @@ fn requests_fail_once_responder_is_gone() {
     drop(responder);
     assert!(matches!(
         block_on_thread(requester.make_request(Number(1))),
-        Err(FeagiRequestError::RequestNotSent(_))
+        Err(FeagiRequestResponseError::RequestNotSent(_))
     ));
 }
 
@@ -516,7 +501,7 @@ fn cancelled_processing_reports_dropped_request() {
         }
     });
     let result = block_on_thread(requester.make_request(Number(5)));
-    assert!(matches!(result, Err(FeagiRequestError::ResponderDroppedRequest)));
+    assert!(matches!(result, Err(FeagiRequestResponseError::ResponderDroppedRequest)));
     server.join().unwrap();
 }
 
@@ -527,7 +512,7 @@ fn dropping_responder_answers_queued_requests() {
     // Give the request time to be queued, then drop the responder without processing it
     std::thread::sleep(Duration::from_millis(50));
     drop(responder);
-    assert!(matches!(client.join().unwrap(), Err(FeagiRequestError::ResponderDroppedRequest)));
+    assert!(matches!(client.join().unwrap(), Err(FeagiRequestResponseError::ResponderDroppedRequest)));
 }
 
 #[test]
@@ -615,12 +600,12 @@ fn request_after_worker_exited_errors() {
     let join_handle = FeagiStdThreadSpawner.spawn_worker(move || async move { drop(responder) }).unwrap();
     join_handle.join().unwrap();
     let result = block_on_thread(requester.make_request(FeagiWorkerRequest::Stop));
-    assert!(matches!(result, Err(FeagiRequestError::RequestNotSent(_))));
+    assert!(matches!(result, Err(FeagiRequestResponseError::RequestNotSent(_))));
 }
 
 #[test]
 fn spawned_worker_can_send_to_additional_channels() {
-    let (event_sender, event_receiver) = FeagiChannelAllocBuilder::<Number>::new(4).create_channels();
+    let (event_sender, event_receiver) = FeagiChannelAllocBuilder::<Number>::create_channels(4);
     let (mut requester, responder) = worker_request_channel(1);
     let join_handle = FeagiStdThreadSpawner
         .spawn_worker(move || async move {
@@ -780,7 +765,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {}
 }
 
 /// Builds a worker that publishes each custom request onto an outgoing event channel. The
@@ -815,8 +800,8 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
-        FeagiChannelAllocBuilder::new(self.event_queue_capacity).create_channels()
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {
+        FeagiChannelAllocBuilder::create_channels(1)
     }
 }
 
@@ -842,13 +827,13 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {}
 }
 
 #[test]
 fn built_worker_answers_custom_requests_then_stops() {
     let builder = DoublingWorkerBuilder { request_queue_capacity: 2 };
-    builder.spawn_required_channel_pairs();
+    builder.spawn_related_channel_pairs();
     let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, ()).unwrap();
 
     block_on_thread(async {
@@ -861,11 +846,11 @@ fn built_worker_answers_custom_requests_then_stops() {
         // when sent to the exited worker, and can be checked that way
         assert!(matches!(
             worker.make_request(1).await,
-            Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
+            Err(FeagiRequestResponseError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
         ));
         assert!(matches!(
             worker.stop().await,
-            Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
+            Err(FeagiRequestResponseError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
         ));
     });
     worker.join().unwrap();
@@ -874,7 +859,7 @@ fn built_worker_answers_custom_requests_then_stops() {
 #[test]
 fn built_worker_sends_on_its_required_channel_pair() {
     let builder = EventWorkerBuilder { event_queue_capacity: 4 };
-    let (event_sender, event_receiver) = builder.spawn_required_channel_pairs();
+    let (event_sender, event_receiver) = builder.spawn_related_channel_pairs();
     let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, event_sender).unwrap();
 
     block_on_thread(async {
@@ -898,7 +883,7 @@ fn stopping_an_exited_built_worker_errors() {
     let result = block_on_thread(worker.stop());
     assert!(matches!(
         result,
-        Err(FeagiRequestError::RequestNotSent(_)) | Err(FeagiRequestError::ResponderDroppedRequest)
+        Err(FeagiRequestResponseError::RequestNotSent(_)) | Err(FeagiRequestResponseError::ResponderDroppedRequest)
     ));
 }
 

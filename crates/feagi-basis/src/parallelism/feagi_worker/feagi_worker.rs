@@ -4,14 +4,16 @@
 // affects workers that exit on their own without being stopped. Fix properly once thingbuf is
 // forked so receivers can close the channel before draining
 
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelTransmitError, FeagiRequestError};
+use crate::parallelism::feagi_channel::base_channels::base_errors::FeagiChannelTransmitError;
+use crate::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequester;
-use crate::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+
 
 #[cfg(feature = "std")]
-use crate::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
-use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
+use crate::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use crate::parallelism::feagi_worker::builder::components::worker_spawner_implementation::WorkerSpawnerImplementation;
+use crate::parallelism::feagi_worker::builder::components::worker_terminal::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in
@@ -50,11 +52,11 @@ where
     ///
     /// Errors with `RequestNotSent` if the worker has been stopped or has already exited, and
     /// with `UnexpectedResponse` if the worker replied with anything but a custom response
-    pub async fn make_request(&mut self, request: CustomRequest) -> Result<CustomResponse, FeagiRequestError> {
+    pub async fn make_request(&mut self, request: CustomRequest) -> Result<CustomResponse, FeagiRequestResponseError> {
         self.refuse_if_stopped()?;
         match self.requester.make_request(FeagiWorkerRequest::Custom(request)).await? {
             FeagiWorkerResponse::Custom(response) => Ok(response),
-            _ => Err(FeagiRequestError::UnexpectedResponse),
+            _ => Err(FeagiRequestResponseError::UnexpectedResponse),
         }
     }
 
@@ -63,21 +65,21 @@ where
     ///
     /// Errors with `RequestNotSent` if the worker has been stopped or has already exited, and
     /// with `UnexpectedResponse` if the worker replied with anything but an acknowledgement
-    pub async fn stop(&mut self) -> Result<(), FeagiRequestError> {
+    pub async fn stop(&mut self) -> Result<(), FeagiRequestResponseError> {
         self.refuse_if_stopped()?;
         match self.requester.make_request(FeagiWorkerRequest::Stop).await? {
             FeagiWorkerResponse::Acknowledged => {
                 self.stopped = true;
                 Ok(())
             }
-            _ => Err(FeagiRequestError::UnexpectedResponse),
+            _ => Err(FeagiRequestResponseError::UnexpectedResponse),
         }
     }
 
     /// Errors the same way as a request to an exited worker, if `stop` was acknowledged
-    fn refuse_if_stopped(&self) -> Result<(), FeagiRequestError> {
+    fn refuse_if_stopped(&self) -> Result<(), FeagiRequestResponseError> {
         if self.stopped {
-            return Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed));
+            return Err(FeagiRequestResponseError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed));
         }
         Ok(())
     }

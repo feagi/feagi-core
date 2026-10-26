@@ -1,10 +1,10 @@
-use core::marker::PhantomData;
-use core::ops::DerefMut;
 use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
-use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
+use crate::parallelism::feagi_channel::base_channels::base_errors::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplyStatus, RequestSlot};
+use core::marker::PhantomData;
+use core::ops::DerefMut;
 
 /// Receives requests from any number of requesters and replies to each one
 ///

@@ -42,8 +42,8 @@ impl FeagiRequestCategoryGroup {
         let basis = basis_path();
         let category_module = quote!(#basis::feagi_message::request::feagi_request_message_category);
         let grouping = quote!(#basis::feagi_message::request::feagi_request_message_grouping);
-        let backend_trait = quote!(#basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend);
-        let alloc_backend = quote!(#basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend);
+        let backend_trait = quote!(#basis::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend);
+        let alloc_backend = quote!(#basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend);
 
         let group_name = self.group_name.to_string();
         let requesters = self.requesters_struct_name();

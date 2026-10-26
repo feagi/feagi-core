@@ -5,8 +5,8 @@
 use std::net::SocketAddr;
 
 use feagi_basis::parallelism::block_on_thread;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
 use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
 use feagi_interop::transport::zenoh::zenoh_configuration::{ZenohConfigurationBuilder, ZenohConfigurationError};

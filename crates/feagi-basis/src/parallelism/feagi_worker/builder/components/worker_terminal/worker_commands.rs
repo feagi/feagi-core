@@ -1,5 +1,3 @@
-//! Requests a worker handle sends to its worker, and the worker's replies.
-
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 
 /// A request from a worker handle to its worker. Establishes universal requests but also
@@ -12,6 +10,7 @@ pub enum FeagiWorkerRequest<CustomRequest> {
     /// Some specific request for the worker
     Custom(CustomRequest),
 }
+
 
 impl<CustomRequest> Recyclable for FeagiWorkerRequest<CustomRequest> {
     fn new_for_recycler() -> Self {

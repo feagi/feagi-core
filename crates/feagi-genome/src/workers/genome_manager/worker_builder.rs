@@ -1,10 +1,3 @@
-use feagi_basis::feagi_basis_proc_common::define_request_category_group;
-use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
-use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 use crate::workers::genome_manager::requests::categories::burst_engine::BurstEngineRequestCategory;
 use crate::workers::genome_manager::requests::categories::connectome::ConnectomeRequestCategory;
 use crate::workers::genome_manager::requests::categories::cortical_area::CorticalAreaRequestCategory;
@@ -13,6 +6,12 @@ use crate::workers::genome_manager::requests::categories::genome::GenomeRequestC
 use crate::workers::genome_manager::requests::categories::morphology::MorphologyRequestCategory;
 use crate::workers::genome_manager::requests::categories::region::RegionRequestCategory;
 use crate::workers::genome_manager::worker_loop::run_genome_manager;
+use feagi_basis::feagi_basis_proc_common::define_request_category_group;
+use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 
 /// How many commands can be in queue on this worker at one time
 const COMMAND_QUEUE_LENGTH: usize = 2;
@@ -66,7 +65,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
         Ok((FeagiWorker::new(cmd_requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {
         let (burst_engine_req, burst_engine_res) = BurstEngineRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
         let (connectome_req, connectome_res) = ConnectomeRequestCategory::spawn_alloc_requester_responser_pair(self.connectome_request_queue_length);
         let (cortical_area_req, cortical_area_res) = CorticalAreaRequestCategory::spawn_alloc_requester_responser_pair(self.cortical_area_request_queue_length);

@@ -1,7 +1,7 @@
 //! Systems (largely) common to both STD and Embassy
 
 use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use routing::{FeagiRestGroupRouter, RestCategoryRoutes};
 
 /// The routes serving every category of `Group`, paired with their configurables
@@ -99,7 +99,7 @@ pub mod routing {
     use feagi_basis::feagi_message::request::feagi_request_descriptor::FeagiMessageEnum;
     use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory, FeagiRequestPayloadDecoder};
     use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NNull};
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
     use picoserve::io::Read;
     use picoserve::request::{Path, Request};
     use picoserve::url_encoded::UrlEncodedString;

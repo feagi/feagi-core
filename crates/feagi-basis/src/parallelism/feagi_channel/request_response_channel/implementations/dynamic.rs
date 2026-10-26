@@ -1,7 +1,7 @@
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use crate::parallelism::feagi_channel::request_response_channel::requester::FeagiRequester;
+use crate::parallelism::feagi_channel::request_response_channel::requester::{FeagiRequester};
 use crate::parallelism::feagi_channel::request_response_channel::responder::FeagiResponder;
 use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
 
@@ -26,55 +26,50 @@ impl FeagiRequestResponseChannelBackend for FeagiRequestResponseChannelsAllocBac
 impl FeagiRequestResponseChannelsAllocBackend {
     /// Creates a new, independent requester and responder. Clone the requester for more
     /// requesters to the same responder. `request_queue_capacity` is how many requests can be
-    /// queued for the responder at once
+    /// queued for the responder at once. The responser itself gets a capacity of one
     pub fn create_channels<Request: Recyclable, Response: Recyclable>(
         request_queue_capacity: usize,
     ) -> (FeagiRequesterAlloc<Request, Response>, FeagiResponderAlloc<Request, Response>) {
-        let (request_sender, request_receiver) = FeagiChannelAllocBuilder::new(request_queue_capacity).create_channels();
+        let (request_tx, request_rx) = FeagiChannelAllocBuilder::create_channels(request_queue_capacity);
+        let (reply_tx, reply_rx) = FeagiChannelAllocBuilder::create_channels(1);
         (
-            FeagiRequesterAlloc::new_with_reply_channel(request_sender),
-            FeagiResponderAlloc::new(request_receiver),
+            FeagiRequesterAlloc::new(request_tx, reply_tx, reply_rx), 
+            FeagiResponderAlloc::new(request_rx),
         )
     }
 }
 
 //endregion
 
-/// Request transmitter used by alloc requesters
-pub type FeagiRequestTransmitterAlloc<Request, Response> = thingbuf::mpsc::Sender<
-    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
-    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
->;
-
-/// Request receiver used by alloc responders
-pub type FeagiRequestReceiverAlloc<Request, Response> = thingbuf::mpsc::Receiver<
-    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
-    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
->;
-
-/// Reply transmitter carried inside alloc requests
-pub type FeagiReplyTransmitterAlloc<Response> = thingbuf::mpsc::Sender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
-
-/// Reply receiver used by alloc requesters
-pub type FeagiReplyReceiverAlloc<Response> = thingbuf::mpsc::Receiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
-
-/// Requester using heap allocated channels. Cloning creates another requester to the same
-/// responder, with its own reply channel
+/// Requester using heap allocated channels
 pub type FeagiRequesterAlloc<Request, Response> = FeagiRequester<Request, Response, FeagiRequestResponseChannelsAllocBackend>;
 
 /// Responder using heap allocated channels
 pub type FeagiResponderAlloc<Request, Response> = FeagiResponder<Request, Response, FeagiRequestResponseChannelsAllocBackend>;
 
-impl<Request: Recyclable, Response: Recyclable> FeagiRequesterAlloc<Request, Response> {
-    /// Creates a requester with a newly allocated reply channel of capacity 1
-    fn new_with_reply_channel(request_sender: FeagiRequestTransmitterAlloc<Request, Response>) -> Self {
-        let (reply_sender, reply_receiver) = FeagiChannelAllocBuilder::new(1).create_channels();
-        FeagiRequester::new(request_sender, reply_sender, reply_receiver)
-    }
-}
 
-impl<Request: Recyclable, Response: Recyclable> Clone for FeagiRequesterAlloc<Request, Response> {
-    fn clone(&self) -> Self {
-        FeagiRequesterAlloc::new_with_reply_channel(self.request_sender.clone())
-    }
-}
+//region Request
+
+/// Request transmitter used by alloc requesters
+pub(crate) type FeagiRequestTransmitterAlloc<Request, Response> = thingbuf::mpsc::Sender<
+    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
+    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
+>;
+
+/// Request receiver used by alloc responders
+pub(crate) type FeagiRequestReceiverAlloc<Request, Response> = thingbuf::mpsc::Receiver<
+    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
+    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
+>;
+
+//endregion
+
+//region Reply
+
+/// Reply transmitter carried inside alloc requests
+pub(crate) type FeagiReplyTransmitterAlloc<Response> = thingbuf::mpsc::Sender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+
+/// Reply receiver used by alloc requesters
+pub(crate) type FeagiReplyReceiverAlloc<Response> = thingbuf::mpsc::Receiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+
+//endregion

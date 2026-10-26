@@ -1,5 +1,5 @@
-use feagi_basis::parallelism::feagi_channel::channel_error::FeagiRequestError;
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiWorkerSpawnError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -13,7 +13,7 @@ pub enum FeagiRestServerError {
     #[error("Server worker failed to start: {0}")]
     FailedToStartWorker(#[from] FeagiWorkerSpawnError),
     #[error("Server worker failed to acknowledge stopping: {0}")]
-    FailedToStopWorker(#[from] FeagiRequestError),
+    FailedToStopWorker(#[from] FeagiRequestResponseError),
     #[error("Server worker panicked!")]
     WorkerPanicked,
 }

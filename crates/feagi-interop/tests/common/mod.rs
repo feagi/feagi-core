@@ -4,7 +4,7 @@
 use feagi_basis::feagi_basis_proc_common::{define_request_category_group, define_request_message_category};
 use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiCategoryResponder;
 use feagi_basis::parallelism::block_on_thread;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
 define_request_message_category! {
     category_name: "CoffeeShop",

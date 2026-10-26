@@ -1,17 +1,17 @@
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
-use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
-use zenoh::Wait;
 use crate::node::feagi_node_flags::FeagiNodeFlags;
 use crate::node::feagi_node_id::FeagiNodeID;
 use crate::transport::zenoh::zenoh_configuration::{ZenohConfiguration, ZenohConfigurationBackend};
 use crate::transport::zenoh::zenoh_liveliness_path::{FeagiNodeLivelinessPath, FeagiNodeLivelinessPathConfigurables};
 use crate::transport::zenoh::zenoh_std::configuration_backend::ZenohStdConfigurationBackend;
 use crate::transport::zenoh::zenoh_std::zenoh_configuration_builder::error::ZenohConfigBuildError;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiWorkerSpawnError;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands};
+use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use zenoh::Wait;
 // TODO reconsider how we are doing this. A force connection block? vs scouting?
 // TODO common trait to unite seperation?
 // TODO std / no-std seperation, other feature seperation
@@ -94,7 +94,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {
         ()
     }
 }

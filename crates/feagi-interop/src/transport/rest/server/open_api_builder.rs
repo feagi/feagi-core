@@ -11,7 +11,7 @@ use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
 use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
 use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
 use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NMDes, NNull};
-use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 
 const FEAGI_INFO_TITLE: &str = "FEAGI";
 const FEAGI_INFO_VERSION: &str = "0.0.0"; // TODO package var?

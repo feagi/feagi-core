@@ -96,7 +96,7 @@ fn configurables_must_be_given_for_categories_that_declare_them() {
 
 #[test]
 fn group_nests_each_requester_with_its_configurables() {
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend as Channels;
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend as Channels;
 
     assert_same_type::<
         <PantryRequesters<Channels> as FeagiRequestCategoryGroup<Channels>>::NestedCategories,
@@ -121,7 +121,7 @@ fn group_nests_each_requester_with_its_configurables() {
 
 #[test]
 fn joined_groups_nest_as_one_flat_chain() {
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend as Channels;
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend as Channels;
 
     // A generated group joined with a lone category, as categories served by different workers are
     type Joined = (TeaOnlyRequesters<Channels>, FeagiCategoryRequester<ShelfRequestCategory, Channels>);

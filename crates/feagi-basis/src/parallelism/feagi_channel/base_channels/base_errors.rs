@@ -43,6 +43,7 @@ impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelTransm
     }
 }
 
+
 /// The receiver was unable to receive data. This may either be expected (no data was sent) or
 /// the channel was closed
 #[derive(Debug, Error)]
@@ -79,17 +80,4 @@ impl From<thingbuf::mpsc::errors::RecvTimeoutError> for FeagiChannelReceiveError
             }
         }
     }
-}
-
-/// A request made over a feagi request / response channel did not produce a response
-#[derive(Debug, Error)]
-pub enum FeagiRequestError {
-    #[error("Feagi request could not be sent: {0}")]
-    RequestNotSent(#[from] FeagiChannelTransmitError),
-    #[error("Feagi reply could not be received: {0}")]
-    ReplyNotReceived(#[from] FeagiChannelReceiveError),
-    #[error("Feagi responder dropped the request without responding!")]
-    ResponderDroppedRequest,
-    #[error("Feagi responder replied with a response that does not match the request!")]
-    UnexpectedResponse,
 }

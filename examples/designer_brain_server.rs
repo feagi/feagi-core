@@ -7,8 +7,8 @@
 
 use std::net::SocketAddr;
 
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_core::runtimes::brain_server::designer_brain_server::DesignerBrainServerWorkerBuilder;
 use feagi_interop::transport::zenoh::zenoh_configuration::ZenohConfigurationBuilder;
 

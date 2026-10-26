@@ -5,11 +5,12 @@
 use crate::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
 use crate::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
 use crate::feagi_message::request::feagi_request_message::FeagiRequestMessage;
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiRequestError};
+use crate::parallelism::feagi_channel::base_channels::base_errors::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
+use crate::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::{FeagiRequester, FeagiResponder};
 
 /// A zero sized struct that contains static information about a category of request messages
@@ -122,18 +123,18 @@ where
     /// The outer error is of the channel (responder gone, channel closed, or it replied to a
     /// different message). The inner result is what the responder answered, including the
     /// message's own error
-    pub async fn request<Message>(&mut self, message: Message) -> Result<FeagiMessageResult<Message>, FeagiRequestError>
+    pub async fn request<Message>(&mut self, message: Message) -> Result<FeagiMessageResult<Message>, FeagiRequestResponseError>
     where
         Message: FeagiRequestMessage,
         Message::Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
     {
         let response = self.requester.make_request(Message::Descriptor::into_category_request(message)).await?;
-        Message::Descriptor::try_from_category_response(response).map_err(|_| FeagiRequestError::UnexpectedResponse)
+        Message::Descriptor::try_from_category_response(response).map_err(|_| FeagiRequestResponseError::UnexpectedResponse)
     }
 
     /// Sends a request already wrapped in the category's request enum, and waits for the
     /// response enum
-    pub async fn make_request(&mut self, request: Category::RequestEnum) -> Result<Category::ResponseEnum, FeagiRequestError> {
+    pub async fn make_request(&mut self, request: Category::RequestEnum) -> Result<Category::ResponseEnum, FeagiRequestResponseError> {
         self.requester.make_request(request).await
     }
 }

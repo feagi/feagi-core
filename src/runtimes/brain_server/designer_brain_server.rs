@@ -1,23 +1,23 @@
-use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
-use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
-use feagi_interop::transport::rest::server::error::FeagiRestServerError;
-use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
-use feagi_interop::transport::rest::server::server_std::{StdRestServerBuilder, StdRestServerWorker};
-use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
-use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
-use feagi_interop::transport::zenoh::zenoh_configuration::ZenohConfiguration;
-use feagi_interop::transport::zenoh::zenoh_worker_builder::{FeagiBuildZenohWorkerError, ZenohStdWorker, ZenohWorkerBuilder};
 use crate::runtimes::brain_server::request_system::{
     ReadCorticalAreaVisualizationSkipRateFeagiRequestMessageResponse, ReadCorticalAreaVisualizationSuppressionThresholdFeagiRequestMessageResponse,
     ReadHealthCheckFeagiRequestMessageResponse, SystemRequestCategory, SystemRequests, SystemResponses,
 };
+use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiWorkerSpawnError;
+use feagi_basis::parallelism::feagi_worker::builder::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
+use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
+use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
+use feagi_interop::transport::rest::server::error::FeagiRestServerError;
+use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
+use feagi_interop::transport::rest::server::server_std::{StdRestServerBuilder, StdRestServerWorker};
+use feagi_interop::transport::zenoh::zenoh_configuration::ZenohConfiguration;
+use feagi_interop::transport::zenoh::zenoh_worker_builder::{FeagiBuildZenohWorkerError, ZenohStdWorker, ZenohWorkerBuilder};
 
 type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
 
@@ -65,7 +65,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(DesignerBrainServerWorker, Self::BuildOutputs), Self::BuildError> {
         // The genome manager makes the request channels of its categories, and keeps the responders
         let genome_manager_builder = GenomeManagerWorkerBuilder::default();
-        let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_required_channel_pairs();
+        let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
         let (genome_manager, ()) = genome_manager_builder.build_worker(spawner, genome_manager_responders)?;
 
         // System requests are answered by the brain server worker itself, which keeps the responder
@@ -100,7 +100,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         Ok((FeagiWorker::new(command_requester, handle), ()))
     }
 
-    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {}
 }
 
 //endregion

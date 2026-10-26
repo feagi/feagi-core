@@ -10,3 +10,4 @@ mod channel_backend;
 mod requester;
 mod responder;
 mod implementations;
+pub mod feagi_request_response_error;

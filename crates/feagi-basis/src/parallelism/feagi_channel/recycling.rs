@@ -55,5 +55,3 @@ where
         element.recycle_self()
     }
 }
-
-unsafe impl<T: Recyclable> Send for RecyclableRecyclePolicy<T> {}

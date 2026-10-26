@@ -1,7 +1,7 @@
 //! The worker's side of its command channel. Handles one command at a time, so each worker keeps
 //! its own loop and can interleave commands with whatever else it does
 
-use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
+use crate::parallelism::feagi_channel::base_channels::base_errors::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiResponder;
 use crate::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};

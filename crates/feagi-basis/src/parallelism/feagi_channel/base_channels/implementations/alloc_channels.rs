@@ -1,30 +1,25 @@
 use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelBuilder, FeagiChannelReceiver, FeagiChannelTransmitter};
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
+use crate::parallelism::feagi_channel::base_channels::base_errors::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 
+//region Builder
+
 /// Creates heap allocated channel pairs holding up to `capacity` items each.
-pub struct FeagiChannelAllocBuilder<T: Recyclable> {
-    capacity: usize,
-    _item: core::marker::PhantomData<fn() -> T>,
-}
+pub struct FeagiChannelAllocBuilder<T: Recyclable>
+(core::marker::PhantomData<T>);
 
 impl<T: Recyclable> FeagiChannelAllocBuilder<T> {
-    pub const fn new(capacity: usize) -> Self {
-        FeagiChannelAllocBuilder {
-            capacity,
-            _item: core::marker::PhantomData,
-        }
-    }
+
+    /// Spawn a new builder
+    pub const fn new() -> Self {Self(core::marker::PhantomData)}
 
     /// Creates a new, independent transmitter and receiver. Can be called any number of times.
     /// Clone the transmitter for multiple producers
-    pub fn create_channels(
-        &self,
-    ) -> (
+    pub fn create_channels(capacity: usize) -> (
         thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>,
         thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>,
     ) {
-        thingbuf::mpsc::with_recycle(self.capacity, RecyclableRecyclePolicy::<T>::new())
+        thingbuf::mpsc::with_recycle(capacity, RecyclableRecyclePolicy::<T>::new())
     }
 }
 
@@ -33,10 +28,19 @@ impl<T: Recyclable> FeagiChannelBuilder<T> for FeagiChannelAllocBuilder<T> {
     type Receiver = thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>;
 
     fn create_transmitter_receiver_pair<const N: usize>() -> (Self::Transmitter, Self::Receiver) {
-        todo!()
+        Self::create_channels(N)
     }
 }
 
+impl<T: Recyclable> Default for FeagiChannelAllocBuilder<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+//endregion
+
+// Transmitter
 impl<T: Recyclable> FeagiChannelTransmitter<T> for thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>> {
     type SendGuard<'a>
         = thingbuf::mpsc::SendRef<'a, T>
@@ -80,6 +84,7 @@ impl<T: Recyclable> FeagiChannelTransmitter<T> for thingbuf::mpsc::Sender<T, Rec
     }
 }
 
+// Receiver
 impl<T: Recyclable> FeagiChannelReceiver<T> for thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>> {
     type RecvGuard<'a>
         = thingbuf::mpsc::RecvRef<'a, T>
