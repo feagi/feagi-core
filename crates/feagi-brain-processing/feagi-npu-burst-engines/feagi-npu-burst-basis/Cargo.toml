@@ -1,5 +1,5 @@
 [package]
-name = "feagi-npu-burst-esp32"
+name = "feagi-npu-burst-basis"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "A burst engine for running on the ESP32 family of SOCs"
+description = "Shared logic / traits for burst engines"
 
 [features]
 
@@ -16,32 +16,23 @@ description = "A burst engine for running on the ESP32 family of SOCs"
 
 # ========================= Standard Toggleable Features ========================= #
 
-# TODO should this embedded crate have no STD mode?
-
 std = [
     "alloc",
 ]
 
 alloc = [
-
+    "serde/alloc",
+    "heapless/alloc"
 ]
-
-# ========================= Platform ========================= #
-
-# TODO seperate features for PSRAM amount?
-
 
 [dependencies]
 # Sub Crates
 
 # Sibling Crates
-feagi-npu-burst-basis = {path = "../feagi-npu-burst-basis" }
 
-# Parent Crates
-feagi-brain-models = {path = "../../../../feagi-cns-structures/feagi-brain-models" }
 
 # Root Crates
-feagi-basis = {path = "../../../../feagi-basis" }
+feagi-basis = {path = "../../../feagi-basis" }
 
 # External Crates
 paste = { workspace = true}

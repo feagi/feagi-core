@@ -1,5 +1,5 @@
 [package]
-name = "feagi-cns-structures"
+name = "feagi-genome"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

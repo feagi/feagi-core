@@ -36,7 +36,7 @@ default = [
 std = [
     "alloc",
     "serde/std", "serde_json/std",
-    "feagi-basis/std", "feagi-interop/std", "feagi-cns-processing/std"
+    "feagi-basis/std", "feagi-interop/std"
 ]
 
 alloc = [
@@ -79,9 +79,6 @@ zenoh_ws = [
 feagi-basis = {path = "crates/feagi-basis"}
 feagi-interop = {path = "crates/feagi-interop"}
 
-# Feagi (Sometimes)
-feagi-cns-processing = {path = "crates/feagi-cns-processing"}
-
 # External (always)
 thiserror = {workspace = true}
 serde = {workspace = true, default-features = false}
@@ -108,25 +105,22 @@ members = [
     "crates/feagi-basis",
     "crates/feagi-basis/feagi-basis-proc-common",
 
+    "crates/feagi-brain-basis",
+    "crates/feagi-brain-processing",
+    "crates/feagi-brain-processing/feagi-npu-burst-engines/feagi-npu-burst-basis",
+    "crates/feagi-brain-processing/feagi-npu-burst-engines/feagi-npu-burst-rayon",
+    "crates/feagi-brain-processing/feagi-npu-burst-engines/feagi-npu-burst-esp32",
+
+    "crates/feagi-genome",
+
     "crates/feagi-interop",
-
-    "crates/feagi-cns-structures",
-
-    "crates/feagi-cns-processing",
-
-    "crates/feagi-pns-structures",
-
-    "crates/feagi-pns-processing",
-
-    "crates/feagi-cns-structures/feagi-brain-models",
-    "crates/feagi-cns-processing/feagi-brain-npu",
-    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines",
-    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
-    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
-    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
 
     "crates/feagi-migrator",
     "crates/feagi-migrator/migrator-legacy-v5",
+
+    "crates/feagi-pns-structures",
+    "crates/feagi-pns-processing",
+
 ]
 
 

@@ -1,5 +1,5 @@
 [package]
-name = "feagi-cns-processing"
+name = "feagi-brain-basis"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,25 +8,24 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Various workers that do tasks related to FEAGI Brain Functionality"
+description = "Base structs and traits to describe neural processing"
 
 [features]
 
 std = [
     "alloc",
-    "feagi-basis/std", "feagi-cns-structures/std",
     "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
-    
 ]
 
 alloc = [
     "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc"
 ]
 
+
+
 [dependencies]
 # Workspace Crates
 feagi-basis = { path = "../feagi-basis" }
-feagi-cns-structures = {path = "../feagi-cns-structures"}
 
 # External Crates
 paste = { workspace = true }
@@ -36,8 +35,7 @@ serde = { workspace = true, default-features = false, features = ["derive"] }
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
-
-serde_json = { workspace = true } # TODO make optional
+rand = {workspace = true}
 
 [lints]
 workspace = true
