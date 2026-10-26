@@ -9,7 +9,6 @@ extern crate alloc;
 // `::feagi_basis`, which this makes resolve inside of this crate too
 extern crate self as feagi_basis;
 
-
 /// Dependencies reached by generated code, so crates using the macros do not need them directly
 #[doc(hidden)]
 pub mod __private {

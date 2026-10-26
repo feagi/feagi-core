@@ -55,7 +55,7 @@ uuid = { workspace = true, default-features = false, features = ["serde"] }
 
 serde_json = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
-rand = {workspace = true, optional = true, features = ["serde", "std", "alloc", "thread_rng"]}
+rand = { workspace = true, optional = true, features = ["serde", "std", "alloc", "thread_rng"] }
 
 
 [dev-dependencies]

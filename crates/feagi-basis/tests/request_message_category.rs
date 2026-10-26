@@ -14,7 +14,7 @@ use feagi_basis::feagi_message::request::feagi_request_response_payloads::{Feagi
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CoffeeMachineError {
     OutOfBeans { beans_needed: u32 },
-    NotImplemented
+    NotImplemented,
 }
 
 impl core::fmt::Display for CoffeeMachineError {
@@ -127,7 +127,10 @@ fn category_marker_holds_category_information() {
     #[cfg(not(feature = "alloc"))]
     assert_same_type::<
         <CoffeeShopRequestCategory as FeagiRequestCategory>::NestedMessageDescriptors,
-        NMDes<ReadOrderFeagiRequestMessageDescriptor, NMDes<ReadStatusFeagiRequestMessageDescriptor, NMDes<CreateOrderFeagiRequestMessageDescriptor, NNull>>>,
+        NMDes<
+            ReadOrderFeagiRequestMessageDescriptor,
+            NMDes<ReadStatusFeagiRequestMessageDescriptor, NMDes<CreateOrderFeagiRequestMessageDescriptor, NNull>>,
+        >,
     >();
 }
 
@@ -135,7 +138,10 @@ fn category_marker_holds_category_information() {
 fn full_path_starts_with_base_path_and_names_its_slots() {
     let (shops, shop_name, orders, order_id): (&str, ConfigurableSlot, &str, MessagePathSlotElement<u32>) =
         ReadOrderFeagiRequestMessagePath::FULL_MESSAGE_PATH;
-    assert_eq!((shops, shop_name.name, orders, order_id.name), ("shops", "shop_name", "orders", "order_id"));
+    assert_eq!(
+        (shops, shop_name.name, orders, order_id.name),
+        ("shops", "shop_name", "orders", "order_id")
+    );
 
     assert_same_type::<<ReadOrderFeagiRequestMessagePath as FeagiMessagePath>::Parameters, ReadOrderFeagiRequestMessageParameters>();
     assert_same_type::<<CreateOrderFeagiRequestMessagePath as FeagiMessagePath>::Parameters, ()>();
@@ -152,7 +158,8 @@ fn slotted_path_fills_in_configurables() {
 #[test]
 fn message_path_is_written_with_its_parameters() {
     let mut path = heapless::String::<64>::new();
-    ReadOrderFeagiRequestMessagePath::write_message_path(configurables(), &ReadOrderFeagiRequestMessageParameters { order_id: 7 }, &mut path).unwrap();
+    ReadOrderFeagiRequestMessagePath::write_message_path(configurables(), &ReadOrderFeagiRequestMessageParameters { order_id: 7 }, &mut path)
+        .unwrap();
     assert_eq!(path.as_str(), "shops/downtown/orders/7");
 
     let mut path = heapless::String::<64>::new();
@@ -234,8 +241,14 @@ fn matcher_finds_the_message_of_the_method_at_a_path() {
         match_path(FeagiMessageEnum::Read, "shops/downtown/orders/7"),
         Some(CoffeeShopPathMatch::ReadOrder(ReadOrderFeagiRequestMessageParameters { order_id: 7 }))
     ));
-    assert!(matches!(match_path(FeagiMessageEnum::Read, "shops/downtown/status"), Some(CoffeeShopPathMatch::ReadStatus(()))));
-    assert!(matches!(match_path(FeagiMessageEnum::Create, "shops/downtown/orders"), Some(CoffeeShopPathMatch::CreateOrder(()))));
+    assert!(matches!(
+        match_path(FeagiMessageEnum::Read, "shops/downtown/status"),
+        Some(CoffeeShopPathMatch::ReadStatus(()))
+    ));
+    assert!(matches!(
+        match_path(FeagiMessageEnum::Create, "shops/downtown/orders"),
+        Some(CoffeeShopPathMatch::CreateOrder(()))
+    ));
 }
 
 #[test]
@@ -322,8 +335,14 @@ fn messages_use_their_defined_error_types() {
 
 #[test]
 fn errors_serialize_as_plain_serde_enums() {
-    assert_eq!(serde_json::to_string(&ReadOrderFeagiRequestMessageError::OrderNotFound).unwrap(), r#""OrderNotFound""#);
-    assert_eq!(serde_json::to_string(&FeagiUnexpectedError::UnexpectedError).unwrap(), r#""UnexpectedError""#);
+    assert_eq!(
+        serde_json::to_string(&ReadOrderFeagiRequestMessageError::OrderNotFound).unwrap(),
+        r#""OrderNotFound""#
+    );
+    assert_eq!(
+        serde_json::to_string(&FeagiUnexpectedError::UnexpectedError).unwrap(),
+        r#""UnexpectedError""#
+    );
     assert_eq!(
         serde_json::to_string(&CoffeeMachineError::OutOfBeans { beans_needed: 4 }).unwrap(),
         r#"{"OutOfBeans":{"beans_needed":4}}"#
@@ -337,8 +356,7 @@ fn errors_serialize_as_plain_serde_enums() {
 #[test]
 fn category_requests_round_trip_through_the_category_channel() {
     use feagi_basis::parallelism::block_on_thread;
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
-    
+
     let (mut requester, responder) = CoffeeShopRequestCategory::spawn_alloc_requester_responser_pair(2);
     let worker = std::thread::spawn(move || {
         block_on_thread(async move {

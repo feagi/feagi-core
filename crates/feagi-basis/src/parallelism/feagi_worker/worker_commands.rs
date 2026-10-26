@@ -2,7 +2,7 @@
 //! its own loop and can interleave commands with whatever else it does
 
 use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
-use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiResponder;
 use crate::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 

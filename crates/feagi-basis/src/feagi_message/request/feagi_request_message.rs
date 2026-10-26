@@ -7,9 +7,9 @@ use crate::feagi_message::request::feagi_request_response_payloads::FeagiRequest
 pub trait FeagiRequestMessage {
     /// The descriptor for this Feagi Request Message
     type Descriptor: FeagiRequestMessageDescriptor<
-        Message=Self,
-        Parameters=Self::DescriptorParameters,
-        RequestPayload=Self::DescriptorRequestPayload
+        Message = Self,
+        Parameters = Self::DescriptorParameters,
+        RequestPayload = Self::DescriptorRequestPayload,
     >;
 
     // NOTE: These 2 get set directly from the Descriptor by the generator
@@ -24,8 +24,3 @@ pub trait FeagiRequestMessage {
 
     // The struct should have the members of all the message data structs as pub members here
 }
-
-
-
-
-

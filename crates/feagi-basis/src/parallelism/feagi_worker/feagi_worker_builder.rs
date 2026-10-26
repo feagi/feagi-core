@@ -1,4 +1,4 @@
-use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 

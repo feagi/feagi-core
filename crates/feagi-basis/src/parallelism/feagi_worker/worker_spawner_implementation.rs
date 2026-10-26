@@ -16,4 +16,3 @@ pub enum FeagiWorkerSpawnError {
     #[error("Backend failed to start the worker!")]
     BackendFailure,
 }
-

@@ -1,10 +1,10 @@
-use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use core::marker::PhantomData;
+use core::ops::DerefMut;
+use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplyStatus, RequestSlot};
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use std::marker::PhantomData;
-use std::ops::DerefMut;
+use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplyStatus, RequestSlot};
 
 /// Receives requests from any number of requesters and replies to each one
 ///
@@ -81,8 +81,10 @@ where
     /// The reply slot is claimed before processing and marked as not responded. If `processor`
     /// is cancelled or panics, dropping the reply guard still publishes the slot, so the requester
     /// receives `ResponderDroppedRequest` instead of waiting forever
-    async fn respond_in_place<Processor>(mut slot: impl DerefMut<Target = RequestSlot<Request, Channels::ReplyTransmitter<Response>>>, processor: Processor)
-    where
+    async fn respond_in_place<Processor>(
+        mut slot: impl DerefMut<Target = RequestSlot<Request, Channels::ReplyTransmitter<Response>>>,
+        processor: Processor,
+    ) where
         Processor: AsyncFnOnce(&mut Request, &mut Response),
     {
         let slot = &mut *slot;
@@ -113,8 +115,7 @@ where
     }
 }
 
-impl<Request, Response, Channels> Drop
-for FeagiResponder<Request, Response, Channels>
+impl<Request, Response, Channels> Drop for FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,

@@ -1,6 +1,6 @@
 use crate::feagi_message::request::feagi_request_descriptor::FeagiRequestMessageDescriptor;
 use crate::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory};
-use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 
 //region Category
 
@@ -9,9 +9,9 @@ pub struct NMDes<Head, Tail>
 where
     Head: FeagiRequestMessageDescriptor,
     // Tail can be either another NMDes or a NNull (tail)
-    {
+{
     pub head: Head,
-    pub tail: Tail
+    pub tail: Tail,
 }
 
 /// Tail of the `NMDes` and `NCat`
@@ -48,10 +48,10 @@ where
 
 /// Nests per category items of a group, as `NCat<Head, NCat<..., NNull>>`
 pub struct NCat<Head, Tail>
-    // Tail can be either another NCat or a NNull (tail)
-    {
+// Tail can be either another NCat or a NNull (tail)
+{
     pub head: Head,
-    pub tail: Tail
+    pub tail: Tail,
 }
 
 /// A `NCat` chain (or `NNull`), which another chain can be appended to. Lets groups be joined
@@ -75,7 +75,10 @@ impl<Head, Tail: FeagiNestedCategories> FeagiNestedCategories for NCat<Head, Tai
     type Append<Other: FeagiNestedCategories> = NCat<Head, Tail::Append<Other>>;
 
     fn append<Other: FeagiNestedCategories>(self, other: Other) -> Self::Append<Other> {
-        NCat { head: self.head, tail: self.tail.append(other) }
+        NCat {
+            head: self.head,
+            tail: self.tail.append(other),
+        }
     }
 }
 
@@ -114,7 +117,10 @@ where
 
     fn into_nested_categories(self, configurables: Self::Configurables) -> Self::NestedCategories {
         NCat {
-            head: FeagiConfiguredCategoryRequester { requester: self, configurables },
+            head: FeagiConfiguredCategoryRequester {
+                requester: self,
+                configurables,
+            },
             tail: NNull,
         }
     }

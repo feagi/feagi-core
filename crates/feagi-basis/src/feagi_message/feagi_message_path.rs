@@ -1,8 +1,6 @@
-
 /// The path a message takes. Zero sized, the path is described entirely by its types and
 /// associated items, for parsers in zenoh / picoserve / open-api to generate what they need
 pub trait FeagiMessagePath: 'static {
-
     /// A struct of `FeagiMessagePathStaticElement` instances, shared by the category
     type Configurables: configurables::FeagiMessagePathConfigurables;
 
@@ -33,11 +31,7 @@ pub trait FeagiMessagePath: 'static {
 
     /// Writes the concrete path for a request with the given `parameters`, segments separated by
     /// `/`. Used by the requesting side (zenoh keys, REST client URLs)
-    fn write_message_path<W: core::fmt::Write>(
-        configurables: &Self::Configurables,
-        parameters: &Self::Parameters,
-        out: &mut W,
-    ) -> core::fmt::Result;
+    fn write_message_path<W: core::fmt::Write>(configurables: &Self::Configurables, parameters: &Self::Parameters, out: &mut W) -> core::fmt::Result;
 
     /// Matches a concrete path, given as its already decoded segments, against this path. Gives
     /// the parameters parsed from it, or `None` if the path is not this one (a static or
@@ -51,7 +45,10 @@ pub trait FeagiMessagePath: 'static {
 /// of `Path` at once (zenoh key expressions)
 ///
 /// Errors if `configurables` has no value for a configurable of the path
-pub fn write_wildcard_message_path<Path: FeagiMessagePath, W: core::fmt::Write>(configurables: &Path::Configurables, out: &mut W) -> core::fmt::Result {
+pub fn write_wildcard_message_path<Path: FeagiMessagePath, W: core::fmt::Write>(
+    configurables: &Path::Configurables,
+    out: &mut W,
+) -> core::fmt::Result {
     use crate::feagi_message::feagi_message_description::FeagiMessagePathElementDescription;
     use configurables::FeagiMessagePathConfigurables;
 
@@ -61,13 +58,14 @@ pub fn write_wildcard_message_path<Path: FeagiMessagePath, W: core::fmt::Write>(
         }
         match element {
             FeagiMessagePathElementDescription::Static(text) => out.write_str(text)?,
-            FeagiMessagePathElementDescription::Configurable { name } => out.write_str(configurables.configurable_str(name).ok_or(core::fmt::Error)?)?,
+            FeagiMessagePathElementDescription::Configurable { name } => {
+                out.write_str(configurables.configurable_str(name).ok_or(core::fmt::Error)?)?
+            }
             FeagiMessagePathElementDescription::Parameter { .. } => out.write_str("*")?,
         }
     }
     Ok(())
 }
-
 
 /// Defines something that can be serialized to become part of the message path statically.
 /// Think reading server name from a config file
@@ -88,13 +86,11 @@ pub mod configurables {
         }
     }
 
-
     /// Defines something that can be serialized to become part of the message path statically.
     /// Used for allowing things to be used as `FeagiMessagePathConfigurables` fields
     pub trait FeagiMessagePathStaticElement {
         fn to_str_slice(&self) -> &str;
     }
-
 
     impl FeagiMessagePathStaticElement for &'static str {
         fn to_str_slice(&self) -> &str {
@@ -145,9 +141,7 @@ pub mod parameters {
 
     /// Something that can be serialized to become part of the message path dynamically as
     /// a parameter.
-    pub trait FeagiMessagePathParameterElement: core::str::FromStr + core::fmt::Debug
-    + serde::Serialize + serde::de::DeserializeOwned
-    {
+    pub trait FeagiMessagePathParameterElement: core::str::FromStr + core::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned {
         /// Writes this parameter as its path segment. What is written must parse back into the
         /// same value through `FromStr`
         fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result;
@@ -213,5 +207,4 @@ pub mod parameters {
     }
 
     //endregion
-    
 }

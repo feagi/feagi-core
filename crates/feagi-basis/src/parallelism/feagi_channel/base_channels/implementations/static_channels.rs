@@ -1,4 +1,4 @@
-use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 
@@ -29,7 +29,7 @@ impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelBuilder<T> for 
 
 impl<T: Recyclable + 'static> FeagiChannelTransmitter<T> for thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>> {
     type SendGuard<'a>
-    = thingbuf::mpsc::SendRef<'a, T>
+        = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
@@ -72,12 +72,14 @@ impl<T: Recyclable + 'static> FeagiChannelTransmitter<T> for thingbuf::mpsc::Sta
 
 impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>> {
     type RecvGuard<'a>
-    = thingbuf::mpsc::RecvRef<'a, T>
+        = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 
     async fn async_recv(&self) -> Result<T, FeagiChannelReceiveError> {
-        thingbuf::mpsc::StaticReceiver::recv(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::StaticReceiver::recv(self)
+            .await
+            .ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv(&self) -> Result<T, FeagiChannelReceiveError> {
@@ -85,7 +87,9 @@ impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for thingbuf::mpsc::Static
     }
 
     async fn async_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        thingbuf::mpsc::StaticReceiver::recv_ref(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::StaticReceiver::recv_ref(self)
+            .await
+            .ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {

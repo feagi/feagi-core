@@ -107,7 +107,9 @@ fn group_nests_each_requester_with_its_configurables() {
     >();
     assert_same_type::<<PantryRequesters<Channels> as FeagiRequestCategoryGroup<Channels>>::Configurables, PantryConfigurables>();
 
-    static SHELF: ShelfConfigurables = ShelfConfigurables { shelf_name: heapless::String::new() };
+    static SHELF: ShelfConfigurables = ShelfConfigurables {
+        shelf_name: heapless::String::new(),
+    };
     let (requesters, _responders) = PantryRequesters::create_alloc_channel_pairs(2);
     let configurables = PantryConfigurables {
         tea: TeaRequestCategory::EMPTY_CONFIGURABLES.unwrap(),
@@ -129,7 +131,9 @@ fn joined_groups_nest_as_one_flat_chain() {
     >();
     assert_same_type::<<Joined as FeagiRequestCategoryGroup<Channels>>::Configurables, (TeaOnlyConfigurables, &'static ShelfConfigurables)>();
 
-    static SHELF: ShelfConfigurables = ShelfConfigurables { shelf_name: heapless::String::new() };
+    static SHELF: ShelfConfigurables = ShelfConfigurables {
+        shelf_name: heapless::String::new(),
+    };
     let (tea, _tea_responders) = TeaOnlyRequesters::create_alloc_channel_pairs(2);
     let (shelf, _shelf_responder) = ShelfRequestCategory::spawn_alloc_requester_responser_pair(2);
     let nested = (tea, shelf).into_nested_categories((TEA_ONLY_CONFIGURABLES, &SHELF));

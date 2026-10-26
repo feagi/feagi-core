@@ -1,9 +1,9 @@
+use feagi_macro_components::common::parse_optional_comma;
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{parenthesized, parse_macro_input, Path, Token};
-use feagi_macro_components::common::parse_optional_comma;
 
 pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
     let enum_level_params = parse_macro_input!(input as EnumLevelParams);
@@ -19,7 +19,7 @@ pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
 
 struct ShortStructKeyNames {
     pub short: Ident,
-    pub key: Ident
+    pub key: Ident,
 }
 
 impl Parse for ShortStructKeyNames {
@@ -29,7 +29,7 @@ impl Parse for ShortStructKeyNames {
         let short: Ident = fields_input.parse()?;
         parse_optional_comma(&fields_input)?;
         let key: Ident = fields_input.parse()?;
-        Ok( Self { short, key })
+        Ok(Self { short, key })
     }
 }
 
@@ -75,11 +75,10 @@ struct EnumLevelParams {
     pub derives: Vec<Path>,
     pub short_trait_name: Ident,
     pub base_trait_name: Ident,
-    pub short_and_struct_key_names: Vec<ShortStructKeyNames>
+    pub short_and_struct_key_names: Vec<ShortStructKeyNames>,
 }
 
 impl EnumLevelParams {
-
     /// generate the family trait code. Every derive is enforced as a bound on `Of`, so the enum
     /// can implement them for any family
     pub fn generate_family_trait(&self) -> proc_macro2::TokenStream {
@@ -87,16 +86,20 @@ impl EnumLevelParams {
         let base_trait_name = self.base_trait_name.clone();
         let short_trait_name = self.short_trait_name.clone();
 
-        let bounds: Vec<proc_macro2::TokenStream> = self.derives.iter().map(|derive| {
-            if let Some(manual) = ManualDerive::from_path(derive) {
-                return manual.trait_path();
-            }
-            // Deserialize carries a lifetime, the bound must hold for any of them
-            match derive.segments.last() {
-                Some(last) if last.ident == "Deserialize" => quote!(for<'de> #derive<'de>),
-                _ => quote!(#derive),
-            }
-        }).collect();
+        let bounds: Vec<proc_macro2::TokenStream> = self
+            .derives
+            .iter()
+            .map(|derive| {
+                if let Some(manual) = ManualDerive::from_path(derive) {
+                    return manual.trait_path();
+                }
+                // Deserialize carries a lifetime, the bound must hold for any of them
+                match derive.segments.last() {
+                    Some(last) if last.ident == "Deserialize" => quote!(for<'de> #derive<'de>),
+                    _ => quote!(#derive),
+                }
+            })
+            .collect();
         let bounds = if bounds.is_empty() { quote!() } else { quote!(: #(#bounds)+*) };
 
         quote! {
@@ -107,9 +110,8 @@ impl EnumLevelParams {
     }
 
     pub fn generate_leveled_enum(&self) -> proc_macro2::TokenStream {
-
         fn make_row(key: &Ident, short_name: &Ident, struct_name: &Ident) -> proc_macro2::TokenStream {
-            quote!{#key(#short_name::Of<#struct_name>),
+            quote! {#key(#short_name::Of<#struct_name>),
             }
         }
 
@@ -120,12 +122,10 @@ impl EnumLevelParams {
         let mut rows = proc_macro2::TokenStream::new();
         for row in &self.short_and_struct_key_names {
             rows.extend(make_row(&row.short, &short_family_trait_name, &row.key));
-        };
+        }
 
         // Derives like serde's only bound the field types, so they can be passed through as is
-        let passthrough_derives: Vec<&Path> = self.derives.iter()
-            .filter(|derive| ManualDerive::from_path(derive).is_none())
-            .collect();
+        let passthrough_derives: Vec<&Path> = self.derives.iter().filter(|derive| ManualDerive::from_path(derive).is_none()).collect();
         let derive_attr = if passthrough_derives.is_empty() {
             quote!()
         } else {
@@ -135,10 +135,16 @@ impl EnumLevelParams {
         let variants: Vec<&Ident> = self.short_and_struct_key_names.iter().map(|row| &row.short).collect();
         let mut manual_impls = proc_macro2::TokenStream::new();
         for manual in self.derives.iter().filter_map(ManualDerive::from_path) {
-            manual_impls.extend(make_manual_impl(manual, &leveled_enum_name, &family_trait_name, &short_family_trait_name, &variants));
+            manual_impls.extend(make_manual_impl(
+                manual,
+                &leveled_enum_name,
+                &family_trait_name,
+                &short_family_trait_name,
+                &variants,
+            ));
         }
 
-        quote!{
+        quote! {
             #derive_attr
             pub enum #leveled_enum_name<#short_family_trait_name: #family_trait_name> {
                 #rows
@@ -270,13 +276,13 @@ impl Parse for EnumLevelParams {
             let short_key = ShortStructKeyNames::parse(&fields_input)?;
             short_and_struct_key_names.push(short_key);
             parse_optional_comma(&fields_input)?;
-        };
+        }
         parse_optional_comma(input)?;
-        Ok( Self {
+        Ok(Self {
             derives,
             short_trait_name,
             base_trait_name,
-            short_and_struct_key_names
+            short_and_struct_key_names,
         })
     }
 }

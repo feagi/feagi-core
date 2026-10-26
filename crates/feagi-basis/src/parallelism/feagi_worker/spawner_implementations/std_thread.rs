@@ -1,7 +1,5 @@
 use crate::parallelism::feagi_worker::worker_spawner_implementation::{FeagiWorkerSpawnError, WorkerSpawnerImplementation};
 
-
-
 //region Worker Spawner Implementation
 
 /// Spawns each worker on a new std thread and runs it there with `block_on_thread`

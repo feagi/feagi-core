@@ -1,8 +1,12 @@
+
 pub mod shared_structs;
-pub mod implementations;
 
 pub use requester::FeagiRequester;
 pub use responder::FeagiResponder;
+pub use channel_backend::FeagiRequestResponseChannelBackend;
+pub use implementations::dynamic;
+
+mod channel_backend;
 mod requester;
 mod responder;
-pub mod channel_backend;
+mod implementations;

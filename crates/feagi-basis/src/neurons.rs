@@ -44,12 +44,10 @@ pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> = ParData<CorticalAreaNeuron
 //region Dimensional Collections
 
 /// Defines the 4D coordinates of a dimensional neuron
-pub type DimensionalCorticalAreaNeuronCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-    SpatialCoordinate<QI, 4>;
+pub type DimensionalCorticalAreaNeuronCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> = SpatialCoordinate<QI, 4>;
 
 /// Defines the 4D dimensions of a dimensional cortical area
-pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-    SpatialDimensions<QI, 4>;
+pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> = SpatialDimensions<QI, 4>;
 
 /// A collection of dimensional neuron potentials that owns all its inner fields, using default
 /// incrementing indexing

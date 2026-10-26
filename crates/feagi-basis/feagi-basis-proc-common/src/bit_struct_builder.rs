@@ -1,11 +1,11 @@
 //! Generates a struct wrapping an unsigned integer with one bool  per named bit field.
 
+use feagi_macro_components::common::parse_optional_comma;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, Attribute, Ident, Token, Type, Visibility};
-use feagi_macro_components::common::parse_optional_comma;
 
 pub fn bit_struct_builder(input: TokenStream) -> TokenStream {
     let spec = parse_macro_input!(input as BitStructBuilderSpec);
@@ -140,12 +140,9 @@ fn parse_unsigned_storage(storage_type: &Type) -> syn::Result<(Ident, usize)> {
         }
     };
 
-    let ident = path.get_ident().ok_or_else(|| {
-        syn::Error::new_spanned(
-            storage_type,
-            "bit_struct_builder: storage type must be u8, u16, u32, or u64",
-        )
-    })?;
+    let ident = path
+        .get_ident()
+        .ok_or_else(|| syn::Error::new_spanned(storage_type, "bit_struct_builder: storage type must be u8, u16, u32, or u64"))?;
 
     // feels dumb but couldnt think of another way
     let bit_capacity = match ident.to_string().as_str() {

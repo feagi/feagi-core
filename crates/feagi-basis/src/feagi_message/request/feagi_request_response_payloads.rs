@@ -1,20 +1,14 @@
 /// The struct that gets sent as the main request payload
-pub trait FeagiRequestPayload: serde::Serialize + serde::de::DeserializeOwned {
-    
-}
+pub trait FeagiRequestPayload: serde::Serialize + serde::de::DeserializeOwned {}
 
 // Messages without any request payload fields use the unit type
 impl FeagiRequestPayload for () {}
 
-
 /// The struct that gets returned as a response (assuming no error, which is handled separately)
-pub trait FeagiResponsePayload: serde::Serialize + serde::de::DeserializeOwned {
-
-}
+pub trait FeagiResponsePayload: serde::Serialize + serde::de::DeserializeOwned {}
 
 // Messages without any response fields use the unit type
 impl FeagiResponsePayload for () {}
-
 
 //region Error
 /// The error a specific message can respond with, when the request reached its responder but

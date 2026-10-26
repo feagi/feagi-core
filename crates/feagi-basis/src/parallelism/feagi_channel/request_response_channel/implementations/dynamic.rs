@@ -1,9 +1,9 @@
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
-use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::requester::FeagiRequester;
 use crate::parallelism::feagi_channel::request_response_channel::responder::FeagiResponder;
+use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
 
 //region Channel Backend
 
@@ -17,9 +17,8 @@ impl FeagiRequestResponseChannelBackend for FeagiRequestResponseChannelsAllocBac
     type ReplyTransmitter<Response: Recyclable> = FeagiReplyTransmitterAlloc<Response>;
     type ReplyReceiver<Response: Recyclable> = FeagiReplyReceiverAlloc<Response>;
 
-    fn create_default_channel_pair<
-        Request: Recyclable, Response: Recyclable, const QUEUE_SIZE: usize
-    >() -> (FeagiRequester<Request, Response, Self>, FeagiResponder<Request, Response, Self>) {
+    fn create_default_channel_pair<Request: Recyclable, Response: Recyclable, const QUEUE_SIZE: usize>(
+    ) -> (FeagiRequester<Request, Response, Self>, FeagiResponder<Request, Response, Self>) {
         Self::create_channels(QUEUE_SIZE)
     }
 }
@@ -42,20 +41,22 @@ impl FeagiRequestResponseChannelsAllocBackend {
 //endregion
 
 /// Request transmitter used by alloc requesters
-pub type FeagiRequestTransmitterAlloc<Request, Response> =
-    thingbuf::mpsc::Sender<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>, RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>>;
+pub type FeagiRequestTransmitterAlloc<Request, Response> = thingbuf::mpsc::Sender<
+    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
+    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
+>;
 
 /// Request receiver used by alloc responders
-pub type FeagiRequestReceiverAlloc<Request, Response> =
-    thingbuf::mpsc::Receiver<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>, RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>>;
+pub type FeagiRequestReceiverAlloc<Request, Response> = thingbuf::mpsc::Receiver<
+    RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>,
+    RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplyTransmitterAlloc<Response>>>,
+>;
 
 /// Reply transmitter carried inside alloc requests
-pub type FeagiReplyTransmitterAlloc<Response> = 
-    thingbuf::mpsc::Sender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+pub type FeagiReplyTransmitterAlloc<Response> = thingbuf::mpsc::Sender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
 
 /// Reply receiver used by alloc requesters
-pub type FeagiReplyReceiverAlloc<Response> = 
-    thingbuf::mpsc::Receiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+pub type FeagiReplyReceiverAlloc<Response> = thingbuf::mpsc::Receiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
 
 /// Requester using heap allocated channels. Cloning creates another requester to the same
 /// responder, with its own reply channel
@@ -64,7 +65,6 @@ pub type FeagiRequesterAlloc<Request, Response> = FeagiRequester<Request, Respon
 /// Responder using heap allocated channels
 pub type FeagiResponderAlloc<Request, Response> = FeagiResponder<Request, Response, FeagiRequestResponseChannelsAllocBackend>;
 
-
 impl<Request: Recyclable, Response: Recyclable> FeagiRequesterAlloc<Request, Response> {
     /// Creates a requester with a newly allocated reply channel of capacity 1
     fn new_with_reply_channel(request_sender: FeagiRequestTransmitterAlloc<Request, Response>) -> Self {
@@ -72,7 +72,6 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequesterAlloc<Request, Res
         FeagiRequester::new(request_sender, reply_sender, reply_receiver)
     }
 }
-
 
 impl<Request: Recyclable, Response: Recyclable> Clone for FeagiRequesterAlloc<Request, Response> {
     fn clone(&self) -> Self {

@@ -1,9 +1,10 @@
-use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use core::marker::PhantomData;
+use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, ReplyStatus};
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use std::marker::PhantomData;
+use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, ReplyStatus};
+
 
 /// Sends requests to a responder and awaits the matching response
 pub struct FeagiRequester<Request, Response, Channels>

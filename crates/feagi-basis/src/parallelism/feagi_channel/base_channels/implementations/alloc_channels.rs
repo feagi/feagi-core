@@ -1,4 +1,4 @@
-use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelBuilder, FeagiChannelReceiver, FeagiChannelTransmitter};
+use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelBuilder, FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 
@@ -18,7 +18,12 @@ impl<T: Recyclable> FeagiChannelAllocBuilder<T> {
 
     /// Creates a new, independent transmitter and receiver. Can be called any number of times.
     /// Clone the transmitter for multiple producers
-    pub fn create_channels(&self) -> (thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>, thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>) {
+    pub fn create_channels(
+        &self,
+    ) -> (
+        thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>,
+        thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>,
+    ) {
         thingbuf::mpsc::with_recycle(self.capacity, RecyclableRecyclePolicy::<T>::new())
     }
 }
@@ -26,11 +31,15 @@ impl<T: Recyclable> FeagiChannelAllocBuilder<T> {
 impl<T: Recyclable> FeagiChannelBuilder<T> for FeagiChannelAllocBuilder<T> {
     type Transmitter = thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>;
     type Receiver = thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>;
+
+    fn create_transmitter_receiver_pair<const N: usize>() -> (Self::Transmitter, Self::Receiver) {
+        todo!()
+    }
 }
 
 impl<T: Recyclable> FeagiChannelTransmitter<T> for thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>> {
     type SendGuard<'a>
-    = thingbuf::mpsc::SendRef<'a, T>
+        = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
@@ -73,7 +82,7 @@ impl<T: Recyclable> FeagiChannelTransmitter<T> for thingbuf::mpsc::Sender<T, Rec
 
 impl<T: Recyclable> FeagiChannelReceiver<T> for thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>> {
     type RecvGuard<'a>
-    = thingbuf::mpsc::RecvRef<'a, T>
+        = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 
@@ -86,7 +95,9 @@ impl<T: Recyclable> FeagiChannelReceiver<T> for thingbuf::mpsc::Receiver<T, Recy
     }
 
     async fn async_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        thingbuf::mpsc::Receiver::recv_ref(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::Receiver::recv_ref(self)
+            .await
+            .ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {

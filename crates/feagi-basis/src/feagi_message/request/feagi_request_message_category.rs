@@ -7,10 +7,10 @@ use crate::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, 
 use crate::feagi_message::request::feagi_request_message::FeagiRequestMessage;
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiRequestError};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use crate::parallelism::feagi_channel::request_response_channel::{FeagiRequester, FeagiResponder};
+use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
 #[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use crate::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use crate::parallelism::feagi_channel::request_response_channel::{FeagiRequester, FeagiResponder};
 
 /// A zero sized struct that contains static information about a category of request messages
 pub trait FeagiRequestCategory: Sized {
@@ -60,9 +60,8 @@ pub trait FeagiRequestCategory: Sized {
 
     /// Create no-alloc compatible channels for compile time using default settings using the
     /// given backend for the entire category, using the request/response enums as their data types,
-    fn spawn_requester_responser_pair<ChannelBackend: FeagiRequestResponseChannelBackend, const QUEUE_SIZE: usize>()
-        -> (FeagiCategoryRequester<Self, ChannelBackend>,
-            FeagiCategoryResponder<Self, ChannelBackend>) {
+    fn spawn_requester_responser_pair<ChannelBackend: FeagiRequestResponseChannelBackend, const QUEUE_SIZE: usize>(
+    ) -> (FeagiCategoryRequester<Self, ChannelBackend>, FeagiCategoryResponder<Self, ChannelBackend>) {
         let (requester, responder) = ChannelBackend::create_default_channel_pair::<Self::RequestEnum, Self::ResponseEnum, QUEUE_SIZE>();
         (FeagiCategoryRequester::new(requester), FeagiCategoryResponder::new(responder))
     }
@@ -70,16 +69,17 @@ pub trait FeagiRequestCategory: Sized {
     /// Create at runtime alloc utilizing channels for the entire category, using the
     /// request/response enums as their data types
     #[cfg(feature = "alloc")]
-    fn spawn_alloc_requester_responser_pair(queue_capacity: usize)
-        -> (FeagiCategoryRequester<Self, FeagiRequestResponseChannelsAllocBackend>,
-            FeagiCategoryResponder<Self, FeagiRequestResponseChannelsAllocBackend>) {
+    fn spawn_alloc_requester_responser_pair(
+        queue_capacity: usize,
+    ) -> (
+        FeagiCategoryRequester<Self, FeagiRequestResponseChannelsAllocBackend>,
+        FeagiCategoryResponder<Self, FeagiRequestResponseChannelsAllocBackend>,
+    ) {
         let (requester, responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(queue_capacity);
         (FeagiCategoryRequester::new(requester), FeagiCategoryResponder::new(responder))
     }
 
-
     // This struct should be zero sized, no fields!
-
 }
 
 /// Where a request's payload comes from (a URL query, a json body, a zenoh payload, ...).

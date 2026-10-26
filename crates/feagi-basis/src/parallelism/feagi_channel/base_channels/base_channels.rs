@@ -1,9 +1,10 @@
-use core::ops::DerefMut;
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
+use core::ops::DerefMut;
 
 // NOTE: These traits are implemented directly on thingbuf's channel halves. They exist so code
 // can be generic over heap allocated and static channels, which thingbuf has no common trait for
+// TODO maybe thingbuf should have a common trait over that?
 
 /// Marks a type that builds feagi channels carrying T
 pub trait FeagiChannelBuilder<T: Recyclable> {
@@ -11,6 +12,9 @@ pub trait FeagiChannelBuilder<T: Recyclable> {
     type Transmitter: FeagiChannelTransmitter<T>;
     /// Receiving half produced by this builder
     type Receiver: FeagiChannelReceiver<T>;
+
+    /// Create a pair of transmitters and receivers statically
+    fn create_transmitter_receiver_pair<const N: usize>() -> (Self::Transmitter, Self::Receiver);
 }
 
 /// Sending half of a feagi channel

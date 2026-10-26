@@ -39,13 +39,12 @@ pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
     typed_enum_builder::enum_leveled_builder(input)
 }
 
-
 //region Templates
 
 //region Feagi Request Messaging
 
-use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
 use feagi_macro_components::feagi_messages::request_response::feagi_request_category_group::FeagiRequestCategoryGroup;
+use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
 
 
 /// Defines a category of request messages. Generates, for every message, its path, request
