@@ -1,4 +1,5 @@
 pub mod common;
+pub mod cortical_dynamics;
 pub mod feagi_messages;
 pub mod template_parsing;
 

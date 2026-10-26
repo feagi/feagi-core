@@ -1,10 +1,7 @@
 use half::{bf16, f16};
-use serde::{Deserialize, Serialize};
 use feagi_basis::prelude::QuantizedDecimalUnwrappedTrait;
 use crate::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
-use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use crate::define_cortical_dynamics_quantization;
-use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use crate::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 
 pub struct CorticalDynamicsModelCorePower<CDQ>(core::marker::PhantomData<CDQ>)
 where CDQ: CorticalDynamicsQuantizationCorePower;
@@ -13,16 +10,16 @@ impl<CDQ> CorticalDynamicsModel<CDQ> for CorticalDynamicsModelCorePower<CDQ>
 where
     CDQ: CorticalDynamicsQuantizationCorePower
 {
-    type CorticalDataProperties = s1;
-    type CorticalDataInternal = s2;
-    type CorticalDataScratch = s3;
-    type CorticalFunctionContext = s4;
-    type NeuronDataInternal = s5;
-    type NeuronDataScratch = s6;
+    type CorticalDataProperties = ();
+    type CorticalDataInternal = ();
+    type CorticalDataScratch = ();
+    type CorticalFunctionContext = ();
+    type NeuronDataInternal = ();
+    type NeuronDataScratch = ();
 }
 
 
-define_cortical_dynamics_quantization! {
+define_cortical_dynamics_quantization_template! {
     /// Quantization For the Core Power type
     CorePower: {
         T1: QuantizedDecimalUnwrappedTrait,
@@ -59,6 +56,8 @@ define_cortical_dynamics_quantization! {
         t_1: T1
     }
  }
+
+cortical_dynamics_quantization_core_power_template!(expand_cortical_dynamics_quantization);
 
 
 

@@ -705,6 +705,7 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
+ "feagi-brain-basis-proc",
  "half",
  "heapless 0.9.3",
  "paste",

@@ -28,6 +28,7 @@ alloc = [
 [dependencies]
 # Workspace Crates
 feagi-basis = { path = "../feagi-basis", default-features = false }
+feagi-brain-basis-proc = { path = "feagi-brain-basis-proc" }
 
 # External Crates
 paste = { workspace = true }
