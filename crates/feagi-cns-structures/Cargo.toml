@@ -36,6 +36,7 @@ serde = { workspace = true, default-features = false, features = ["derive"] }
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
+rand = {workspace = true}
 
 [lints]
 workspace = true

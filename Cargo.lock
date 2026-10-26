@@ -749,6 +749,7 @@ dependencies = [
  "half",
  "heapless 0.9.3",
  "paste",
+ "rand 0.10.3",
  "serde",
  "thiserror 2.0.21",
  "uuid",

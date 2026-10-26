@@ -43,20 +43,13 @@ pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> = ParData<CorticalAreaNeuron
 
 //region Dimensional Collections
 
-// TODO further restrict order type to neuron specific implementations
-
-create_wrapped_quantized_unsigned_integer!(
-    /// Index of a neuron's position along the x y z or d
-    pub DimensionalCorticalAreaNeuronAxisPosition
-);
-
 /// Defines the 4D coordinates of a dimensional neuron
 pub type DimensionalCorticalAreaNeuronCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-    SpatialCoordinate<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
+    SpatialCoordinate<QI, 4>;
 
 /// Defines the 4D dimensions of a dimensional cortical area
 pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-    SpatialDimensions<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
+    SpatialDimensions<QI, 4>;
 
 /// A collection of dimensional neuron potentials that owns all its inner fields, using default
 /// incrementing indexing
@@ -65,7 +58,7 @@ pub type DimensionalCorticalAreaPotentials<
     QP: QuantizedDecimalUnwrappedTrait,
     S: ParDataStore + DeserializeOwned + 'static,
 > = SpatialParDataOwning<
-    DimensionalCorticalAreaNeuronAxisPosition<QI>,
+    QI,
     DimensionalCorticalAreaNeuronCoordinates<QI>,
     DimensionalCorticalAreaDimensions<QI>,
     AxisOrderIncrementing<3>,

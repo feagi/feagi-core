@@ -14,7 +14,9 @@ description = "Various workers that do tasks related to FEAGI Brain Functionalit
 
 std = [
     "alloc",
+    "feagi-basis/std", "feagi-cns-structures/std",
     "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
+    
 ]
 
 alloc = [

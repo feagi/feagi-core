@@ -3,7 +3,7 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
-use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
+use feagi_cns_structures::basis::cortical_area::cortical_id::Base64EncodedCorticalID;
 
 /// One connection rule of a mapping from a source to a destination cortical area
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

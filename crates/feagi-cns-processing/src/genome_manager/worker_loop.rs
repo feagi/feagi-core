@@ -2,6 +2,8 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_cns_structures::feagi_brain_models::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_cns_structures::graphs::implementations::designer_graph::DesignerGraph;
 use crate::genome_manager::worker_builder::GenomeManagerResponders;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
@@ -26,6 +28,8 @@ pub(crate) async fn run_genome_manager(
     genome_request_responders: GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>
 )
 {
+
+    let mut genome = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
 
     let commands = FeagiWorkerCommands::new(responder);
     let mut command_handler = GenomeManagerCommandHandler;
@@ -64,3 +68,6 @@ async fn answer_not_implemented<Category: FeagiRequestCategory>(responder: &Feag
         .await
         .is_ok()
 }
+
+
+
