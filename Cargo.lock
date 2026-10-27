@@ -710,6 +710,7 @@ dependencies = [
  "heapless 0.9.3",
  "paste",
  "rand 0.10.3",
+ "rayon",
  "serde",
  "thiserror 2.0.21",
  "uuid",

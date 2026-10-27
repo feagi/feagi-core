@@ -39,6 +39,7 @@ base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
 rand = {workspace = true}
+rayon = {workspace = true, optional = true}
 
 [lints]
 workspace = true

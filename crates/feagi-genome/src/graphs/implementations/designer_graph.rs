@@ -4,7 +4,7 @@ use crate::basis::cortical_area::cortical_area_container::{CorticalAreaContainer
 use crate::graphs::feagi_graph::FeagiGraph;
 use crate::identifiers::brain_regions::BrainRegionID;
 use crate::basis::cortical_area::cortical_id::CorticalID;
-use crate::graphs::components::element_identifiers::ConcreteGraphElementIdentifiers;
+use crate::graphs::components::element_identifiers::{ConcreteGraphElementIdentifiers, GraphElementIdentifiers};
 use crate::graphs::components::npu_context::GraphNPUContextNone;
 
 /// A dynamic Genome Graph that stores genomic level data for the running feagi brain and acts
@@ -40,6 +40,10 @@ impl<FIQ: FeagiIndexQuantization> DesignerGraph<FIQ> {
 impl<FIQ: FeagiIndexQuantization> FeagiGraph<FIQ> for DesignerGraph<FIQ> {
     type ElementIdentifiers = ConcreteGraphElementIdentifiers;
     type NPUContext = GraphNPUContextNone;
+
+    fn get_cortical_area(&self, cortical_id: &<ConcreteGraphElementIdentifiers as GraphElementIdentifiers>::CorticalIdentifier) -> Option<&CorticalAreaContainer<FIQ, CacheData>> {
+        todo!()
+    }
 }
 
 impl<FIQ: FeagiIndexQuantization> DesignerGraph<FIQ> {

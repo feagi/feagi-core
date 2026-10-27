@@ -1,5 +1,7 @@
+use crate::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 // NOTE: How this works is a sub trait is made FIRST per cortical area model, then
 // there are implementations under that
 
@@ -37,7 +39,7 @@ where
     type NeuronDataScratch: CorticalAreaModelNeuronSpecification<CDQ>;
 
     //endregion
-    
+
 }
 
 
