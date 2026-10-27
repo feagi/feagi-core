@@ -1,10 +1,10 @@
-use feagi_basis::create_wrapped_uuid;
 use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
-use feagi_basis::identifiers::byte_id::{Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
+use feagi_basis::identifiers::{Base64EncodedByteID, Base64EncodedByteIdError, ByteID, Identifier, UuidVersionError};
 use feagi_basis::impl_byte_array_id;
 use feagi_basis::impl_byte_array_id_random;
+use feagi_basis::impl_uuid_id;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct RawId<const N: usize>([u8; N]);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,8 +62,14 @@ impl<'de, const N: usize> serde::Deserialize<'de> for RawId<N> {
     }
 }
 
+impl<const N: usize> Identifier for RawId<N> {}
+
 impl<const N: usize> ByteID<N> for RawId<N> {
+    // A generic N cannot name its base64 length, so the tests build `Base64EncodedByteID` directly
+    type Base64Type = ();
     type DeserializationError = Reject;
+
+    fn to_base_64(self) -> Self::Base64Type {}
 
     fn get_id_bytes(&self) -> &[u8; N] {
         &self.0
@@ -256,13 +262,39 @@ fn new_random_returns_the_declared_length() {
     assert_eq!(id.into_id_bytes().len(), 8);
 }
 
-create_wrapped_uuid!(
-    /// Documented UUID wrapper.
+impl_uuid_id!(
+    /// Documented v4 UUID ID.
     DocumentedUuidId,
     v4
 );
 
+impl_uuid_id!(SortedUuidId, v7);
+
 #[test]
-fn create_wrapped_uuid_accepts_a_doc_comment() {
-    let _documented = DocumentedUuidId::new;
+fn impl_uuid_id_accepts_a_doc_comment() {
+    let _documented = DocumentedUuidId::from_uuid;
+}
+
+#[test]
+fn uuid_ids_set_their_version() {
+    let v4 = DocumentedUuidId::new_from_random_bytes([0xFF; 16]);
+    assert_eq!(v4.as_uuid().get_version(), Some(uuid::Version::Random));
+    let v7 = SortedUuidId::new_from_unix_millis(1_700_000_000_000, &[0x11; 10]);
+    assert_eq!(v7.as_uuid().get_version(), Some(uuid::Version::SortRand));
+    assert_eq!(SortedUuidId::from_uuid(v7.as_uuid()).expect("same version"), v7);
+}
+
+#[test]
+fn uuid_ids_reject_other_versions() {
+    let v4 = DocumentedUuidId::new_from_random_bytes([0x22; 16]);
+    assert!(matches!(
+        SortedUuidId::from_uuid(v4.as_uuid()),
+        Err(UuidVersionError { expected: uuid::Version::SortRand, actual: Some(uuid::Version::Random) })
+    ));
+    assert!(matches!(
+        Base64EncodedSortedUuidId::try_from_str(&v4.to_string()),
+        Err(Base64EncodedByteIdError::Id(UuidVersionError { .. }))
+    ));
+    let v7 = SortedUuidId::new_from_unix_millis(1, &[0x33; 10]);
+    assert_eq!(Base64EncodedSortedUuidId::try_from_str(&v7.to_string()).expect("v7 text").to_id(), v7);
 }

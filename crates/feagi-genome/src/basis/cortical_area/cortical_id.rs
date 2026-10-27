@@ -1,6 +1,6 @@
-use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
 use feagi_basis::impl_byte_array_id;
-
+use crate::identifiers::faux_identifer::{FauxIdentifier, HasFauxIdentifier};
+use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
 //region Cortical ID
 
 #[macro_export]
@@ -64,9 +64,6 @@ impl_byte_array_id!(
 
 //endregion
 
+impl HasFauxIdentifier for CorticalID {}
 
-impl_byte_array_id!(
-    /// Used as placeholders in amalgamations
-    pub FauxCorticalID,
-    8
-);
+pub type FauxCorticalID = FauxIdentifier<CorticalID>;

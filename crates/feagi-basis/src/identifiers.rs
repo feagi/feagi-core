@@ -6,7 +6,32 @@ extern crate alloc;
 use base64::Engine;
 use thiserror::Error;
 
-// TODO use more optimized base64 encoding / decoding engines via cfg flags
+
+
+/// A value that uniquely identifies something within a given space
+pub trait Identifier: Copy + Eq + core::hash::Hash + core::fmt::Debug
++ serde::Serialize + serde::de::DeserializeOwned
+{}
+
+//region ByteID
+
+/// An ID in feagi that is internally a fixed array of bytes
+pub trait ByteID<const NUMBER_OF_BYTES: usize>: Identifier + core::fmt::Display {
+    type Base64Type;
+    type DeserializationError: core::error::Error;
+
+    /// Get the bytes of the encoding ID
+    fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES];
+
+    /// Return the inner byte array, consuming self
+    fn into_id_bytes(self) -> [u8; NUMBER_OF_BYTES];
+
+    /// Turns self into the base 64 representation
+    fn to_base_64(self) -> Self::Base64Type;
+
+    /// Try to parse the given bytes into the ID here
+    fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError>;
+}
 
 /// Defines a fixed-byte ID tuple struct and its standard surface.
 ///
@@ -14,7 +39,7 @@ use thiserror::Error;
 /// `Eq`, `Hash`, `serde::Serialize`, and `serde::Deserialize`. The macro also adds:
 ///
 /// - `from_bytes_const`, which wraps the bytes and does not run a deserialization check
-/// - [`ByteID`], including `try_from_id_bytes`
+/// - [`Identifier`] and [`ByteID`], including `try_from_id_bytes`
 /// - `Base64EncodedName`, the padded URL-safe base64 alias
 /// - [`core::fmt::Display`] as that same base64 text
 ///
@@ -86,7 +111,9 @@ macro_rules! impl_byte_array_id {
             }
         }
 
-        impl $crate::identifiers::byte_id::ByteID<$number_of_bytes> for $id_name {
+        impl $crate::identifiers::Identifier for $id_name {}
+
+        impl $crate::identifiers::ByteID<$number_of_bytes> for $id_name {
 
             type Base64Type = paste::paste! {[<Base64Encoded $id_name>]};
             type DeserializationError = $error_ty;
@@ -109,10 +136,10 @@ macro_rules! impl_byte_array_id {
                 $crate::impl_byte_array_id!(@try_from $id_name, bytes $(, $try_from_id_bytes)?)
             }
         }
-
+        
         paste::paste! {
             #[allow(clippy::manual_div_ceil)]
-            pub type [<Base64Encoded $id_name>] = $crate::identifiers::byte_id::Base64EncodedByteID<
+            pub type [<Base64Encoded $id_name>] = $crate::identifiers::Base64EncodedByteID<
                 $id_name,
                 $number_of_bytes,
                 { ($number_of_bytes + 2) / 3 * 4 },
@@ -162,27 +189,11 @@ macro_rules! impl_byte_array_id_random {
     };
 }
 
-/// An ID in feagi that is internally a fixed array of bytes
-pub trait ByteID<const NUMBER_OF_BYTES: usize>:
-    Sized + Clone + PartialEq + Eq + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
-{
-    type Base64Type;
-    type DeserializationError: core::error::Error;
-
-    /// Get the bytes of the encoding ID
-    fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES];
-
-    /// Return the inner byte array, consuming self
-    fn into_id_bytes(self) -> [u8; NUMBER_OF_BYTES];
-
-    /// Turns self into the base 64 representation
-    fn to_base_64(self) -> Self::Base64Type;
-
-    /// Try to parse the given bytes into the ID here
-    fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError>;
-}
+//endregion
 
 //region Base64ByteId
+
+// TODO use more optimized base64 encoding / decoding engines via cfg flags
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Base64EncodedByteID<
@@ -214,7 +225,7 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
     ///
     /// A concrete ID knows both lengths, so `Display` can call `Base64EncodedMyId::fmt_id(self, f)`.
     pub fn fmt_id(id: &ID, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let _ = Self::BASE64_LEN_MATCHES_SOURCE;
+        let _: () = Self::BASE64_LEN_MATCHES_SOURCE;
         let mut arr = [0u8; NUMBER_BASE_64_BYTES];
         // NUMBER_BASE_64_BYTES is the padded length, so this write fills `arr` with ASCII.
         _ = base64::prelude::BASE64_URL_SAFE
@@ -229,7 +240,7 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
     /// The text must be the canonical encoding of exactly `NUMBER_OF_SOURCE_BYTES` bytes,
     /// and those bytes must be a valid `ID`.
     pub fn try_from_str(text: &str) -> Result<Self, Base64EncodedByteIdError<ID::DeserializationError>> {
-        let _ = Self::BASE64_LEN_MATCHES_SOURCE;
+        let _: () = Self::BASE64_LEN_MATCHES_SOURCE;
         if text.len() != NUMBER_BASE_64_BYTES {
             return Err(Base64EncodedByteIdError::WrongLength {
                 actual: text.len(),
@@ -411,6 +422,116 @@ pub enum Base64EncodedByteIdError<E: core::error::Error> {
     /// The decoded bytes were not a valid ID and failed the ID's internal check
     #[error(transparent)]
     Id(#[from] E),
+}
+
+//endregion
+
+//region UUID
+
+/// Defines a 16-byte ID that holds a UUID of a single version.
+/// ```text
+/// impl_uuid_id!(
+///     /// Docs for the generated struct.
+///     pub MyId,
+///     v7
+/// );
+/// ```
+#[macro_export]
+macro_rules! impl_uuid_id {
+    (
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident, v4
+    ) => {
+        $crate::impl_uuid_id! {
+            @common
+            $(#[$meta])*
+            $vis $id_name, ::uuid::Version::Random
+        }
+
+        impl $id_name {
+            /// Builds an ID from a new random v4 UUID.
+            #[cfg(feature = "std")]
+            pub fn new_random() -> Self {
+                let mut bytes = [0u8; 16];
+                rand::fill(&mut bytes[..]);
+                Self::new_from_random_bytes(bytes)
+            }
+
+            /// Builds a v4 UUID from `random_bytes`, overwriting its version and variant bits.
+            pub const fn new_from_random_bytes(random_bytes: [u8; 16]) -> Self {
+                Self::from_bytes_const(::uuid::Builder::from_random_bytes(random_bytes).into_uuid().into_bytes())
+            }
+        }
+    };
+
+    (
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident, v7
+    ) => {
+        $crate::impl_uuid_id! {
+            @common
+            $(#[$meta])*
+            $vis $id_name, ::uuid::Version::SortRand
+        }
+
+        impl $id_name {
+            /// Builds an ID from a new time-ordered v7 UUID.
+            #[cfg(feature = "std")]
+            pub fn new_now() -> Self {
+                Self::from_bytes_const(::uuid::Uuid::now_v7().into_bytes())
+            }
+
+            /// Builds a v7 UUID from a unix timestamp in milliseconds and 10 counter / random bytes.
+            pub const fn new_from_unix_millis(unix_millis: u64, counter_random_bytes: &[u8; 10]) -> Self {
+                Self::from_bytes_const(
+                    ::uuid::Builder::from_unix_timestamp_millis(unix_millis, counter_random_bytes)
+                        .into_uuid()
+                        .into_bytes(),
+                )
+            }
+        }
+    };
+
+    (
+        @common
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident, $version:path
+    ) => {
+        $crate::impl_byte_array_id!(
+            $(#[$meta])*
+            $vis $id_name,
+            16,
+            $crate::identifiers::UuidVersionError,
+            $id_name::try_from_uuid_bytes
+        );
+
+        impl $id_name {
+            /// Wraps `uuid` when its version matches this ID.
+            pub const fn from_uuid(uuid: ::uuid::Uuid) -> Result<Self, $crate::identifiers::UuidVersionError> {
+                match uuid.get_version() {
+                    Some($version) => Ok(Self::from_bytes_const(uuid.into_bytes())),
+                    actual => Err($crate::identifiers::UuidVersionError { expected: $version, actual }),
+                }
+            }
+
+            /// Reads this ID as a UUID.
+            pub const fn as_uuid(&self) -> ::uuid::Uuid {
+                ::uuid::Uuid::from_bytes(self.0)
+            }
+
+            fn try_from_uuid_bytes(bytes: [u8; 16]) -> Result<Self, $crate::identifiers::UuidVersionError> {
+                Self::from_uuid(::uuid::Uuid::from_bytes(bytes))
+            }
+        }
+    };
+}
+
+/// The UUID bytes of a [`impl_uuid_id!`] ID were not the version that ID holds.
+#[derive(Debug, Error)]
+#[error("UUID version {actual:?} did not match expected version {expected:?}")]
+pub struct UuidVersionError {
+    pub expected: uuid::Version,
+    pub actual: Option<uuid::Version>,
 }
 
 //endregion

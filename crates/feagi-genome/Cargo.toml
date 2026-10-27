@@ -14,7 +14,7 @@ description = "Various structures used to describe the structure and state of th
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std",
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std", "uuid/v7", "uuid/js",  # js for WASM support
     "feagi-basis/std", "feagi-brain-basis/std"
 ]
 
@@ -38,7 +38,7 @@ serde = { workspace = true, default-features = false, features = ["derive"] }
 serde_json = {workspace = true} # TODO this may nto be optional?
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
-uuid = { workspace = true, features = ["serde"] }
+uuid = { workspace = true }
 rand = {workspace = true}
 
 [lints]

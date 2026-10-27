@@ -35,6 +35,7 @@ pub(crate) async fn cortical_area_response(
                 CorticalAreaRequests::ReadCorticalAreaIdList(_m) => {
             
                     let cortical_ids = graph.get_all_cortical_areas();
+                    
 
                    // CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
                     //    cortical_ids,

@@ -20,7 +20,7 @@ default = [
 std = [
     "alloc",
     "rand",
-    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std", "uuid/v4",
+    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std",
 ]
 
 alloc = [
@@ -51,7 +51,7 @@ serde_arrays = { workspace = true }
 heapless = { workspace = true }
 thingbuf = { workspace = true, features = ["static"] } # TODO review features
 half = { workspace = true, default-features = false, features = ["serde"] }
-uuid = { workspace = true, default-features = false, features = ["serde"] }
+uuid = { workspace = true }
 
 serde_json = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
@@ -62,6 +62,7 @@ rand = { workspace = true, optional = true, features = ["serde", "std", "alloc",
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["std"] }
 heapless = { workspace = true }
+uuid = { workspace = true, features = ["std", "v7"] }
 
 
 

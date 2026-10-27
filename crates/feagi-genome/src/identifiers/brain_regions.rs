@@ -1,13 +1,13 @@
-use feagi_basis::create_wrapped_uuid;
+use feagi_basis::impl_uuid_id;
 
-create_wrapped_uuid!(
+impl_uuid_id!(
     /// The ID of a region. This is created fresh with the current timestamp whenever a Brain Region
     /// is created, regardless of its new or if its from an almagamation
-    BrainRegionID,
+    pub BrainRegionID,
     v7);
 
-create_wrapped_uuid!(
+impl_uuid_id!(
     /// The "Original" ID of a region. A new one is created only on the first creation of a
     /// brain region. On almagamation, this is preserved.
-    BrainRegionAncestryID,
+    pub BrainRegionAncestryID,
     v7);

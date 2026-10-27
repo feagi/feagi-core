@@ -5,11 +5,12 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
+use crate::workers::genome_manager::requests::category_structs::GenomeManagerResponders;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
 use crate::workers::genome_manager::response_processing::cortical_area::cortical_area_response;
 use crate::workers::genome_manager::response_processing::morphology::morphology_response;
 use crate::workers::genome_manager::response_processing::region::region_response;
-use crate::workers::genome_manager::worker_builder::GenomeManagerResponders;
+
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
 /// request is answered while idle
