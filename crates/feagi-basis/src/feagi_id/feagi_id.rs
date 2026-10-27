@@ -18,6 +18,7 @@ pub trait FeagiID<const ID_BYTE_COUNT: usize>: Copy + Eq + core::hash::Hash + co
 
 // region Extensions
 
+/// Added to FeagiID to enable converting to a base64 form and back
 pub trait HasBase64<const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>: FeagiID<ID_BYTE_COUNT>
 {
     type Base64Type: FeagiIDBase64<ID_BYTE_COUNT, BASE_64_BYTE_COUNT,Original=Self>;
@@ -25,7 +26,7 @@ pub trait HasBase64<const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>
     fn from_base_64(b64: &Self::Base64Type) -> Self {
         b64.to_original()
     }
-    
+
     /// Turns self into the base 64 representation
     fn to_base_64(&self) -> Self::Base64Type {
         Self::Base64Type::from_original(&self)
