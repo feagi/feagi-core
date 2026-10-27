@@ -3,9 +3,11 @@ use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
 use crate::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
 use crate::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use crate::cortical_dynamics::model::implementations::core_power::dynamics::CorticalDynamicsQuantizationCorePowerFloat32;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 // TODO move to NPU
+
 
 
 
@@ -29,12 +31,15 @@ where
         <Self::CorticalModel as CorticalDynamicsModel<CDQ>>::CorticalDataScratch,
     ); // Do not return function context as its not actually intended to be written, just used for neuron generation
 
-    /// A function that returns what the neuron data should be at a given index
+    /// A function that returns what the neuron data should be at a given index. Also runs the function for
+    /// the cortical level neuron modifier contexts
     fn generate_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>)
         -> PerNeuronData<Self::CorticalModel, CDQ>;
 
+    //TODO into enum
+
     //region Default impls
-    
+
     /// Number of neurons needed in the cortical area
     fn get_total_number_neurons_needed(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
         let layout = self.get_neuron_layout();
@@ -95,7 +100,7 @@ where
             (*internal_out, *scratch_out) = self.generate_neuron_data_at(&CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(i));
         });
     }
-    
+
     //endregion
 }
 

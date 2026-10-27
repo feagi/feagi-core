@@ -4,3 +4,4 @@ pub mod data_structs;
 pub mod implementations;
 pub mod cortical_dynamics_quantization;
 pub mod cortical_generator_definition;
+pub mod cortical_dynamics_model_enum;

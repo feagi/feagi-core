@@ -13,19 +13,22 @@ pub trait FeagiGraph<FIQ: FeagiIndexQuantization>
 
     /// The types of data contained that is relevant to NPU communication / translation
     type NPUContext: GraphNPUContext;
-    
 
-    //region Reading
+
+    //region Reading Properties
 
     fn get_cortical_area(&self, cortical_id: &<ConcreteGraphElementIdentifiers as GraphElementIdentifiers>::CorticalIdentifier) -> Option<&CorticalAreaContainer<FIQ, CacheData>>;
 
 
+
     //region Default Impls
 
-    //endregion
+    // TODO Multis
 
     //endregion
 
+
+    //endregion
 }
 
 
