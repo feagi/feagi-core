@@ -1,9 +1,12 @@
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::graphs::components::element_identifiers::GraphElementIdentifiers;
+use crate::basis::cortical_area::cortical_area_container::CorticalAreaContainer;
+use crate::graphs;
+use crate::graphs::components::element_identifiers::{ConcreteGraphElementIdentifiers, GraphElementIdentifiers};
 use crate::graphs::components::npu_context::GraphNPUContext;
 
 /// Represents the layout and (a variable amount of) data of a FEAGI brain
-pub trait FeagiGraph<FIQ: FeagiIndexQuantization> {
+pub trait FeagiGraph<FIQ: FeagiIndexQuantization>
+{
     // Note: To be extended by `GraphConnectomeDataAsync` or `GraphConnectomeDataSync`
     /// What identifiers are used
     type ElementIdentifiers: GraphElementIdentifiers;
@@ -15,10 +18,20 @@ pub trait FeagiGraph<FIQ: FeagiIndexQuantization> {
 
 
 
+    //region Reading
+
+    fn get_cortical_area(&self, cortical_id: &CorticalIdentifier) -> Option<&CorticalAreaContainer<FIQ, CacheData>>;
+
+
+    //region Default Impls
+
+    //endregion
+
+    //endregion
 
 }
 
-
+ type CorticalIdentifier = <ConcreteGraphElementIdentifiers as GraphElementIdentifiers>::CorticalIdentifier;
 
 
 

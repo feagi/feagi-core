@@ -1,5 +1,4 @@
 pub mod basis;
-pub mod containers;
 pub mod graphs;
 pub mod identifiers;
 pub mod workers;

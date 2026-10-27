@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::identifiers::brain_regions::BrainRegionID;
 use crate::basis::cortical_area::cortical_id::CorticalID;
-use crate::containers::genome_object_metadata::GenomeObjectMetadata;
+use crate::basis::genome_object_metadata::GenomeObjectMetadata;
 
 // TODO premade types
 
