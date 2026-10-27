@@ -14,6 +14,9 @@ use feagi_basis::parallelism::feagi_channel::base_channels::implementations::all
 use feagi_basis::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiRequesterAlloc, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
+use feagi_basis::parallelism::feagi_signal::implementations::std_signal::FeagiSignalStdBackend;
+use feagi_basis::parallelism::feagi_signal::signal_errors::FeagiSignalClosed;
+use feagi_basis::parallelism::feagi_signal::signal_traits::{FeagiSignalListener, FeagiSignalNotifier};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
@@ -379,6 +382,100 @@ fn block_on_thread_wakes_when_another_thread_sends() {
     });
     assert_eq!(block_on_thread(receiver.async_recv()).unwrap(), Number(9));
     producer.join().unwrap();
+}
+
+//endregion
+
+//region Signals
+
+#[test]
+fn signal_try_take_returns_only_the_latest_value_once() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    assert_eq!(listener.try_take(), Ok(None));
+
+    notifier.notify(1);
+    notifier.notify(2);
+    assert_eq!(listener.try_take(), Ok(Some(2)));
+    assert_eq!(listener.try_take(), Ok(None));
+}
+
+#[test]
+fn signal_notify_with_merges_into_the_pending_value() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u8>();
+    let set_flag = |flag: u8| notifier.notify_with(|pending| *pending.get_or_insert(0) |= flag);
+
+    set_flag(0b001);
+    set_flag(0b100);
+    assert_eq!(listener.try_take(), Ok(Some(0b101)));
+    set_flag(0b010);
+    assert_eq!(listener.try_take(), Ok(Some(0b010)));
+}
+
+#[test]
+fn signal_wait_is_pending_until_notified() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    assert!(poll_once(listener.wait()).is_pending());
+    notifier.notify(7);
+    assert_eq!(poll_once(listener.wait()), Poll::Ready(Ok(7)));
+}
+
+#[test]
+fn signal_wait_wakes_when_another_thread_notifies() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    let producer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(20));
+        notifier.notify(9);
+        // Kept alive until joined, so the wait can only end by being notified
+        notifier
+    });
+    assert_eq!(block_on_thread(listener.wait()), Ok(9));
+    drop(producer.join().unwrap());
+}
+
+#[test]
+fn signal_closes_once_every_notifier_is_dropped_after_delivering_pending_value() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    let cloned_notifier = notifier.clone();
+    drop(notifier);
+    cloned_notifier.notify(3);
+    assert_eq!(listener.try_take(), Ok(Some(3)));
+    assert_eq!(listener.try_take(), Ok(None));
+
+    cloned_notifier.notify(4);
+    drop(cloned_notifier);
+    assert_eq!(listener.try_take(), Ok(Some(4)));
+    assert_eq!(listener.try_take(), Err(FeagiSignalClosed));
+    assert_eq!(block_on_thread(listener.wait()), Err(FeagiSignalClosed));
+}
+
+#[test]
+fn signal_wait_wakes_when_last_notifier_is_dropped_on_another_thread() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    let producer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(20));
+        drop(notifier);
+    });
+    assert_eq!(block_on_thread(listener.wait()), Err(FeagiSignalClosed));
+    producer.join().unwrap();
+}
+
+#[test]
+fn signal_notify_after_listener_dropped_does_nothing() {
+    let (notifier, listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    drop(listener);
+    notifier.notify(1);
+    notifier.notify_with(|_| panic!("update ran after the listener was dropped"));
+}
+
+#[test]
+fn signal_still_works_after_a_notify_with_update_panics() {
+    let (notifier, mut listener) = FeagiSignalStdBackend::create_signal_pair::<u32>();
+    let panicking_notifier = notifier.clone();
+    let result = std::thread::spawn(move || panicking_notifier.notify_with(|_| panic!("update panicked"))).join();
+    assert!(result.is_err());
+
+    notifier.notify(5);
+    assert_eq!(listener.try_take(), Ok(Some(5)));
 }
 
 //endregion

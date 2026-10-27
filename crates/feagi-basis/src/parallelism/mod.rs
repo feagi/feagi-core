@@ -1,4 +1,5 @@
 pub mod feagi_channel;
+pub mod feagi_signal;
 pub mod feagi_worker;
 
 #[cfg(feature = "std")]
