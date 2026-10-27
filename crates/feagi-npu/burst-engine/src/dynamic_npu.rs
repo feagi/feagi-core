@@ -734,6 +734,10 @@ where
         dispatch_mut!(self, remove_memory_neuron_runtime_state(removals))
     }
 
+    pub fn drain_reward_consolidated_memory_neurons(&self) -> Vec<u32> {
+        dispatch!(self, drain_reward_consolidated_memory_neurons())
+    }
+
     pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
         dispatch_mut!(
             self,
@@ -854,6 +858,17 @@ where
         dispatch_mut!(
             self,
             register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
+        )
+    }
+
+    pub fn stdp_mapping_params(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<crate::npu::StdpMappingParams> {
+        dispatch!(
+            self,
+            stdp_mapping_params(src_cortical_idx, dst_cortical_idx)
         )
     }
 
@@ -1314,6 +1329,14 @@ where
             DynamicNPUGeneric::INT8(npu) => {
                 npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
             }
+        }
+    }
+
+    /// Answer delay (bursts) of each registered classifier error watch.
+    pub fn classifier_error_watch_answer_delays(&self) -> Vec<u32> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.classifier_error_watch_answer_delays(),
+            DynamicNPUGeneric::INT8(npu) => npu.classifier_error_watch_answer_delays(),
         }
     }
 

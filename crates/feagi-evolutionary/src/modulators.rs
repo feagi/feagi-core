@@ -4,8 +4,9 @@
 //! Genome modulator instances.
 //!
 //! An instance is a named copy of a built-in [`ModulatorKind`] plus the cortical
-//! id of the 1x1x1 driver area that turns it on. Areas and mapping rules
-//! subscribe by instance id.
+//! id of the driver area that turns it on. The driver is either a 1x1x1 area the
+//! instance owns, or an existing area it adopts. Areas and mapping rules subscribe
+//! by instance id.
 
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{
@@ -30,6 +31,12 @@ pub struct ModulatorInstance {
 }
 
 impl ModulatorInstance {
+    /// True when the driver is an existing area, not one created for this instance.
+    /// An adopted driver keeps its own timing and is not deleted with the instance.
+    pub fn adopts_driver(&self) -> bool {
+        !self.driver_cortical_id.is_modulator_driver()
+    }
+
     /// Reject fields that cannot produce a defined signal.
     pub fn validate(&self) -> Result<(), ModulatorValidationError> {
         validate_instance_fields(
@@ -273,9 +280,24 @@ pub struct ModulatorWrite {
     pub graded: bool,
     #[serde(default)]
     pub full_scale_potential: Option<f32>,
+    /// Existing area to adopt as the driver. Absent creates a new driver area.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub driver_cortical_id: Option<String>,
 }
 
 impl ModulatorWrite {
+    /// An adopted driver fires on its own schedule, so the instance cannot add duration or rest.
+    pub fn validate_adopted_timing(&self) -> EvoResult<()> {
+        if self.effect_duration_bursts != 1 || self.rest_bursts != 0 {
+            return Err(EvoError::InvalidGenome(
+                "a modulator on an existing area takes its timing from that area: \
+                 effect_duration_bursts must be 1 and rest_bursts 0"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn into_instance(self, driver_cortical_id: CorticalID) -> EvoResult<ModulatorInstance> {
         let kind = ModulatorKind::parse(&self.kind).map_err(EvoError::InvalidGenome)?;
         let instance = ModulatorInstance {

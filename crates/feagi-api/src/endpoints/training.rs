@@ -87,48 +87,40 @@ pub async fn get_shock_status(
     Ok(Json(response))
 }
 
-/// Set reward intensity for positive reinforcement.
+/// Retired. Reward strength is each Reward modulator's `magnitude_percent`.
 #[utoipa::path(
     post,
     path = "/v1/training/reward/intensity",
     tag = "training",
     responses(
-        (status = 200, description = "Reward intensity set", body = HashMap<String, String>),
-        (status = 500, description = "Internal server error")
+        (status = 400, description = "Retired: reward strength is each Reward modulator's magnitude_percent")
     )
 )]
 pub async fn post_reward_intensity(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Set reward intensity
-
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Reward intensity set successfully".to_string(),
-    )])))
+    Err(ApiError::invalid_input(
+        "Reward strength is each Reward modulator's magnitude_percent; update the modulator",
+    ))
 }
 
-/// Set punishment intensity for negative reinforcement.
+/// Retired. Punishment strength is each Reward modulator's `magnitude_percent`.
 #[utoipa::path(
     post,
     path = "/v1/training/punishment/intensity",
     tag = "training",
     responses(
-        (status = 200, description = "Punishment intensity set", body = HashMap<String, String>),
-        (status = 500, description = "Internal server error")
+        (status = 400, description = "Retired: punishment strength is each Reward modulator's magnitude_percent")
     )
 )]
 pub async fn post_punishment_intensity(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Set punishment intensity
-
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Punishment intensity set successfully".to_string(),
-    )])))
+    Err(ApiError::invalid_input(
+        "Punishment strength is each Reward modulator's magnitude_percent; update the modulator",
+    ))
 }
 
 /// Signal game over condition for episode termination.
@@ -319,27 +311,87 @@ pub async fn post_config(
 }
 
 // EXACT Python paths:
-/// Apply reward signal for positive reinforcement learning.
+/// Fires the drivers of `modulator_ids`. Each must be a `synaptic.reward` modulator whose
+/// magnitude has the sign `positive` asks for.
+async fn fire_reward_modulators(
+    state: &ApiState,
+    request: &HashMap<String, Value>,
+    positive: bool,
+) -> ApiResult<Vec<String>> {
+    let ids: Vec<String> = request
+        .get("modulator_ids")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            ApiError::invalid_input("modulator_ids must be a list of Reward modulator ids")
+        })?
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect();
+    if ids.is_empty() {
+        return Err(ApiError::invalid_input("modulator_ids must not be empty"));
+    }
+    let mut drivers = Vec::new();
+    for id in &ids {
+        let body = state
+            .genome_service
+            .get_modulator(id)
+            .await
+            .map_err(|e| ApiError::invalid_input(format!("modulator '{id}': {e}")))?;
+        let magnitude = body
+            .get("magnitude_percent")
+            .and_then(|value| value.as_f64())
+            .unwrap_or(0.0);
+        let is_reward =
+            body.get("type").and_then(|value| value.as_str()) == Some("synaptic.reward");
+        if !is_reward || (positive && magnitude <= 0.0) || (!positive && magnitude >= 0.0) {
+            return Err(ApiError::invalid_input(format!(
+                "modulator '{id}' must be a Reward modulator with {} magnitude",
+                if positive { "positive" } else { "negative" }
+            )));
+        }
+        let driver = body
+            .get("driver_cortical_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| ApiError::internal(format!("modulator '{id}' has no driver")))?;
+        drivers.push(driver.to_string());
+    }
+    for driver in &drivers {
+        state
+            .runtime_service
+            .inject_sensory_by_coordinates(
+                driver,
+                &[(0, 0, 0, 1.0)],
+                feagi_services::traits::runtime_service::ManualStimulationMode::ForceFire,
+            )
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to fire driver {driver}: {e}")))?;
+    }
+    Ok(ids)
+}
+
+/// Fire Reward modulators with positive magnitude. Body: `{"modulator_ids": [..]}`.
 #[utoipa::path(post, path = "/v1/training/reward", tag = "training")]
 pub async fn post_reward(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, Value>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    let ids = fire_reward_modulators(&state, &req, true).await?;
     Ok(Json(HashMap::from([(
         "message".to_string(),
-        "Reward applied".to_string(),
+        format!("Reward applied through {}", ids.join(", ")),
     )])))
 }
 
-/// Apply punishment signal for negative reinforcement learning.
+/// Fire Reward modulators with negative magnitude. Body: `{"modulator_ids": [..]}`.
 #[utoipa::path(post, path = "/v1/training/punishment", tag = "training")]
 pub async fn post_punishment(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, Value>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    let ids = fire_reward_modulators(&state, &req, false).await?;
     Ok(Json(HashMap::from([(
         "message".to_string(),
-        "Punishment applied".to_string(),
+        format!("Punishment applied through {}", ids.join(", ")),
     )])))
 }
 

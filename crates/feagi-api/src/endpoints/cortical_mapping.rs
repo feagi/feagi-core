@@ -181,11 +181,9 @@ fn format_dict_mapping_rule(
             serde_json::json!(decay),
         );
     }
-    // Subscriptions and per-instance reward fields: pass through when present.
-    for key in ["modulators", "classifier_instance_reward"] {
-        if let Some(value) = obj.get(key).filter(|v| !v.is_null()) {
-            rule_obj.insert(key.to_string(), value.clone());
-        }
+    // Modulator subscriptions pass through when present.
+    if let Some(value) = obj.get("modulators").filter(|v| !v.is_null()) {
+        rule_obj.insert("modulators".to_string(), value.clone());
     }
     if let Some(mw) = max_weight {
         rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
@@ -747,7 +745,7 @@ mod tests {
         let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
         assert_eq!(out["modulators"], serde_json::json!(["pleasure", "pain"]));
         assert!(out.get("gate_source_area").is_none());
-        assert_eq!(out["classifier_instance_reward"], true);
+        assert!(out.get("classifier_instance_reward").is_none());
         assert!(out.get("reward_source_area").is_none());
         assert!(out.get("punishment_source_area").is_none());
         // Re-formatting the output is stable, so read -> write -> read loses nothing.
@@ -764,9 +762,7 @@ mod tests {
             "plasticity_flag": false,
         });
         let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
-        for key in ["modulators", "classifier_instance_reward"] {
-            assert!(out.get(key).is_none(), "{key}");
-        }
+        assert!(out.get("modulators").is_none());
     }
 }
 

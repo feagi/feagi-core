@@ -17,8 +17,8 @@
 //! Pure ZMQ client, no Composer/REST coupling:
 //! - Registers over the command/control requester ([`CommandControlAgent`]) to obtain the session
 //!   [`AgentID`] and the per-capability data endpoints.
-//! - Publishes pre-encoded sensory neurons (and affect-channel reward stimulation) on the sensory
-//!   PUSH endpoint as a [`FeagiByteContainer`] holding one `NeuronCategoricalXYZP` structure.
+//! - Publishes pre-encoded sensory neurons (and reward stimulation of the run's
+//!   [`RewardTargets`]) on the sensory PUSH endpoint as a [`FeagiByteContainer`] holding one `NeuronCategoricalXYZP` structure.
 //! - Subscribes to the motor PUB endpoint and decodes the latest `NeuronCategoricalXYZP` frame.
 //!
 //! All hosts/ports/timeouts come from [`RemoteRuntimeConfig`]; nothing is hardcoded.
@@ -34,12 +34,12 @@ use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscribe
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
-use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
 
-use crate::binding::reward::{AffectChannel, RewardSignal};
+use crate::binding::reward::RewardSignal;
+use crate::binding::reward_targets::RewardTargets;
 use crate::binding::runtime::FeagiRuntime;
 use crate::error::TrainerError;
 
@@ -89,6 +89,9 @@ pub struct RemoteFeagiRuntime {
     /// Last submitted sensory frame; re-published every burst of the next `step`, then dropped.
     held_sensory: Option<CorticalMappedXYZPNeuronVoxels>,
     increment: u16,
+    /// Areas each affect channel stimulates. Core affect areas until
+    /// [`RemoteFeagiRuntime::set_reward_targets`] names reward modulators.
+    reward_targets: RewardTargets,
     burst_period: Duration,
     motor_poll_interval: Duration,
     motor_collect_timeout: Duration,
@@ -97,17 +100,6 @@ pub struct RemoteFeagiRuntime {
 /// Maps any foreign error (agent/network/serialization) onto a [`TrainerError::Runtime`].
 fn rt<E: Display>(error: E) -> TrainerError {
     TrainerError::Runtime(error.to_string())
-}
-
-/// Resolves the core affect cortical area that a reward channel stimulates.
-fn affect_cortical_id(channel: AffectChannel) -> CorticalID {
-    let core = match channel {
-        AffectChannel::Pain => CoreCorticalType::Pain,
-        AffectChannel::Pleasure => CoreCorticalType::Pleasure,
-        AffectChannel::Fear => CoreCorticalType::Fear,
-        AffectChannel::Hope => CoreCorticalType::Hope,
-    };
-    core.to_cortical_id()
 }
 
 /// Waits `ticks` burst periods, re-publishing `held` at the start of every burst after the
@@ -213,10 +205,17 @@ impl RemoteFeagiRuntime {
             motor_buffer: CorticalMappedXYZPNeuronVoxels::new(),
             held_sensory: None,
             increment: 0,
+            reward_targets: RewardTargets::core_affect(),
             burst_period: config.burst_period,
             motor_poll_interval: config.motor_poll_interval,
             motor_collect_timeout: config.motor_collect_timeout,
         })
+    }
+
+    /// Routes reward signals to the drivers of the run's reward modulators. The default,
+    /// [`RewardTargets::core_affect`], stimulates the core Pain/Pleasure/Fear/Hope areas.
+    pub fn set_reward_targets(&mut self, targets: RewardTargets) {
+        self.reward_targets = targets;
     }
 
     /// The session id assigned by FEAGI at registration.
@@ -272,18 +271,23 @@ impl FeagiRuntime for RemoteFeagiRuntime {
         if signals.is_empty() {
             return Ok(());
         }
-        // Reward is delivered as a single-spike stimulation in the corresponding core affect area;
-        // multiple signals for the same channel accumulate as separate voxels.
+        // Each signal is a single-spike stimulation of every area its channel targets (core affect
+        // areas, or the drivers of the listed reward modulators); repeated signals for one area
+        // accumulate as separate voxels.
         let mut affect = CorticalMappedXYZPNeuronVoxels::new();
         for signal in signals {
-            let cortical_id = affect_cortical_id(signal.channel);
-            if !affect.contains_cortical_id(&cortical_id) {
-                affect.insert(cortical_id, NeuronVoxelXYZPArrays::new());
+            for cortical_id in self.reward_targets.cortical_ids_for(signal.channel) {
+                if !affect.contains_cortical_id(&cortical_id) {
+                    affect.insert(cortical_id, NeuronVoxelXYZPArrays::new());
+                }
+                affect
+                    .get_neurons_of_mut(&cortical_id)
+                    .expect("array was just inserted")
+                    .push_raw(0, 0, 0, signal.magnitude as f32);
             }
-            affect
-                .get_neurons_of_mut(&cortical_id)
-                .expect("array was just inserted")
-                .push_raw(0, 0, 0, signal.magnitude as f32);
+        }
+        if affect.is_empty() {
+            return Ok(());
         }
         self.publish_neurons(&affect)
     }

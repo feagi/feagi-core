@@ -35,6 +35,17 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
 
+/// The fire-queue sample of one burst, stored together with that burst's number.
+///
+/// Both are written in a single assignment under one lock, so a reader that clones this
+/// value always gets a sample and the burst it belongs to. `sample` is `None` when the
+/// burst fired nothing; `burst` still names that burst.
+#[derive(Clone)]
+struct CachedFireQueue {
+    burst: u64,
+    sample: Option<Arc<FireQueueSample>>,
+}
+
 /// Decoded sensory data: list of (cortical ID, XYZP list per cortical area)
 type SensoryXyzpDecoded = Vec<(
     feagi_structures::genomic::cortical_area::CorticalID,
@@ -169,7 +180,7 @@ pub struct BurstLoopRunner {
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>,
     /// Cached fire queue from last burst (for API queries)
     /// Stored as Arc to avoid cloning when sharing between viz and motor
-    cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>,
+    cached_fire_queue: Arc<Mutex<Option<CachedFireQueue>>>,
     /// Parameter update queue (asynchronous, non-blocking)
     /// API pushes updates here, burst loop consumes between bursts
     pub parameter_queue: ParameterUpdateQueue,
@@ -868,7 +879,12 @@ impl BurstLoopRunner {
     /// Get current fire queue for monitoring
     /// Returns the last cached fire queue data from previous burst
     pub fn get_fire_queue_sample(&mut self) -> Option<FireQueueSample> {
-        let cached = self.cached_fire_queue.lock().unwrap().clone();
+        let cached = self
+            .cached_fire_queue
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.sample.clone());
         if let Some(ref sample_arc) = cached {
             debug!(
                 "[BURST-LOOP-RUNNER] Returning cached fire queue: {} areas",
@@ -881,10 +897,26 @@ impl BurstLoopRunner {
         cached.map(|arc| (*arc).clone())
     }
 
+    /// Last cached fire-queue sample together with the burst it was taken from.
+    ///
+    /// The burst number and the sample come from one lock acquisition, so they always
+    /// belong together. An empty map means that burst fired nothing. `None` means no
+    /// burst is cached (before the first burst, or after the cache was cleared).
+    pub fn get_fire_queue_sample_with_burst(&self) -> Option<(u64, FireQueueSample)> {
+        let cached = self.cached_fire_queue.lock().unwrap().clone()?;
+        let sample = cached.sample.map(|arc| (*arc).clone()).unwrap_or_default();
+        Some((cached.burst, sample))
+    }
+
     /// Fired-neuron count per cortical area in the last cached burst.
     /// Reads lengths from the shared sample; no neuron data is copied.
     pub fn get_fire_queue_counts(&self) -> Option<Vec<(u32, u32)>> {
-        let cached = self.cached_fire_queue.lock().unwrap().clone();
+        let cached = self
+            .cached_fire_queue
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.sample.clone());
         cached.map(|sample| {
             sample
                 .iter()
@@ -1539,8 +1571,8 @@ fn burst_loop(
     visualization_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
     visualization_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
-    cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
-    parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
+    cached_fire_queue: Arc<Mutex<Option<CachedFireQueue>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
+    parameter_queue: ParameterUpdateQueue,                  // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     post_burst_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Post-burst callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
@@ -2244,7 +2276,10 @@ fn burst_loop(
                         }
                         // Store as Arc to share without cloning
                         let cache_store_start = Instant::now();
-                        *cached_fire_queue.lock().unwrap() = fq_sample.map(Arc::new);
+                        *cached_fire_queue.lock().unwrap() = Some(CachedFireQueue {
+                            burst: result.burst,
+                            sample: fq_sample.map(Arc::new),
+                        });
                         let cache_store_duration = cache_store_start.elapsed();
                         if cache_store_duration.as_millis() > 5 {
                             warn!(
@@ -2573,7 +2608,11 @@ fn burst_loop(
             // This is stored in cached_fire_queue which was set right after process_burst()
             // CRITICAL PERFORMANCE: Already stored as Arc, so we can clone the Arc (cheap) instead of the data
             let sample_start = Instant::now();
-            let fire_data_arc_opt = cached_fire_queue.lock().unwrap().clone(); // Clone Arc, not data!
+            let fire_data_arc_opt = cached_fire_queue
+                .lock()
+                .unwrap()
+                .as_ref()
+                .and_then(|c| c.sample.clone()); // Clone Arc, not data!
             let sample_duration = sample_start.elapsed();
             // Lower threshold to catch smaller slowdowns (5ms instead of 10ms)
             if sample_duration.as_millis() > 5 {
@@ -3518,9 +3557,27 @@ mod tests {
 
         let mut sample = ahash::AHashMap::new();
         sample.insert(7, (vec![1], vec![0], vec![0], vec![0], vec![1.0]));
-        *runner.cached_fire_queue.lock().unwrap() = Some(Arc::new(sample));
+        *runner.cached_fire_queue.lock().unwrap() = Some(CachedFireQueue {
+            burst: 42,
+            sample: Some(Arc::new(sample)),
+        });
         assert!(runner.get_fire_queue_sample().is_some());
+        // The sample is labelled with the burst it was stored with.
+        let (burst, labelled) = runner.get_fire_queue_sample_with_burst().unwrap();
+        assert_eq!(burst, 42);
+        assert_eq!(labelled.len(), 1);
+        // A burst that fired nothing keeps its own number and reports an empty sample.
+        *runner.cached_fire_queue.lock().unwrap() = Some(CachedFireQueue {
+            burst: 43,
+            sample: None,
+        });
+        let (burst, labelled) = runner.get_fire_queue_sample_with_burst().unwrap();
+        assert_eq!(burst, 43);
+        assert!(labelled.is_empty());
+        assert!(runner.get_fire_queue_sample().is_none());
+        assert!(runner.get_fire_queue_counts().is_none());
         runner.clear_cached_fire_queue();
+        assert!(runner.get_fire_queue_sample_with_burst().is_none());
         assert!(runner.get_fire_queue_sample().is_none());
 
         assert!(!runner.is_running());

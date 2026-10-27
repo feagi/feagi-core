@@ -36,6 +36,7 @@ pub mod profile;
 #[cfg(feature = "remote-runtime")]
 pub mod remote_runtime;
 pub mod reward;
+pub mod reward_targets;
 pub mod runtime;
 pub mod segmentation_mask_decoder;
 pub mod stub_runtime;
@@ -60,6 +61,7 @@ pub use reward::{
     AffectChannel, EnvironmentRewardPolicy, NoAffectReward, PainPleasureReward, RewardPolicy,
     RewardSignal, SegmentationOverlapReward, SurvivalReward,
 };
+pub use reward_targets::{RewardModulatorTarget, RewardTargets, REWARD_MODULATOR_TYPE};
 pub use runtime::FeagiRuntime;
 pub use segmentation_mask_decoder::SegmentationMaskDecoder;
 pub use stub_runtime::StubFeagiRuntime;

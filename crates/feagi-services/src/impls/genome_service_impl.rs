@@ -1574,6 +1574,9 @@ impl GenomeService for GenomeServiceImpl {
                 "modulator id must not be empty".to_string(),
             ));
         }
+        if let Some(adopted) = write.driver_cortical_id.clone() {
+            return self.create_adopting_modulator(id, adopted, write).await;
+        }
         let (driver, instance) = {
             let genome = self.current_genome.read();
             let genome = genome
@@ -1658,6 +1661,20 @@ impl GenomeService for GenomeServiceImpl {
                     resource: "modulator".to_string(),
                     id: id.to_string(),
                 })?;
+            if write
+                .driver_cortical_id
+                .as_deref()
+                .is_some_and(|driver| driver != current.driver_cortical_id.as_base_64())
+            {
+                return Err(ServiceError::InvalidInput(format!(
+                    "modulator '{id}' driver cannot change"
+                )));
+            }
+            if current.adopts_driver() {
+                write
+                    .validate_adopted_timing()
+                    .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            }
             let updated = write
                 .into_instance(current.driver_cortical_id)
                 .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
@@ -1666,12 +1683,20 @@ impl GenomeService for GenomeServiceImpl {
                     "modulator '{id}' type cannot change while subscribers exist"
                 )));
             }
-            let mut changes = feagi_evolutionary::driver_locked_properties(&updated);
-            changes.insert("modulator_field_owner".to_string(), serde_json::json!(true));
+            // An adopted driver keeps its own neuron properties.
+            let changes = if updated.adopts_driver() {
+                None
+            } else {
+                let mut changes = feagi_evolutionary::driver_locked_properties(&updated);
+                changes.insert("modulator_field_owner".to_string(), serde_json::json!(true));
+                Some(changes)
+            };
             (current.driver_cortical_id.as_base_64(), (updated, changes))
         };
         let (updated, changes) = changes;
-        self.update_cortical_area(&driver_id, changes).await?;
+        if let Some(changes) = changes {
+            self.update_cortical_area(&driver_id, changes).await?;
+        }
         {
             let mut genome = self.current_genome.write();
             let genome = genome
@@ -1721,6 +1746,7 @@ impl GenomeService for GenomeServiceImpl {
             }
             rewrite_modulator_id(genome, old_id, &new_id);
         }
+        rewrite_runtime_classifier_sources(&mut self.connectome.write(), old_id, Some(&new_id));
         // Registered mappings hold the old id in the engine's group table; rewrite it so they
         // stay modulated, then push the renamed bindings and area subscriptions.
         self.connectome
@@ -1753,14 +1779,15 @@ impl GenomeService for GenomeServiceImpl {
                 .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?
                 .clone()
         };
-        let driver = snapshot
+        let instance = snapshot
             .modulators
             .get(id)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "modulator".to_string(),
                 id: id.to_string(),
-            })?
-            .driver_cortical_id;
+            })?;
+        let driver = instance.driver_cortical_id;
+        let adopted = instance.adopts_driver();
         let usage = modulator_usage_of(&snapshot, id);
         if !force && !usage_is_empty(&usage) {
             return Err(ServiceError::Conflict(
@@ -1780,6 +1807,24 @@ impl GenomeService for GenomeServiceImpl {
                 strip_modulator_subscriptions(genome, id);
             }
             genome.modulators.remove(id);
+        }
+        if force {
+            rewrite_runtime_classifier_sources(&mut self.connectome.write(), id, None);
+        }
+        if adopted {
+            // The adopted area belongs to someone else and stays.
+            self.connectome
+                .read()
+                .remove_modulator_from_runtime(id)
+                .map_err(|err| ServiceError::Backend(err.to_string()))?;
+            self.push_modulator_bindings()?;
+            return Ok(());
+        }
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
             genome.cortical_areas.remove(&driver);
             for region in genome.brain_regions.values_mut() {
                 region.cortical_areas.remove(&driver);
@@ -1937,6 +1982,9 @@ fn rewrite_modulator_id(
     old_id: &str,
     new_id: &str,
 ) {
+    for classifier in genome.classifiers.values_mut() {
+        rewrite_classifier_source(classifier, old_id, Some(new_id));
+    }
     for area in genome.cortical_areas.values_mut() {
         rewrite_id_list(area.properties.get_mut("modulators"), old_id, new_id);
         if let Some(dst) = area
@@ -1959,6 +2007,40 @@ fn rewrite_modulator_id(
     }
 }
 
+/// Renames (`Some`) or removes (`None`) `old_id` in a classifier's reward sources.
+/// Returns true when the list changed.
+pub(crate) fn rewrite_classifier_source(
+    classifier: &mut feagi_structures::genomic::classifiers::Classifier,
+    old_id: &str,
+    new_id: Option<&str>,
+) -> bool {
+    let before = classifier.reward_modulator_ids.clone();
+    match new_id {
+        Some(new_id) => {
+            for id in classifier.reward_modulator_ids.iter_mut() {
+                if id == old_id {
+                    *id = new_id.to_string();
+                }
+            }
+        }
+        None => classifier.reward_modulator_ids.retain(|id| id != old_id),
+    }
+    classifier.reward_modulator_ids != before
+}
+
+/// Applies the same rename or removal to the runtime classifier records.
+pub(crate) fn rewrite_runtime_classifier_sources(
+    manager: &mut feagi_brain_development::ConnectomeManager,
+    old_id: &str,
+    new_id: Option<&str>,
+) {
+    for mut classifier in manager.list_classifiers().into_values() {
+        if rewrite_classifier_source(&mut classifier, old_id, new_id) {
+            manager.upsert_classifier(classifier);
+        }
+    }
+}
+
 fn rewrite_id_list(value: Option<&mut Value>, old_id: &str, new_id: &str) {
     let Some(list) = value.and_then(|value| value.as_array_mut()) else {
         return;
@@ -1970,7 +2052,13 @@ fn rewrite_id_list(value: Option<&mut Value>, old_id: &str, new_id: &str) {
     }
 }
 
-fn strip_modulator_subscriptions(genome: &mut feagi_evolutionary::RuntimeGenome, id: &str) {
+pub(crate) fn strip_modulator_subscriptions(
+    genome: &mut feagi_evolutionary::RuntimeGenome,
+    id: &str,
+) {
+    for classifier in genome.classifiers.values_mut() {
+        rewrite_classifier_source(classifier, id, None);
+    }
     for area in genome.cortical_areas.values_mut() {
         strip_id_list(area.properties.get_mut("modulators"), id);
         if let Some(dst) = area
@@ -2001,6 +2089,51 @@ fn strip_id_list(value: Option<&mut Value>, id: &str) {
 }
 
 impl GenomeServiceImpl {
+    /// Registers `id` on an existing area. No driver area is created.
+    async fn create_adopting_modulator(
+        &self,
+        id: String,
+        driver: String,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<Value> {
+        write
+            .validate_adopted_timing()
+            .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+        let driver_id = CorticalID::try_from_base_64(driver.trim())
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid driver id: {e}")))?;
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if genome.modulators.contains(&id) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{id}' already exists"
+                )));
+            }
+            if driver_id.is_modulator_driver() || !genome.cortical_areas.contains_key(&driver_id) {
+                return Err(ServiceError::InvalidInput(format!(
+                    "driver '{driver}' must be an existing area that is not a modulator driver"
+                )));
+            }
+            if let Some((other, _)) = genome
+                .modulators
+                .iter()
+                .find(|(_, instance)| instance.driver_cortical_id == driver_id)
+            {
+                return Err(ServiceError::Conflict(format!(
+                    "area '{driver}' already drives modulator '{other}'"
+                )));
+            }
+            let instance = write
+                .into_instance(driver_id)
+                .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            genome.modulators.insert(id.clone(), instance);
+        }
+        self.push_modulator_bindings()?;
+        self.get_modulator(&id).await
+    }
+
     fn push_modulator_bindings(&self) -> ServiceResult<()> {
         let genome = self.current_genome.read();
         let Some(genome) = genome.as_ref() else {
@@ -6575,6 +6708,110 @@ mod tests {
             "deleted id must leave the group table"
         );
         assert!(npu.modulator_area_subscriptions(area_idx).is_empty());
+    }
+
+    #[tokio::test]
+    async fn classifier_reward_sources_follow_modulator_rename_and_delete() {
+        use crate::traits::GenomeService;
+
+        let (svc, _npu, _area_id, _area_idx) = modulator_runtime_fixture();
+        let classifier = feagi_structures::genomic::classifiers::Classifier {
+            classifier_id: "clf-src".to_string(),
+            name: "src".to_string(),
+            parent_region_id: "root".to_string(),
+            coordinates_3d: [0, 0, 0],
+            sample_area_ids: Vec::new(),
+            class_bindings: Vec::new(),
+            sample_memory_id: "smem".to_string(),
+            class_memory_id: "cmem".to_string(),
+            error_area_id: "err".to_string(),
+            reward_training: true,
+            answer_feedback_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: vec!["pleasure".to_string()],
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
+            properties: std::collections::HashMap::new(),
+        };
+        svc.get_current_genome_arc()
+            .write()
+            .as_mut()
+            .unwrap()
+            .classifiers
+            .insert(classifier.classifier_id.clone(), classifier.clone());
+        svc.connectome.write().upsert_classifier(classifier);
+
+        let sources = |svc: &super::GenomeServiceImpl| -> (Vec<String>, Vec<String>) {
+            let genome = svc.get_current_genome_arc();
+            let genome_ids = genome.read().as_ref().unwrap().classifiers["clf-src"]
+                .reward_modulator_ids
+                .clone();
+            let runtime_ids = svc
+                .connectome
+                .read()
+                .get_classifier("clf-src")
+                .unwrap()
+                .reward_modulator_ids
+                .clone();
+            (genome_ids, runtime_ids)
+        };
+        svc.rename_modulator("pleasure", "joy".to_string())
+            .await
+            .expect("rename");
+        assert_eq!(
+            sources(&svc),
+            (vec!["joy".to_string()], vec!["joy".to_string()])
+        );
+        svc.delete_modulator("joy", true)
+            .await
+            .expect("force delete");
+        assert_eq!(sources(&svc), (Vec::new(), Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn modulator_adopts_an_existing_area_and_leaves_it_on_delete() {
+        use crate::traits::GenomeService;
+        use crate::types::ServiceError;
+
+        let (svc, _npu, area_id, _area_idx) = modulator_runtime_fixture();
+        let write = |duration: u16| feagi_evolutionary::ModulatorWrite {
+            kind: "synaptic.reward".to_string(),
+            magnitude_percent: -100.0,
+            effect_duration_bursts: duration,
+            rest_bursts: 0,
+            graded: false,
+            full_scale_potential: None,
+            driver_cortical_id: Some(area_id.as_base_64()),
+        };
+        let err = svc
+            .create_modulator("slow".to_string(), write(3))
+            .await
+            .expect_err("an adopted driver keeps its own timing");
+        assert!(matches!(err, ServiceError::InvalidInput(_)), "{err:?}");
+
+        let created = svc
+            .create_modulator("ouch".to_string(), write(1))
+            .await
+            .expect("adopt existing area");
+        assert_eq!(created["driver_cortical_id"], area_id.as_base_64());
+        let err = svc
+            .create_modulator("ouch2".to_string(), write(1))
+            .await
+            .expect_err("one modulator per adopted area");
+        assert!(matches!(err, ServiceError::Conflict(_)), "{err:?}");
+
+        svc.delete_modulator("ouch", true)
+            .await
+            .expect("delete adopting modulator");
+        let genome = svc.get_current_genome_arc();
+        let genome = genome.read();
+        let genome = genome.as_ref().unwrap();
+        assert!(!genome.modulators.contains("ouch"));
+        assert!(
+            genome.cortical_areas.contains_key(&area_id),
+            "the adopted area stays"
+        );
     }
 
     #[tokio::test]

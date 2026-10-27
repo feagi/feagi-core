@@ -1310,7 +1310,7 @@ async fn test_reset_weights_routes_return_404_for_unknown_areas() {
 async fn test_cortical_area_read_waits_for_genome_transition() {
     let state = build_test_state();
     let transition_lock = Arc::clone(&state.genome_transition_lock);
-    let transition_guard = transition_lock.lock_owned().await;
+    let transition_guard = transition_lock.write_owned().await;
     state
         .genome_transition_in_progress
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1331,6 +1331,40 @@ async fn test_cortical_area_read_waits_for_genome_transition() {
     drop(transition_guard);
     let (status, _response) = read_task.await.expect("read task should complete");
     assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_reads_overlap_but_exclude_genome_transition() {
+    let state = build_test_state();
+    let lock = Arc::clone(&state.genome_transition_lock);
+    // Simulate a slow in-flight GET that holds the shared transition lock.
+    let in_flight_read = Arc::clone(&lock).read_owned().await;
+    let app = create_http_server(state);
+
+    // A second GET must run to completion while the first one is still in flight.
+    let second = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        request_json(
+            app,
+            "GET",
+            "/v1/cortical_area/cortical_area_name_list",
+            None,
+        ),
+    )
+    .await
+    .expect("a GET must not be serialized behind another in-flight GET");
+    assert_eq!(second.0, StatusCode::OK);
+
+    // A genome transition (try_write) is still refused while a read is in flight.
+    assert!(
+        lock.try_write().is_err(),
+        "transition must not start while a GET is in flight"
+    );
+    drop(in_flight_read);
+    assert!(
+        lock.try_write().is_ok(),
+        "transition may start once reads have drained"
+    );
 }
 
 #[tokio::test]

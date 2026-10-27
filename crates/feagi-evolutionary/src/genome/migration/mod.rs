@@ -51,7 +51,7 @@ pub enum MigrationError {
 
     /// The runner needed a migrator for a version but the registry didn't
     /// have one. Indicates a gap in the chain.
-    #[error("No migrator registered with from_version={from} (needed to reach v{target})")]
+    #[error("No migrator registered with from_version={from} (needed to reach {target})")]
     MissingMigrator {
         from: GenomeSchemaVersion,
         target: GenomeSchemaVersion,
@@ -65,7 +65,7 @@ pub enum MigrationError {
 
     /// The genome's detected schema version is newer than the requested
     /// target. Forward-only migrations are by design.
-    #[error("Cannot migrate downward: genome is at v{from} but target is v{target}")]
+    #[error("Cannot migrate downward: genome is at {from} but target is {target}")]
     DowngradeRefused {
         from: GenomeSchemaVersion,
         target: GenomeSchemaVersion,

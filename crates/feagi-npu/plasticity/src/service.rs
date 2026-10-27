@@ -342,6 +342,8 @@ pub struct PlasticityStats {
     pub memory_neurons_reactivated: usize,
     pub memory_neurons_aged: usize,
     pub memory_neurons_converted_ltm: usize,
+    /// Subset of `memory_neurons_converted_ltm` promoted by reward consolidation.
+    pub memory_neurons_reward_consolidated: usize,
     pub plasticity_commands_enqueued: usize,
     pub plasticity_commands_dropped: usize,
 }
@@ -590,6 +592,13 @@ impl PlasticityService {
                 .collect()
         };
 
+        // Reward consolidation: ids marked by reward-gated associative LTP. Drained here, before
+        // the array lock, to keep the NPU-then-array lock order the NPU predicates use.
+        let reward_consolidated_ids = npu
+            .lock()
+            .unwrap()
+            .drain_reward_consolidated_memory_neurons();
+
         let mut commands = Vec::new();
         let mut array = memory_neuron_array.lock().unwrap();
         let mut encoded_this_burst: Vec<(u32, usize, Vec<ReplayFrame>)> = Vec::new();
@@ -599,16 +608,25 @@ impl PlasticityService {
         // Rationale:
         // If a neuron’s lifespan is already at/above the long-term threshold (e.g., init=100, threshold=100),
         // we must convert it before decrementing lifespan; otherwise it becomes 99 and never qualifies.
-        let converted_neurons = {
+        let mut converted_neurons = {
             let lifecycle_configs = memory_lifecycle_configs.lock().unwrap();
             array.check_longterm_conversion_by_area(
                 &lifecycle_configs,
                 config.memory_lifecycle_config.longterm_threshold,
             )
         };
+        // Reward consolidation: a positive reward that committed LTP on an associative synapse
+        // promotes both memory-neuron endpoints now (same conversion path as above), so the
+        // learned association is not lost when a short-term neuron's lifespan runs out.
+        // Placeholder ids, expired neurons and neurons already long-term are skipped.
+        let reward_consolidated =
+            Self::promote_reward_consolidated(&mut array, &reward_consolidated_ids);
+        let reward_consolidated_count = reward_consolidated.len();
+        converted_neurons.extend(reward_consolidated);
         if !converted_neurons.is_empty() {
             let mut s = stats.lock().unwrap();
             s.memory_neurons_converted_ltm += converted_neurons.len();
+            s.memory_neurons_reward_consolidated += reward_consolidated_count;
             drop(s);
 
             for neuron_idx in converted_neurons {
@@ -1185,6 +1203,13 @@ impl PlasticityService {
                 }
             }
         }
+    }
+
+    /// Promote the given memory-neuron ids to long-term memory; returns the promoted slots.
+    fn promote_reward_consolidated(array: &mut MemoryNeuronArray, ids: &[u32]) -> Vec<usize> {
+        ids.iter()
+            .filter_map(|&id| array.promote_to_longterm_by_id(id))
+            .collect()
     }
 
     /// Remove the NPU-side footprint of removed neurons and return their notices.

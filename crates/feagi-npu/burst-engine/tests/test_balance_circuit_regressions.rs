@@ -59,11 +59,8 @@ fn stdp_params(mode: PlasticityMode, group: u16) -> StdpMappingParams {
         synapse_type: SynapseType::Excitatory,
         plasticity_mode: mode,
         eligibility_decay_bursts: 0,
-        reward_source_area: None,
-        punishment_source_area: None,
         max_weight: 3.0,
         plasticity_eta: 1.0,
-        instance_reward: false,
         modulation_group: group,
         frozen: false,
     }

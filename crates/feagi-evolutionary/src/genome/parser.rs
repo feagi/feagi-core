@@ -217,13 +217,13 @@ pub struct RawClassifier {
     pub class_memory_id: Option<String>,
     pub error_area_id: Option<String>,
     #[serde(default)]
+    pub correct_area_id: String,
+    #[serde(default)]
     pub reward_training: bool,
     #[serde(default)]
     pub answer_feedback_area_id: Option<String>,
     #[serde(default)]
-    pub pain_area_id: Option<String>,
-    #[serde(default)]
-    pub pleasure_area_id: Option<String>,
+    pub reward_modulator_ids: Vec<String>,
     #[serde(default)]
     pub answer_latency_bursts: u32,
     #[serde(default)]
@@ -983,8 +983,8 @@ impl GenomeParser {
                 error_area_id,
                 reward_training: raw.reward_training,
                 answer_feedback_area_id: raw.answer_feedback_area_id.clone(),
-                pain_area_id: raw.pain_area_id.clone(),
-                pleasure_area_id: raw.pleasure_area_id.clone(),
+                correct_area_id: raw.correct_area_id.clone(),
+                reward_modulator_ids: raw.reward_modulator_ids.clone(),
                 answer_latency_bursts: raw.answer_latency_bursts,
                 learn_area_id: raw.learn_area_id.clone(),
                 confidence_area_id: raw.confidence_area_id.clone(),

@@ -645,6 +645,55 @@ impl ConnectomeServiceImpl {
         self.genome_load_timestamp = Some(timestamp);
     }
 
+    /// Removes modulators whose adopted driver is `area_id`, with their subscriptions.
+    fn drop_modulators_adopting(&self, area_id: &CorticalID) -> ServiceResult<()> {
+        let dropped: Vec<String> = {
+            let mut genome = self.current_genome.write();
+            let Some(genome) = genome.as_mut() else {
+                return Ok(());
+            };
+            let ids: Vec<String> = genome
+                .modulators
+                .iter()
+                .filter(|(_, instance)| {
+                    instance.adopts_driver() && instance.driver_cortical_id == *area_id
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &ids {
+                crate::impls::genome_service_impl::strip_modulator_subscriptions(genome, id);
+                genome.modulators.remove(id);
+            }
+            ids
+        };
+        if dropped.is_empty() {
+            return Ok(());
+        }
+        for id in &dropped {
+            crate::impls::genome_service_impl::rewrite_runtime_classifier_sources(
+                &mut self.connectome.write(),
+                id,
+                None,
+            );
+        }
+        let manager = self.connectome.read();
+        for id in &dropped {
+            manager
+                .remove_modulator_from_runtime(id)
+                .map_err(|err| ServiceError::Backend(err.to_string()))?;
+        }
+        if manager.get_npu().is_none() {
+            return Ok(());
+        }
+        let genome = self.current_genome.read();
+        let Some(genome) = genome.as_ref() else {
+            return Ok(());
+        };
+        manager
+            .sync_modulators_from_genome(genome)
+            .map_err(|e| ServiceError::Backend(format!("Failed to sync modulators: {}", e)))
+    }
+
     /// Push the imported genome's modulator bindings, area subscriptions, spike-train areas and
     /// homeostatic leak areas into the NPU after a full snapshot apply (no-op without an NPU or genome).
     #[cfg(feature = "connectome-io")]
@@ -1171,6 +1220,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         let deleted_id_base64 = cortical_id_typed.as_base_64();
+        self.drop_modulators_adopting(&cortical_id_typed)?;
         let (sibling_owned_ids, detached_scans) = {
             let mut manager = self.connectome.write();
             let owning = manager.classifiers_owning_area(&deleted_id_base64);
@@ -1188,6 +1238,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     continue;
                 }
                 let mut detached = classifier.clone();
+                if detached.clear_answer_area(&deleted_id_base64) {
+                    manager.upsert_classifier(detached);
+                    continue;
+                }
                 if let Some(class_area_id) = detached
                     .binding_for_output(&deleted_id_base64)
                     .map(|binding| binding.class_area_id.clone())
@@ -7129,8 +7183,8 @@ mod tests {
             class_memory_id: class_mem_id.as_base_64(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,

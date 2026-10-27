@@ -1357,6 +1357,13 @@ impl Neuroembryogenesis {
             }
         }
 
+        // Mapping rules reach the manager only inside the loop above, so the eligibility of
+        // reward-trained classifiers (derived from the circuit's answer delay) can only be
+        // recomputed now. The earlier pass in corticogenesis finds no rules and skips.
+        self.connectome_manager
+            .write()
+            .refresh_classifier_reward_eligibility();
+
         // Verify against genome stats
         if expected_synapses > 0 {
             let diff = (total_synapses_created as i64 - expected_synapses as i64).abs();
@@ -1872,5 +1879,106 @@ mod tests {
         // and share the same singleton; the progress fields above already reflect this run's outcome.
 
         println!("✅ Development completed in {}ms", progress.duration_ms);
+    }
+
+    /// Genome load must refresh a reward-trained classifier's stored eligibility: the mapping
+    /// rules only exist once synaptogenesis has run.
+    #[test]
+    fn genome_load_refreshes_classifier_reward_eligibility() {
+        use feagi_structures::genomic::classifiers::Classifier;
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, MemoryCorticalType};
+
+        let runtime = feagi_npu_runtime::StdRuntime;
+        let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+        let npu = feagi_npu_burst_engine::RustNPU::new(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU");
+        let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "eligibility-load-test-npu",
+        ));
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+        let mut neuro = Neuroembryogenesis::new(manager.clone());
+
+        let mut genome = create_genome_with_core_morphologies(
+            "elig_genome".to_string(),
+            "Elig Genome".to_string(),
+        );
+        let memory_area = |bytes: &[u8; 8], name: &str| {
+            let mut area = CorticalArea::new(
+                CorticalID::try_from_bytes(bytes).unwrap(),
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+            )
+            .unwrap();
+            area.properties
+                .insert("is_mem_type".to_string(), serde_json::json!(true));
+            area
+        };
+        let mut sample = memory_area(b"melgsmp1", "sample");
+        let class_mem = memory_area(b"melgcls1", "class");
+        let (sample_id, class_id) = (sample.cortical_id, class_mem.cortical_id);
+        sample.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ class_id.as_base_64(): [{
+                "morphology_id": "associative_memory",
+                "plasticity_flag": true,
+                "plasticity_mode": "rstdp",
+                "modulators": [],
+                "eligibility_decay_bursts": 4,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 4
+            }]}),
+        );
+        genome.cortical_areas.insert(sample_id, sample);
+        genome.cortical_areas.insert(class_id, class_mem);
+        genome.classifiers.insert(
+            "clf-elig".to_string(),
+            Classifier {
+                classifier_id: "clf-elig".to_string(),
+                name: "elig".to_string(),
+                parent_region_id: "root".to_string(),
+                coordinates_3d: [0, 0, 0],
+                sample_area_ids: Vec::new(),
+                class_bindings: Vec::new(),
+                sample_memory_id: sample_id.as_base_64(),
+                class_memory_id: class_id.as_base_64(),
+                error_area_id: "err".to_string(),
+                reward_training: true,
+                answer_feedback_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: std::collections::HashMap::new(),
+            },
+        );
+
+        neuro.develop_from_genome(&genome).expect("load failed");
+
+        let guard = manager.read();
+        let stored = guard.get_mapping_rules(&sample_id, &class_id).unwrap()[0]
+            ["eligibility_decay_bursts"]
+            .as_u64()
+            .unwrap();
+        // Default circuit answer delay 3 gives eligibility 5.
+        assert_eq!(stored, 5, "stored rule must follow the circuit on load");
+        let params = npu
+            .lock()
+            .unwrap()
+            .stdp_mapping_params(
+                guard.get_cortical_area(&sample_id).unwrap().cortical_idx,
+                guard.get_cortical_area(&class_id).unwrap().cortical_idx,
+            );
+        if let Some(params) = params {
+            assert_eq!(params.eligibility_decay_bursts, 5);
+        }
     }
 }

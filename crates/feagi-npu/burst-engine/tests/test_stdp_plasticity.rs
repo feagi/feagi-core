@@ -75,11 +75,8 @@ fn stdp_params(
         synapse_type,
         plasticity_mode: PlasticityMode::Stdp,
         eligibility_decay_bursts: 0,
-        reward_source_area: None,
-        punishment_source_area: None,
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
-        instance_reward: false,
         modulation_group: 0,
         frozen: false,
     }

@@ -608,6 +608,21 @@ impl MemoryNeuronArray {
         died_indices
     }
 
+    /// Promote an active short-term neuron to long-term memory by global id.
+    ///
+    /// Uses the same conversion as `check_longterm_conversion`, so ordering indexes and
+    /// long-term counts stay consistent. Returns the slot index when promoted, `None` when the
+    /// id is not an active short-term memory neuron (unknown, expired, placeholder, or already
+    /// long-term).
+    pub fn promote_to_longterm_by_id(&mut self, neuron_id: u32) -> Option<usize> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        if !self.is_valid_index(idx) || !self.is_active[idx] || self.is_longterm_memory[idx] {
+            return None;
+        }
+        self.convert_to_longterm(idx);
+        Some(idx)
+    }
+
     /// Check for neurons ready for long-term memory conversion
     pub fn check_longterm_conversion(&mut self, longterm_threshold: u32) -> Vec<usize> {
         let n = self.next_available_index;
@@ -1419,6 +1434,35 @@ mod tests {
         assert_eq!(array.lifespan_current[idx], config.initial_lifespan);
         assert_eq!(array.activation_count[idx], 1);
         assert_eq!(array.creation_burst[idx], 0);
+    }
+
+    #[test]
+    fn reward_consolidation_promotes_and_survives_expiry() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 3,
+            ..Default::default()
+        };
+        let promoted = array.create_memory_neuron(1, 100, 0, &config).unwrap();
+        let control = array.create_memory_neuron(2, 100, 0, &config).unwrap();
+        let promoted_id = array.neuron_ids[promoted];
+
+        assert_eq!(array.promote_to_longterm_by_id(promoted_id), Some(promoted));
+        assert!(array.is_longterm_memory[promoted]);
+        // Already long-term, and a placeholder (unknown) id, are not promoted again.
+        assert_eq!(array.promote_to_longterm_by_id(promoted_id), None);
+        assert_eq!(array.promote_to_longterm_by_id(7), None);
+
+        let mut died = Vec::new();
+        for burst in 1..=10 {
+            died.extend(array.age_memory_neurons(burst));
+        }
+        assert!(died.contains(&control), "unpromoted neuron expires");
+        assert!(
+            !died.contains(&promoted),
+            "promoted neuron outlives init_lifespan"
+        );
+        assert!(array.is_active[promoted]);
     }
 
     #[test]

@@ -2003,8 +2003,8 @@ fn classifier_edge_rules_without_morphology(
 fn classifier_reward_mapping_rule(
     associative_window: u32,
     existing: &serde_json::Value,
-    pleasure_instance_id: &str,
-    pain_instance_id: &str,
+    reward_modulator_ids: &[String],
+    eligibility_decay_bursts: u32,
 ) -> serde_json::Value {
     let mut rule = if existing.is_object() {
         existing.clone()
@@ -2020,13 +2020,18 @@ fn classifier_reward_mapping_rule(
         object.insert("plasticity_mode".to_string(), serde_json::json!("rstdp"));
         object.remove("reward_source_area");
         object.remove("punishment_source_area");
+        if reward_modulator_ids.is_empty() {
+            object.remove("modulators");
+        } else {
+            object.insert(
+                "modulators".to_string(),
+                serde_json::json!(reward_modulator_ids),
+            );
+        }
+        object.remove("classifier_instance_reward");
         object.insert(
-            "modulators".to_string(),
-            serde_json::json!([pleasure_instance_id, pain_instance_id]),
-        );
-        object.insert(
-            "classifier_instance_reward".to_string(),
-            serde_json::json!(true),
+            "eligibility_decay_bursts".to_string(),
+            serde_json::json!(eligibility_decay_bursts),
         );
         object
             .entry("plasticity_constant".to_string())
@@ -2067,21 +2072,6 @@ fn classifier_plain_associative_rule(
         );
     }
     rule
-}
-
-fn classifier_reward_instance_id(name: &str, role: &str) -> String {
-    let mut id = String::new();
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            id.push(ch.to_ascii_lowercase());
-        } else {
-            id.push('_');
-        }
-    }
-    if id.is_empty() {
-        id.push_str("classifier");
-    }
-    format!("{id}_{role}")
 }
 
 fn existing_associative_rule(
@@ -2247,6 +2237,7 @@ pub async fn post_classifier(
     let sample_mem_id = classifier_owned_area_id(b'm', name, timestamp, 1)?;
     let class_mem_id = classifier_owned_area_id(b'm', name, timestamp, 2)?;
     let error_area_id = classifier_owned_area_id(b'c', name, timestamp, 3)?;
+    let correct_area_id = classifier_owned_area_id(b'c', name, timestamp, 4)?;
 
     let mut sample_mem_props = HashMap::new();
     sample_mem_props.insert(
@@ -2274,14 +2265,6 @@ pub async fn post_classifier(
     );
     class_mem_props.insert("memory_twin_areas".to_string(), serde_json::json!({}));
 
-    let mut error_props = HashMap::new();
-    error_props.insert("classifier_role".to_string(), serde_json::json!("error"));
-    error_props.insert(
-        "parent_region_id".to_string(),
-        serde_json::Value::String(circuit_region_id.clone()),
-    );
-    error_props.insert("classifier_assembly".to_string(), serde_json::json!(true));
-
     let mut sample_mem_params = classifier_memory_params(
         sample_mem_id.clone(),
         format!("{name}_sample_mem"),
@@ -2297,33 +2280,29 @@ pub async fn post_classifier(
         &circuit_region_id,
         class_mem_props,
     );
-    let error_params = feagi_services::types::CreateCorticalAreaParams {
-        cortical_id: error_area_id.clone(),
-        name: format!("{name} error"),
-        dimensions: (1, 1, 1),
-        position: (coordinates_3d[0], coordinates_3d[1] + 2, coordinates_3d[2]),
-        area_type: "Custom".to_string(),
-        visible: Some(true),
-        sub_group: None,
-        neurons_per_voxel: Some(1),
-        postsynaptic_current: None,
-        plasticity_constant: Some(0.0),
-        degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
-        firing_threshold_increment: Some(0.0),
-        firing_threshold_limit: Some(0.0),
-        consecutive_fire_count: Some(0),
-        snooze_period: Some(0),
-        refractory_period: Some(0),
-        leak_coefficient: Some(1.0),
-        leak_variability: Some(0.0),
-        burst_engine_active: Some(true),
-        properties: Some(error_props),
-    };
+    let error_params = classifier_answer_area_params(
+        error_area_id.clone(),
+        format!("{name} error"),
+        (coordinates_3d[0], coordinates_3d[1] + 2, coordinates_3d[2]),
+        &circuit_region_id,
+        "error",
+    );
+    let correct_params = classifier_answer_area_params(
+        correct_area_id.clone(),
+        format!("{name} correct"),
+        (coordinates_3d[0], coordinates_3d[1] + 4, coordinates_3d[2]),
+        &circuit_region_id,
+        "correct",
+    );
 
     let genome_service = state.genome_service.as_ref();
     let created_areas = match genome_service
-        .create_cortical_areas(vec![sample_mem_params, class_mem_params, error_params])
+        .create_cortical_areas(vec![
+            sample_mem_params,
+            class_mem_params,
+            error_params,
+            correct_params,
+        ])
         .await
     {
         Ok(created_areas) => created_areas,
@@ -2378,13 +2357,15 @@ pub async fn post_classifier(
         error_area_id: error_area_id.clone(),
         reward_training: false,
         answer_feedback_area_id: None,
-        pain_area_id: None,
-        pleasure_area_id: None,
+        correct_area_id: correct_area_id.clone(),
+        reward_modulator_ids: Vec::new(),
         answer_latency_bursts: 0,
         learn_area_id: None,
         confidence_area_id: None,
         properties: HashMap::new(),
     };
+    let mut classifier = classifier;
+    ensure_classifier_answer_modulators(&state, &mut classifier).await?;
     connectome_service
         .upsert_classifier(classifier)
         .await
@@ -2399,6 +2380,7 @@ pub async fn post_classifier(
     response.insert("sample_memory_id".to_string(), sample_mem_id);
     response.insert("class_memory_id".to_string(), class_mem_id);
     response.insert("error_area_id".to_string(), error_area_id);
+    response.insert("correct_area_id".to_string(), correct_area_id);
     response.insert("circuit_region_id".to_string(), circuit_region_id);
     response.insert("name".to_string(), name.to_string());
     Ok(Json(response))
@@ -2455,6 +2437,259 @@ pub struct UpdateClassifierRequest {
     /// Empty string clears the confidence OPU. Absent leaves it unchanged.
     #[serde(default)]
     pub confidence_area_id: Option<String>,
+    /// `synaptic.reward` modulators the associative mapping learns from. Replaces the list.
+    /// Absent leaves it unchanged; turning reward training on with an empty list selects the
+    /// classifier's correct-answer and error modulators.
+    #[serde(default)]
+    pub reward_modulator_ids: Option<Vec<String>>,
+}
+
+/// Rejects ids that are not `synaptic.reward` modulators.
+async fn validated_reward_modulator_ids(
+    state: &ApiState,
+    ids: Vec<String>,
+) -> ApiResult<Vec<String>> {
+    let mut accepted: Vec<String> = Vec::new();
+    for id in ids {
+        let id = id.trim().to_string();
+        if id.is_empty() || accepted.contains(&id) {
+            continue;
+        }
+        let body = state
+            .genome_service
+            .get_modulator(&id)
+            .await
+            .map_err(|e| ApiError::invalid_input(format!("reward modulator not found: {e}")))?;
+        if body.get("type").and_then(|value| value.as_str()) != Some("synaptic.reward") {
+            return Err(ApiError::invalid_input(format!(
+                "modulator '{id}' is not a Reward modulator"
+            )));
+        }
+        accepted.push(id);
+    }
+    Ok(accepted)
+}
+
+/// Settings shared by the classifier's 1x1x1 error and correct areas.
+fn classifier_answer_area_params(
+    cortical_id: String,
+    name: String,
+    position: (i32, i32, i32),
+    circuit_region_id: &str,
+    role: &str,
+) -> feagi_services::types::CreateCorticalAreaParams {
+    let mut props = HashMap::new();
+    props.insert("classifier_role".to_string(), serde_json::json!(role));
+    props.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(circuit_region_id.to_string()),
+    );
+    props.insert("classifier_assembly".to_string(), serde_json::json!(true));
+    feagi_services::types::CreateCorticalAreaParams {
+        cortical_id,
+        name,
+        dimensions: (1, 1, 1),
+        position,
+        area_type: "Custom".to_string(),
+        visible: Some(true),
+        sub_group: None,
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(1.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(props),
+    }
+}
+
+/// Creates the error or correct area when the classifier has none: made before the correct
+/// area existed, or the area was deleted.
+async fn ensure_classifier_answer_areas(
+    state: &ApiState,
+    classifier: &mut feagi_structures::genomic::classifiers::Classifier,
+) -> ApiResult<bool> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let [x, y, z] = classifier.coordinates_3d;
+    let mut created = false;
+    for (role, y_offset) in [("error", 2), ("correct", 4)] {
+        let current = if role == "error" {
+            &classifier.error_area_id
+        } else {
+            &classifier.correct_area_id
+        };
+        if !current.is_empty() {
+            continue;
+        }
+        // The id is name-derived; step the suffix past any id already in use.
+        let mut area_id = String::new();
+        for suffix in 3u8..=255 {
+            let candidate = classifier_owned_area_id(b'c', &classifier.name, timestamp, suffix)?;
+            if state
+                .connectome_service
+                .get_cortical_area(&candidate)
+                .await
+                .is_err()
+            {
+                area_id = candidate;
+                break;
+            }
+        }
+        if area_id.is_empty() {
+            return Err(ApiError::internal(
+                "No free id for a classifier answer area".to_string(),
+            ));
+        }
+        state
+            .genome_service
+            .create_cortical_areas(vec![classifier_answer_area_params(
+                area_id.clone(),
+                format!("{} {role}", classifier.name),
+                (x, y + y_offset, z),
+                &classifier.parent_region_id,
+                role,
+            )])
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!("Failed to create classifier {role} area: {e}"))
+            })?;
+        if role == "error" {
+            classifier.error_area_id = area_id;
+        } else {
+            classifier.correct_area_id = area_id;
+        }
+        created = true;
+    }
+    Ok(created)
+}
+
+/// Reward modulator adopting `area_id`, created as `name` when none exists yet.
+async fn ensure_answer_modulator(
+    state: &ApiState,
+    area_id: &str,
+    name: String,
+    magnitude_percent: f32,
+) -> ApiResult<String> {
+    let modulators = state
+        .genome_service
+        .list_modulators()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list modulators: {e}")))?;
+    if let Some(object) = modulators.as_object() {
+        for (id, body) in object {
+            if body.get("driver_cortical_id").and_then(|v| v.as_str()) != Some(area_id) {
+                continue;
+            }
+            // One modulator per driver: reuse it only if it can serve as this answer signal.
+            let is_reward = body.get("type").and_then(|v| v.as_str()) == Some("synaptic.reward");
+            let magnitude = body
+                .get("magnitude_percent")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0) as f32;
+            if is_reward && magnitude.signum() == magnitude_percent.signum() && magnitude != 0.0 {
+                return Ok(id.clone());
+            }
+            return Err(ApiError::invalid_input(format!(
+                "modulator '{id}' already uses this classifier answer area but is not a {} Reward modulator",
+                if magnitude_percent < 0.0 { "negative" } else { "positive" }
+            )));
+        }
+    }
+    let write = feagi_evolutionary::ModulatorWrite {
+        kind: "synaptic.reward".to_string(),
+        magnitude_percent,
+        effect_duration_bursts: 1,
+        rest_bursts: 0,
+        graded: false,
+        full_scale_potential: None,
+        driver_cortical_id: Some(area_id.to_string()),
+    };
+    let mut id = name.clone();
+    let mut attempt = 1;
+    loop {
+        match state
+            .genome_service
+            .create_modulator(id.clone(), write.clone())
+            .await
+        {
+            Ok(_) => return Ok(id),
+            Err(feagi_services::types::errors::ServiceError::Conflict(_)) if attempt < 100 => {
+                attempt += 1;
+                id = format!("{name} {attempt}");
+            }
+            Err(err) => {
+                return Err(ApiError::internal(format!(
+                    "Failed to create answer modulator: {err}"
+                )))
+            }
+        }
+    }
+}
+
+/// The classifier's correct-answer (+) and error (-) Reward modulators, created if missing.
+async fn ensure_classifier_answer_modulators(
+    state: &ApiState,
+    classifier: &mut feagi_structures::genomic::classifiers::Classifier,
+) -> ApiResult<[String; 2]> {
+    ensure_classifier_answer_areas(state, classifier).await?;
+    let right = ensure_answer_modulator(
+        state,
+        &classifier.correct_area_id,
+        format!("{} correct answer", classifier.name),
+        100.0,
+    )
+    .await?;
+    let wrong = ensure_answer_modulator(
+        state,
+        &classifier.error_area_id,
+        format!("{} error", classifier.name),
+        -100.0,
+    )
+    .await?;
+    Ok([right, wrong])
+}
+
+/// Bursts from a class input to its class output, from the class input -> class memory rules.
+async fn classifier_answer_delay_bursts(
+    state: &ApiState,
+    classifier: &feagi_structures::genomic::classifiers::Classifier,
+) -> u32 {
+    let mut input_delay: Option<u64> = None;
+    for binding in &classifier.class_bindings {
+        let Ok(area) = state
+            .connectome_service
+            .get_cortical_area(&binding.class_area_id)
+            .await
+        else {
+            continue;
+        };
+        let delay = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|dst| dst.get(&classifier.class_memory_id))
+            .and_then(|rules| rules.as_array())
+            .and_then(|rules| {
+                rules
+                    .iter()
+                    .filter_map(|rule| rule.get("synaptic_delay_bursts")?.as_u64())
+                    .max()
+            });
+        input_delay = input_delay.max(delay);
+    }
+    feagi_structures::genomic::classifiers::classifier_answer_delay_bursts(
+        input_delay.unwrap_or(1) as u32
+    )
 }
 
 fn classifier_from_info(
@@ -2472,8 +2707,8 @@ fn classifier_from_info(
         error_area_id: existing.error_area_id,
         reward_training: existing.reward_training,
         answer_feedback_area_id: existing.answer_feedback_area_id,
-        pain_area_id: existing.pain_area_id,
-        pleasure_area_id: existing.pleasure_area_id,
+        correct_area_id: existing.correct_area_id,
+        reward_modulator_ids: existing.reward_modulator_ids,
         answer_latency_bursts: existing.answer_latency_bursts,
         learn_area_id: existing.learn_area_id,
         confidence_area_id: existing.confidence_area_id,
@@ -2548,117 +2783,10 @@ async fn remap_classifier_input(
     Ok(())
 }
 
-async fn ensure_classifier_affect_areas(
-    state: &ApiState,
-    classifier: &feagi_structures::genomic::classifiers::Classifier,
-) -> ApiResult<(String, String, String, String)> {
-    let (pain_area_id, pain_instance_id) = ensure_classifier_reward_instance(
-        state,
-        &classifier.name,
-        classifier.pain_area_id.as_deref(),
-        "pain",
-        -100.0,
-    )
-    .await?;
-    let (pleasure_area_id, pleasure_instance_id) = ensure_classifier_reward_instance(
-        state,
-        &classifier.name,
-        classifier.pleasure_area_id.as_deref(),
-        "pleasure",
-        100.0,
-    )
-    .await?;
-    Ok((
-        pain_area_id,
-        pleasure_area_id,
-        pain_instance_id,
-        pleasure_instance_id,
-    ))
-}
-
-/// Reuse a Reward driver that already exists, otherwise create the instance.
-async fn ensure_classifier_reward_instance(
-    state: &ApiState,
-    classifier_name: &str,
-    existing_area_id: Option<&str>,
-    role: &str,
-    magnitude_percent: f32,
-) -> ApiResult<(String, String)> {
-    if let Some(area_id) = existing_area_id {
-        if let Some(instance_id) = reward_instance_for_driver(state, area_id).await? {
-            return Ok((area_id.to_string(), instance_id));
-        }
-    }
-    let instance_id = classifier_reward_instance_id(classifier_name, role);
-    let write = feagi_evolutionary::ModulatorWrite {
-        kind: "synaptic.reward".to_string(),
-        magnitude_percent,
-        effect_duration_bursts: 1,
-        rest_bursts: 0,
-        graded: false,
-        full_scale_potential: None,
-    };
-    let created = match state
-        .genome_service
-        .create_modulator(instance_id.clone(), write)
-        .await
-    {
-        Ok(created) => created,
-        Err(feagi_services::types::errors::ServiceError::Conflict(_)) => state
-            .genome_service
-            .get_modulator(&instance_id)
-            .await
-            .map_err(|err| {
-                ApiError::internal(format!(
-                    "Failed to read existing classifier reward instance: {err}"
-                ))
-            })?,
-        Err(err) => {
-            return Err(ApiError::internal(format!(
-                "Failed to create classifier reward instance: {err}"
-            )));
-        }
-    };
-    let driver = created
-        .get("driver_cortical_id")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| {
-            ApiError::internal("Classifier reward instance did not return a driver".to_string())
-        })?;
-    Ok((driver.to_string(), instance_id))
-}
-
-async fn reward_instance_for_driver(
-    state: &ApiState,
-    driver_cortical_id: &str,
-) -> ApiResult<Option<String>> {
-    let modulators = state
-        .genome_service
-        .list_modulators()
-        .await
-        .map_err(|err| ApiError::internal(format!("Failed to list modulators: {err}")))?;
-    let Some(object) = modulators.as_object() else {
-        return Ok(None);
-    };
-    for (instance_id, body) in object {
-        let matches_driver = body
-            .get("driver_cortical_id")
-            .and_then(|value| value.as_str())
-            == Some(driver_cortical_id);
-        let is_reward =
-            body.get("type").and_then(|value| value.as_str()) == Some("synaptic.reward");
-        if matches_driver && is_reward {
-            return Ok(Some(instance_id.clone()));
-        }
-    }
-    Ok(None)
-}
-
 async fn sync_classifier_reward_mapping(
     state: &ApiState,
     classifier: &feagi_structures::genomic::classifiers::Classifier,
     associative_window: u32,
-    reward_instances: Option<(&str, &str)>,
 ) -> ApiResult<()> {
     let kernel_area = state
         .connectome_service
@@ -2667,14 +2795,14 @@ async fn sync_classifier_reward_mapping(
         .map_err(|e| ApiError::internal(format!("Classifier kernel memory is missing: {}", e)))?;
     let existing = existing_associative_rule(&kernel_area.properties, &classifier.class_memory_id);
     let rule = if classifier.reward_training {
-        let (pleasure_instance, pain_instance) = reward_instances.ok_or_else(|| {
-            ApiError::internal("Classifier reward instances are missing".to_string())
-        })?;
+        let answer_delay = classifier_answer_delay_bursts(state, classifier).await;
         classifier_reward_mapping_rule(
             associative_window,
             &existing,
-            pleasure_instance,
-            pain_instance,
+            &classifier.reward_modulator_ids,
+            feagi_structures::genomic::classifiers::classifier_reward_eligibility_bursts(
+                answer_delay,
+            ),
         )
     } else {
         classifier_plain_associative_rule(associative_window, &existing)
@@ -2687,13 +2815,58 @@ async fn sync_classifier_reward_mapping(
             vec![rule],
         )
         .await
-        .map_err(|e| {
-            ApiError::internal(format!(
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::InvalidInput(message) => {
+                ApiError::invalid_input(format!(
+                    "Classifier associative mapping rejected: {message}"
+                ))
+            }
+            other => ApiError::internal(format!(
                 "Failed to update classifier associative mapping: {}",
-                e
-            ))
+                other
+            )),
         })?;
     Ok(())
+}
+
+/// Creates the classifier's correct area and its "correct answer" (+) and "error" (-) Reward
+/// modulators when missing, and returns their ids. Idempotent; upgrades classifiers made
+/// before these existed.
+#[utoipa::path(
+    post,
+    path = "/v1/cortical_area/classifier/{classifier_id}/answer_modulators",
+    tag = "cortical_area"
+)]
+pub async fn post_classifier_answer_modulators(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let existing = state
+        .connectome_service
+        .get_classifier(&classifier_id)
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::NotFound { resource, id } => {
+                ApiError::not_found(&resource, &id)
+            }
+            other => ApiError::internal(format!("Failed to get classifier: {}", other)),
+        })?;
+    let mut classifier = classifier_from_info(existing);
+    let had_answer_areas =
+        !classifier.correct_area_id.is_empty() && !classifier.error_area_id.is_empty();
+    let [correct, error] = ensure_classifier_answer_modulators(&state, &mut classifier).await?;
+    if !had_answer_areas {
+        state
+            .connectome_service
+            .upsert_classifier(classifier.clone())
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to update classifier: {}", e)))?;
+    }
+    Ok(Json(HashMap::from([
+        ("correct_answer".to_string(), correct),
+        ("error".to_string(), error),
+        ("correct_area_id".to_string(), classifier.correct_area_id),
+    ])))
 }
 
 #[utoipa::path(
@@ -2816,21 +2989,40 @@ pub async fn update_classifier(
                 .to_string(),
         )
     })?;
-    if request.reward_training.is_some() {
-        let reward_instances = if classifier.reward_training {
-            let (pain_area_id, pleasure_area_id, pain_instance_id, pleasure_instance_id) =
-                ensure_classifier_affect_areas(&state, &classifier).await?;
-            classifier.pain_area_id = Some(pain_area_id);
-            classifier.pleasure_area_id = Some(pleasure_area_id);
-            Some((pleasure_instance_id, pain_instance_id))
-        } else {
-            None
-        };
-        let reward_refs = reward_instances
-            .as_ref()
-            .map(|(pleasure, pain)| (pleasure.as_str(), pain.as_str()));
-        sync_classifier_reward_mapping(&state, &classifier, associative_window, reward_refs)
-            .await?;
+    // Validate before creating anything, so a rejected request leaves nothing behind.
+    let requested_sources = match request.reward_modulator_ids.clone() {
+        Some(ids) => Some(validated_reward_modulator_ids(&state, ids).await?),
+        None => None,
+    };
+    let answer_areas_before = (
+        classifier.error_area_id.clone(),
+        classifier.correct_area_id.clone(),
+    );
+    let answer_modulators = ensure_classifier_answer_modulators(&state, &mut classifier).await?;
+    if answer_areas_before
+        != (
+            classifier.error_area_id.clone(),
+            classifier.correct_area_id.clone(),
+        )
+    {
+        // Record the new owned areas now; a later failure must not orphan them.
+        state
+            .connectome_service
+            .upsert_classifier(classifier.clone())
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to update classifier: {}", e)))?;
+    }
+    let mut sources_changed = requested_sources.is_some();
+    if let Some(ids) = requested_sources {
+        classifier.reward_modulator_ids = ids;
+    }
+    // R-STDP needs at least one reward source; an empty selection means the classifier's own.
+    if classifier.reward_training && classifier.reward_modulator_ids.is_empty() {
+        classifier.reward_modulator_ids = answer_modulators.to_vec();
+        sources_changed = true;
+    }
+    if request.reward_training.is_some() || sources_changed {
+        sync_classifier_reward_mapping(&state, &classifier, associative_window).await?;
     }
     state
         .connectome_service
@@ -2883,7 +3075,7 @@ pub async fn post_classifier_field(
 
 pub async fn delete_classifier_field(
     State(_state): State<ApiState>,
-    Path((_classifier_id, _field_area_id)): Path<(String, String)>,
+    Path(_classifier_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::invalid_input(
         "Classifier fields are gone. Remove the classifier_sample or classifier_class mapping.",
@@ -4153,6 +4345,36 @@ mod voxel_neurons_dto_tests {
 #[cfg(test)]
 mod classifier_mapping_rule_tests {
     use super::classifier_mapping_rule;
+
+    #[test]
+    fn reward_rule_is_standard_rstdp_over_the_sources() {
+        let existing = serde_json::json!({
+            "morphology_id": "associative_memory",
+            "plasticity_constant": 3,
+            "modulators": ["stale"],
+            "classifier_instance_reward": true,
+            "reward_source_area": "legacy",
+            "punishment_source_area": "legacy",
+        });
+        let sources = vec!["joy".to_string(), "ouch".to_string()];
+        let rule = super::classifier_reward_mapping_rule(4, &existing, &sources, 6);
+        assert_eq!(rule["plasticity_mode"], "rstdp");
+        assert_eq!(rule["plasticity_flag"], true);
+        assert_eq!(rule["modulators"], serde_json::json!(["joy", "ouch"]));
+        assert_eq!(rule["eligibility_decay_bursts"], 6);
+        assert_eq!(rule["plasticity_constant"], 3, "existing tuning is kept");
+        for gone in [
+            "classifier_instance_reward",
+            "reward_source_area",
+            "punishment_source_area",
+        ] {
+            assert!(rule.get(gone).is_none(), "{gone} must be dropped");
+        }
+        let plain = super::classifier_plain_associative_rule(4, &rule);
+        assert!(plain.get("modulators").is_none());
+        assert!(plain.get("plasticity_mode").is_none());
+        assert!(plain.get("eligibility_decay_bursts").is_none());
+    }
 
     #[test]
     fn classifier_associative_rule_uses_memory_temporal_depth() {

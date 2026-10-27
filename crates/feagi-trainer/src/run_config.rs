@@ -103,6 +103,13 @@ pub struct RunConfig {
     /// Trainer-injected affect magnitude in `[0.0, 1.0]`. Absent on labeled dataset runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reward_magnitude: Option<f64>,
+    /// `synaptic.reward` modulator instance ids that receive trainer reward. The sign of each
+    /// modulator's magnitude decides its channel: Pleasure stimulates the drivers of positive
+    /// ones, Pain the drivers of negative ones (resolved with
+    /// [`RewardTargets::resolve`](crate::binding::RewardTargets::resolve) at run start). Empty
+    /// keeps the core Pain/Pleasure areas. Labeled dataset runs must leave it empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reward_modulator_ids: Vec<String>,
     /// Mean-IoU threshold for segmentation overlap reward in `[0.0, 1.0]`.
     #[serde(default)]
     pub segmentation_iou_threshold: Option<f64>,
@@ -115,6 +122,23 @@ impl RunConfig {
     pub fn from_json(json: &str) -> Result<Self, TrainerError> {
         serde_json::from_str(json)
             .map_err(|e| TrainerError::Config(format!("invalid run config json: {e}")))
+    }
+
+    /// Labeled runs teach with the label; the trainer injects no reward there.
+    fn reject_trainer_reward(&self) -> Result<(), TrainerError> {
+        if self.reward_magnitude.is_some() {
+            return Err(TrainerError::Config(
+                "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
+                    .to_string(),
+            ));
+        }
+        if !self.reward_modulator_ids.is_empty() {
+            return Err(TrainerError::Config(
+                "labeled runs must not set reward_modulator_ids; trainer does not inject reward"
+                    .to_string(),
+            ));
+        }
+        Ok(())
     }
 
     /// Verifies every selector named by the run spec is supported by the CLI's built-in plugin
@@ -151,12 +175,7 @@ impl RunConfig {
                     &spec.reward_policy.plugin.id.0,
                     SUPPORTED_NONE_REWARD_ID,
                 )?;
-                if self.reward_magnitude.is_some() {
-                    return Err(TrainerError::Config(
-                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
-                            .to_string(),
-                    ));
-                }
+                self.reject_trainer_reward()?;
                 check(
                     "encoder coder",
                     &spec.binding.encoder.coder_id,
@@ -179,12 +198,7 @@ impl RunConfig {
                     &spec.reward_policy.plugin.id.0,
                     SUPPORTED_NONE_REWARD_ID,
                 )?;
-                if self.reward_magnitude.is_some() {
-                    return Err(TrainerError::Config(
-                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
-                            .to_string(),
-                    ));
-                }
+                self.reject_trainer_reward()?;
                 check(
                     "encoder coder",
                     &spec.binding.encoder.coder_id,
@@ -224,12 +238,7 @@ impl RunConfig {
                     &spec.reward_policy.plugin.id.0,
                     SUPPORTED_NONE_REWARD_ID,
                 )?;
-                if self.reward_magnitude.is_some() {
-                    return Err(TrainerError::Config(
-                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
-                            .to_string(),
-                    ));
-                }
+                self.reject_trainer_reward()?;
                 check(
                     "encoder coder",
                     &spec.binding.encoder.coder_id,
@@ -264,12 +273,7 @@ impl RunConfig {
                     &spec.reward_policy.plugin.id.0,
                     SUPPORTED_NONE_REWARD_ID,
                 )?;
-                if self.reward_magnitude.is_some() {
-                    return Err(TrainerError::Config(
-                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
-                            .to_string(),
-                    ));
-                }
+                self.reject_trainer_reward()?;
                 if self.encoder_profile.stream.is_some() {
                     check(
                         "encoder coder",
@@ -906,6 +910,7 @@ mod tests {
                 silence_bursts: 0,
             },
             reward_magnitude: None,
+            reward_modulator_ids: Vec::new(),
             segmentation_iou_threshold: None,
             scorecard: ScorecardInput {
                 scorecard_id: ScorecardId("sc-cfg-0001".to_string()),
@@ -940,6 +945,21 @@ mod tests {
         config.reward_magnitude = Some(0.8);
         let err = config.validate_supported().unwrap_err();
         assert!(err.to_string().contains("reward_magnitude"));
+        config = run_config();
+        config.reward_modulator_ids = vec!["reward_a".to_string()];
+        let err = config.validate_supported().unwrap_err();
+        assert!(err.to_string().contains("reward_modulator_ids"));
+    }
+
+    #[test]
+    fn reward_modulator_ids_default_to_empty_and_stay_out_of_json() {
+        let config = run_config();
+        let serialized = serde_json::to_string(&config).expect("serialize");
+        assert!(!serialized.contains("reward_modulator_ids"));
+        assert!(RunConfig::from_json(&serialized)
+            .expect("deserialize")
+            .reward_modulator_ids
+            .is_empty());
     }
 
     #[test]

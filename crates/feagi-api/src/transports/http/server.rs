@@ -75,7 +75,7 @@ pub struct ApiState {
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
     /// Exclusive lock for genome transition operations (load/upload/reload).
-    pub genome_transition_lock: Arc<tokio::sync::Mutex<()>>,
+    pub genome_transition_lock: Arc<tokio::sync::RwLock<()>>,
     /// Indicates whether a prioritized genome transition is currently in progress.
     pub genome_transition_in_progress: Arc<AtomicBool>,
     /// Most recent failed mutating HTTP request (POST/PUT/PATCH/DELETE with status >= 400).
@@ -201,9 +201,9 @@ impl ApiState {
     }
 
     /// Initialize synchronization primitives for strict genome transitions.
-    pub fn init_genome_transition_controls() -> (Arc<tokio::sync::Mutex<()>>, Arc<AtomicBool>) {
+    pub fn init_genome_transition_controls() -> (Arc<tokio::sync::RwLock<()>>, Arc<AtomicBool>) {
         (
-            Arc::new(tokio::sync::Mutex::new(())),
+            Arc::new(tokio::sync::RwLock::new(())),
             Arc::new(AtomicBool::new(false)),
         )
     }
@@ -356,7 +356,7 @@ async fn reject_during_genome_transition(
     let method = request.method();
 
     if *method == Method::GET && !is_transition_allowed_route(path, method) {
-        let _read_guard = state.genome_transition_lock.lock().await;
+        let _read_guard = state.genome_transition_lock.read().await;
         return next.run(request).await;
     }
 
@@ -607,6 +607,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/cortical_area/classifier/:classifier_id/field",
             axum::routing::post(cortical_area::post_classifier_field)
                 .delete(cortical_area::delete_classifier_field),
+        )
+        .route(
+            "/cortical_area/classifier/:classifier_id/answer_modulators",
+            axum::routing::post(cortical_area::post_classifier_answer_modulators),
         )
         .route(
             "/cortical_area/classifier/:classifier_id",

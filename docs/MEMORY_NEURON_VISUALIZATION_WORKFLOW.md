@@ -15,6 +15,8 @@ standard neuron array. This enables bidirectional firing between episodic memory
 and associative learning (bi-directional STDP) while keeping short-term memory neurons purely
 episodic. The bridge uses t+1 injection semantics to avoid same-burst recursion.
 
+Reward consolidation: when a positive `synaptic.reward` commits LTP on an associative synapse of a reward-gated mapping (new synapse or weight rise), both memory-neuron endpoints are promoted to long-term memory so the learned association survives short-term expiry. Negative or zero reward and plain STDP do not consolidate.
+
 ## Complete Visualization Workflow (Backwards from BV)
 
 ### 1. Brain Visualizer (BV) - Reception & Rendering

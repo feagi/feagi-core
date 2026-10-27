@@ -141,7 +141,7 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 ///   and `R(t)=1`, which preserves legacy STDP numerics.
 /// - `RStdp`: reward-modulated STDP. Eligibility traces persist across bursts (decaying with
 ///   `eligibility_decay_bursts`), and weight commits are gated by
-///   `R(t) = density(reward_source_area) - density(punishment_source_area)`.
+///   `R(t)` = the summed signal of the `synaptic.reward` modulators the mapping subscribes to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlasticityMode {
     #[default]
@@ -160,9 +160,8 @@ pub enum PlasticityMode {
 /// defaults to `1.0` and is a separate f32 from the integer LTP/LTD `delta_plus` / `delta_minus`
 /// (see `delta_plus_u8`); this gives sub-unit scaling of weight updates without changing trace
 /// accumulation, which is useful when the multipliers are stored as `i8`.
-/// The wireheading lint enforces that `reward_source_area` and `punishment_source_area`
-/// have `plasticity_mode = Off` on all incoming mappings, so the policy cannot drive the
-/// reward source itself.
+/// The wireheading lint enforces that the driver areas of a mapping's reward modulators
+/// receive no plastic input, so the policy cannot drive its own reward.
 #[derive(Debug, Clone, Copy)]
 pub struct StdpMappingParams {
     pub plasticity_window: usize,
@@ -185,13 +184,6 @@ pub struct StdpMappingParams {
     /// full reset each burst). For R-STDP, typical values are 5-50 bursts depending on the
     /// task's reward latency. Ignored when `plasticity_mode == Off`.
     pub eligibility_decay_bursts: u32,
-    /// Source cortical area whose firing density contributes positively to `R(t)`. `None`
-    /// means no positive reward channel. For R-STDP this is typically a fixed-wiring
-    /// "pleasure detector" sub-circuit.
-    pub reward_source_area: Option<u32>,
-    /// Source cortical area whose firing density contributes negatively to `R(t)` (punishment).
-    /// `None` means no negative reward channel.
-    pub punishment_source_area: Option<u32>,
     /// Upper bound applied to `w_ij` after a positive (potentiating) commit in the unified
     /// plasticity update path. Prevents runaway weight growth under sustained reward when the
     /// integer-valued `delta_plus` and persistent eligibility traces would otherwise compound
@@ -207,15 +199,12 @@ pub struct StdpMappingParams {
     /// `0.0` as before, so LTD / punishment can always drive a synapse all the way to zero.
     pub max_weight: f32,
     /// Scales the end-of-burst weight commit in the unified plasticity path:
-    /// `w_ij += plasticity_eta * R(t) * e_ij` (Stdp: R=1.0; RStdp: R=reward-pain density).
+    /// `w_ij += plasticity_eta * R(t) * e_ij` (Stdp: R=1.0; RStdp: R=summed reward modulators).
     /// `1.0` preserves the historical magnitude; use `(0, 1]` to slow runaway R-STDP when
     /// integer `ltp`/`ltd` cannot be fractional, complementary to `max_weight`.
     /// Rejected in the BDU at parse time if not finite, `<= 0`, or non-finite/NaN. Omitted
     /// from JSON is treated as `1.0`.
     pub plasticity_eta: f32,
-    /// Classifier reward training commits pain and pleasure per scanning instance.
-    /// The generic end-of-burst R-STDP update does not also move these synapses.
-    pub instance_reward: bool,
     /// Synaptic modulator group stamped onto this mapping's synapses. `0` means none.
     pub modulation_group: u16,
     /// When `true` the end-of-burst plasticity pass skips this mapping entirely: no
@@ -237,11 +226,8 @@ impl Default for StdpMappingParams {
             synapse_type: SynapseType::Excitatory,
             plasticity_mode: PlasticityMode::Off,
             eligibility_decay_bursts: 0,
-            reward_source_area: None,
-            punishment_source_area: None,
             max_weight: f32::INFINITY,
             plasticity_eta: 1.0,
-            instance_reward: false,
             modulation_group: 0,
             frozen: false,
         }
@@ -390,6 +376,11 @@ pub struct RustNPU<
     /// pass (plasticity: typically `is_active`). When `None`, legacy behavior: any co-firing pair in
     /// the memory global id range qualifies without calling plasticity.
     memory_neuron_assoc_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
+    /// Memory-neuron ids whose associative synapse committed reward-gated LTP since the last
+    /// drain. The plasticity service drains it each burst and promotes them to long-term
+    /// memory (see `apply_stdp_updates_for_burst`). A set, so it stays bounded by the number
+    /// of distinct memory neurons even when nothing drains it.
+    reward_consolidated_memory_neurons: std::sync::Mutex<AHashSet<u32>>,
     /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
     /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
@@ -409,11 +400,18 @@ pub struct ClassifierErrorPair {
     pub output_area_idx: u32,
 }
 
-/// Error area plus the class pairs that can raise it.
+/// Error and correct areas plus the class pairs that raise them.
+///
+/// Each class output is compared with its class input from `answer_delay_bursts` earlier,
+/// the time the classifier takes to answer.
 #[derive(Debug, Clone)]
 pub struct ClassifierErrorWatch {
     pub error_area_idx: u32,
+    pub correct_area_idx: Option<u32>,
+    pub answer_delay_bursts: u32,
     pub pairs: Vec<ClassifierErrorPair>,
+    /// Recent class-input firing per pair, newest last. Filled by the burst loop.
+    pub input_history: std::collections::VecDeque<Vec<Vec<(u32, u32, u32)>>>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -594,6 +592,7 @@ impl<
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
             power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
+            reward_consolidated_memory_neurons: std::sync::Mutex::new(AHashSet::new()),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
             modulator_engine: std::sync::Mutex::new(ModulatorEngine::default()),
@@ -2307,12 +2306,23 @@ impl<
             .map(|target| (target.twin_area_idx, target.potential))
     }
 
+    /// Answer delay (bursts) of each registered classifier error watch, in registration order.
+    pub fn classifier_error_watch_answer_delays(&self) -> Vec<u32> {
+        self.classifier_error_watches
+            .read()
+            .unwrap()
+            .iter()
+            .map(|watch| watch.answer_delay_bursts)
+            .collect()
+    }
+
     /// Replace the classifier error watches checked after each burst.
     pub fn set_classifier_error_watches(&self, watches: Vec<ClassifierErrorWatch>) {
         *self.classifier_error_watches.write().unwrap() = watches;
     }
 
-    /// Same-burst class mismatch or multi-neuron class output fires the error area next burst.
+    /// Class output that mismatches its delayed class input, or has more than one firing
+    /// neuron, fires the error area next burst. A fully answered burst fires the correct area.
     ///
     /// `process_burst` already holds `fire_structures`. Queue the injection on that
     /// guard. Locking the mutex again deadlocks the burst loop.
@@ -2322,9 +2332,11 @@ impl<
         burst_count: u64,
         fire_structures: &mut FireStructures,
     ) {
-        use feagi_structures::genomic::classifiers::{classifier_reports_error, ClassPairFiring};
+        use feagi_structures::genomic::classifiers::{
+            classifier_reports_correct, classifier_reports_error, ClassPairFiring,
+        };
 
-        let watches = self.classifier_error_watches.read().unwrap();
+        let mut watches = self.classifier_error_watches.write().unwrap();
         if watches.is_empty() {
             return;
         }
@@ -2340,23 +2352,41 @@ impl<
                 })
                 .unwrap_or_default()
         };
-        let error_areas: Vec<u32> = watches
-            .iter()
-            .filter(|watch| {
-                let pairs: Vec<ClassPairFiring> = watch
-                    .pairs
-                    .iter()
-                    .map(|pair| ClassPairFiring {
-                        input_coords: coords_for(pair.input_area_idx),
-                        output_coords: coords_for(pair.output_area_idx),
-                    })
-                    .collect();
-                classifier_reports_error(&pairs)
-            })
-            .map(|watch| watch.error_area_idx)
-            .collect();
+        let mut fired_areas: Vec<u32> = Vec::new();
+        for watch in watches.iter_mut() {
+            let inputs: Vec<Vec<(u32, u32, u32)>> = watch
+                .pairs
+                .iter()
+                .map(|pair| coords_for(pair.input_area_idx))
+                .collect();
+            watch.input_history.push_back(inputs);
+            let keep = watch.answer_delay_bursts as usize + 1;
+            while watch.input_history.len() > keep {
+                watch.input_history.pop_front();
+            }
+            if watch.input_history.len() < keep {
+                continue;
+            }
+            let delayed = &watch.input_history[0];
+            let pairs: Vec<ClassPairFiring> = watch
+                .pairs
+                .iter()
+                .enumerate()
+                .map(|(index, pair)| ClassPairFiring {
+                    input_coords: delayed.get(index).cloned().unwrap_or_default(),
+                    output_coords: coords_for(pair.output_area_idx),
+                })
+                .collect();
+            if classifier_reports_error(&pairs) {
+                fired_areas.push(watch.error_area_idx);
+            } else if let Some(correct_area_idx) = watch.correct_area_idx {
+                if classifier_reports_correct(&pairs) {
+                    fired_areas.push(correct_area_idx);
+                }
+            }
+        }
         drop(watches);
-        for error_area_idx in error_areas {
+        for error_area_idx in fired_areas {
             fire_structures
                 .pending_replay_injections
                 .push(ReplayInjection {
@@ -4682,6 +4712,15 @@ impl<
                 }
             }
         }
+        // Keep the modulator engine's homeostatic set in step with the registry so leak
+        // modulators see a refreshed baseline. Locked alone, after the locks above ended.
+        if let Ok(mut m) = self.modulator_engine.lock() {
+            if registered {
+                m.add_homeostatic_leak_area(cortical_idx);
+            } else {
+                m.remove_homeostatic_leak_area(cortical_idx);
+            }
+        }
     }
 
     /// Whether a cortical area is registered with the rate-modulated leak homeostat.
@@ -5828,58 +5867,44 @@ impl<
             ));
         }
 
-        // Wireheading lint. Reward/punishment source areas must never receive plastic input,
-        // otherwise the brain can learn to inject its own reward by stimulating the detector.
+        // Wireheading lint. Driver areas of reward modulators must never receive plastic input,
+        // otherwise the brain can learn to inject its own reward by stimulating the driver.
         // Two checks are needed because mapping registration order is not guaranteed:
-        //   1. The new mapping itself terminates on a protected area declared by an existing
-        //      plastic mapping.
-        //   2. The new mapping declares a protected area that is already the destination of an
-        //      existing plastic mapping.
+        //   1. The new mapping itself terminates on a reward driver of an existing plastic mapping.
+        //   2. The new mapping's reward drivers already receive an existing plastic mapping.
         if params.is_plastic() {
             let mappings = self.stdp_mappings.read().unwrap();
-            let new_protected: [Option<u32>; 2] =
-                [params.reward_source_area, params.punishment_source_area];
-
+            let modulators = self.modulator_engine.lock().unwrap();
+            let new_protected = modulators.reward_driver_areas(params.modulation_group);
             for (existing_key, existing_params) in mappings.iter() {
                 if !existing_params.is_plastic() {
                     continue;
                 }
-                let existing_protected: [Option<u32>; 2] = [
-                    existing_params.reward_source_area,
-                    existing_params.punishment_source_area,
-                ];
-
-                // Check 1: new mapping terminates on a protected area of an existing mapping.
-                for protected in existing_protected.iter().flatten().copied() {
-                    if protected == dst_cortical_idx {
-                        return Err(FeagiError::RuntimeError(format!(
-                            "Wireheading violation: plastic mapping {} -> {} would write into \
-                             reward/punishment source area {} (protected by mapping {} -> {}). \
-                             Reward/punishment areas must be driven by hard-wired (plasticity_mode=Off) \
-                             input only.",
-                            src_cortical_idx,
-                            dst_cortical_idx,
-                            protected,
-                            existing_key.0,
-                            existing_key.1
-                        )));
-                    }
+                let existing_protected =
+                    modulators.reward_driver_areas(existing_params.modulation_group);
+                if existing_protected.contains(&dst_cortical_idx) {
+                    return Err(FeagiError::RuntimeError(format!(
+                        "Wireheading violation: plastic mapping {} -> {} would write into the \
+                         reward driver area {} of mapping {} -> {}. Reward drivers must be \
+                         driven by non-plastic input only.",
+                        src_cortical_idx,
+                        dst_cortical_idx,
+                        dst_cortical_idx,
+                        existing_key.0,
+                        existing_key.1
+                    )));
                 }
-
-                // Check 2: new mapping declares a protected area that already receives plastic input.
-                for protected in new_protected.iter().flatten().copied() {
-                    if protected == existing_key.1 {
-                        return Err(FeagiError::RuntimeError(format!(
-                            "Wireheading violation: declared reward/punishment source area {} on \
-                             mapping {} -> {} already receives plastic input via mapping {} -> {}. \
-                             Detector areas must have plasticity_mode=Off on all incoming mappings.",
-                            protected,
-                            src_cortical_idx,
-                            dst_cortical_idx,
-                            existing_key.0,
-                            existing_key.1
-                        )));
-                    }
+                if new_protected.contains(&existing_key.1) {
+                    return Err(FeagiError::RuntimeError(format!(
+                        "Wireheading violation: reward driver area {} of mapping {} -> {} \
+                         already receives plastic input via mapping {} -> {}. Reward drivers \
+                         must be driven by non-plastic input only.",
+                        existing_key.1,
+                        src_cortical_idx,
+                        dst_cortical_idx,
+                        existing_key.0,
+                        existing_key.1
+                    )));
                 }
             }
         }
@@ -5888,6 +5913,16 @@ impl<
         self.stdp_mappings.write().unwrap().insert(key, params);
         self.rebuild_stdp_mapping_index();
         Ok(())
+    }
+
+    /// Registered STDP / R-STDP parameters for a cortical mapping A→B, if any.
+    pub fn stdp_mapping_params(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<StdpMappingParams> {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        self.stdp_mappings.read().unwrap().get(&key).cloned()
     }
 
     /// Unregister STDP parameters for a cortical mapping A→B.
@@ -6011,6 +6046,29 @@ impl<
                 .is_some_and(|idx| idx == dst_area);
         }
         false
+    }
+
+    /// Record memory-neuron endpoints of a synapse that just committed reward-gated LTP.
+    /// Ids below `MEMORY_NEURON_ID_START` (dense placeholder neurons) are ignored.
+    fn note_reward_consolidated(&self, src_neuron: u32, dst_neuron: u32) {
+        let mut set = self.reward_consolidated_memory_neurons.lock().unwrap();
+        for id in [src_neuron, dst_neuron] {
+            if id >= MEMORY_NEURON_ID_START {
+                set.insert(id);
+            }
+        }
+    }
+
+    /// Take the memory-neuron ids marked for reward consolidation since the last call.
+    ///
+    /// Rule: when a positive reward commits LTP on an associative synapse of a reward-gated
+    /// mapping (a new synapse is synthesized, or an existing weight rises), both memory-neuron
+    /// endpoints are marked. The plasticity service promotes them to long-term memory so the
+    /// learned association survives short-term expiry. Negative or zero reward and plain
+    /// (non-reward-gated) STDP never mark anything.
+    pub fn drain_reward_consolidated_memory_neurons(&self) -> Vec<u32> {
+        let mut set = self.reward_consolidated_memory_neurons.lock().unwrap();
+        set.drain().collect()
     }
 
     fn apply_stdp_updates_for_burst(
@@ -6234,7 +6292,7 @@ impl<
             let neuron_storage = self.neuron_storage.read().unwrap();
             let mut synapse_storage = self.synapse_storage.write().unwrap();
             for (key, params) in &mappings {
-                if matches!(params.plasticity_mode, PlasticityMode::Off) || params.instance_reward {
+                if matches!(params.plasticity_mode, PlasticityMode::Off) {
                     continue;
                 }
                 let Some(activity) = activity_sets.get(key) else {
@@ -6307,15 +6365,24 @@ impl<
                     // their configured plasticity window.
                     // Associative-memory edges can be seeded with a dense placeholder neuron id
                     // while runtime activity comes from dynamic memory neuron ids in the same
-                    // cortical area. For these edges, treat "any activity in src/dst area" as
-                    // endpoint activity so learned associations are not blocked by id mismatch.
+                    // cortical area. For a placeholder endpoint (id below
+                    // `MEMORY_NEURON_ID_START`) treat "any activity in the area" as endpoint
+                    // activity so seeded edges are not blocked by id mismatch. Learned synapses
+                    // between concrete memory neurons carry the same edge flag, but their
+                    // endpoints are exact ids: each counts as present only if that id fired in
+                    // the window, otherwise unrelated learned links would share credit or
+                    // punishment whenever any neuron in either area fires.
                     let associative_edge = (synapse_storage.edge_flags()[syn_idx]
                         & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
                         != 0;
                     let src_any_present = activity.src_any.contains(src_neuron)
-                        || (associative_edge && !activity.src_any.is_empty());
+                        || (associative_edge
+                            && src_neuron < MEMORY_NEURON_ID_START
+                            && !activity.src_any.is_empty());
                     let dst_any_present = activity.dst_any.contains(dst_neuron)
-                        || (associative_edge && !activity.dst_any.is_empty());
+                        || (associative_edge
+                            && dst_neuron < MEMORY_NEURON_ID_START
+                            && !activity.dst_any.is_empty());
                     let co_fired_within_window = src_any_present && dst_any_present;
                     if co_fired_within_window {
                         e_ij += delta_plus;
@@ -6364,6 +6431,11 @@ impl<
                             synapse_storage.weights_mut()[syn_idx] = new_w;
                             synaptic_plasticity_committed = true;
                         }
+                        // Reward consolidates the memories it trains (see
+                        // `drain_reward_consolidated_memory_neurons`).
+                        if delta_w > 0.0 && reward_gated_mappings.contains(key) {
+                            self.note_reward_consolidated(src_neuron, dst_neuron);
+                        }
                     }
                 }
             }
@@ -6377,9 +6449,6 @@ impl<
         let mut created_synapses = false;
         let mut created_by_mapping: Vec<(u32, u32, usize)> = Vec::new();
         for (key @ (src_area, dst_area), params) in &mappings {
-            if params.instance_reward {
-                continue;
-            }
             let allow_synapse_synthesis = params.bidirectional_stdp
                 || params.associative_memory_mapping
                 || associative_mapping_flags.get(key).copied().unwrap_or(false);
@@ -6514,6 +6583,12 @@ impl<
                     .map_err(|e| {
                         FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
                     })?;
+                if reward_gated_mappings.contains(key) {
+                    // reward > 0 here (checked above): consolidate both endpoints.
+                    for (src_id, dst_id) in source_ids.iter().zip(target_ids.iter()) {
+                        self.note_reward_consolidated(*src_id, *dst_id);
+                    }
+                }
                 created_synapses = true;
                 synaptic_plasticity_committed = true;
                 created_by_mapping.push((*src_area, *dst_area, n_new));
@@ -7209,6 +7284,32 @@ mod tests {
     // ═══════════════════════════════════════════════════════════
 
     #[test]
+    fn sync_rate_modulated_leak_tracks_homeostatic_leak_area() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                64, 64, 4,
+            );
+        let idx = 5u32;
+        npu.sync_rate_modulated_leak_from_cortical_property(
+            idx,
+            &serde_json::json!({ "enabled": true }),
+            0.1,
+            vec![0, 1],
+        );
+        assert!(npu.has_rate_modulated_leak(idx));
+        assert!(npu.is_homeostatic_leak_area(idx));
+
+        npu.sync_rate_modulated_leak_from_cortical_property(
+            idx,
+            &serde_json::json!({ "enabled": false }),
+            0.1,
+            vec![0, 1],
+        );
+        assert!(!npu.has_rate_modulated_leak(idx));
+        assert!(!npu.is_homeostatic_leak_area(idx));
+    }
+
+    #[test]
     fn classifier_error_schedules_without_relocking_fire_structures() {
         let npu =
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
@@ -7216,10 +7317,13 @@ mod tests {
             );
         npu.set_classifier_error_watches(vec![ClassifierErrorWatch {
             error_area_idx: 9,
+            correct_area_idx: None,
+            answer_delay_bursts: 0,
             pairs: vec![ClassifierErrorPair {
                 input_area_idx: 2,
                 output_area_idx: 3,
             }],
+            input_history: Default::default(),
         }]);
         let mut fire_queue = FireQueue::new();
         fire_queue.add_neuron(FiringNeuron {
@@ -7238,6 +7342,98 @@ mod tests {
         assert_eq!(injection.target_burst, 11);
         assert_eq!(injection.twin_area_idx, 9);
         assert_eq!(injection.coords, vec![(0, 0, 0)]);
+    }
+
+    #[test]
+    fn classifier_answer_is_graded_against_the_delayed_input() {
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                64, 64, 4,
+            );
+        npu.set_classifier_error_watches(vec![ClassifierErrorWatch {
+            error_area_idx: 9,
+            correct_area_idx: Some(8),
+            answer_delay_bursts: 2,
+            pairs: vec![ClassifierErrorPair {
+                input_area_idx: 2,
+                output_area_idx: 3,
+            }],
+            input_history: Default::default(),
+        }]);
+        let firing = |area: u32, x: u32| FiringNeuron {
+            neuron_id: NeuronId(area * 10 + x),
+            membrane_potential: 1.0,
+            cortical_idx: area,
+            x,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        };
+        let mut fired = Vec::new();
+        for burst in 0..3u64 {
+            let mut fire_queue = FireQueue::new();
+            if burst == 0 {
+                fire_queue.add_neuron(firing(2, 1));
+            }
+            if burst == 2 {
+                fire_queue.add_neuron(firing(3, 1));
+            }
+            let mut fire_structures = npu.fire_structures.lock().unwrap();
+            npu.schedule_classifier_error_outputs(&fire_queue, burst, &mut fire_structures);
+            fired.extend(
+                fire_structures
+                    .pending_replay_injections
+                    .drain(..)
+                    .map(|injection| (injection.target_burst, injection.twin_area_idx)),
+            );
+        }
+        assert_eq!(
+            fired,
+            vec![(3, 8)],
+            "only the answer two bursts later is graded, as correct"
+        );
+    }
+
+    #[test]
+    fn classifier_without_correct_area_reports_only_errors() {
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                64, 64, 4,
+            );
+        npu.set_classifier_error_watches(vec![ClassifierErrorWatch {
+            error_area_idx: 9,
+            correct_area_idx: None,
+            answer_delay_bursts: 0,
+            pairs: vec![ClassifierErrorPair {
+                input_area_idx: 2,
+                output_area_idx: 3,
+            }],
+            input_history: Default::default(),
+        }]);
+        let neuron = |area: u32, x: u32| FiringNeuron {
+            neuron_id: NeuronId(area * 10 + x),
+            membrane_potential: 1.0,
+            cortical_idx: area,
+            x,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        };
+        let mut answered = FireQueue::new();
+        answered.add_neuron(neuron(2, 1));
+        answered.add_neuron(neuron(3, 1));
+        let mut wrong = FireQueue::new();
+        wrong.add_neuron(neuron(2, 1));
+        wrong.add_neuron(neuron(3, 0));
+        let mut fire_structures = npu.fire_structures.lock().unwrap();
+        npu.schedule_classifier_error_outputs(&answered, 1, &mut fire_structures);
+        assert!(fire_structures.pending_replay_injections.is_empty());
+        npu.schedule_classifier_error_outputs(&wrong, 2, &mut fire_structures);
+        assert_eq!(fire_structures.pending_replay_injections.len(), 1);
+        assert_eq!(
+            fire_structures.pending_replay_injections[0].twin_area_idx,
+            9
+        );
     }
 
     #[test]

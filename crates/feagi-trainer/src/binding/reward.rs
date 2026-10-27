@@ -1,8 +1,10 @@
 //! Reward axis — maps a sample outcome onto FEAGI's native affect channels (Appendix D.2).
 //!
 //! Reward is a first-class, versioned plugin axis. A policy converts the comparison of a
-//! prediction against its target into stimulation of FEAGI Core affect areas
-//! (Pain/Pleasure/Fear/Hope). The reward-policy version is part of the run comparability key.
+//! prediction against its target into affect-channel signals (Pain/Pleasure/Fear/Hope). The
+//! runtime delivers each channel to the run's [`RewardTargets`](crate::binding::RewardTargets):
+//! the drivers of listed `synaptic.reward` modulators, or the core affect areas when none are
+//! listed. The reward-policy version is part of the run comparability key.
 
 use serde::{Deserialize, Serialize};
 

@@ -177,6 +177,74 @@ fn default_duration() -> f32 {
     1.0
 }
 
+/// Spikes of one area collected over a monitoring window.
+///
+/// The burst engine keeps only the latest burst's fire queue, so a poll can return the same
+/// burst more than once. Each burst is therefore counted once, keyed by the burst number
+/// stored with the sample.
+struct ActivityWindow {
+    /// Burst counter when the window opened; samples at or before it are not in the window.
+    start_burst: u64,
+    last_burst: Option<u64>,
+    spike_history: Vec<Value>,
+    neuron_fire_counts: HashMap<u32, u32>,
+    total_membrane_potential: f32,
+    potential_samples: usize,
+    /// Distinct bursts in the window that a poll saw (whether or not the area fired).
+    bursts_observed: u64,
+    /// Observed bursts in which the area fired.
+    bursts_with_firing: u64,
+}
+
+impl ActivityWindow {
+    fn new(start_burst: u64) -> Self {
+        Self {
+            start_burst,
+            last_burst: None,
+            spike_history: Vec::new(),
+            neuron_fire_counts: HashMap::new(),
+            total_membrane_potential: 0.0,
+            potential_samples: 0,
+            bursts_observed: 0,
+            bursts_with_firing: 0,
+        }
+    }
+
+    /// Record one polled sample (`burst` is the sample's own burst number).
+    /// Returns false when the burst was already counted or lies before the window.
+    fn observe(
+        &mut self,
+        burst: u64,
+        area: Option<&feagi_services::traits::runtime_service::FireQueueAreaSample>,
+    ) -> bool {
+        if burst <= self.start_burst || self.last_burst.is_some_and(|last| burst <= last) {
+            return false;
+        }
+        self.last_burst = Some(burst);
+        self.bursts_observed += 1;
+
+        if let Some((neuron_ids, _x, _y, _z, potentials)) = area {
+            if !neuron_ids.is_empty() {
+                self.bursts_with_firing += 1;
+            }
+            for (i, &neuron_id) in neuron_ids.iter().enumerate() {
+                *self.neuron_fire_counts.entry(neuron_id).or_insert(0) += 1;
+
+                let potential = potentials.get(i).copied().unwrap_or(0.0);
+                self.total_membrane_potential += potential;
+                self.potential_samples += 1;
+
+                self.spike_history.push(json!({
+                    "burst": burst,
+                    "neuron_id": neuron_id,
+                    "potential": potential
+                }));
+            }
+        }
+        true
+    }
+}
+
 /// Monitor real-time neuron firing activity for a specific cortical area over a time window.
 #[utoipa::path(
     get,
@@ -221,40 +289,18 @@ pub async fn get_cortical_activity(
     let sample_interval_ms = 50;
     let num_samples = ((params.duration * 1000.0) / sample_interval_ms as f32).ceil() as usize;
 
-    let mut spike_history = Vec::new();
-    let mut neuron_fire_counts: HashMap<u32, u32> = HashMap::new();
-    let mut total_membrane_potential = 0.0;
-    let mut potential_samples = 0;
+    let mut window = ActivityWindow::new(start_burst);
 
     for _ in 0..num_samples {
         tokio::time::sleep(tokio::time::Duration::from_millis(sample_interval_ms)).await;
 
-        let fq_sample = runtime_service
-            .get_fire_queue_sample()
+        let snapshot = runtime_service
+            .get_fire_queue_snapshot()
             .await
             .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
 
-        if let Some((neuron_ids, _x_coords, _y_coords, _z_coords, potentials)) =
-            fq_sample.get(&cortical_idx)
-        {
-            let current_burst = runtime_service
-                .get_burst_count()
-                .await
-                .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
-
-            for (i, &neuron_id) in neuron_ids.iter().enumerate() {
-                *neuron_fire_counts.entry(neuron_id).or_insert(0) += 1;
-
-                let potential = potentials.get(i).copied().unwrap_or(0.0);
-                total_membrane_potential += potential;
-                potential_samples += 1;
-
-                spike_history.push(json!({
-                    "burst": current_burst,
-                    "neuron_id": neuron_id,
-                    "potential": potential
-                }));
-            }
+        if let Some(snapshot) = snapshot {
+            window.observe(snapshot.burst, snapshot.areas.get(&cortical_idx));
         }
     }
 
@@ -263,12 +309,26 @@ pub async fn get_cortical_activity(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
 
+    let ActivityWindow {
+        spike_history,
+        neuron_fire_counts,
+        total_membrane_potential,
+        potential_samples,
+        bursts_observed,
+        bursts_with_firing,
+        ..
+    } = window;
+
     let total_spikes = spike_history.len();
     let firing_rate_hz = if params.duration > 0.0 {
         total_spikes as f32 / params.duration
     } else {
         0.0
     };
+    // Bursts that ran in the window but were never seen by the 50 ms poll (the cache holds
+    // only the latest burst, so above ~20 Hz some bursts are skipped).
+    let bursts_in_window = end_burst.saturating_sub(start_burst);
+    let bursts_unsampled = bursts_in_window.saturating_sub(bursts_observed);
 
     let active_neurons: Vec<u32> = neuron_fire_counts.keys().copied().collect();
     let peak_firing_neuron = neuron_fire_counts
@@ -298,11 +358,19 @@ pub async fn get_cortical_activity(
             "burst_count_sampled".to_string(),
             json!(end_burst - start_burst),
         ),
+        ("bursts_in_window".to_string(), json!(bursts_in_window)),
+        ("bursts_observed".to_string(), json!(bursts_observed)),
+        (
+            "bursts_observed_with_firing".to_string(),
+            json!(bursts_with_firing),
+        ),
+        ("bursts_unsampled".to_string(), json!(bursts_unsampled)),
         (
             "firing_statistics".to_string(),
             json!({
                 "total_spikes": total_spikes,
                 "firing_rate_hz": firing_rate_hz,
+                "firing_rate_is_lower_bound": bursts_unsampled > 0,
                 "active_neurons": active_neurons,
                 "active_neuron_count": active_neurons.len(),
                 "peak_firing_neuron": peak_firing_neuron,
@@ -311,4 +379,66 @@ pub async fn get_cortical_activity(
         ),
         ("spike_history".to_string(), json!(spike_history)),
     ])))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use feagi_services::traits::runtime_service::FireQueueAreaSample as AreaSample;
+
+    fn area(ids: &[u32]) -> AreaSample {
+        (
+            ids.to_vec(),
+            vec![0; ids.len()],
+            vec![0; ids.len()],
+            vec![0; ids.len()],
+            vec![1.5; ids.len()],
+        )
+    }
+
+    #[test]
+    fn same_burst_polled_repeatedly_is_counted_once() {
+        let mut window = ActivityWindow::new(100);
+        let fired = area(&[7, 9]);
+        // Ten 50 ms polls of a 2 Hz burst all return burst 101.
+        let accepted = (0..10)
+            .filter(|_| window.observe(101, Some(&fired)))
+            .count();
+        assert_eq!(accepted, 1);
+        assert_eq!(window.spike_history.len(), 2);
+        assert_eq!(window.bursts_observed, 1);
+        assert_eq!(window.bursts_with_firing, 1);
+        assert!(window
+            .spike_history
+            .iter()
+            .all(|spike| spike["burst"] == json!(101)));
+    }
+
+    #[test]
+    fn spikes_carry_the_sample_burst_and_distinct_bursts_accumulate() {
+        let mut window = ActivityWindow::new(100);
+        assert!(window.observe(101, Some(&area(&[1]))));
+        assert!(window.observe(103, None)); // burst 102 was never sampled
+        assert!(window.observe(104, Some(&area(&[1, 2]))));
+        assert_eq!(window.bursts_observed, 3);
+        assert_eq!(window.bursts_with_firing, 2);
+        assert_eq!(window.spike_history.len(), 3);
+        assert_eq!(window.neuron_fire_counts[&1], 2);
+        let labels: Vec<_> = window
+            .spike_history
+            .iter()
+            .map(|s| s["burst"].clone())
+            .collect();
+        assert_eq!(labels, vec![json!(101), json!(104), json!(104)]);
+    }
+
+    #[test]
+    fn stale_samples_from_before_the_window_are_ignored() {
+        let mut window = ActivityWindow::new(100);
+        assert!(!window.observe(100, Some(&area(&[5]))));
+        assert!(!window.observe(99, Some(&area(&[5]))));
+        assert!(window.spike_history.is_empty());
+        assert_eq!(window.bursts_observed, 0);
+    }
 }

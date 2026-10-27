@@ -121,12 +121,7 @@ fn create_rstdp_network() -> RstdpTestNetwork {
 }
 
 /// Plastic mapping params with a default R-STDP shape; tests override mode/decay/sources.
-fn rstdp_params(
-    mode: PlasticityMode,
-    eligibility_decay_bursts: u32,
-    reward_source_area: Option<u32>,
-    punishment_source_area: Option<u32>,
-) -> StdpMappingParams {
+fn rstdp_params(mode: PlasticityMode, eligibility_decay_bursts: u32) -> StdpMappingParams {
     StdpMappingParams {
         plasticity_window: 1,
         plasticity_constant: 4,
@@ -138,11 +133,8 @@ fn rstdp_params(
         synapse_type: SynapseType::Excitatory,
         plasticity_mode: mode,
         eligibility_decay_bursts,
-        reward_source_area,
-        punishment_source_area,
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
-        instance_reward: false,
         modulation_group: 1,
         frozen: false,
     }
@@ -190,7 +182,7 @@ fn synapse_weight(npu: &RustNPU<StdRuntime, f32, CPUBackend>, src: NeuronId) -> 
 fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse() {
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
     let (mut npu, _src, dst, reward, _pain) = create_rstdp_network();
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.associative_memory_mapping = true;
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -236,6 +228,8 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0)]);
     npu.process_burst().unwrap();
 
+    // Strengthening needs the learned link's own memory endpoint to fire; a different
+    // memory neuron firing in the same area must not credit it.
     let initial_weight = synapse_weight(&npu, second_source_memory_neuron);
     assert!(
         initial_weight > 0.0,
@@ -243,7 +237,7 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     );
 
     npu.inject_memory_neuron_to_fcl_with_kind(
-        source_memory_neuron.0,
+        second_source_memory_neuron.0,
         10,
         2.0,
         feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
@@ -251,7 +245,7 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
     npu.process_burst().unwrap();
     npu.inject_memory_neuron_to_fcl_with_kind(
-        source_memory_neuron.0,
+        second_source_memory_neuron.0,
         10,
         2.0,
         feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
@@ -268,13 +262,91 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     );
 }
 
+const CONSOLIDATION_MEMORY_START: u32 = 50_000_000;
+
+/// Register one memory neuron per area (10 and 11) and fire both for one burst. When
+/// `rewarded`, the reward driver also fires one burst earlier so its density is visible.
+fn cofire_memory_pair(
+    npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
+    reward: NeuronId,
+    rewarded: bool,
+) -> (u32, u32) {
+    use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
+    let a = CONSOLIDATION_MEMORY_START + 1;
+    let b = CONSOLIDATION_MEMORY_START + 2;
+    npu.register_dynamic_neuron_mapping(a, CorticalID::try_from_bytes(b"csrc0001").unwrap());
+    npu.register_dynamic_neuron_mapping(b, CorticalID::try_from_bytes(b"cdst0001").unwrap());
+    for _ in 0..3 {
+        npu.inject_memory_neuron_to_fcl_with_kind(a, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+        npu.inject_memory_neuron_to_fcl_with_kind(b, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+        if rewarded {
+            npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+        }
+        npu.process_burst().unwrap();
+    }
+    (a, b)
+}
+
+/// Positive reward that commits associative LTP marks both memory endpoints for long-term
+/// promotion; the mark is consumed by one drain.
+#[test]
+fn test_reward_gated_associative_ltp_marks_both_memory_endpoints() {
+    let (mut npu, _src, _dst, reward, _pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let (a, b) = cofire_memory_pair(&mut npu, reward, true);
+    assert_eq!(npu.get_outgoing_synapses(a).len(), 1, "synapse synthesized");
+    let mut marked = npu.drain_reward_consolidated_memory_neurons();
+    marked.sort_unstable();
+    assert_eq!(marked, vec![a, b]);
+    assert!(npu.drain_reward_consolidated_memory_neurons().is_empty());
+}
+
+/// Co-firing without reward creates nothing and marks nothing.
+#[test]
+fn test_reward_gated_associative_without_reward_does_not_mark() {
+    let (mut npu, _src, _dst, reward, _pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let (a, _b) = cofire_memory_pair(&mut npu, reward, false);
+    assert!(npu.get_outgoing_synapses(a).is_empty());
+    assert!(npu.drain_reward_consolidated_memory_neurons().is_empty());
+}
+
+/// Negative reward (punishment driver only) marks nothing.
+#[test]
+fn test_reward_gated_associative_negative_reward_does_not_mark() {
+    let (mut npu, _src, _dst, _reward, pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let (a, _b) = cofire_memory_pair(&mut npu, pain, true);
+    assert!(npu.get_outgoing_synapses(a).is_empty());
+    assert!(npu.drain_reward_consolidated_memory_neurons().is_empty());
+}
+
+/// Plain (not reward-gated) STDP associative mapping learns but does not consolidate.
+#[test]
+fn test_plain_stdp_associative_does_not_mark() {
+    let (mut npu, _src, _dst, reward, _pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::Stdp, 0);
+    params.associative_memory_mapping = true;
+    params.modulation_group = 0;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let (a, _b) = cofire_memory_pair(&mut npu, reward, false);
+    assert_eq!(npu.get_outgoing_synapses(a).len(), 1, "plain STDP still learns");
+    assert!(npu.drain_reward_consolidated_memory_neurons().is_empty());
+}
+
 /// `PlasticityMode::Off` must not change weights, even on perfect co-firing.
 #[test]
 fn test_off_mode_is_no_op() {
     let (mut npu, src, dst, _reward, _pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
-    let params = rstdp_params(PlasticityMode::Off, 0, None, None);
+    let params = rstdp_params(PlasticityMode::Off, 0);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
@@ -294,7 +366,7 @@ fn test_rstdp_no_reward_means_no_weight_change() {
     let (mut npu, src, dst, _reward, _pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
-    let params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let params = rstdp_params(PlasticityMode::RStdp, 10);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: src + dst co-fire, reward+pain silent. Trace builds, R(t)=0, weight unchanged.
@@ -317,7 +389,7 @@ fn test_rstdp_delayed_reward_commits_weight() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     let decay_bursts = 10u32;
-    let params = rstdp_params(PlasticityMode::RStdp, decay_bursts, Some(12), Some(13));
+    let params = rstdp_params(PlasticityMode::RStdp, decay_bursts);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: src+dst co-fire, reward silent.
@@ -363,7 +435,7 @@ fn test_rstdp_plasticity_eta_scales_weight_commit() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     let decay_bursts = 10u32;
-    let mut params = rstdp_params(PlasticityMode::RStdp, decay_bursts, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, decay_bursts);
     params.plasticity_eta = 0.5;
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -389,7 +461,7 @@ fn test_rstdp_punishment_drives_negative_weight_change() {
     let (mut npu, src, dst, _reward, pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
 
-    let params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let params = rstdp_params(PlasticityMode::RStdp, 10);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: src+dst co-fire, no reward/pain.
@@ -417,7 +489,7 @@ fn test_rstdp_balanced_reward_and_punishment_zero_change() {
     let (mut npu, src, dst, reward, pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
-    let params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let params = rstdp_params(PlasticityMode::RStdp, 10);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: build trace.
@@ -444,7 +516,7 @@ fn test_rstdp_trace_decay_reduces_late_commit() {
     fn run(silent_bursts: usize) -> f32 {
         let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
         wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
-        let params = rstdp_params(PlasticityMode::RStdp, 5, Some(12), Some(13));
+        let params = rstdp_params(PlasticityMode::RStdp, 5);
         npu.register_stdp_mapping(10, 11, params).unwrap();
 
         // Build trace.
@@ -485,7 +557,7 @@ fn test_rstdp_zero_decay_means_no_temporal_credit() {
     let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
-    let params = rstdp_params(PlasticityMode::RStdp, 0, Some(12), Some(13));
+    let params = rstdp_params(PlasticityMode::RStdp, 0);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: build trace via co-fire (no reward).
@@ -512,11 +584,11 @@ fn test_wireheading_rejects_plastic_input_into_reward_area() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     // First mapping: 10 -> 11, declares 12 (reward) and 13 (pain) as protected.
-    let p1 = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let p1 = rstdp_params(PlasticityMode::RStdp, 10);
     npu.register_stdp_mapping(10, 11, p1).unwrap();
 
     // Second mapping: 10 -> 12 with plain STDP. dst=12 is protected -> must reject.
-    let p2 = rstdp_params(PlasticityMode::Stdp, 0, None, None);
+    let p2 = rstdp_params(PlasticityMode::Stdp, 0);
     let err = npu
         .register_stdp_mapping(10, 12, p2)
         .expect_err("expected wireheading rejection for plastic mapping into reward area");
@@ -540,11 +612,11 @@ fn test_wireheading_rejects_protected_area_with_existing_plastic_input() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     // First mapping: 10 -> 12 with plain STDP. Area 12 is now plastic-input.
-    let p1 = rstdp_params(PlasticityMode::Stdp, 0, None, None);
+    let p1 = rstdp_params(PlasticityMode::Stdp, 0);
     npu.register_stdp_mapping(10, 12, p1).unwrap();
 
     // Second mapping: 10 -> 11, R-STDP, declares 12 as reward source -> must reject.
-    let p2 = rstdp_params(PlasticityMode::RStdp, 10, Some(12), None);
+    let p2 = rstdp_params(PlasticityMode::RStdp, 10);
     let err = npu
         .register_stdp_mapping(10, 11, p2)
         .expect_err("expected wireheading rejection for declaring already-plastic dst as reward");
@@ -564,12 +636,12 @@ fn test_wireheading_allows_off_mode_input_into_reward_area() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     // Mapping declaring area 12 as reward source.
-    let p1 = rstdp_params(PlasticityMode::RStdp, 10, Some(12), None);
+    let p1 = rstdp_params(PlasticityMode::RStdp, 10);
     npu.register_stdp_mapping(10, 11, p1).unwrap();
 
     // Off-mode mapping into the reward area. This represents the hard-wired sensor->detector
     // path that builds the reward signal and must be allowed.
-    let p2 = rstdp_params(PlasticityMode::Off, 0, None, None);
+    let p2 = rstdp_params(PlasticityMode::Off, 0);
     npu.register_stdp_mapping(10, 12, p2)
         .expect("Off-mode mapping into reward area must be allowed");
 }
@@ -585,7 +657,7 @@ fn test_rstdp_max_weight_clamps_runaway_potentiation() {
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
     let cap: f32 = 7.5;
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.max_weight = cap;
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -615,7 +687,7 @@ fn test_rstdp_max_weight_infinity_preserves_legacy_growth() {
     let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
 
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.max_weight = f32::INFINITY;
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -654,7 +726,7 @@ fn test_rstdp_max_weight_does_not_block_punishment_to_zero() {
     let (mut npu, src, dst, _reward, pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
 
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.max_weight = 50.0; // Well above starting weight; clamp inactive on this path.
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -687,7 +759,7 @@ fn test_rstdp_punishment_against_ltd_trace_never_potentiates() {
     let (mut npu, src, dst, _reward, pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
 
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.max_weight = 1000.0;
     npu.register_stdp_mapping(10, 11, params).unwrap();
     let _ = dst;
@@ -708,7 +780,7 @@ fn test_rstdp_zero_ltp_multiplier_never_increases_weight() {
     let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
     wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
 
-    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
     params.ltp_multiplier = 0;
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
@@ -723,4 +795,98 @@ fn test_rstdp_zero_ltp_multiplier_never_increases_weight() {
         let w = synapse_weight(&npu, src[0]);
         assert!(w <= 20.0, "ltp_multiplier=0 must not potentiate, got {}", w);
     }
+}
+
+/// Fire the given memory neurons (area, id) for `bursts` bursts; when `driver` is set it
+/// also fires every burst so its modulator density is visible.
+fn fire_memory_group(
+    npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
+    neurons: &[(u32, u32)],
+    driver: Option<NeuronId>,
+    bursts: usize,
+) {
+    use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
+    for _ in 0..bursts {
+        for &(area, id) in neurons {
+            npu.inject_memory_neuron_to_fcl_with_kind(id, area, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+        }
+        if let Some(d) = driver {
+            npu.inject_sensory_with_potentials(&[(d, 128.0)]);
+        }
+        npu.process_burst().unwrap();
+    }
+}
+
+/// Reward-gated associative mapping with two learned memory-neuron links, A->c0 and B->c1.
+/// Returns (npu, reward, pain, [a, c0, b, c1]) after both links were learned.
+fn learned_pair_of_links() -> (
+    RustNPU<StdRuntime, f32, CPUBackend>,
+    NeuronId,
+    NeuronId,
+    [u32; 4],
+) {
+    let (mut npu, _src, _dst, reward, pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let a = CONSOLIDATION_MEMORY_START + 1;
+    let c0 = CONSOLIDATION_MEMORY_START + 2;
+    let b = CONSOLIDATION_MEMORY_START + 3;
+    let c1 = CONSOLIDATION_MEMORY_START + 4;
+    for id in [a, b] {
+        npu.register_dynamic_neuron_mapping(id, CorticalID::try_from_bytes(b"csrc0001").unwrap());
+    }
+    for id in [c0, c1] {
+        npu.register_dynamic_neuron_mapping(id, CorticalID::try_from_bytes(b"cdst0001").unwrap());
+    }
+    fire_memory_group(&mut npu, &[(10, a), (11, c0)], Some(reward), 3);
+    fire_memory_group(&mut npu, &[], None, 12);
+    fire_memory_group(&mut npu, &[(10, b), (11, c1)], Some(reward), 3);
+    fire_memory_group(&mut npu, &[], None, 12);
+    assert_eq!(npu.get_outgoing_synapses(a).len(), 1, "A->c0 learned");
+    assert_eq!(npu.get_outgoing_synapses(b).len(), 1, "B->c1 learned");
+    (npu, reward, pain, [a, c0, b, c1])
+}
+
+fn learned_weight(npu: &RustNPU<StdRuntime, f32, CPUBackend>, src: u32, dst: u32) -> f32 {
+    npu.get_outgoing_synapses(src)
+        .iter()
+        .find(|s| s.0 == dst)
+        .unwrap_or_else(|| panic!("synapse {src}->{dst} missing"))
+        .1
+}
+
+/// Punishing only A and c0 lowers A->c0 and leaves the unrelated learned B->c1 untouched.
+#[test]
+fn test_learned_memory_link_punishment_does_not_leak_to_unrelated_link() {
+    let (mut npu, _reward, pain, [a, c0, b, c1]) = learned_pair_of_links();
+    let (ac0_before, bc1_before) = (learned_weight(&npu, a, c0), learned_weight(&npu, b, c1));
+    fire_memory_group(&mut npu, &[(10, a), (11, c0)], Some(pain), 3);
+    let (ac0_after, bc1_after) = (learned_weight(&npu, a, c0), learned_weight(&npu, b, c1));
+    assert!(
+        ac0_after < ac0_before,
+        "punished link must drop: {ac0_before} -> {ac0_after}"
+    );
+    assert_eq!(
+        bc1_after, bc1_before,
+        "link whose endpoints never fired must not change"
+    );
+    assert_eq!(npu.get_outgoing_synapses(a).len(), 1, "no A->c1 created");
+}
+
+/// Rewarding only A and c0 raises A->c0 and leaves the unrelated learned B->c1 untouched.
+#[test]
+fn test_learned_memory_link_reward_does_not_leak_to_unrelated_link() {
+    let (mut npu, reward, _pain, [a, c0, b, c1]) = learned_pair_of_links();
+    let (ac0_before, bc1_before) = (learned_weight(&npu, a, c0), learned_weight(&npu, b, c1));
+    fire_memory_group(&mut npu, &[(10, a), (11, c0)], Some(reward), 3);
+    let (ac0_after, bc1_after) = (learned_weight(&npu, a, c0), learned_weight(&npu, b, c1));
+    assert!(
+        ac0_after > ac0_before,
+        "rewarded link must rise: {ac0_before} -> {ac0_after}"
+    );
+    assert_eq!(
+        bc1_after, bc1_before,
+        "link whose endpoints never fired must not change"
+    );
 }

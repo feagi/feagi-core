@@ -202,6 +202,11 @@ impl ModulatorEngine {
         self.homeostatic_leak_areas.contains(&cortical_idx)
     }
 
+    /// Add one area to the homeostatic leak set.
+    pub fn add_homeostatic_leak_area(&mut self, cortical_idx: u32) {
+        self.homeostatic_leak_areas.insert(cortical_idx);
+    }
+
     /// Drop one area from the homeostatic leak set.
     pub fn remove_homeostatic_leak_area(&mut self, cortical_idx: u32) {
         self.homeostatic_leak_areas.remove(&cortical_idx);
@@ -257,6 +262,23 @@ impl ModulatorEngine {
                     .is_some_and(|binding| binding.kind == ModulatorKind::Reward)
             })
         })
+    }
+
+    /// Driver areas of the `synaptic.reward` instances in this synaptic group.
+    pub fn reward_driver_areas(&self, group: u16) -> Vec<u32> {
+        if group == 0 {
+            return Vec::new();
+        }
+        self.groups
+            .get(&group)
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| self.binding(id))
+                    .filter(|binding| binding.kind == ModulatorKind::Reward)
+                    .map(|binding| binding.driver_cortical_idx)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Whether any of these instance ids is bound to a `synaptic.reward` modulator. Read-only:

@@ -44,6 +44,12 @@ pub struct AttemptStand {
     pub outcome: String,
     /// Seed the controller used to home the attempt.
     pub seed: u64,
+    /// True for an unassisted probe attempt between training attempts.
+    #[serde(default)]
+    pub probe: bool,
+    /// Training attempts completed when a probe ran. Absent for a non-probe attempt.
+    #[serde(default)]
+    pub train_attempts_before: Option<u32>,
 }
 
 /// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.

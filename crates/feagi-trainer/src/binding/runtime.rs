@@ -41,8 +41,10 @@ pub trait FeagiRuntime {
     /// input (silence gaps).
     fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError>;
 
-    /// Injects affect-channel reward stimulation (Pain/Pleasure/Fear/Hope) for the next
-    /// burst(s). Called by the executor after the output is observed and scored.
+    /// Injects affect-channel reward stimulation for the next burst(s). A runtime routes each
+    /// channel to its [`RewardTargets`](crate::binding::RewardTargets): the drivers of the run's
+    /// listed `synaptic.reward` modulators, or the core Pain/Pleasure/Fear/Hope areas when none
+    /// are listed. Called by the executor after the output is observed and scored.
     fn submit_reward(&mut self, signals: &[RewardSignal]) -> Result<(), TrainerError>;
 
     /// Reserved teaching / target-motor channel for imitation (behavior cloning).

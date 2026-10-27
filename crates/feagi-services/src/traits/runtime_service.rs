@@ -26,6 +26,20 @@ pub enum ManualStimulationMode {
 /// Idle time after which a fire-history subscription is dropped on the next read.
 pub const FIRE_HISTORY_SUBSCRIPTION_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
+/// Per-area fire-queue sample: `(neuron_ids, x, y, z, membrane_potentials)`.
+pub type FireQueueAreaSample = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>);
+
+/// A fire-queue sample together with the burst it was taken from.
+///
+/// `areas` is empty when that burst fired nothing; `burst` still names it.
+#[derive(Debug, Clone, Default)]
+pub struct FireQueueSnapshot {
+    /// Burst number the sample belongs to.
+    pub burst: u64,
+    /// Fired neurons per cortical index.
+    pub areas: std::collections::HashMap<u32, FireQueueAreaSample>,
+}
+
 /// Runtime control service (transport-agnostic)
 #[async_trait]
 pub trait RuntimeService: Send + Sync {
@@ -146,6 +160,20 @@ pub trait RuntimeService: Send + Sync {
     ) -> ServiceResult<
         std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
     >;
+
+    /// Fire Queue sample labelled with the burst it came from.
+    ///
+    /// Returns `None` when no burst is cached (before the first burst, or after a genome
+    /// load cleared the cache). An empty `areas` map means that burst fired nothing.
+    ///
+    /// The default pairs `get_fire_queue_sample` with a separate `get_burst_count` read, so
+    /// the label can be off by a burst. Implementations that own the cache must override
+    /// it and return the number stored with the sample.
+    async fn get_fire_queue_snapshot(&self) -> ServiceResult<Option<FireQueueSnapshot>> {
+        let areas = self.get_fire_queue_sample().await?;
+        let burst = self.get_burst_count().await?;
+        Ok(Some(FireQueueSnapshot { burst, areas }))
+    }
 
     /// Fired-neuron count per cortical area in the last burst, as
     /// `(cortical_idx, fired_count)` pairs. For monitors that need counts only.

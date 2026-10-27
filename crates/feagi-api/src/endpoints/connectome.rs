@@ -1426,7 +1426,7 @@ async fn import_connectome_snapshot(
     state: &ApiState,
     snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
+    let _transition_lock = state.genome_transition_lock.try_write().map_err(|_| {
         ApiError::conflict(
             "Another genome transition is already in progress; wait for it to finish",
         )

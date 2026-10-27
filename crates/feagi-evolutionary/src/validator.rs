@@ -716,6 +716,23 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
                 ));
             }
         }
+        for modulator_id in &classifier.reward_modulator_ids {
+            match genome.modulators.get(modulator_id) {
+                None => result.add_error(format!(
+                    "Classifier '{}' lists missing reward modulator '{}'",
+                    classifier_id, modulator_id
+                )),
+                Some(instance)
+                    if instance.kind != feagi_structures::genomic::ModulatorKind::Reward =>
+                {
+                    result.add_error(format!(
+                        "Classifier '{}' lists '{}', which is not a Reward modulator",
+                        classifier_id, modulator_id
+                    ))
+                }
+                Some(_) => {}
+            }
+        }
     }
 
     // Validate composite morphology references
@@ -920,15 +937,36 @@ mod tests {
                 error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
-                pain_area_id: None,
-                pleasure_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: vec!["gone".to_string(), "boost".to_string()],
                 answer_latency_bursts: 0,
                 learn_area_id: None,
                 confidence_area_id: None,
                 properties: HashMap::new(),
             },
         );
+        genome.modulators.insert(
+            "boost".to_string(),
+            crate::modulators::ModulatorInstance {
+                kind: feagi_structures::genomic::ModulatorKind::TransmissionGain,
+                magnitude_percent: 50.0,
+                effect_duration_bursts: 1,
+                rest_bursts: 0,
+                graded: false,
+                full_scale_potential: None,
+                driver_cortical_id:
+                    feagi_structures::genomic::cortical_area::CorticalID::modulator_driver(0),
+            },
+        );
         let result = validate_genome(&genome);
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("missing reward modulator 'gone'")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("'boost', which is not a Reward modulator")));
         assert!(result
             .errors
             .iter()

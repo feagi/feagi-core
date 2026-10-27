@@ -84,12 +84,16 @@ fn migrate_reward_sources(genome: &mut Value) -> Result<usize, String> {
     let mut next_serial = next_driver_serial(&blueprint);
     let mut source_to_instance: BTreeMap<String, (String, String)> = BTreeMap::new();
     for (source_id, magnitude) in &sources {
-        let instance_id = format!("reward_{}", sanitize_id(source_id));
+        let prefix = if *magnitude < 0.0 {
+            "punishment"
+        } else {
+            "reward"
+        };
+        let instance_id = format!("{prefix}_{}", sanitize_id(source_id));
         let driver = CorticalID::modulator_driver(next_serial);
         next_serial = next_serial.saturating_add(1);
         let driver_id = driver.as_base_64();
         source_to_instance.insert(source_id.clone(), (instance_id, driver_id));
-        let _ = magnitude;
     }
 
     {

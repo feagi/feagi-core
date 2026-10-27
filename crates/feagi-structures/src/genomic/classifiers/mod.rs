@@ -93,18 +93,21 @@ pub struct Classifier {
     /// Owned 1x1x1 area. Fires when any class output mismatches its class input
     /// or has more than one firing neuron.
     pub error_area_id: String,
+    /// Owned 1x1x1 area. Fires when every firing class input is answered by its class
+    /// output and no output raises the error. Empty on classifiers created before it existed.
+    #[serde(default)]
+    pub correct_area_id: String,
     /// Per-pattern pain and pleasure on the associative mapping.
     #[serde(default)]
     pub reward_training: bool,
     /// Correct-answer area. Empty until the user selects one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer_feedback_area_id: Option<String>,
-    /// Hidden area whose firing is this classifier's pain signal.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pain_area_id: Option<String>,
-    /// Hidden area whose firing is this classifier's pleasure signal.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pleasure_area_id: Option<String>,
+    /// `synaptic.reward` modulators the associative mapping learns from (R-STDP).
+    /// The classifier's own right-answer and wrong-answer modulators are listed here
+    /// like any other source.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reward_modulator_ids: Vec<String>,
     /// Bursts between a decision and the answer that grades it. Zero grades the same burst.
     #[serde(default)]
     pub answer_latency_bursts: u32,
@@ -130,19 +133,12 @@ impl Classifier {
         if !self.error_area_id.is_empty() {
             owned.push(self.error_area_id.clone());
         }
+        if !self.correct_area_id.is_empty() {
+            owned.push(self.correct_area_id.clone());
+        }
         for binding in &self.class_bindings {
             if !binding.class_output_area_id.is_empty() {
                 owned.push(binding.class_output_area_id.clone());
-            }
-        }
-        if let Some(pain_area_id) = &self.pain_area_id {
-            if !pain_area_id.is_empty() {
-                owned.push(pain_area_id.clone());
-            }
-        }
-        if let Some(pleasure_area_id) = &self.pleasure_area_id {
-            if !pleasure_area_id.is_empty() {
-                owned.push(pleasure_area_id.clone());
             }
         }
         owned
@@ -157,6 +153,23 @@ impl Classifier {
         inputs
     }
 
+    /// Forget a deleted error or correct area. Returns true when `area_id` was one of them.
+    /// The next reward update creates the area again.
+    pub fn clear_answer_area(&mut self, area_id: &str) -> bool {
+        if area_id.is_empty() {
+            return false;
+        }
+        if self.error_area_id == area_id {
+            self.error_area_id.clear();
+            return true;
+        }
+        if self.correct_area_id == area_id {
+            self.correct_area_id.clear();
+            return true;
+        }
+        false
+    }
+
     pub fn owns_assembly_core(&self, area_id: &str) -> bool {
         self.sample_memory_id == area_id || self.class_memory_id == area_id
     }
@@ -165,6 +178,7 @@ impl Classifier {
     pub fn owns_area(&self, area_id: &str) -> bool {
         self.owns_assembly_core(area_id)
             || self.error_area_id == area_id
+            || (!self.correct_area_id.is_empty() && self.correct_area_id == area_id)
             || self.binding_for_output(area_id).is_some()
     }
 
@@ -407,6 +421,37 @@ pub fn classifier_reports_error(pairs: &[ClassPairFiring]) -> bool {
     pairs.iter().any(class_output_reports_error)
 }
 
+/// True when at least one class input fired and every class output answered it without error.
+pub fn classifier_reports_correct(pairs: &[ClassPairFiring]) -> bool {
+    pairs.iter().any(|pair| !pair.input_coords.is_empty()) && !classifier_reports_error(pairs)
+}
+
+/// Bursts between a memory area receiving its upstream input and its memory neuron firing.
+///
+/// Pattern detection runs after the input arrives, and the memory neuron is injected into the
+/// next burst's FCL (the memory-neuron injection path in the burst engine, `npu.rs`, and
+/// plasticity `inject_memory_neuron_to_fcl`), so it fires one burst later.
+pub const MEMORY_NEURON_FIRING_LATENCY_BURSTS: u32 = 1;
+
+/// Bursts from the class-memory replay neuron firing to the class output firing.
+pub const CLASS_MEMORY_REPLAY_BURSTS: u32 = 1;
+
+/// Bursts from a class input firing to its class output answering it: the hop into class
+/// memory (at least one burst), plus the memory neuron's firing latency, plus the replay
+/// onto the output. With the default one-burst rule delay this is 3.
+pub fn classifier_answer_delay_bursts(input_to_memory_delay_bursts: u32) -> u32 {
+    input_to_memory_delay_bursts.max(1)
+        + MEMORY_NEURON_FIRING_LATENCY_BURSTS
+        + CLASS_MEMORY_REPLAY_BURSTS
+}
+
+/// Bursts from co-activity on the associative mapping until the answer reaches it as reward:
+/// the answer delay, one burst for the correct or error area to fire, and one for the
+/// modulator to commit its signal.
+pub fn classifier_reward_eligibility_bursts(answer_delay_bursts: u32) -> u32 {
+    answer_delay_bursts + 2
+}
+
 /// Visible name of one class output.
 pub fn class_output_area_name(classifier_name: &str, class_area_name: &str) -> String {
     format!("{classifier_name} {class_area_name} class output")
@@ -456,8 +501,8 @@ mod tests {
             error_area_id: "err".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -467,6 +512,78 @@ mod tests {
             .attach_class("class-a".to_string(), "out-a".to_string())
             .expect("class");
         classifier
+    }
+
+    #[test]
+    fn deleted_answer_area_is_forgotten_and_no_longer_owned() {
+        let mut classifier = sample();
+        classifier.correct_area_id = "ok".to_string();
+        assert!(classifier.owns_area("ok"));
+        assert!(classifier.clear_answer_area("ok"));
+        assert!(classifier.correct_area_id.is_empty());
+        assert!(!classifier.owned_area_ids().contains(&"ok".to_string()));
+        assert!(classifier.clear_answer_area("err"));
+        assert!(classifier.error_area_id.is_empty());
+        assert!(
+            !classifier.clear_answer_area("smem"),
+            "only answer areas are cleared"
+        );
+        assert!(!classifier.clear_answer_area(""));
+    }
+
+    #[test]
+    fn answer_delay_and_eligibility_follow_the_circuit() {
+        assert_eq!(classifier_answer_delay_bursts(1), 3);
+        assert_eq!(
+            classifier_answer_delay_bursts(0),
+            3,
+            "a zero rule delay still takes one burst"
+        );
+        assert_eq!(classifier_answer_delay_bursts(3), 5);
+        assert_eq!(classifier_reward_eligibility_bursts(3), 5);
+    }
+
+    #[test]
+    fn correct_needs_an_answered_input_and_no_error() {
+        let answered = ClassPairFiring {
+            input_coords: vec![(0, 0, 0)],
+            output_coords: vec![(0, 0, 0)],
+        };
+        let silent = ClassPairFiring {
+            input_coords: Vec::new(),
+            output_coords: Vec::new(),
+        };
+        let wrong = ClassPairFiring {
+            input_coords: vec![(0, 0, 0)],
+            output_coords: vec![(1, 0, 0)],
+        };
+        assert!(classifier_reports_correct(&[
+            answered.clone(),
+            silent.clone()
+        ]));
+        assert!(!classifier_reports_correct(&[silent]));
+        assert!(!classifier_reports_correct(&[answered, wrong]));
+    }
+
+    #[test]
+    fn legacy_affect_fields_are_ignored() {
+        let json = serde_json::json!({
+            "classifier_id": "clf-1",
+            "name": "demo",
+            "parent_region_id": "region",
+            "coordinates_3d": [0, 0, 0],
+            "sample_memory_id": "smem",
+            "class_memory_id": "cmem",
+            "error_area_id": "err",
+            "pain_area_id": "legacy-pain",
+            "properties": {}
+        });
+        let classifier: Classifier = serde_json::from_value(json).expect("classifier");
+        assert!(classifier.correct_area_id.is_empty());
+        assert!(classifier.reward_modulator_ids.is_empty());
+        assert!(!classifier
+            .owned_area_ids()
+            .contains(&"legacy-pain".to_string()));
     }
 
     #[test]

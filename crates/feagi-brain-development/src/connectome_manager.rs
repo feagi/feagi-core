@@ -733,13 +733,9 @@ impl ConnectomeManager {
                 Some(area_id) => Self::hash_str(&mut hasher, area_id),
                 None => Self::hash_str(&mut hasher, "null"),
             }
-            match &classifier.pain_area_id {
-                Some(area_id) => Self::hash_str(&mut hasher, area_id),
-                None => Self::hash_str(&mut hasher, "null"),
-            }
-            match &classifier.pleasure_area_id {
-                Some(area_id) => Self::hash_str(&mut hasher, area_id),
-                None => Self::hash_str(&mut hasher, "null"),
+            Self::hash_str(&mut hasher, &classifier.correct_area_id);
+            for modulator_id in &classifier.reward_modulator_ids {
+                Self::hash_str(&mut hasher, modulator_id);
             }
             Self::hash_u32(&mut hasher, classifier.answer_latency_bursts);
             match &classifier.learn_area_id {
@@ -3054,7 +3050,7 @@ impl ConnectomeManager {
         for classifier in classifiers {
             self.apply_loaded_classifier_assembly(&classifier);
         }
-        self.sync_classifier_error_watches();
+        self.resync_classifier_watches();
         self.assign_all_classifier_circuit_io();
     }
 
@@ -3109,15 +3105,21 @@ impl ConnectomeManager {
             }
         }
 
-        if let Ok(error_id) = CorticalID::try_from_base_64(&classifier.error_area_id) {
-            if let Some(error_area) = self.cortical_areas.get_mut(&error_id) {
-                error_area
+        for (answer_id, role) in [
+            (&classifier.error_area_id, "error"),
+            (&classifier.correct_area_id, "correct"),
+        ] {
+            let Ok(area_id) = CorticalID::try_from_base_64(answer_id) else {
+                continue;
+            };
+            if let Some(answer_area) = self.cortical_areas.get_mut(&area_id) {
+                answer_area
                     .properties
                     .insert("classifier_assembly".to_string(), serde_json::json!(true));
-                error_area
+                answer_area
                     .properties
-                    .insert("classifier_role".to_string(), serde_json::json!("error"));
-                Self::ensure_assembly_burst(error_area);
+                    .insert("classifier_role".to_string(), serde_json::json!(role));
+                Self::ensure_assembly_burst(answer_area);
             }
         }
 
@@ -3196,22 +3198,8 @@ impl ConnectomeManager {
             "classifier_reward_training".to_string(),
             serde_json::json!(classifier.reward_training),
         );
-        if let Some(pain_area_id) = &classifier.pain_area_id {
-            kernel_mem.properties.insert(
-                "classifier_pain_area_id".to_string(),
-                serde_json::json!(pain_area_id),
-            );
-        } else {
-            kernel_mem.properties.remove("classifier_pain_area_id");
-        }
-        if let Some(pleasure_area_id) = &classifier.pleasure_area_id {
-            kernel_mem.properties.insert(
-                "classifier_pleasure_area_id".to_string(),
-                serde_json::json!(pleasure_area_id),
-            );
-        } else {
-            kernel_mem.properties.remove("classifier_pleasure_area_id");
-        }
+        kernel_mem.properties.remove("classifier_pain_area_id");
+        kernel_mem.properties.remove("classifier_pleasure_area_id");
         if let Some(feedback_area_id) = &classifier.answer_feedback_area_id {
             kernel_mem.properties.insert(
                 "classifier_answer_feedback_area_id".to_string(),
@@ -3268,14 +3256,14 @@ impl ConnectomeManager {
             }
         }
         self.refresh_classifiers_hash();
-        self.sync_classifier_error_watches();
+        self.resync_classifier_watches();
         self.assign_classifier_circuit_io(&classifier_id);
     }
 
     /// Declare the classifier circuit's input and outputs.
     ///
-    /// The sample memory is the classifier's input face. The error area and every class
-    /// output are outputs. Class memory stays inside the circuit and is not designated.
+    /// The sample memory is the classifier's input face. The error area, the correct area and
+    /// every class output are outputs. Class memory stays inside the circuit and is not designated.
     pub fn assign_classifier_circuit_io(&mut self, classifier_id: &str) {
         let Some(classifier) = self.classifiers.get(classifier_id).cloned() else {
             return;
@@ -3306,8 +3294,10 @@ impl ConnectomeManager {
             inputs.push(area_id);
         }
         let mut outputs = Vec::new();
-        if let Some(area_id) = member_id(region, &classifier.error_area_id) {
-            outputs.push(area_id);
+        for answer_id in [&classifier.error_area_id, &classifier.correct_area_id] {
+            if let Some(area_id) = member_id(region, answer_id) {
+                outputs.push(area_id);
+            }
         }
         for binding in &classifier.class_bindings {
             if let Some(area_id) = member_id(region, &binding.class_output_area_id) {
@@ -3388,7 +3378,7 @@ impl ConnectomeManager {
         let removed = self.classifiers.remove(classifier_id);
         if removed.is_some() {
             self.refresh_classifiers_hash();
-            self.sync_classifier_error_watches();
+            self.resync_classifier_watches();
         }
         removed
     }
@@ -3438,7 +3428,7 @@ impl ConnectomeManager {
         }
         if count > 0 {
             self.refresh_classifiers_hash();
-            self.sync_classifier_error_watches();
+            self.resync_classifier_watches();
         }
         count
     }
@@ -3506,7 +3496,7 @@ impl ConnectomeManager {
         }
         if updated > 0 {
             self.refresh_classifiers_hash();
-            self.sync_classifier_error_watches();
+            self.resync_classifier_watches();
         }
         removed_outputs
     }
@@ -3714,6 +3704,134 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Bursts from a class input firing to its class output answering it, from the
+    /// synaptic delay of the class input -> class memory rule (the longest across classes).
+    pub fn classifier_answer_delay_bursts(
+        &self,
+        classifier: &feagi_structures::genomic::classifiers::Classifier,
+    ) -> u32 {
+        let input_delay = classifier
+            .class_bindings
+            .iter()
+            .filter_map(|binding| {
+                let class_id = CorticalID::try_from_base_64(&binding.class_area_id).ok()?;
+                let rules = self
+                    .cortical_areas
+                    .get(&class_id)?
+                    .properties
+                    .get("cortical_mapping_dst")?
+                    .get(&classifier.class_memory_id)?
+                    .as_array()?;
+                rules
+                    .iter()
+                    .filter_map(|rule| rule.get("synaptic_delay_bursts")?.as_u64())
+                    .max()
+            })
+            .max()
+            .unwrap_or(1) as u32;
+        feagi_structures::genomic::classifiers::classifier_answer_delay_bursts(input_delay)
+    }
+
+    /// Refresh everything derived from the circuit's classifier timing: the reward mappings'
+    /// eligibility, then the error watches.
+    fn resync_classifier_watches(&mut self) {
+        self.refresh_classifier_reward_eligibility();
+        self.sync_classifier_error_watches();
+    }
+
+    /// Recompute `eligibility_decay_bursts` on the sample memory -> class memory reward rule of
+    /// every classifier with `reward_training` on, from the circuit's current answer delay (the
+    /// same rule `sync_classifier_reward_mapping` applies). Only rules whose stored value
+    /// differs are changed: the genome-side rule is updated, and a registered NPU mapping is
+    /// refreshed in place. Synapses, weights and eligibility traces are not touched.
+    pub fn refresh_classifier_reward_eligibility(&mut self) {
+        let classifiers: Vec<_> = self
+            .classifiers
+            .values()
+            .filter(|classifier| classifier.reward_training)
+            .cloned()
+            .collect();
+        for classifier in classifiers {
+            let (Ok(src_id), Ok(dst_id)) = (
+                CorticalID::try_from_base_64(&classifier.sample_memory_id),
+                CorticalID::try_from_base_64(&classifier.class_memory_id),
+            ) else {
+                continue;
+            };
+            let Some(mut rules) = self.get_mapping_rules(&src_id, &dst_id) else {
+                continue;
+            };
+            let wanted =
+                feagi_structures::genomic::classifiers::classifier_reward_eligibility_bursts(
+                    self.classifier_answer_delay_bursts(&classifier),
+                );
+            let mut old_value = None;
+            for rule in rules.iter_mut() {
+                let Some(object) = rule.as_object_mut() else {
+                    continue;
+                };
+                let is_reward_rule = object.get("morphology_id").and_then(|v| v.as_str())
+                    == Some("associative_memory")
+                    && object.get("plasticity_mode").and_then(|v| v.as_str()) == Some("rstdp");
+                if !is_reward_rule {
+                    continue;
+                }
+                let current = object
+                    .get("eligibility_decay_bursts")
+                    .and_then(|v| v.as_u64());
+                if current != Some(u64::from(wanted)) {
+                    old_value = Some(current);
+                    object.insert(
+                        "eligibility_decay_bursts".to_string(),
+                        serde_json::json!(wanted),
+                    );
+                }
+            }
+            let Some(old_value) = old_value else {
+                continue;
+            };
+            if let Err(error) = self.update_cortical_mapping(&src_id, &dst_id, rules) {
+                warn!(
+                    target: "feagi-bdu",
+                    "Classifier '{}': reward eligibility update rejected: {}",
+                    classifier.name,
+                    error
+                );
+                continue;
+            }
+            // Refresh the NPU registration only when one exists; a mapping not registered yet
+            // (genome load) is registered later from the stored rule.
+            let registered = match (
+                self.npu.as_ref(),
+                self.cortical_id_to_idx.get(&src_id),
+                self.cortical_id_to_idx.get(&dst_id),
+            ) {
+                (Some(npu), Some(&src_idx), Some(&dst_idx)) => npu
+                    .lock()
+                    .map(|npu| npu.stdp_mapping_params(src_idx, dst_idx).is_some())
+                    .unwrap_or(false),
+                _ => false,
+            };
+            if registered {
+                if let Err(error) = self.apply_mapping_plasticity_in_place(&src_id, &dst_id) {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Classifier '{}': NPU reward mapping refresh failed: {}",
+                        classifier.name,
+                        error
+                    );
+                }
+            }
+            info!(
+                target: "feagi-bdu",
+                "Classifier '{}': reward eligibility_decay_bursts {} -> {}",
+                classifier.name,
+                old_value.map_or("unset".to_string(), |v| v.to_string()),
+                wanted
+            );
+        }
+    }
+
     fn sync_classifier_error_watches(&self) {
         let Some(npu) = self.npu.as_ref() else {
             return;
@@ -3747,9 +3865,15 @@ impl ConnectomeManager {
                 });
             }
             if !pairs.is_empty() {
+                let correct_area_idx = CorticalID::try_from_base_64(&classifier.correct_area_id)
+                    .ok()
+                    .and_then(|id| self.cortical_id_to_idx.get(&id).copied());
                 watches.push(feagi_npu_burst_engine::ClassifierErrorWatch {
                     error_area_idx: error_idx,
+                    correct_area_idx,
+                    answer_delay_bursts: self.classifier_answer_delay_bursts(classifier),
                     pairs,
+                    input_history: Default::default(),
                 });
             }
         }
@@ -3912,7 +4036,26 @@ impl ConnectomeManager {
 
         self.refresh_cortical_mappings_hash();
 
+        // A class input -> class memory edge sets the classifier answer delay (and through it
+        // the reward eligibility). The sample memory -> class memory edge that the resync
+        // itself rewrites is not a class-input edge, so this does not recurse.
+        if self.is_classifier_class_input_edge(src_area_id, dst_area_id) {
+            self.resync_classifier_watches();
+        }
+
         Ok(())
+    }
+
+    /// True when `src -> dst` is a class input -> class memory edge of any classifier.
+    fn is_classifier_class_input_edge(&self, src: &CorticalID, dst: &CorticalID) -> bool {
+        let (src, dst) = (src.as_base_64(), dst.as_base_64());
+        self.classifiers.values().any(|classifier| {
+            classifier.class_memory_id == dst
+                && classifier
+                    .class_bindings
+                    .iter()
+                    .any(|binding| binding.class_area_id == src)
+        })
     }
 
     /// Rule keys that only configure plasticity. Changing them never changes which synapses
@@ -4964,14 +5107,6 @@ impl ConnectomeManager {
             .and_then(|v| v.as_u64())
             .map(|n| n as u32)
             .unwrap_or(0);
-        let reward_source_area_id = rule_obj
-            .get("reward_source_area")
-            .and_then(|v| v.as_str())
-            .map(str::to_string);
-        let punishment_source_area_id = rule_obj
-            .get("punishment_source_area")
-            .and_then(|v| v.as_str())
-            .map(str::to_string);
 
         // Optional upper-bound clamp for plasticity weight commits. Absent / null means no
         // clamp (legacy unbounded behaviour). When provided, must be a strictly positive
@@ -5031,33 +5166,14 @@ impl ConnectomeManager {
             1.0
         };
 
-        let instance_reward = rule_obj
-            .get("classifier_instance_reward")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if instance_reward
-            && !matches!(
-                plasticity_mode,
-                feagi_npu_burst_engine::npu::PlasticityMode::RStdp
-            )
-        {
-            return Err(BduError::Internal(format!(
-                "classifier_instance_reward requires plasticity_mode='rstdp' on mapping {} -> {}",
-                src_area_id, dst_area_id
-            )));
-        }
-
         // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
         if !matches!(
             plasticity_mode,
             feagi_npu_burst_engine::npu::PlasticityMode::RStdp
-        ) && (reward_source_area_id.is_some()
-            || punishment_source_area_id.is_some()
-            || eligibility_decay_bursts != 0)
+        ) && eligibility_decay_bursts != 0
         {
             return Err(BduError::Internal(format!(
-                "R-STDP fields (reward_source_area / punishment_source_area / eligibility_decay_bursts) \
-                 only valid when plasticity_mode='rstdp' on mapping {} -> {}",
+                "eligibility_decay_bursts is only valid when plasticity_mode='rstdp' on mapping {} -> {}",
                 src_area_id, dst_area_id
             )));
         }
@@ -5093,51 +5209,6 @@ impl ConnectomeManager {
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
         trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
 
-        // Schema v4: reward comes from `synaptic.reward` modulators listed in the rule's
-        // `modulators`, not from reward_source_area / punishment_source_area.
-        if instance_reward {
-            // Read-only check: a rejected rule must not leave an orphan group behind.
-            if !npu_lock.modulator_ids_include_reward(&rule_modulator_ids(rule_obj)) {
-                return Err(BduError::Internal(format!(
-                    "classifier_instance_reward requires at least one synaptic.reward modulator \
-                     in `modulators` on mapping {} -> {}",
-                    src_area_id, dst_area_id
-                )));
-            }
-        }
-
-        // Resolve reward/punishment area names to cortical_idx (R-STDP only). The detector
-        // areas must already be registered with the NPU before this mapping is parsed; the
-        // genome ordering normally handles this because cortical areas are processed before
-        // their cross-area mapping rules.
-        let resolve_optional_area =
-            |label: &str, name_opt: &Option<String>| -> BduResult<Option<u32>> {
-                let Some(name) = name_opt else {
-                    return Ok(None);
-                };
-                match npu_lock.get_cortical_area_id(name.as_str()) {
-                    Some(idx) => Ok(Some(idx)),
-                    None => Err(BduError::Internal(format!(
-                        "Unknown {} cortical area '{}' on R-STDP mapping {} -> {}",
-                        label, name, src_area_id, dst_area_id
-                    ))),
-                }
-            };
-        let reward_source_area =
-            resolve_optional_area("reward_source_area", &reward_source_area_id)?;
-        let punishment_source_area =
-            resolve_optional_area("punishment_source_area", &punishment_source_area_id)?;
-        if reward_source_area.is_some() || punishment_source_area.is_some() {
-            warn!(
-                target: "feagi-bdu",
-                "Mapping {} -> {} carries reward_source_area / punishment_source_area; the burst \
-                 engine computes R(t) only from `synaptic.reward` modulators listed in the rule's \
-                 `modulators`, so these fields only feed the wireheading lint (schema v4 migrates \
-                 them to Reward instances)",
-                src_area_id, dst_area_id
-            );
-        }
-
         // Off-mode mappings are skipped (no NPU registration, no fire-ledger tracking).
         if matches!(
             plasticity_mode,
@@ -5160,11 +5231,8 @@ impl ConnectomeManager {
             synapse_type,
             plasticity_mode,
             eligibility_decay_bursts,
-            reward_source_area,
-            punishment_source_area,
             max_weight,
             plasticity_eta,
-            instance_reward,
             frozen: rule_obj
                 .get("plasticity_frozen")
                 .and_then(|v| v.as_bool())
@@ -5191,19 +5259,11 @@ impl ConnectomeManager {
                 ))
             })?;
 
-        // FireLedger tracking. Plain STDP needs depth=plasticity_window on src+dst. R-STDP
-        // additionally needs depth>=1 on reward/punishment source areas so `activity_density`
-        // can sample current-burst firing.
-        let mut areas_to_track: Vec<(u32, usize)> = vec![
+        // FireLedger tracking: depth=plasticity_window on src+dst.
+        let areas_to_track: Vec<(u32, usize)> = vec![
             (src_cortical_idx, plasticity_window),
             (dst_cortical_idx, plasticity_window),
         ];
-        if let Some(area) = reward_source_area {
-            areas_to_track.push((area, 1));
-        }
-        if let Some(area) = punishment_source_area {
-            areas_to_track.push((area, 1));
-        }
 
         let existing_configs = npu_lock.get_all_fire_ledger_configs();
         for (area_idx, required_depth) in areas_to_track {
@@ -7189,175 +7249,6 @@ impl ConnectomeManager {
         // Scanner and kernel scan configs are no longer built.
         let _ = memory_id;
         None
-    }
-
-    /// `Some(None)` when reward training is off. `None` when it is on and its
-    /// areas or associative steps cannot be resolved.
-    #[cfg(feature = "plasticity")]
-    // Reward fields stay on the classifier. This scan grading path is not scheduled.
-    #[allow(dead_code)]
-    fn classifier_reward_scan_config(
-        &self,
-        memory_area: &CorticalArea,
-        memory_id: &CorticalID,
-        class_mem_id: &CorticalID,
-        class_channel_count: u32,
-        feedback_layout: feagi_npu_plasticity::AnswerFeedbackLayout,
-    ) -> Option<Option<feagi_npu_plasticity::ClassifierRewardConfig>> {
-        use crate::models::CorticalAreaExt;
-        let enabled = memory_area
-            .properties
-            .get("classifier_reward_training")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if !enabled {
-            return Some(None);
-        }
-        let pain_b64 = memory_area
-            .properties
-            .get("classifier_pain_area_id")
-            .and_then(|value| value.as_str())?;
-        let pleasure_b64 = memory_area
-            .properties
-            .get("classifier_pleasure_area_id")
-            .and_then(|value| value.as_str())?;
-        let pain_id = CorticalID::try_from_base_64(pain_b64).ok()?;
-        let pleasure_id = CorticalID::try_from_base_64(pleasure_b64).ok()?;
-        let pain_area_idx = *self.cortical_id_to_idx.get(&pain_id)?;
-        let pleasure_area_idx = *self.cortical_id_to_idx.get(&pleasure_id)?;
-        let (feedback_area_idx, feedback_width, feedback_height, feedback_layout) =
-            match memory_area
-                .properties
-                .get("classifier_answer_feedback_area_id")
-                .and_then(|value| value.as_str())
-            {
-                Some(feedback_b64) => {
-                    let feedback_id = CorticalID::try_from_base_64(feedback_b64).ok()?;
-                    let feedback_area = self.cortical_areas.get(&feedback_id)?;
-                    let width = feedback_area.dimensions.width;
-                    let height = feedback_area.dimensions.height;
-                    let depth = feedback_area.dimensions.depth;
-                    let layout = if matches!(
-                        feedback_layout,
-                        feagi_npu_plasticity::AnswerFeedbackLayout::OutputColumn
-                    ) && {
-                        let ones = [width, height, depth]
-                            .iter()
-                            .filter(|axis| **axis == 1)
-                            .count();
-                        let volume = u64::from(width)
-                            .saturating_mul(u64::from(height))
-                            .saturating_mul(u64::from(depth));
-                        class_channel_count > 0
-                            && ones >= 2
-                            && volume == u64::from(class_channel_count)
-                    } {
-                        feagi_npu_plasticity::AnswerFeedbackLayout::ImageClass
-                    } else {
-                        feedback_layout
-                    };
-                    (
-                        Some(*self.cortical_id_to_idx.get(&feedback_id)?),
-                        width,
-                        height,
-                        layout,
-                    )
-                }
-                None => (None, 0, 0, feedback_layout),
-            };
-        let learn_area_idx = match memory_area
-            .properties
-            .get("classifier_learn_area_id")
-            .and_then(|value| value.as_str())
-        {
-            Some(learn_b64) => {
-                let learn_id = CorticalID::try_from_base_64(learn_b64).ok()?;
-                Some(*self.cortical_id_to_idx.get(&learn_id)?)
-            }
-            None => None,
-        };
-        let (confidence_area_idx, confidence_width, confidence_height, confidence_depth) =
-            match memory_area
-                .properties
-                .get("classifier_confidence_area_id")
-                .and_then(|value| value.as_str())
-            {
-                Some(confidence_b64) => {
-                    let confidence_id = CorticalID::try_from_base_64(confidence_b64).ok()?;
-                    let confidence_area = self.cortical_areas.get(&confidence_id)?;
-                    (
-                        Some(*self.cortical_id_to_idx.get(&confidence_id)?),
-                        confidence_area.dimensions.width,
-                        confidence_area.dimensions.height,
-                        confidence_area.dimensions.depth,
-                    )
-                }
-                None => (None, 0, 0, 0),
-            };
-        let answer_latency_bursts = memory_area
-            .properties
-            .get("classifier_answer_latency_bursts")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0) as u32;
-        let class_mem = self.cortical_areas.get(class_mem_id)?;
-        let firing_threshold = class_mem.firing_threshold();
-        let (pleasure_step, pain_step, max_weight) =
-            self.associative_reward_steps(memory_id, class_mem_id)?;
-        Some(Some(feagi_npu_plasticity::ClassifierRewardConfig {
-            pain_area_idx,
-            pleasure_area_idx,
-            feedback_area_idx,
-            feedback_layout,
-            feedback_width,
-            feedback_height,
-            answer_latency_bursts,
-            learn_area_idx,
-            confidence_area_idx,
-            confidence_width,
-            confidence_height,
-            confidence_depth,
-            firing_threshold,
-            pleasure_step,
-            pain_step,
-            max_weight,
-        }))
-    }
-
-    #[cfg(feature = "plasticity")]
-    #[allow(dead_code)]
-    fn associative_reward_steps(
-        &self,
-        memory_id: &CorticalID,
-        class_mem_id: &CorticalID,
-    ) -> Option<(f32, f32, f32)> {
-        let memory_area = self.cortical_areas.get(memory_id)?;
-        let mapping_dst = memory_area
-            .properties
-            .get("cortical_mapping_dst")
-            .and_then(|value| value.as_object())?;
-        let rules = Self::get_mapping_rules_for_destination(mapping_dst, class_mem_id)?;
-        let rule = rules.iter().find(|rule| {
-            rule.get("morphology_id").and_then(|value| value.as_str()) == Some("associative_memory")
-        })?;
-        let constant = rule
-            .get("plasticity_constant")
-            .and_then(|value| value.as_f64())? as f32;
-        let ltp = rule
-            .get("ltp_multiplier")
-            .and_then(|value| value.as_f64())? as f32;
-        let ltd = rule
-            .get("ltd_multiplier")
-            .and_then(|value| value.as_f64())? as f32;
-        let eta = rule
-            .get("plasticity_eta")
-            .and_then(|value| value.as_f64())
-            .unwrap_or(1.0) as f32;
-        let max_weight = rule
-            .get("max_weight")
-            .and_then(|value| value.as_f64())
-            .map(|value| value as f32)
-            .unwrap_or(f32::INFINITY);
-        Some((eta * constant * ltp, eta * constant * ltd, max_weight))
     }
 
     #[cfg(feature = "plasticity")]
@@ -10981,8 +10872,8 @@ mod tests {
             error_area_id: "cerr0001".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13114,8 +13005,8 @@ mod tests {
             error_area_id: "cerr0001".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13244,8 +13135,8 @@ mod tests {
             error_area_id: "cerr0001".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13320,6 +13211,7 @@ mod tests {
         let sample_mem = CorticalID::try_from_bytes(b"msamp001").unwrap();
         let class_mem = CorticalID::try_from_bytes(b"mclass01").unwrap();
         let error_id = CorticalID::try_from_bytes(b"cerr0001").unwrap();
+        let correct_id = CorticalID::try_from_bytes(b"cok00001").unwrap();
         let class_area = CorticalArea::new(
             class_id,
             0,
@@ -13360,6 +13252,19 @@ mod tests {
         manager.add_cortical_area(sample_area).unwrap();
         manager.add_cortical_area(class_memory).unwrap();
         manager.add_cortical_area(error_area).unwrap();
+        manager
+            .add_cortical_area(
+                CorticalArea::new(
+                    correct_id,
+                    0,
+                    "correct".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
         {
             let circuit = manager
                 .get_brain_region_mut(&circuit_key)
@@ -13370,6 +13275,7 @@ mod tests {
             circuit.add_area(sample_mem);
             circuit.add_area(class_mem);
             circuit.add_area(error_id);
+            circuit.add_area(correct_id);
         }
         manager.upsert_classifier(feagi_structures::genomic::classifiers::Classifier {
             classifier_id: "clf-io".to_string(),
@@ -13383,8 +13289,8 @@ mod tests {
             error_area_id: error_id.as_base_64(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: correct_id.as_base_64(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13394,7 +13300,12 @@ mod tests {
         let io = manager.recompute_brain_region_io_registry().unwrap();
         let (inputs, outputs) = io.get(&circuit_key).expect("circuit io");
         assert_eq!(inputs, &vec![sample_mem.as_base_64()]);
-        assert_eq!(outputs, &vec![error_id.as_base_64()]);
+        let mut expected = vec![error_id.as_base_64(), correct_id.as_base_64()];
+        expected.sort();
+        assert_eq!(
+            outputs, &expected,
+            "error and correct areas are both circuit outputs"
+        );
         assert!(!inputs.contains(&class_mem.as_base_64()));
         assert!(!outputs.contains(&class_mem.as_base_64()));
 
@@ -13426,7 +13337,291 @@ mod tests {
         );
         let io = manager.recompute_brain_region_io_registry().unwrap();
         let outputs = &io.get(&circuit_key).expect("circuit io after unmap").1;
-        assert_eq!(outputs, &vec![error_id.as_base_64()]);
+        assert_eq!(outputs, &expected);
+    }
+
+    #[test]
+    fn classifier_answer_delay_follows_the_class_input_rule() {
+        let mut manager = ConnectomeManager::new_for_testing();
+        let class_id = CorticalID::try_from_bytes(b"cdlycls1").unwrap();
+        let class_mem = CorticalID::try_from_bytes(b"mdlymem1").unwrap();
+        manager
+            .add_cortical_area(
+                CorticalArea::new(
+                    class_id,
+                    0,
+                    "Class".to_string(),
+                    feagi_structures::genomic::cortical_area::CorticalAreaDimensions::new(1, 1, 2)
+                        .unwrap(),
+                    (0, 0, 0).into(),
+                    feagi_structures::genomic::cortical_area::CorticalAreaType::Custom(
+                        feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let mut classifier = feagi_structures::genomic::classifiers::Classifier {
+            classifier_id: "clf-delay".to_string(),
+            name: "delay".to_string(),
+            parent_region_id: "root".to_string(),
+            coordinates_3d: [0, 0, 0],
+            sample_area_ids: Vec::new(),
+            class_bindings: vec![
+                feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                    class_area_id: class_id.as_base_64(),
+                    class_output_area_id: "out".to_string(),
+                },
+            ],
+            sample_memory_id: "smem".to_string(),
+            class_memory_id: class_mem.as_base_64(),
+            error_area_id: "err".to_string(),
+            reward_training: true,
+            answer_feedback_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
+            properties: HashMap::new(),
+        };
+        assert_eq!(
+            manager.classifier_answer_delay_bursts(&classifier),
+            3,
+            "no rule: one burst into class memory, one to fire the memory neuron, one replay"
+        );
+        manager
+            .get_cortical_area_mut(&class_id)
+            .unwrap()
+            .properties
+            .insert(
+                "cortical_mapping_dst".to_string(),
+                serde_json::json!({ class_mem.as_base_64(): [{"synaptic_delay_bursts": 3}] }),
+            );
+        assert_eq!(manager.classifier_answer_delay_bursts(&classifier), 5);
+        classifier.class_bindings.clear();
+        assert_eq!(manager.classifier_answer_delay_bursts(&classifier), 3);
+    }
+
+    fn eligibility_test_memory_area(
+        bytes: &[u8; 8],
+        name: &str,
+    ) -> crate::models::cortical_area::CorticalArea {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, MemoryCorticalType,
+        };
+        let mut area = CorticalArea::new(
+            CorticalID::try_from_bytes(bytes).unwrap(),
+            0,
+            name.to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        area.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        area
+    }
+
+    /// Manager with a sample memory -> class memory rstdp mapping that stores `stored`
+    /// eligibility, registered on the NPU, plus one classifier over it.
+    fn eligibility_fixture(
+        reward_training: bool,
+        stored: u32,
+    ) -> (
+        ConnectomeManager,
+        std::sync::Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        CorticalID,
+        CorticalID,
+    ) {
+        let (mut manager, npu) = manager_with_npu();
+        let sample = eligibility_test_memory_area(b"melgsmp1", "sample");
+        let class_mem = eligibility_test_memory_area(b"melgcls1", "class");
+        let (sample_id, class_id) = (sample.cortical_id, class_mem.cortical_id);
+        manager.add_cortical_area(sample).unwrap();
+        manager.add_cortical_area(class_mem).unwrap();
+        manager
+            .update_cortical_mapping(
+                &sample_id,
+                &class_id,
+                vec![serde_json::json!({
+                    "morphology_id": "associative_memory",
+                    "plasticity_flag": true,
+                    "plasticity_mode": "rstdp",
+                    "modulators": [],
+                    "eligibility_decay_bursts": stored,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 4
+                })],
+            )
+            .unwrap();
+        manager
+            .apply_mapping_plasticity_in_place(&sample_id, &class_id)
+            .unwrap();
+        manager.replace_classifiers(HashMap::from([(
+            "clf-elig".to_string(),
+            feagi_structures::genomic::classifiers::Classifier {
+                classifier_id: "clf-elig".to_string(),
+                name: "elig".to_string(),
+                parent_region_id: "root".to_string(),
+                coordinates_3d: [0, 0, 0],
+                sample_area_ids: Vec::new(),
+                class_bindings: Vec::new(),
+                sample_memory_id: sample_id.as_base_64(),
+                class_memory_id: class_id.as_base_64(),
+                error_area_id: "err".to_string(),
+                reward_training,
+                answer_feedback_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: HashMap::new(),
+            },
+        )]));
+        (manager, npu, sample_id, class_id)
+    }
+
+    fn stored_and_npu_eligibility(
+        manager: &ConnectomeManager,
+        npu: &std::sync::Arc<
+            feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>,
+        >,
+        sample_id: &CorticalID,
+        class_id: &CorticalID,
+    ) -> (u64, u32) {
+        let stored = manager.get_mapping_rules(sample_id, class_id).unwrap()[0]
+            ["eligibility_decay_bursts"]
+            .as_u64()
+            .unwrap();
+        let npu_value = npu
+            .lock()
+            .unwrap()
+            .stdp_mapping_params(
+                manager.cortical_id_to_idx[sample_id],
+                manager.cortical_id_to_idx[class_id],
+            )
+            .unwrap()
+            .eligibility_decay_bursts;
+        (stored, npu_value)
+    }
+
+    #[test]
+    fn classifier_reward_eligibility_refreshes_on_sync_and_is_idempotent() {
+        let (mut manager, npu, sample_id, class_id) = eligibility_fixture(true, 4);
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (4, 4)
+        );
+        manager.apply_loaded_classifier_assemblies();
+        // Default circuit: answer delay 3, so eligibility 5, in the rule and on the NPU.
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (5, 5)
+        );
+        let rules_after_first = manager.get_mapping_rules(&sample_id, &class_id);
+        manager.apply_loaded_classifier_assemblies();
+        assert_eq!(
+            manager.get_mapping_rules(&sample_id, &class_id),
+            rules_after_first
+        );
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (5, 5)
+        );
+    }
+
+    #[test]
+    fn class_input_mapping_delay_edit_resyncs_answer_delay_and_eligibility() {
+        use feagi_structures::genomic::classifiers::{
+            classifier_answer_delay_bursts, classifier_reward_eligibility_bursts,
+            ClassifierClassBinding,
+        };
+        let (mut manager, npu, sample_id, class_id) = eligibility_fixture(true, 4);
+        let input = eligibility_test_memory_area(b"melgin01", "input");
+        let other = eligibility_test_memory_area(b"melgoth1", "other");
+        let output = eligibility_test_memory_area(b"melgout1", "output");
+        let (input_id, other_id, output_id) =
+            (input.cortical_id, other.cortical_id, output.cortical_id);
+        manager.add_cortical_area(input).unwrap();
+        manager.add_cortical_area(other).unwrap();
+        manager.add_cortical_area(output).unwrap();
+        let mut classifier = manager.get_classifier("clf-elig").unwrap().clone();
+        classifier.class_bindings = vec![ClassifierClassBinding {
+            class_area_id: input_id.as_base_64(),
+            class_output_area_id: output_id.as_base_64(),
+        }];
+        classifier.error_area_id = other_id.as_base_64();
+        manager.replace_classifiers(HashMap::from([("clf-elig".to_string(), classifier)]));
+        let set_delay = |manager: &mut ConnectomeManager, delay: u64| {
+            manager
+                .update_cortical_mapping(
+                    &input_id,
+                    &class_id,
+                    vec![serde_json::json!({
+                        "morphology_id": "episodic_memory",
+                        "synaptic_delay_bursts": delay
+                    })],
+                )
+                .unwrap();
+        };
+        let delays = |npu: &std::sync::Arc<
+            feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>,
+        >| npu.lock().unwrap().classifier_error_watch_answer_delays();
+
+        set_delay(&mut manager, 1);
+        let (answer_1, elig_1) = (
+            classifier_answer_delay_bursts(1),
+            classifier_reward_eligibility_bursts(classifier_answer_delay_bursts(1)),
+        );
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (u64::from(elig_1), elig_1)
+        );
+        assert_eq!(delays(&npu), vec![answer_1]);
+
+        set_delay(&mut manager, 2);
+        let (answer_2, elig_2) = (
+            classifier_answer_delay_bursts(2),
+            classifier_reward_eligibility_bursts(classifier_answer_delay_bursts(2)),
+        );
+        assert_ne!(answer_1, answer_2);
+        assert_eq!(delays(&npu), vec![answer_2]);
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (u64::from(elig_2), elig_2)
+        );
+
+        // An unrelated mapping edit changes nothing, even with a stale stored eligibility.
+        manager
+            .update_cortical_mapping(
+                &other_id,
+                &class_id,
+                vec![serde_json::json!({
+                    "morphology_id": "episodic_memory",
+                    "synaptic_delay_bursts": 9
+                })],
+            )
+            .unwrap();
+        assert_eq!(delays(&npu), vec![answer_2]);
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (u64::from(elig_2), elig_2)
+        );
+    }
+
+    #[test]
+    fn classifier_reward_eligibility_left_alone_without_reward_training() {
+        let (mut manager, npu, sample_id, class_id) = eligibility_fixture(false, 4);
+        manager.apply_loaded_classifier_assemblies();
+        assert_eq!(
+            stored_and_npu_eligibility(&manager, &npu, &sample_id, &class_id),
+            (4, 4)
+        );
     }
 
     #[test]
@@ -13444,8 +13639,8 @@ mod tests {
             class_memory_id: "mcmem1".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13876,8 +14071,8 @@ mod tests {
             class_memory_id: "mcmem001".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -13995,8 +14190,8 @@ mod tests {
             class_memory_id: "mcmem001".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
-            pain_area_id: None,
-            pleasure_area_id: None,
+            correct_area_id: String::new(),
+            reward_modulator_ids: Vec::new(),
             answer_latency_bursts: 0,
             learn_area_id: None,
             confidence_area_id: None,
@@ -14268,8 +14463,8 @@ mod tests {
                 class_memory_id: class_mem_id.as_base_64(),
                 reward_training: false,
                 answer_feedback_area_id: None,
-                pain_area_id: None,
-                pleasure_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
                 answer_latency_bursts: 0,
                 learn_area_id: None,
                 confidence_area_id: None,
@@ -14481,8 +14676,8 @@ mod tests {
                 class_memory_id: class_mem_id.as_base_64(),
                 reward_training: false,
                 answer_feedback_area_id: None,
-                pain_area_id: None,
-                pleasure_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
                 answer_latency_bursts: 0,
                 learn_area_id: None,
                 confidence_area_id: None,
@@ -14558,14 +14753,14 @@ mod tests {
     ) -> BduResult<()> {
         let src = CorticalID::try_from_bytes(b"mcsrc001").unwrap();
         let dst = CorticalID::try_from_bytes(b"mcdst001").unwrap();
-        // Rule shape produced by feagi-api `classifier_reward_mapping_rule` under schema v4:
-        // no reward_source_area / punishment_source_area, reward instances in `modulators`.
+        // Rule shape produced by feagi-api `classifier_reward_mapping_rule`: standard R-STDP
+        // over the reward sources in `modulators`.
         let rule = serde_json::json!({
             "morphology_id": "associative_memory",
             "plasticity_flag": true,
             "plasticity_mode": "rstdp",
             "modulators": modulators,
-            "classifier_instance_reward": true,
+            "eligibility_decay_bursts": 4,
             "plasticity_constant": 1,
             "ltp_multiplier": 1,
             "ltd_multiplier": 1,
@@ -14585,36 +14780,20 @@ mod tests {
     }
 
     #[test]
-    fn classifier_instance_reward_accepts_reward_modulators_without_legacy_fields() {
+    fn classifier_reward_rule_registers_as_standard_rstdp() {
         let npu = classifier_reward_test_npu();
         let result = register_classifier_reward_rule(&npu, serde_json::json!(["pleasure", "pain"]));
         assert!(result.is_ok(), "reward mapping rejected: {:?}", result);
     }
 
     #[test]
-    fn classifier_instance_reward_without_reward_modulator_is_rejected() {
+    fn classifier_reward_rule_without_sources_registers() {
         let npu = classifier_reward_test_npu();
-        let baseline = npu
-            .lock()
-            .unwrap()
-            .allocate_modulation_group(&["pleasure".to_string()]);
-        for modulators in [serde_json::json!([]), serde_json::json!(["eta"])] {
-            let err = register_classifier_reward_rule(&npu, modulators.clone())
-                .expect_err("classifier_instance_reward needs a synaptic.reward modulator");
-            assert!(
-                err.to_string().contains("synaptic.reward"),
-                "unexpected error for {modulators}: {err}"
-            );
-        }
-        // Rejections allocated nothing: the next new group id follows the baseline directly.
-        let next = npu
-            .lock()
-            .unwrap()
-            .allocate_modulation_group(&["pain".to_string()]);
-        assert_eq!(
-            next,
-            baseline + 1,
-            "rejected rule leaked a modulation group"
+        let result = register_classifier_reward_rule(&npu, serde_json::json!([]));
+        assert!(
+            result.is_ok(),
+            "empty reward sources rejected: {:?}",
+            result
         );
     }
 

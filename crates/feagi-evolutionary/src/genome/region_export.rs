@@ -444,8 +444,11 @@ pub fn subset_runtime_genome_for_region_branch(
         .unwrap_or_else(|| "Neural circuit".to_string());
     if let Some(circuit) = brain_regions.get_mut(root_region_id) {
         circuit.name = circuit_name.clone();
+        // Own driver areas join the circuit root. An adopted driver already belongs to its region.
         for (_, instance) in modulators.iter() {
-            circuit.cortical_areas.insert(instance.driver_cortical_id);
+            if !instance.adopts_driver() {
+                circuit.cortical_areas.insert(instance.driver_cortical_id);
+            }
         }
     }
 
@@ -846,8 +849,8 @@ mod tests {
                 error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
-                pain_area_id: None,
-                pleasure_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
                 answer_latency_bursts: 0,
                 learn_area_id: None,
                 confidence_area_id: None,
@@ -870,6 +873,67 @@ mod tests {
     }
 
     #[test]
+    fn subset_keeps_an_adopted_driver_in_its_own_region_only() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let (mut genome, parent_key, child_key) = runtime_parent_and_child();
+        let src_id = CorticalID::try_from_bytes(b"csrcexp1").expect("source id");
+        let answer_id = CorticalID::try_from_bytes(b"cansexp1").expect("answer id");
+        for (id, region) in [(src_id, &parent_key), (answer_id, &child_key)] {
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                "area".to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .expect("area");
+            if id == src_id {
+                area.properties.insert(
+                    "cortical_mapping_dst".to_string(),
+                    json!({ src_id.as_base_64(): [{"morphology_id": "projector", "modulators": ["answer"]}] }),
+                );
+            }
+            genome
+                .brain_regions
+                .get_mut(region)
+                .expect("region")
+                .add_area(id);
+            genome.cortical_areas.insert(id, area);
+        }
+        genome.modulators.insert(
+            "answer".to_string(),
+            crate::modulators::ModulatorInstance {
+                kind: feagi_structures::genomic::ModulatorKind::Reward,
+                magnitude_percent: -100.0,
+                effect_duration_bursts: 1,
+                rest_bursts: 0,
+                graded: false,
+                full_scale_potential: None,
+                driver_cortical_id: answer_id,
+            },
+        );
+
+        let exported =
+            subset_runtime_genome_for_region_branch(&genome, &parent_key).expect("subset");
+        assert!(exported.modulators.contains("answer"));
+        let homes: Vec<&String> = exported
+            .brain_regions
+            .iter()
+            .filter(|(_, region)| region.cortical_areas.contains(&answer_id))
+            .map(|(key, _)| key)
+            .collect();
+        assert_eq!(
+            homes,
+            vec![&child_key],
+            "an adopted driver stays in its own region"
+        );
+    }
+
+    #[test]
     fn subset_omits_classifier_outside_the_exported_circuit() {
         use feagi_structures::genomic::classifiers::Classifier;
 
@@ -888,8 +952,8 @@ mod tests {
                 error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
-                pain_area_id: None,
-                pleasure_area_id: None,
+                correct_area_id: String::new(),
+                reward_modulator_ids: Vec::new(),
                 answer_latency_bursts: 0,
                 learn_area_id: None,
                 confidence_area_id: None,

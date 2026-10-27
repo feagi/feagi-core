@@ -298,6 +298,31 @@ pub async fn get_fire_queue_counts(
     Ok(Json(response))
 }
 
+/// Labels for a detailed fire-queue response.
+///
+/// - `timestep`: the burst the sample was taken from (`null` when no burst is cached).
+/// - `current_burst`: the burst counter when the response was built.
+/// - `bursts_since_sample`: how many bursts have run since the sampled one.
+/// - `sample_available`: false when no burst is cached (before the first burst, or after a
+///   genome load cleared the cache); the areas are then empty and `timestep` is `null`.
+fn detailed_sample_labels(
+    sample_burst: Option<u64>,
+    current_burst: u64,
+) -> [(&'static str, serde_json::Value); 4] {
+    [
+        ("timestep", serde_json::json!(sample_burst)),
+        ("current_burst", serde_json::json!(current_burst)),
+        (
+            "bursts_since_sample",
+            serde_json::json!(sample_burst.map(|b| current_burst.saturating_sub(b))),
+        ),
+        (
+            "sample_available",
+            serde_json::json!(sample_burst.is_some()),
+        ),
+    ]
+}
+
 /// Get the detailed Fire Queue (FQ) from the latest sampled burst.
 ///
 /// Unlike `/v1/burst_engine/fire_queue`, this endpoint includes per-area neuron IDs,
@@ -317,15 +342,18 @@ pub async fn get_fire_queue_detailed(
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
-    let fq_sample = runtime_service
-        .get_fire_queue_sample()
+    // The sample and the burst it belongs to come from one read. `current_burst` is read
+    // after it, so it is never behind the sample.
+    let snapshot = runtime_service
+        .get_fire_queue_snapshot()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
-
-    let timestep = runtime_service
+    let current_burst = runtime_service
         .get_burst_count()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+    let sample_burst = snapshot.as_ref().map(|s| s.burst);
+    let fq_sample = snapshot.map(|s| s.areas).unwrap_or_default();
 
     let areas = connectome_service
         .list_cortical_areas()
@@ -365,8 +393,15 @@ pub async fn get_fire_queue_detailed(
     }
 
     let mut response = HashMap::new();
-    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    for (key, value) in detailed_sample_labels(sample_burst, current_burst) {
+        response.insert(key.to_string(), value);
+    }
     response.insert("total_fired".to_string(), serde_json::json!(total_fired));
+    // True when the sampled burst (`timestep`) fired nothing; `cortical_areas` is then empty.
+    response.insert(
+        "sampled_burst_fired_nothing".to_string(),
+        serde_json::json!(sample_burst.is_some() && total_fired == 0),
+    );
     response.insert(
         "cortical_areas".to_string(),
         serde_json::json!(cortical_areas),
@@ -1624,4 +1659,36 @@ pub async fn post_force_connectome_integration(
         ),
         ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
+}
+
+#[cfg(test)]
+mod detailed_label_tests {
+    use super::detailed_sample_labels;
+
+    fn labels(
+        sample: Option<u64>,
+        current: u64,
+    ) -> std::collections::HashMap<String, serde_json::Value> {
+        detailed_sample_labels(sample, current)
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect()
+    }
+
+    #[test]
+    fn timestep_is_the_sample_burst_not_the_counter() {
+        let l = labels(Some(2053), 2055);
+        assert_eq!(l["timestep"], serde_json::json!(2053));
+        assert_eq!(l["current_burst"], serde_json::json!(2055));
+        assert_eq!(l["bursts_since_sample"], serde_json::json!(2));
+        assert_eq!(l["sample_available"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn missing_sample_has_null_timestep() {
+        let l = labels(None, 7);
+        assert!(l["timestep"].is_null());
+        assert!(l["bursts_since_sample"].is_null());
+        assert_eq!(l["sample_available"], serde_json::json!(false));
+    }
 }

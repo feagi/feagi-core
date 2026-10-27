@@ -195,7 +195,7 @@ async fn load_genome_with_priority(
     params: LoadGenomeParams,
     source: &str,
 ) -> ApiResult<GenomeInfo> {
-    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
+    let _transition_lock = state.genome_transition_lock.try_write().map_err(|_| {
         ApiError::conflict(
             "Another genome transition is already in progress; wait for it to finish",
         )
@@ -1621,7 +1621,7 @@ pub async fn post_clone(
     )
 )]
 pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    let _lock = state.genome_transition_lock.try_lock().map_err(|_| {
+    let _lock = state.genome_transition_lock.try_write().map_err(|_| {
         ApiError::conflict("Another genome transition is in progress; wait for it to finish")
     })?;
 

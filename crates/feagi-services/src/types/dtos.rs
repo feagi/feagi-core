@@ -341,10 +341,10 @@ pub struct ClassifierInfo {
     pub reward_training: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answer_feedback_area_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pain_area_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pleasure_area_id: Option<String>,
+    #[serde(default)]
+    pub correct_area_id: String,
+    #[serde(default)]
+    pub reward_modulator_ids: Vec<String>,
     #[serde(default)]
     pub answer_latency_bursts: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -368,8 +368,8 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             error_area_id: classifier.error_area_id,
             reward_training: classifier.reward_training,
             answer_feedback_area_id: classifier.answer_feedback_area_id,
-            pain_area_id: classifier.pain_area_id,
-            pleasure_area_id: classifier.pleasure_area_id,
+            correct_area_id: classifier.correct_area_id,
+            reward_modulator_ids: classifier.reward_modulator_ids,
             answer_latency_bursts: classifier.answer_latency_bursts,
             learn_area_id: classifier.learn_area_id,
             confidence_area_id: classifier.confidence_area_id,
