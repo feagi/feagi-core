@@ -553,10 +553,12 @@ impl RuntimeService for RuntimeServiceImpl {
         let runner = self.burst_runner.read();
         Ok(runner
             .get_fire_queue_sample_with_burst()
-            .map(|(burst, sample)| crate::traits::runtime_service::FireQueueSnapshot {
-                burst,
-                areas: sample.into_iter().collect(),
-            }))
+            .map(
+                |(burst, sample)| crate::traits::runtime_service::FireQueueSnapshot {
+                    burst,
+                    areas: sample.into_iter().collect(),
+                },
+            ))
     }
 
     async fn get_fire_queue_counts(&self) -> ServiceResult<Vec<(u32, u32)>> {

@@ -66,6 +66,7 @@ pub enum MetricScope {
 /// TypeScript/desktop side (e.g. `{ "type": "progress", "samples_done": 3, ... }`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // Progress is a flat public JSON payload
 pub enum RunEventKind {
     /// The run record exists but has not started.
     Created,

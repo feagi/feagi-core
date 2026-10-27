@@ -336,7 +336,11 @@ fn test_plain_stdp_associative_does_not_mark() {
     params.modulation_group = 0;
     npu.register_stdp_mapping(10, 11, params).unwrap();
     let (a, _b) = cofire_memory_pair(&mut npu, reward, false);
-    assert_eq!(npu.get_outgoing_synapses(a).len(), 1, "plain STDP still learns");
+    assert_eq!(
+        npu.get_outgoing_synapses(a).len(),
+        1,
+        "plain STDP still learns"
+    );
     assert!(npu.drain_reward_consolidated_memory_neurons().is_empty());
 }
 

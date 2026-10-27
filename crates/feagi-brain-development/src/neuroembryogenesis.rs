@@ -1970,13 +1970,10 @@ mod tests {
             .unwrap();
         // Default circuit answer delay 3 gives eligibility 5.
         assert_eq!(stored, 5, "stored rule must follow the circuit on load");
-        let params = npu
-            .lock()
-            .unwrap()
-            .stdp_mapping_params(
-                guard.get_cortical_area(&sample_id).unwrap().cortical_idx,
-                guard.get_cortical_area(&class_id).unwrap().cortical_idx,
-            );
+        let params = npu.lock().unwrap().stdp_mapping_params(
+            guard.get_cortical_area(&sample_id).unwrap().cortical_idx,
+            guard.get_cortical_area(&class_id).unwrap().cortical_idx,
+        );
         if let Some(params) = params {
             assert_eq!(params.eligibility_decay_bursts, 5);
         }
