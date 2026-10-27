@@ -1,5 +1,5 @@
 use feagi_basis::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
-use feagi_basis::parallelism::feagi_worker::builder::components::worker_spawner_implementation::FeagiWorkerSpawnError;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

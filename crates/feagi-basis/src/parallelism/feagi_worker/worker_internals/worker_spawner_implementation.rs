@@ -6,7 +6,7 @@ pub trait WorkerSpawnerImplementation {
     type WorkerInternalHandle;
 }
 
-/// Backend failed to spawn a worker for some reason
+/// Backend failed to spawn a worker for some reason. Used by all implementations
 #[derive(Debug, thiserror::Error)]
 pub enum FeagiWorkerSpawnError {
     /// The backend has no room for another worker (embassy task pool full)

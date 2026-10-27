@@ -1,7 +1,7 @@
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequestResponseChannelBackend;
-use crate::parallelism::feagi_worker::builder::components::worker_spawner_implementation::WorkerSpawnerImplementation;
+use crate::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::{FeagiWorkerSpawnError, WorkerSpawnerImplementation};
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use crate::parallelism::feagi_worker::worker_commands::FeagiWorkerCommandHandler;
+use crate::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 
 /// Handles the construction of various 'FeagiWorker' types
 pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
@@ -17,11 +17,10 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
     type RequiredChannelPairs;
     
     /// Centralizes handling of commands for a worker
-    type WorkerCommandHandler: FeagiWorkerCommandHandler;
-    
+    type WorkerCommandHandler: FeagiWorkerCommandProcessor;
 
-
-    type BuildError: core::error::Error;
+    /// Custom context for why a worker failed to start.
+    type WorkerStartError: core::error::Error;
 
     /// Consume self to build the FeagiWorker
     fn build_worker(
@@ -33,10 +32,25 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
             FeagiWorker<Spawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>,
             Self::BuildOutputs,
         ),
-        Self::BuildError,
+        WorkerStartError<Self::WorkerStartError>,
     >;
 
     /// Create related channel pairings. Done first so different workers can be aligned before
     /// building them
     fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs;
+}
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum WorkerStartError<CustomError: core::error::Error> {
+    #[error(transparent)]
+    SpawnerError(FeagiWorkerSpawnError),
+    #[error(transparent)]
+    WorkerError(CustomError)
+}
+
+impl<CustomError: core::error::Error> From<FeagiWorkerSpawnError> for WorkerStartError<CustomError> {
+    fn from(err: FeagiWorkerSpawnError) -> Self {
+        WorkerStartError::SpawnerError(err)
+    }
 }

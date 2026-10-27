@@ -1,6 +1,7 @@
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerCommandRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
@@ -16,7 +17,7 @@ const IDLE_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_mill
 
 struct GenomeManagerCommandHandler;
 
-impl FeagiWorkerCommandHandler for GenomeManagerCommandHandler {
+impl FeagiWorkerCommandProcessor for GenomeManagerCommandHandler {
     type CustomRequest = ();
     type CustomResponse = ();
 
@@ -35,7 +36,7 @@ pub(crate) async fn run_genome_manager(
 
     let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
 
-    let commands = FeagiWorkerCommands::new(responder);
+    let commands = FeagiWorkerCommandRouter::new(responder);
     let mut command_handler = GenomeManagerCommandHandler;
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
 

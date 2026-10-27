@@ -1,4 +1,4 @@
 pub mod feagi_worker;
-pub mod worker_commands;
-pub mod worker_request_response;
-pub mod builder;
+pub mod feagi_worker_builder;
+pub mod worker_externals;
+pub mod worker_internals;
