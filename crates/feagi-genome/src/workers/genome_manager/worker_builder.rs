@@ -1,17 +1,10 @@
-use crate::workers::genome_manager::requests::categories::burst_engine::BurstEngineRequestCategory;
-use crate::workers::genome_manager::requests::categories::connectome::ConnectomeRequestCategory;
-use crate::workers::genome_manager::requests::categories::cortical_area::CorticalAreaRequestCategory;
-use crate::workers::genome_manager::requests::categories::cortical_mapping::CorticalMappingRequestCategory;
-use crate::workers::genome_manager::requests::categories::genome::GenomeRequestCategory;
-use crate::workers::genome_manager::requests::categories::morphology::MorphologyRequestCategory;
-use crate::workers::genome_manager::requests::categories::region::RegionRequestCategory;
 use crate::workers::genome_manager::worker_loop::{run_genome_manager, GenomeManagerCommandHandler};
-use feagi_basis::feagi_basis_proc_common::define_request_category_group;
 use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use crate::workers::genome_manager::requests::category_structs::{GenomeManagerRequesters, GenomeManagerResponders};
 
 /// How many commands can be in queue on this worker at one time
 const COMMAND_QUEUE_LENGTH: usize = 2;

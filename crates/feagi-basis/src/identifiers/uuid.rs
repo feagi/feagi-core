@@ -107,6 +107,7 @@ macro_rules! create_wrapped_uuid {
         }
 
         impl $crate::identifiers::byte_id::ByteID<16> for $struct_name {
+            type Base64Type = paste::paste! {[<Base64Encoded $struct_name>]};
             type DeserializationError = $crate::identifiers::uuid::UuidDeserializationError;
 
             fn get_id_bytes(&self) -> &[u8; 16] {
@@ -117,8 +118,12 @@ macro_rules! create_wrapped_uuid {
                 self.0.into_bytes()
             }
 
+            fn to_base_64(self) -> Self::Base64Type {
+                self.into()
+            }
+            
             fn try_from_id_bytes(
-                _bytes: [u8; 16],
+                bytes: [u8; 16],
             ) -> Result<Self, Self::DeserializationError> {
                 todo!()
             }
@@ -147,7 +152,7 @@ pub trait WrappedUuid: ByteID<16> {
     fn as_uuid(&self) -> &uuid::Uuid;
 
     fn into_uuid(self) -> uuid::Uuid;
-
+    
     // TODO try froms?
 }
 

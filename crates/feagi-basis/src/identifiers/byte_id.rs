@@ -87,6 +87,8 @@ macro_rules! impl_byte_array_id {
         }
 
         impl $crate::identifiers::byte_id::ByteID<$number_of_bytes> for $id_name {
+
+            type Base64Type = paste::paste! {[<Base64Encoded $id_name>]};
             type DeserializationError = $error_ty;
 
             fn get_id_bytes(&self) -> &[u8; $number_of_bytes] {
@@ -95,6 +97,10 @@ macro_rules! impl_byte_array_id {
 
             fn into_id_bytes(self) -> [u8; $number_of_bytes] {
                 self.0
+            }
+
+            fn to_base_64(self) -> Self::Base64Type {
+                self.into()
             }
 
             fn try_from_id_bytes(
@@ -160,6 +166,7 @@ macro_rules! impl_byte_array_id_random {
 pub trait ByteID<const NUMBER_OF_BYTES: usize>:
     Sized + Clone + PartialEq + Eq + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
 {
+    type Base64Type;
     type DeserializationError: core::error::Error;
 
     /// Get the bytes of the encoding ID
@@ -167,6 +174,9 @@ pub trait ByteID<const NUMBER_OF_BYTES: usize>:
 
     /// Return the inner byte array, consuming self
     fn into_id_bytes(self) -> [u8; NUMBER_OF_BYTES];
+
+    /// Turns self into the base 64 representation
+    fn to_base_64(self) -> Self::Base64Type;
 
     /// Try to parse the given bytes into the ID here
     fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError>;

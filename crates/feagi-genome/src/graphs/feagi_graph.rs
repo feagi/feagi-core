@@ -34,6 +34,7 @@ pub trait FeagiGraph<FIQ: FeagiIndexQuantization>
     //region Default Impls
     
     fn get_cortical_area(&self, cortical_id: &CorticalIdentifierOf<Self, FIQ>) -> Option<&CorticalAreaContainer<FIQ, CorticalCachingOf<Self, FIQ>>> {
+        
         self.get_cortical_area_map().get(cortical_id)
     }
     
