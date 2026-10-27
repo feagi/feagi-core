@@ -34,7 +34,7 @@ pub(crate) async fn run_genome_manager(
 )
 {
 
-    let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
+    let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new_now("Blank Genome".to_string());
 
     let mut commands = FeagiWorkerPollingRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;

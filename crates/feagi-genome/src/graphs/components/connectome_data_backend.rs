@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_area_container::CorticalAreaRuntimeCache;
+use crate::basis::cortical_area::cortical_area_container::CorticalAreaCachingEnabled;
 
 
 //region Connectome Data BackEnd

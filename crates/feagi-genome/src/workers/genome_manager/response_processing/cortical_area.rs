@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use crate::graphs::feagi_graph::FeagiGraph;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
-use crate::workers::genome_manager::requests::categories::cortical_area::{CorticalAreaRequestCategory, CorticalAreaRequests, CorticalAreaResponses, ReadCorticalAreaGeometryFeagiRequestMessageResponse, ReadCorticalMapDetailedFeagiRequestMessageResponse, ReadIpuTypesFeagiRequestMessageResponse, ReadOpuTypesFeagiRequestMessageResponse};
+use crate::workers::genome_manager::requests::categories::prelude::*;
 
 pub(crate) async fn cortical_area_response(
     responder: &FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
@@ -15,105 +16,111 @@ pub(crate) async fn cortical_area_response(
                 CorticalAreaRequests::Nothing => {
                     CorticalAreaResponses::Nothing
                 }
-                CorticalAreaRequests::ReadIpu(r) => {
+                CorticalAreaRequests::ReadIpu(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadOpu(r) => {
+                CorticalAreaRequests::ReadOpu(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadIpuTypes(r) => {
+                CorticalAreaRequests::ReadIpuTypes(m) => {
                     CorticalAreaResponses::ReadIpuTypes(Ok(ReadIpuTypesFeagiRequestMessageResponse {
                         types: HashMap::new(),
                     }))
                 }
-                CorticalAreaRequests::ReadOpuTypes(r) => {
+                CorticalAreaRequests::ReadOpuTypes(m) => {
                     CorticalAreaResponses::ReadOpuTypes(Ok(ReadOpuTypesFeagiRequestMessageResponse {
                         types: HashMap::new(),
                     }))
                 }
-                CorticalAreaRequests::ReadCorticalAreaIdList(r) => {
+                CorticalAreaRequests::ReadCorticalAreaIdList(_m) => {
+            
+                    let cortical_ids = graph.get_all_cortical_areas();
+
+                   // CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
+                    //    cortical_ids,
+                    //}))
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadCorticalAreaNameList(r) => {
+                CorticalAreaRequests::ReadCorticalAreaNameList(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadCorticalIdNameMapping(r) => {
+                CorticalAreaRequests::ReadCorticalIdNameMapping(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadCorticalTypes(r) => {
+                CorticalAreaRequests::ReadCorticalTypes(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadCorticalMapDetailed(r) => {
+                CorticalAreaRequests::ReadCorticalMapDetailed(m) => {
                     CorticalAreaResponses::ReadCorticalMapDetailed(Ok(ReadCorticalMapDetailedFeagiRequestMessageResponse {
                         mappings: HashMap::new(),
                     }))
                 }
-                CorticalAreaRequests::ReadCorticalLocations2d(r) => {
+                CorticalAreaRequests::ReadCorticalLocations2d(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadCorticalAreaGeometry(r) => {
+                CorticalAreaRequests::ReadCorticalAreaGeometry(m) => {
                     CorticalAreaResponses::ReadCorticalAreaGeometry(Ok(ReadCorticalAreaGeometryFeagiRequestMessageResponse {
                         areas: HashMap::new(),
                     }))
                 }
-                CorticalAreaRequests::ReadCorticalVisibility(r) => {
+                CorticalAreaRequests::ReadCorticalVisibility(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadVoxelNeurons(r) => {
+                CorticalAreaRequests::ReadVoxelNeurons(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::ReadMemory(r) => {
+                CorticalAreaRequests::ReadMemory(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateCorticalNameLocation(r) => {
+                CorticalAreaRequests::CreateCorticalNameLocation(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateCorticalAreaProperties(r) => {
+                CorticalAreaRequests::CreateCorticalAreaProperties(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateMultiCorticalAreaProperties(r) => {
+                CorticalAreaRequests::CreateMultiCorticalAreaProperties(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateCorticalArea(r) => {
+                CorticalAreaRequests::CreateCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateCustomCorticalArea(r) => {
+                CorticalAreaRequests::CreateCustomCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateClone(r) => {
+                CorticalAreaRequests::CreateClone(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateVoxelNeurons(r) => {
+                CorticalAreaRequests::CreateVoxelNeurons(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::CreateResize(r) => {
+                CorticalAreaRequests::CreateResize(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditCorticalArea(r) => {
+                CorticalAreaRequests::EditCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditMultiCorticalArea(r) => {
+                CorticalAreaRequests::EditMultiCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditReset(r) => {
+                CorticalAreaRequests::EditReset(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditCoord2d(r) => {
+                CorticalAreaRequests::EditCoord2d(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditSuppressCorticalVisibility(r) => {
+                CorticalAreaRequests::EditSuppressCorticalVisibility(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditCoordinates3d(r) => {
+                CorticalAreaRequests::EditCoordinates3d(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::EditCoord3d(r) => {
+                CorticalAreaRequests::EditCoord3d(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::DeleteCorticalArea(r) => {
+                CorticalAreaRequests::DeleteCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
-                CorticalAreaRequests::DeleteMultiCorticalArea(r) => {
+                CorticalAreaRequests::DeleteMultiCorticalArea(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
             }

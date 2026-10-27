@@ -107,18 +107,3 @@ impl From<std::io::Error> for GenomeManagerWorkerBuilderError {
     fn from(v: std::io::Error) -> Self {GenomeManagerWorkerBuilderError::ThreadError(v)}
 }
 
-// The requester and responder of every request category the genome manager serves. The
-// responders are held by the genome manager worker itself, the requesters can be cloned and
-// handed to whatever needs to make requests of those categories
-define_request_category_group! {
-    group_name: GenomeManager,
-    categories: {
-        burst_engine: BurstEngineRequestCategory,
-        connectome: ConnectomeRequestCategory,
-        cortical_area: CorticalAreaRequestCategory,
-        cortical_mapping: CorticalMappingRequestCategory,
-        genome: GenomeRequestCategory,
-        morphology: MorphologyRequestCategory,
-        region: RegionRequestCategory,
-    }
-}

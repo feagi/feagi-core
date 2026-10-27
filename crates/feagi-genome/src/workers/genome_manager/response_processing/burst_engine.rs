@@ -1,6 +1,6 @@
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
-use crate::workers::genome_manager::requests::categories::burst_engine::{BurstEngineRequestCategory, BurstEngineRequests, BurstEngineResponses, ReadSimulationTimestepFeagiRequestMessageResponse};
+use crate::workers::genome_manager::requests::categories::prelude::*;
 
 pub(crate) async fn burst_engine_response(
     responder: &FeagiCategoryResponder<BurstEngineRequestCategory, FeagiRequestResponseChannelsAllocBackend>) -> bool {
@@ -11,45 +11,49 @@ pub(crate) async fn burst_engine_response(
                 BurstEngineRequests::Nothing => {
                     BurstEngineResponses::Nothing
                 }
-                BurstEngineRequests::ReadSimulationTimestep(_) => {
+                BurstEngineRequests::ReadSimulationTimestep(_m) => {
                     BurstEngineResponses::ReadSimulationTimestep(Ok(ReadSimulationTimestepFeagiRequestMessageResponse {
                         simulation_timestep: 0.05,
                     }))
                 }
-                BurstEngineRequests::ReadStats(_) => {
+                BurstEngineRequests::ReadStats(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::ReadStatus(_) => {
+                BurstEngineRequests::ReadStatus(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::ReadBurstCounter(_) => {
+                BurstEngineRequests::ReadBurstCounter(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::ReadConfig(_) => {
+                BurstEngineRequests::ReadConfig(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::ReadFrequencyStatus(_) => {
+                BurstEngineRequests::ReadFrequencyStatus(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateSimulationTimestep(_) => {
+                BurstEngineRequests::CreateSimulationTimestep(m) => {
+                    let timestep = m.simulation_timestep;
+                    // TODO
+                    
+                    BurstEngineRequestCategory::not_implemented_response(&request)
+                    
+                }
+                BurstEngineRequests::CreateControl(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateControl(_) => {
+                BurstEngineRequests::CreateStart(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateStart(_) => {
+                BurstEngineRequests::CreateStop(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateStop(_) => {
+                BurstEngineRequests::CreateHold(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateHold(_) => {
+                BurstEngineRequests::CreateResume(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
-                BurstEngineRequests::CreateResume(_) => {
-                    BurstEngineRequestCategory::not_implemented_response(&request)
-                }
-                BurstEngineRequests::EditConfig(_) => {
+                BurstEngineRequests::EditConfig(m) => {
                     BurstEngineRequestCategory::not_implemented_response(&request)
                 }
             }
