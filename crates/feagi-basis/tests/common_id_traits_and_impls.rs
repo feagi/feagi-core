@@ -1,5 +1,8 @@
 use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
-use feagi_basis::identifiers::{Base64EncodedByteID, Base64EncodedByteIdError, ByteID, Identifier, UuidVersionError};
+use feagi_basis::feagi_id::base_64::{Base64EncodedByteID, Base64EncodedByteIdError};
+use feagi_basis::feagi_id::byte_id::ByteID;
+use feagi_basis::feagi_id::identifier::Identifier;
+use feagi_basis::feagi_id::uuid::UuidVersionError;
 use feagi_basis::impl_byte_array_id;
 use feagi_basis::impl_byte_array_id_random;
 use feagi_basis::impl_uuid_id;

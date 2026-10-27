@@ -58,9 +58,9 @@ pub mod capabilities;
 mod feagi_basis_error;
 pub mod feagi_message;
 //pub mod feagi_message_prev;
-pub mod identifiers;
 pub mod misc;
 pub mod neurons;
 pub mod voxels;
+pub mod feagi_id;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
