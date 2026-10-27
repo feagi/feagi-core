@@ -1,4 +1,4 @@
-use feagi_basis::feagi_id::identifier::Identifier;
+use feagi_basis::feagi_id_prev::identifier::Identifier;
 
 /// The given identifier has a faux identifier
 pub trait HasFauxIdentifier: Identifier {

@@ -80,10 +80,10 @@ macro_rules! impl_uuid_id {
 
         impl $id_name {
             /// Wraps `uuid` when its version matches this ID.
-            pub const fn from_uuid(uuid: ::uuid::Uuid) -> Result<Self, $crate::feagi_id::uuid::UuidVersionError> {
+            pub const fn from_uuid(uuid: ::uuid::Uuid) -> Result<Self, $crate::feagi_id_prev::uuid::UuidVersionError> {
                 match uuid.get_version() {
                     Some($version) => Ok(Self::from_bytes_const(uuid.into_bytes())),
-                    actual => Err($crate::feagi_id::uuid::UuidVersionError { expected: $version, actual }),
+                    actual => Err($crate::feagi_id_prev::uuid::UuidVersionError { expected: $version, actual }),
                 }
             }
 
@@ -92,7 +92,7 @@ macro_rules! impl_uuid_id {
                 ::uuid::Uuid::from_bytes(self.0)
             }
 
-            fn try_from_uuid_bytes(bytes: [u8; 16]) -> Result<Self, $crate::feagi_id::uuid::UuidVersionError> {
+            fn try_from_uuid_bytes(bytes: [u8; 16]) -> Result<Self, $crate::feagi_id_prev::uuid::UuidVersionError> {
                 Self::from_uuid(::uuid::Uuid::from_bytes(bytes))
             }
         }

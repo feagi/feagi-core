@@ -1,3 +1,2 @@
-pub mod byte_id;
-pub mod uuid;
+pub mod feagi_id;
 pub mod base_64;

@@ -1,5 +1,5 @@
 use crate::basis::cortical_area::cortical_id::{CorticalID, FauxCorticalID};
-use feagi_basis::feagi_id::identifier::Identifier;
+use feagi_basis::feagi_id_prev::identifier::Identifier;
 
 /// Defines what type of identifier is used for Graph Elements
 pub trait GraphElementIdentifiers {
