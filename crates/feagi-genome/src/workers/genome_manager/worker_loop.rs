@@ -1,8 +1,8 @@
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerCommandRouter, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
@@ -15,7 +15,7 @@ use crate::workers::genome_manager::worker_builder::GenomeManagerResponders;
 /// request is answered while idle
 const IDLE_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(1);
 
-struct GenomeManagerCommandHandler;
+pub struct GenomeManagerCommandHandler;
 
 impl FeagiWorkerCommandProcessor for GenomeManagerCommandHandler {
     type CustomRequest = ();
@@ -36,12 +36,11 @@ pub(crate) async fn run_genome_manager(
 
     let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
 
-    let commands = FeagiWorkerCommandRouter::new(responder);
-    let mut command_handler = GenomeManagerCommandHandler;
+    let mut commands = FeagiWorkerPollingRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
 
     loop {
-        let mut busy = match commands.try_handle_next(&mut command_handler).await {
+        let mut busy = match commands.try_handle_next().await {
             FeagiWorkerStep::Handled => true,
             FeagiWorkerStep::Idle => false,
             FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,

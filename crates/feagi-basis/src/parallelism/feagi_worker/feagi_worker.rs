@@ -11,7 +11,7 @@ use crate::parallelism::feagi_channel::request_response_channel::FeagiRequester;
 #[cfg(feature = "std")]
 use crate::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use crate::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::WorkerSpawnerImplementation;
-use crate::parallelism::feagi_worker::worker_internals::worker_terminal::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
+use crate::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in

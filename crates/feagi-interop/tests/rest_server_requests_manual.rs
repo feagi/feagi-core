@@ -11,7 +11,7 @@ mod common;
 use std::net::SocketAddr;
 
 use common::{start_coffee_shop, Channels, ShopGroup};
-use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
 use feagi_interop::transport::rest::server::server_std::StdRestServerBuilder;

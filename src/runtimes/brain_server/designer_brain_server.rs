@@ -4,13 +4,13 @@ use crate::runtimes::brain_server::request_system::{
 };
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerCommandRouter, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
 use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
@@ -59,15 +59,16 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
-    type CustomRequest = ();
-    type CustomResponse = ();
+    type WorkerCommandHandler = DesignerBrainServerCommandHandler;
     type WorkerStartError = DesignerBrainServerLaunchError;
 
-    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(DesignerBrainServerWorker, Self::BuildOutputs), Self::WorkerStartError> {
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(DesignerBrainServerWorker, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
         // The genome manager makes the request channels of its categories, and keeps the responders
         let genome_manager_builder = GenomeManagerWorkerBuilder::default();
         let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
-        let (genome_manager, ()) = genome_manager_builder.build_worker(spawner, genome_manager_responders)?;
+        let (genome_manager, ()) = genome_manager_builder
+            .build_worker(spawner, genome_manager_responders)
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         // System requests are answered by the brain server worker itself, which keeps the responder
         let (system_requester, system_responder) = SystemRequestCategory::spawn_alloc_requester_responser_pair(SYSTEM_REQUEST_QUEUE_LENGTH);
@@ -85,7 +86,9 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         {
             rest_server_builder.open_api_json = Some(OPEN_API_JSON);
         }
-        let (rest_server, ()) = rest_server_builder.build_worker(spawner, ((genome_manager_requesters, system_requester), configurables))?;
+        let (rest_server, ()) = rest_server_builder
+            .build_worker(spawner, ((genome_manager_requesters, system_requester), configurables))
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         // Not connected to the other workers yet, it only announces the brain server. If it fails
         // to start, the workers above are dropped the same way
@@ -93,7 +96,9 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         roles.set_role(FeagiRole::FeagiBrainDesignerMode, true);
         let mut flags = FeagiNodeFlags::new();
         flags.set_roles(roles);
-        let (zenoh, ()) = ZenohWorkerBuilder::new(self.zenoh_configuration, flags).build_worker(spawner, ())?;
+        let (zenoh, ()) = ZenohWorkerBuilder::new(self.zenoh_configuration, flags)
+            .build_worker(spawner, ())
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         let (command_requester, command_responder) = ChannelBackend::create_channels(COMMAND_QUEUE_LENGTH);
         let handler = DesignerBrainServerCommandHandler { system: Some(system_responder), genome_manager, rest_server, zenoh };
@@ -110,7 +115,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
 
 /// Holds the workers the brain server runs and the system responder, and stops them when the
 /// brain server is stopped
-struct DesignerBrainServerCommandHandler {
+pub struct DesignerBrainServerCommandHandler {
     /// Taken when stopping, so system requests are no longer answered
     system: Option<FeagiCategoryResponder<SystemRequestCategory, ChannelBackend>>,
     genome_manager: FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, (), ()>,
@@ -202,17 +207,17 @@ fn system_response(request: &SystemRequests) -> SystemResponses {
 /// for the workers it runs to exit
 async fn server_runtime(
     command_responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
-    mut handler: DesignerBrainServerCommandHandler,
+    handler: DesignerBrainServerCommandHandler,
 ) {
-    let commands = FeagiWorkerCommandRouter::new(command_responder);
+    let mut commands = FeagiWorkerPollingRouter::new(handler, command_responder);
     loop {
-        let mut busy = match commands.try_handle_next(&mut handler).await {
+        let mut busy = match commands.try_handle_next().await {
             FeagiWorkerStep::Handled => true,
             FeagiWorkerStep::Idle => false,
             FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
         };
 
-        busy |= handler.answer_system_request().await;
+        busy |= commands.processor_mut().answer_system_request().await;
 
         if !busy {
             std::thread::sleep(IDLE_POLL_INTERVAL);
@@ -222,7 +227,7 @@ async fn server_runtime(
     // If the brain server's handle was dropped without stopping, joining drops each worker's
     // handle first, so they exit too. The system responder goes first, so a REST request
     // waiting on it fails rather than holding the REST server up
-    let DesignerBrainServerCommandHandler { system, genome_manager, rest_server, zenoh } = handler;
+    let DesignerBrainServerCommandHandler { system, genome_manager, rest_server, zenoh } = commands.into_processor();
     drop(system);
     let _ = zenoh.join();
     let _ = rest_server.join();
@@ -234,11 +239,11 @@ async fn server_runtime(
 #[derive(Debug, thiserror::Error)]
 pub enum DesignerBrainServerLaunchError {
     #[error("Genome manager failed to start: {0}")]
-    GenomeManager(#[from] GenomeManagerWorkerBuilderError),
+    GenomeManager(#[from] WorkerStartError<GenomeManagerWorkerBuilderError>),
     #[error("REST server failed to start: {0}")]
-    RestServer(#[from] FeagiRestServerError),
+    RestServer(#[from] WorkerStartError<FeagiRestServerError>),
     #[error("Zenoh worker failed to start: {0}")]
-    Zenoh(#[from] FeagiBuildZenohWorkerError),
+    Zenoh(#[from] WorkerStartError<FeagiBuildZenohWorkerError>),
     #[error("Brain server worker failed to start: {0}")]
     Spawn(#[from] FeagiWorkerSpawnError),
 }

@@ -29,7 +29,12 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
         inputs: Self::BuildInputs,
     ) -> Result<
         (
-            FeagiWorker<Spawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>,
+            FeagiWorker<
+                Spawner,
+                Self::ChannelBackend,
+                <Self::WorkerCommandHandler as FeagiWorkerCommandProcessor>::CustomRequest,
+                <Self::WorkerCommandHandler as FeagiWorkerCommandProcessor>::CustomResponse,
+            >,
             Self::BuildOutputs,
         ),
         WorkerStartError<Self::WorkerStartError>,

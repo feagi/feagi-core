@@ -9,12 +9,12 @@ use core::future::Future;
 use core::marker::PhantomData;
 use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiStdThreadSpawner;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerCommandRouter, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 //region Local Configs
 
@@ -75,8 +75,7 @@ where
     type BuildInputs = (Group, Group::Configurables);
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
-    type CustomRequest = ();
-    type CustomResponse = ();
+    type WorkerCommandHandler = RestServerCommandHandler;
     type WorkerStartError = FeagiRestServerError;
 
     /// Binds `socket_address` on the calling thread and makes it non-blocking, then starts the
@@ -85,11 +84,11 @@ where
         self,
         spawner: &FeagiStdThreadSpawner,
         inputs: Self::BuildInputs,
-    ) -> Result<(StdRestServerWorker, Self::BuildOutputs), Self::WorkerStartError> {
-        let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
+    ) -> Result<(StdRestServerWorker, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
+        let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| WorkerStartError::WorkerError(FeagiRestServerError::FailedToBindToSocket))?;
         listener
             .set_nonblocking(true)
-            .map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
+            .map_err(|_| WorkerStartError::WorkerError(FeagiRestServerError::FailedToConfigureSocket))?;
         let (group, configurables) = inputs;
         let routes = group.into_nested_categories(configurables);
         let (requester, requests) = FeagiRequestResponseChannelsAllocBackend::create_channels(REQUEST_QUEUE_CAPACITY);
@@ -123,7 +122,7 @@ where
 pub type StdRestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAllocBackend, (), ()>;
 
 /// Answers commands sent to the server worker. Only `Stop` is used, which needs no cleanup
-struct RestServerCommandHandler;
+pub struct RestServerCommandHandler;
 
 impl FeagiWorkerCommandProcessor for RestServerCommandHandler {
     // No custom requests are defined
@@ -143,11 +142,10 @@ async fn run_rest_server<Router: picoserve::routing::PathRouter>(
     router: picoserve::Router<Router>,
 ) {
     //let router = route_brain_visualizer_startup(router);
-    let commands = FeagiWorkerCommandRouter::new(requests);
-    let mut command_handler = RestServerCommandHandler;
+    let mut commands = FeagiWorkerPollingRouter::new(RestServerCommandHandler, requests);
 
     loop {
-        match commands.try_handle_next(&mut command_handler).await {
+        match commands.try_handle_next().await {
             FeagiWorkerStep::Handled | FeagiWorkerStep::Idle => {}
             FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
         }

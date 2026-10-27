@@ -5,12 +5,12 @@ use crate::workers::genome_manager::requests::categories::cortical_mapping::Cort
 use crate::workers::genome_manager::requests::categories::genome::GenomeRequestCategory;
 use crate::workers::genome_manager::requests::categories::morphology::MorphologyRequestCategory;
 use crate::workers::genome_manager::requests::categories::region::RegionRequestCategory;
-use crate::workers::genome_manager::worker_loop::run_genome_manager;
+use crate::workers::genome_manager::worker_loop::{run_genome_manager, GenomeManagerCommandHandler};
 use feagi_basis::feagi_basis_proc_common::define_request_category_group;
 use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
-use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiStdThreadSpawner;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 
 /// How many commands can be in queue on this worker at one time
@@ -53,11 +53,10 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
         GenomeManagerRequesters<FeagiRequestResponseChannelsAllocBackend>,
         GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>,
     );
-    type CustomRequest = (); // TODO NPU launcher configuration
-    type CustomResponse = ();
+    type WorkerCommandHandler = GenomeManagerCommandHandler; // TODO NPU launcher configuration
     type WorkerStartError = GenomeManagerWorkerBuilderError;
 
-    fn build_worker(self, spawner: &FeagiStdThreadSpawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::WorkerStartError> {
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, (), ()>, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
         
         let (responders) = inputs;
         let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);

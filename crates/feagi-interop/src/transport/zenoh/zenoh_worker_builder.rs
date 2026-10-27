@@ -5,12 +5,12 @@ use crate::transport::zenoh::zenoh_liveliness_path::{FeagiNodeLivelinessPath, Fe
 use crate::transport::zenoh::zenoh_std::configuration_backend::ZenohStdConfigurationBackend;
 use crate::transport::zenoh::zenoh_std::zenoh_configuration_builder::error::ZenohConfigBuildError;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
-use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerAwaitingRouter;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use zenoh::Wait;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 // TODO reconsider how we are doing this. A force connection block? vs scouting?
@@ -57,17 +57,17 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
-    type CustomRequest = ();
-    type CustomResponse = ();
+    type WorkerCommandHandler = ZenohCommandHandler;
     type WorkerStartError = FeagiBuildZenohWorkerError;
 
     /// Opens the zenoh session, checks no other node has the same ID, and declares the node's
     /// liveliness token, all on the calling thread so failures are returned here. Then starts the
     /// worker thread, which holds the session and token
-    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(ZenohStdWorker, Self::BuildOutputs), Self::WorkerStartError> {
-        let zenoh_config = ZenohStdConfigurationBackend::build_zenoh_config(self.zenoh_config)?;
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(ZenohStdWorker, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
+        let zenoh_config = ZenohStdConfigurationBackend::build_zenoh_config(self.zenoh_config)
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
         // The sync API runs on zenoh's own runtime, so it works on threads without one
-        let session = zenoh::open(zenoh_config).wait().map_err(FeagiBuildZenohWorkerError::FailedToOpenSession)?;
+        let session = zenoh::open(zenoh_config).wait().map_err(|error| WorkerStartError::WorkerError(FeagiBuildZenohWorkerError::FailedToOpenSession(error)))?;
 
         let liveliness_configurables = FeagiNodeLivelinessPathConfigurables::new(self.feagi_node_id);
         let replies = session
@@ -75,12 +75,12 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
             .get(FeagiNodeLivelinessPath::wildcard_key(&liveliness_configurables).as_str())
             .timeout(NODE_ID_CHECK_TIMEOUT)
             .wait()
-            .map_err(FeagiBuildZenohWorkerError::FailedToCheckNodeID)?;
+            .map_err(|error| WorkerStartError::WorkerError(FeagiBuildZenohWorkerError::FailedToCheckNodeID(error)))?;
         // Ends once the query is answered or times out
         while let Ok(reply) = replies.recv() {
             let Ok(sample) = reply.result() else { continue };
             if FeagiNodeLivelinessPath::parse_key(&liveliness_configurables, sample.key_expr().as_str()).is_some() {
-                return Err(FeagiBuildZenohWorkerError::NodeIDTaken(self.feagi_node_id));
+                return Err(WorkerStartError::WorkerError(FeagiBuildZenohWorkerError::NodeIDTaken(self.feagi_node_id)));
             }
         }
 
@@ -88,7 +88,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
             .liveliness()
             .declare_token(FeagiNodeLivelinessPath::key(&liveliness_configurables, self.flags).as_str())
             .wait()
-            .map_err(FeagiBuildZenohWorkerError::FailedToDeclareLivelinessToken)?;
+            .map_err(|error| WorkerStartError::WorkerError(FeagiBuildZenohWorkerError::FailedToDeclareLivelinessToken(error)))?;
 
         let (requester, requests) = FeagiRequestResponseChannelsAllocBackend::create_channels(REQUEST_QUEUE_CAPACITY);
         let handle = spawner.spawn_worker(move || run_zenoh_worker(requests, session, token))?;
@@ -102,7 +102,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
 
 /// Holds the session and token. Stopping withdraws the token and closes the session, so other
 /// nodes see this node leave before the stop is acknowledged
-struct ZenohCommandHandler {
+pub struct ZenohCommandHandler {
     session: zenoh::Session,
     token: Option<zenoh::liveliness::LivelinessToken>,
 }
@@ -130,8 +130,8 @@ async fn run_zenoh_worker(
     session: zenoh::Session,
     token: zenoh::liveliness::LivelinessToken,
 ) {
-    let mut handler = ZenohCommandHandler { session, token: Some(token) };
-    FeagiWorkerCommandRouter::new(requests).run_until_stopped(&mut handler).await;
+    let handler = ZenohCommandHandler { session, token: Some(token) };
+    FeagiWorkerAwaitingRouter::new(handler, requests).run_until_stopped().await;
 }
 
 
