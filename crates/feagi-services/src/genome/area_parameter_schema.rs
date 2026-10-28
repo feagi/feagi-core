@@ -23,7 +23,9 @@ use std::collections::HashMap;
 pub const EXCITABILITY_MIN: f64 = 0.0;
 pub const EXCITABILITY_MAX: f64 = 1.0;
 
-pub use feagi_evolutionary::validator::{CONSECUTIVE_FIRE_COUNT_MAX, LEAK_FRACTION_MAX, LEAK_FRACTION_MIN};
+pub use feagi_evolutionary::validator::{
+    CONSECUTIVE_FIRE_COUNT_MAX, LEAK_FRACTION_MAX, LEAK_FRACTION_MIN,
+};
 
 const ALL_AREAS: &[&str] = &["IPU", "OPU", "CORE", "CUSTOM", "MEMORY"];
 const MEMORY_ONLY: &[&str] = &["MEMORY"];
@@ -199,7 +201,12 @@ fn xyz_fields() -> Vec<AreaParameterSchemaEntry> {
     ["x", "y", "z"]
         .iter()
         .map(|axis| {
-            E::new(axis, &format!("{} gradient step", axis.to_uppercase()), "number", "Threshold increment per voxel along this axis.")
+            E::new(
+                axis,
+                &format!("{} gradient step", axis.to_uppercase()),
+                "number",
+                "Threshold increment per voxel along this axis.",
+            )
         })
         .collect()
 }
@@ -218,24 +225,55 @@ pub const CATEGORIES: [&str; 8] = [
 
 fn category_for(key: &str) -> &'static str {
     match key {
-        "cortical_name" | "visible" | "coordinate_2d" | "coordinates_3d" | "cortical_dimensions"
-        | "cortical_dimensions_per_device" | "per_voxel_neuron_cnt" | "region_id"
+        "cortical_name"
+        | "visible"
+        | "coordinate_2d"
+        | "coordinates_3d"
+        | "cortical_dimensions"
+        | "cortical_dimensions_per_device"
+        | "per_voxel_neuron_cnt"
+        | "region_id"
         | "cortical_type" => CATEGORIES[0],
-        "coding_signage" | "coding_behavior" | "coding_type" | "new_cortical_id" | "group_id"
-        | "sub_group_id" | "dev_count" | "sensory_hold_last_frame" => CATEGORIES[1],
-        "neuron_init_lifespan" | "neuron_lifespan_growth_rate" | "neuron_longterm_mem_threshold"
-        | "temporal_depth" | "mp_learning_enabled" | "mp_change_mode" | "mp_delta_quantization"
-        | "mp_ratio_quantization" | "memory_neuron_cap" | "ltm_eviction" | "memory_twin_areas"
+        "coding_signage"
+        | "coding_behavior"
+        | "coding_type"
+        | "new_cortical_id"
+        | "group_id"
+        | "sub_group_id"
+        | "dev_count"
+        | "sensory_hold_last_frame" => CATEGORIES[1],
+        "neuron_init_lifespan"
+        | "neuron_lifespan_growth_rate"
+        | "neuron_longterm_mem_threshold"
+        | "temporal_depth"
+        | "mp_learning_enabled"
+        | "mp_change_mode"
+        | "mp_delta_quantization"
+        | "mp_ratio_quantization"
+        | "memory_neuron_cap"
+        | "ltm_eviction"
+        | "memory_twin_areas"
         | "is_mem_type" => CATEGORIES[2],
-        "neuron_fire_threshold" | "neuron_firing_threshold_limit"
-        | "neuron_fire_threshold_increment" | "firing_threshold_increment_x"
-        | "firing_threshold_increment_y" | "firing_threshold_increment_z"
-        | "neuron_refractory_period" | "neuron_leak_coefficient" | "neuron_leak_variability"
-        | "neuron_consecutive_fire_count" | "neuron_snooze_period" | "neuron_excitability"
-        | "neuron_mp_charge_accumulation" | "neuron_degeneracy_coefficient"
-        | "burst_engine_active" | "rate_modulated_leak" => CATEGORIES[3],
-        "neuron_post_synaptic_potential" | "neuron_post_synaptic_potential_max"
-        | "neuron_psp_uniform_distribution" | "neuron_mp_driven_psp" => CATEGORIES[4],
+        "neuron_fire_threshold"
+        | "neuron_firing_threshold_limit"
+        | "neuron_fire_threshold_increment"
+        | "firing_threshold_increment_x"
+        | "firing_threshold_increment_y"
+        | "firing_threshold_increment_z"
+        | "neuron_refractory_period"
+        | "neuron_leak_coefficient"
+        | "neuron_leak_variability"
+        | "neuron_consecutive_fire_count"
+        | "neuron_snooze_period"
+        | "neuron_excitability"
+        | "neuron_mp_charge_accumulation"
+        | "neuron_degeneracy_coefficient"
+        | "burst_engine_active"
+        | "rate_modulated_leak" => CATEGORIES[3],
+        "neuron_post_synaptic_potential"
+        | "neuron_post_synaptic_potential_max"
+        | "neuron_psp_uniform_distribution"
+        | "neuron_mp_driven_psp" => CATEGORIES[4],
         "visualization_voxel_granularity" | "visualization" => CATEGORIES[5],
         "cortical_mapping_dst" | "synapse_attractivity" => CATEGORIES[6],
         _ => CATEGORIES[7],
@@ -447,16 +485,26 @@ pub fn validate_hard_bounds(key: &str, value: &Value) -> Result<(), String> {
     if entry.value_type == "integer" && n.fract() != 0.0 {
         return Err(format!("{key} must be a whole number; got {n}"));
     }
-    let unit = entry.unit.as_deref().map(|u| format!(" ({u})")).unwrap_or_default();
+    let unit = entry
+        .unit
+        .as_deref()
+        .map(|u| format!(" ({u})"))
+        .unwrap_or_default();
     let below = match entry.min {
         Some(min) => n < min || (entry.min_exclusive && n <= min),
         None => false,
     };
     let above = entry.max.is_some_and(|max| n > max);
     if below || above {
-        let lo = entry.min.map(|m| format!("{}{m}", if entry.min_exclusive { "> " } else { ">= " }));
+        let lo = entry
+            .min
+            .map(|m| format!("{}{m}", if entry.min_exclusive { "> " } else { ">= " }));
         let hi = entry.max.map(|m| format!("<= {m}"));
-        let range = [lo, hi].into_iter().flatten().collect::<Vec<_>>().join(" and ");
+        let range = [lo, hi]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" and ");
         return Err(format!("{key} must be {range}{unit}; got {n}"));
     }
     Ok(())
@@ -485,15 +533,28 @@ mod tests {
         let mut seen = BTreeSet::new();
         for e in &schema {
             for k in e.all_keys() {
-                assert!(seen.insert(k.to_string()), "key {k} listed twice in the schema");
+                assert!(
+                    seen.insert(k.to_string()),
+                    "key {k} listed twice in the schema"
+                );
             }
-            assert_ne!(e.update_class, "unclassified", "{} is not in the classifier", e.key);
+            assert_ne!(
+                e.update_class, "unclassified",
+                "{} is not in the classifier",
+                e.key
+            );
         }
         let universe = classifier_universe();
         let missing: Vec<_> = universe.difference(&seen).collect();
         let extra: Vec<_> = seen.difference(&universe).collect();
-        assert!(missing.is_empty(), "update-path keys missing from schema: {missing:?}");
-        assert!(extra.is_empty(), "schema keys the update path does not know: {extra:?}");
+        assert!(
+            missing.is_empty(),
+            "update-path keys missing from schema: {missing:?}"
+        );
+        assert!(
+            extra.is_empty(),
+            "schema keys the update path does not know: {extra:?}"
+        );
     }
 
     #[test]
@@ -512,7 +573,10 @@ mod tests {
         assert!(mem.iter().any(|e| e.key == "memory_neuron_cap"));
         let props = HashMap::from([("leak_coefficient".to_string(), json!(0.25))]);
         let s = build_area_parameter_schema(None, Some(&props));
-        let leak = s.iter().find(|e| e.key == "neuron_leak_coefficient").unwrap();
+        let leak = s
+            .iter()
+            .find(|e| e.key == "neuron_leak_coefficient")
+            .unwrap();
         assert_eq!(leak.current_value, Some(json!(0.25)));
         assert!(leak.live_updatable && leak.update_class == "parameter");
     }
@@ -523,10 +587,23 @@ mod tests {
         // with `null` meaning "no setting on this area".
         let props = HashMap::from([("name".to_string(), json!("a"))]);
         let with_area = build_area_parameter_schema(None, Some(&props));
-        let missing: Vec<_> = with_area.iter().filter(|e| e.current_value.is_none()).map(|e| &e.key).collect();
+        let missing: Vec<_> = with_area
+            .iter()
+            .filter(|e| e.current_value.is_none())
+            .map(|e| &e.key)
+            .collect();
         assert!(missing.is_empty(), "no current_value for {missing:?}");
-        assert!(build_area_parameter_schema(None, None).iter().all(|e| e.current_value.is_none()));
-        let by = |k: &str| with_area.iter().find(|e| e.key == k).unwrap().current_value.clone();
+        assert!(build_area_parameter_schema(None, None)
+            .iter()
+            .all(|e| e.current_value.is_none()));
+        let by = |k: &str| {
+            with_area
+                .iter()
+                .find(|e| e.key == k)
+                .unwrap()
+                .current_value
+                .clone()
+        };
         assert_eq!(by("cortical_name"), Some(json!("a")));
         assert_eq!(by("modulators"), Some(Value::Null));
         assert_eq!(by("mp_change_mode"), Some(json!("none")));
@@ -557,12 +634,29 @@ mod tests {
                 continue;
             }
             if let Some(min) = e.min {
-                assert_eq!(validate_hard_bounds(&e.key, &json!(min)).is_ok(), !e.min_exclusive, "{} at min", e.key);
-                assert!(validate_hard_bounds(&e.key, &json!(min - 1.0)).is_err(), "{} below min", e.key);
+                assert_eq!(
+                    validate_hard_bounds(&e.key, &json!(min)).is_ok(),
+                    !e.min_exclusive,
+                    "{} at min",
+                    e.key
+                );
+                assert!(
+                    validate_hard_bounds(&e.key, &json!(min - 1.0)).is_err(),
+                    "{} below min",
+                    e.key
+                );
             }
             if let Some(max) = e.max {
-                assert!(validate_hard_bounds(&e.key, &json!(max)).is_ok(), "{} at max", e.key);
-                assert!(validate_hard_bounds(&e.key, &json!(max + 1.0)).is_err(), "{} above max", e.key);
+                assert!(
+                    validate_hard_bounds(&e.key, &json!(max)).is_ok(),
+                    "{} at max",
+                    e.key
+                );
+                assert!(
+                    validate_hard_bounds(&e.key, &json!(max + 1.0)).is_err(),
+                    "{} above max",
+                    e.key
+                );
             }
         }
         // The sample named in the brief: excitability is a fraction.
@@ -609,28 +703,56 @@ mod tests {
         for f in &fields {
             if let Some(values) = &f.enum_values {
                 for v in values {
-                    assert!(C::validate(&build(&f.key, json!(v))).is_ok(), "{} = {v}", f.key);
+                    assert!(
+                        C::validate(&build(&f.key, json!(v))).is_ok(),
+                        "{} = {v}",
+                        f.key
+                    );
                 }
-                assert!(C::validate(&build(&f.key, json!("bogus"))).is_err(), "{} bogus", f.key);
+                assert!(
+                    C::validate(&build(&f.key, json!("bogus"))).is_err(),
+                    "{} bogus",
+                    f.key
+                );
                 continue;
             }
             if let Some(min) = f.min {
                 let at_min = C::validate(&build(&f.key, int_field(f, min))).is_ok();
                 assert_eq!(at_min, !f.min_exclusive, "{} at min {min}", f.key);
-                assert!(C::validate(&build(&f.key, int_field(f, min - 1.0))).is_err(), "{} below min", f.key);
+                assert!(
+                    C::validate(&build(&f.key, int_field(f, min - 1.0))).is_err(),
+                    "{} below min",
+                    f.key
+                );
             }
             if let Some(max) = f.max {
-                assert!(C::validate(&build(&f.key, int_field(f, max))).is_ok(), "{} at max {max}", f.key);
-                assert!(C::validate(&build(&f.key, int_field(f, max + 1.0))).is_err(), "{} above max", f.key);
+                assert!(
+                    C::validate(&build(&f.key, int_field(f, max))).is_ok(),
+                    "{} at max {max}",
+                    f.key
+                );
+                assert!(
+                    C::validate(&build(&f.key, int_field(f, max + 1.0))).is_err(),
+                    "{} above max",
+                    f.key
+                );
             }
             if let Some(d) = &f.default {
-                assert!(C::validate(&build(&f.key, d.clone())).is_ok(), "{} default", f.key);
+                assert!(
+                    C::validate(&build(&f.key, d.clone())).is_ok(),
+                    "{} default",
+                    f.key
+                );
             }
         }
         // Every field the config struct serializes is in the schema.
-        let ser = serde_json::to_value(C::validate(&json!({"enabled": true})).unwrap().unwrap()).unwrap();
+        let ser =
+            serde_json::to_value(C::validate(&json!({"enabled": true})).unwrap().unwrap()).unwrap();
         for k in ser.as_object().unwrap().keys() {
-            assert!(fields.iter().any(|f| &f.key == k), "rml field {k} missing from schema");
+            assert!(
+                fields.iter().any(|f| &f.key == k),
+                "rml field {k} missing from schema"
+            );
         }
     }
 }

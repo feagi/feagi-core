@@ -309,7 +309,11 @@ fn per_neuron_arms_to_own_rate_then_holds_under_added_input() {
         "{target:?}"
     );
     assert_eq!(target[1], 0.0);
-    assert_eq!(reg, vec![1.0, 0.5, 1.0], "silent neuron is one-sided by default");
+    assert_eq!(
+        reg,
+        vec![1.0, 0.5, 1.0],
+        "silent neuron is one-sided by default"
+    );
     // No leak adjustment while arming, and the silent neuron is never pinned.
     assert!(
         leak.iter().all(|&l| (l - BASE_LEAK).abs() < 1e-6),

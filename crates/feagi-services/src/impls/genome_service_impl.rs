@@ -5821,12 +5821,18 @@ mod tests {
     fn new_memory_area_defaults_to_firing_threshold_one() {
         use super::merge_memory_area_properties;
         let merged = merge_memory_area_properties(HashMap::new(), None);
-        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(1.0)));
+        assert_eq!(
+            merged.get("firing_threshold"),
+            Some(&serde_json::json!(1.0))
+        );
         // Caller-provided value still wins.
         let mut extra = HashMap::new();
         extra.insert("firing_threshold".to_string(), serde_json::json!(0.4));
         let merged = merge_memory_area_properties(HashMap::new(), Some(&extra));
-        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(0.4)));
+        assert_eq!(
+            merged.get("firing_threshold"),
+            Some(&serde_json::json!(0.4))
+        );
     }
 
     #[test]
@@ -6288,15 +6294,21 @@ mod tests {
                 "message must state the range: {msg}"
             );
         }
-        assert!(queue.drain_all().is_empty(), "rejected updates queue nothing");
+        assert!(
+            queue.drain_all().is_empty(),
+            "rejected updates queue nothing"
+        );
 
         for (key, ok) in [
             ("neuron_leak_coefficient", serde_json::json!(0.25)),
             ("neuron_consecutive_fire_count", serde_json::json!(3)),
         ] {
-            svc.update_cortical_area(&area_id.as_base_64(), HashMap::from([(key.to_string(), ok)]))
-                .await
-                .unwrap_or_else(|e| panic!("{key} in range must be accepted: {e:?}"));
+            svc.update_cortical_area(
+                &area_id.as_base_64(),
+                HashMap::from([(key.to_string(), ok)]),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("{key} in range must be accepted: {e:?}"));
         }
     }
 
@@ -6324,7 +6336,8 @@ mod tests {
         .unwrap();
         let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
         connectome.write().add_cortical_area(area).unwrap();
-        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, ParameterUpdateQueue::new());
+        let svc =
+            GenomeServiceImpl::new_with_parameter_queue(connectome, ParameterUpdateQueue::new());
         for (key, bad) in [
             ("neuron_excitability", serde_json::json!(25)),
             ("neuron_leak_coefficient", serde_json::json!(30)),
@@ -6493,7 +6506,9 @@ mod tests {
         .await
         .expect("full object");
         // Bumping only arm_epoch keeps target_mode and gain.
-        send(serde_json::json!({ "arm_epoch": 2 })).await.expect("partial");
+        send(serde_json::json!({ "arm_epoch": 2 }))
+            .await
+            .expect("partial");
         assert_eq!(
             stored(&connectome).unwrap(),
             serde_json::json!({
@@ -6501,7 +6516,9 @@ mod tests {
             })
         );
         // Only `enabled` keeps the rest.
-        send(serde_json::json!({ "enabled": false })).await.expect("disable");
+        send(serde_json::json!({ "enabled": false }))
+            .await
+            .expect("disable");
         assert_eq!(
             stored(&connectome).unwrap(),
             serde_json::json!({

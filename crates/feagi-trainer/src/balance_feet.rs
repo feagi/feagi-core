@@ -1220,6 +1220,14 @@ pub struct BalanceAttemptRecord {
     /// predicted need by more than `over_assist_margin`. 0 for an unassisted attempt.
     #[serde(default)]
     pub over_assist_fraction: f64,
+    /// Non-settling bursts elapsed when the body was first confirmed collapsed: not upright
+    /// (see [`non_upright_reasons`]) continuously for `fall_confirm_s`. Independent of
+    /// `fall_tilt_deg`, so it is set even when the fall rule is off. Absent if never collapsed.
+    #[serde(default)]
+    pub collapsed_at_bursts: Option<u32>,
+    /// `collapsed_at_bursts` times `burst_period_s`: seconds from the end of settling.
+    #[serde(default)]
+    pub collapsed_at_s: Option<f64>,
     /// Adaptive-assist numbers. Absent for a ladder attempt and for probes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive: Option<AdaptiveAttemptStats>,
@@ -1826,6 +1834,8 @@ pub struct OpenBalanceAttempt {
     pub support_use: SupportUseCounts,
     /// Consecutive elapsed bursts that were not standing, ending at the latest counted burst.
     pub off_stance_bursts: u32,
+    /// Non-settling bursts elapsed when the collapse was first confirmed, if it was.
+    pub collapsed_at_bursts: Option<u32>,
 }
 
 impl OpenBalanceAttempt {
@@ -1864,6 +1874,7 @@ impl OpenBalanceAttempt {
             non_upright: NonUprightCounts::default(),
             support_use: SupportUseCounts::default(),
             off_stance_bursts: 0,
+            collapsed_at_bursts: None,
         }
     }
 }
@@ -2015,6 +2026,16 @@ pub fn observe_balance_sample(
             support_use_flags(sample, criterion, reset_height_m, level),
             1,
         );
+        let collapsed_at_bursts = if sample.settling {
+            open.collapsed_at_bursts
+        } else {
+            let off_run = if upright {
+                0
+            } else {
+                open.off_stance_bursts.saturating_add(1)
+            };
+            collapse_confirmed_at(open.collapsed_at_bursts, off_run, bursts, criterion)
+        };
         return Ok(BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
             outcome,
@@ -2026,6 +2047,8 @@ pub fn observe_balance_sample(
             non_upright,
             carried_fraction: support_use.carried_fraction(),
             over_assist_fraction: support_use.over_assist_fraction(),
+            collapsed_at_bursts,
+            collapsed_at_s: collapsed_at_bursts.map(|b| f64::from(b) * criterion.burst_period_s),
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -2089,6 +2112,12 @@ pub fn observe_balance_sample(
     } else {
         0
     };
+    let collapsed_at_bursts = collapse_confirmed_at(
+        open.collapsed_at_bursts,
+        off_stance_bursts,
+        bursts,
+        criterion,
+    );
     let first_violation_burst =
         open.first_violation_burst
             .or(if upright { None } else { Some(open.bursts) });
@@ -2110,6 +2139,8 @@ pub fn observe_balance_sample(
             non_upright,
             carried_fraction: support_use.carried_fraction(),
             over_assist_fraction: support_use.over_assist_fraction(),
+            collapsed_at_bursts,
+            collapsed_at_s: collapsed_at_bursts.map(|b| f64::from(b) * criterion.burst_period_s),
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -2162,7 +2193,21 @@ pub fn observe_balance_sample(
         non_upright,
         support_use,
         off_stance_bursts,
+        collapsed_at_bursts,
     }))
+}
+
+/// Latch the first burst at which the body has been continuously not upright for at least
+/// `fall_confirm_s` (`off_run` bursts, at least one). Uses the upright rule only, so it does
+/// not depend on `fall_tilt_deg`.
+fn collapse_confirmed_at(
+    latched: Option<u32>,
+    off_run: u32,
+    bursts: u32,
+    criterion: &BalanceFeetCriterion,
+) -> Option<u32> {
+    latched
+        .or_else(|| (off_run > 0 && off_run >= criterion.fall_confirm_bursts()).then_some(bursts))
 }
 
 /// Record carrying only the balance-time fields; callers fill the rest with struct update.
@@ -2188,6 +2233,8 @@ fn balance_time_fields(
         non_upright: NonUprightCounts::default(),
         carried_fraction: 0.0,
         over_assist_fraction: 0.0,
+        collapsed_at_bursts: None,
+        collapsed_at_s: None,
         adaptive: None,
     }
 }
@@ -3976,6 +4023,15 @@ fn attempts_table_spec() -> TableSpec {
                 "over_assist_fraction",
                 "Share of bursts with support above the predicted need.",
             ),
+            ColumnSpec::unitless(
+                "collapsed",
+                "The body was continuously not upright (tilt over the limit, torso under the height fraction, a contact body off the world, or another body touching) for at least the fall confirm time after settling. Independent of the fall tilt rule, so it is set even when that rule is off.",
+            ),
+            ColumnSpec::with_unit(
+                "collapsed_at_s",
+                "s",
+                "Time from the end of settling to the burst that confirmed the collapse; empty when the attempt never collapsed.",
+            ),
         ],
     }
 }
@@ -3997,6 +4053,8 @@ fn attempt_row(phase: &str, index: usize, record: &BalanceAttemptRecord) -> Vec<
         RunDataValue::opt_float(record.time_to_first_violation_s),
         RunDataValue::Float(record.carried_fraction),
         RunDataValue::Float(record.over_assist_fraction),
+        RunDataValue::Bool(record.collapsed_at_bursts.is_some()),
+        RunDataValue::opt_float(record.collapsed_at_s),
     ]
 }
 
@@ -4840,8 +4898,8 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_actions::ScheduledAction;
     use crate::control::CollectingEventSink;
+    use crate::run_actions::ScheduledAction;
 
     /// One burst is 0.05 s; hold 0.1 s = 2 bursts, cap 0.2 s = 4 bursts. One physics step per
     /// burst so legacy tests stay readable.
@@ -4957,6 +5015,58 @@ mod tests {
     }
 
     #[test]
+    fn collapse_is_detected_with_the_fall_rule_off() {
+        let mut c = fall_criterion();
+        c.fall_tilt_deg = 0.0;
+        assert_eq!(c.fall_confirm_bursts(), 5);
+        let mut open = OpenBalanceAttempt::fresh();
+        open = fed(&open, &balanced(1, 1), &c);
+        for seq in 2..=5 {
+            open = fed(&open, &sample(seq, 1, 70.0), &c);
+            assert_eq!(open.collapsed_at_bursts, None, "seq {seq}");
+        }
+        open = fed(&open, &sample(6, 1, 70.0), &c);
+        assert_eq!(open.collapsed_at_bursts, Some(6));
+        let mut last = sample(7, 1, 70.0);
+        last.terminal = Some(BalanceTerminal::Interrupted);
+        match observe_balance_sample(&open, &last, &c, 1).expect("obs") {
+            BalanceAttemptStep::Finished(r) => {
+                assert_eq!(r.outcome, BalanceAttemptOutcome::Interrupted);
+                assert_eq!(r.collapsed_at_bursts, Some(6));
+                assert_eq!(r.collapsed_at_s, Some(6.0 * c.burst_period_s));
+            }
+            BalanceAttemptStep::Continue(_) => panic!("terminal ends the attempt"),
+        }
+    }
+
+    #[test]
+    fn a_brief_dip_is_not_a_collapse() {
+        let mut c = fall_criterion();
+        c.fall_tilt_deg = 0.0;
+        let mut open = OpenBalanceAttempt::fresh();
+        open = fed(&open, &balanced(1, 1), &c);
+        for seq in 2..=5 {
+            open = fed(&open, &sample(seq, 1, 70.0), &c);
+        }
+        open = fed(&open, &balanced(6, 1), &c);
+        for seq in 7..=10 {
+            open = fed(&open, &sample(seq, 1, 70.0), &c);
+        }
+        assert_eq!(open.collapsed_at_bursts, None);
+    }
+
+    #[test]
+    fn an_upright_attempt_is_never_collapsed() {
+        let mut c = fall_criterion();
+        c.fall_tilt_deg = 0.0;
+        let mut open = OpenBalanceAttempt::fresh();
+        for seq in 1..=10 {
+            open = fed(&open, &balanced(seq, 1), &c);
+        }
+        assert_eq!(open.collapsed_at_bursts, None);
+    }
+
+    #[test]
     fn fall_fields_validate() {
         let mut c = fall_criterion();
         c.fall_tilt_deg = 15.0;
@@ -4992,6 +5102,8 @@ mod tests {
             non_upright: NonUprightCounts::default(),
             carried_fraction: 0.0,
             over_assist_fraction: 0.0,
+            collapsed_at_bursts: None,
+            collapsed_at_s: None,
             adaptive: None,
         }
     }

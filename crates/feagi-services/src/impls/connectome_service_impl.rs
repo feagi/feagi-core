@@ -4999,12 +4999,18 @@ mod tests {
     fn new_memory_area_defaults_to_firing_threshold_one() {
         use super::merge_memory_area_properties;
         let merged = merge_memory_area_properties(HashMap::new(), None);
-        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(1.0)));
+        assert_eq!(
+            merged.get("firing_threshold"),
+            Some(&serde_json::json!(1.0))
+        );
         // Caller-provided value still wins.
         let mut extra = HashMap::new();
         extra.insert("firing_threshold".to_string(), serde_json::json!(0.4));
         let merged = merge_memory_area_properties(HashMap::new(), Some(&extra));
-        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(0.4)));
+        assert_eq!(
+            merged.get("firing_threshold"),
+            Some(&serde_json::json!(0.4))
+        );
     }
 
     /// Connectome import rebuilds via neuroembryogenesis, which requires an attached NPU.
@@ -6542,7 +6548,11 @@ mod tests {
             .await?;
         svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule(0.0)])
             .await?;
-        assert_eq!(saved_rules().len(), 1, "zero multiplier must not drop the rule");
+        assert_eq!(
+            saved_rules().len(),
+            1,
+            "zero multiplier must not drop the rule"
+        );
         assert_eq!(
             saved_rules()[0]["postSynapticCurrent_multiplier"].as_f64(),
             Some(0.0)
@@ -6563,7 +6573,11 @@ mod tests {
             .and_then(|dst| dst.get(dst_id.as_base_64()))
             .and_then(|rules| rules.as_array().cloned())
             .unwrap_or_default();
-        assert_eq!(reloaded.len(), 1, "zero-multiplier rule survives save and load");
+        assert_eq!(
+            reloaded.len(),
+            1,
+            "zero-multiplier rule survives save and load"
+        );
 
         let two_rules = |multiplier: f64| {
             let mut second = rule(multiplier);
@@ -6650,7 +6664,10 @@ mod tests {
                 .unwrap_or_default()
         };
         assert_eq!(stored.len(), 1);
-        assert_eq!(stored[0]["postSynapticCurrent_multiplier"].as_f64(), Some(0.5));
+        assert_eq!(
+            stored[0]["postSynapticCurrent_multiplier"].as_f64(),
+            Some(0.5)
+        );
         assert!(stored[0].get("psc_multiplier").is_none());
         assert_eq!(stored[0]["plasticity_flag"], false);
 
@@ -6677,7 +6694,10 @@ mod tests {
                 vec![serde_json::json!({"morphology_scalar": 1})],
             )
             .await;
-        assert!(rejected.is_err(), "a rule without morphology_id is rejected");
+        assert!(
+            rejected.is_err(),
+            "a rule without morphology_id is rejected"
+        );
         Ok(())
     }
 

@@ -4830,19 +4830,17 @@ impl<
                     F::RateTarget => homeostat
                         .as_ref()
                         .and_then(|m| m.get(&i).map(|h| h.rate_target)),
-                    F::HomeostatRegulated => homeostat
-                        .as_ref()
-                        .and_then(|m| {
-                            m.get(&i).map(|h| {
-                                if !h.regulated {
-                                    0.0
-                                } else if h.one_sided {
-                                    0.5
-                                } else {
-                                    1.0
-                                }
-                            })
-                        }),
+                    F::HomeostatRegulated => homeostat.as_ref().and_then(|m| {
+                        m.get(&i).map(|h| {
+                            if !h.regulated {
+                                0.0
+                            } else if h.one_sided {
+                                0.5
+                            } else {
+                                1.0
+                            }
+                        })
+                    }),
                 })
                 .collect();
             out.fields.push((field, col));

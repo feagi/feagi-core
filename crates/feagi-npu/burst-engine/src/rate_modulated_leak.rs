@@ -1331,7 +1331,11 @@ mod tests {
             assert!(leaks[1] <= prev + 1e-7 || t < 230, "not monotone at {t}");
             prev = leaks[1];
         }
-        assert!((leaks[1] - 0.2).abs() < 1e-3, "relaxed to base: {}", leaks[1]);
+        assert!(
+            (leaks[1] - 0.2).abs() < 1e-3,
+            "relaxed to base: {}",
+            leaks[1]
+        );
         // Two-sided neuron 0 was driven by the same rule as before (still regulated two-sided).
         let s = reg.neuron_state_by_neuron(cortical).unwrap();
         assert!(!s[&0].one_sided);
