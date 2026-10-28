@@ -502,6 +502,87 @@ fn process_coordinate_property(
     Ok(())
 }
 
+/// Bring one object-form dstmap rule to the canonical shape, or say why it cannot be.
+///
+/// Rules reach the genome from several writers. Some use the short name `psc_multiplier` for
+/// `postSynapticCurrent_multiplier`, and some omit `plasticity_flag`. The burst engine reads
+/// the long name and defaults a missing multiplier to 1, so such a rule works live; a loader
+/// that required the long name dropped it on the next save or load. This one repairs the
+/// aliases and defaults (multiplier 1, plasticity off, the values the runtime already uses)
+/// and rejects only what cannot be repaired: no `morphology_id`, a conflicting pair of
+/// multiplier keys, or a non-boolean `plasticity_flag`. Plasticity parameters are checked
+/// separately by `require_plasticity_params`, because a mapping update may inherit them.
+///
+/// Returns `true` when the rule was changed.
+pub fn normalize_dstmap_rule_object(
+    rule: &mut serde_json::Map<String, Value>,
+) -> Result<bool, String> {
+    let mut changed = false;
+    let morphology_ok = rule
+        .get("morphology_id")
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| !s.is_empty());
+    if !morphology_ok {
+        return Err("morphology_id must be a non-empty string".to_string());
+    }
+
+    if let Some(short) = rule.remove("psc_multiplier") {
+        changed = true;
+        match rule.get("postSynapticCurrent_multiplier") {
+            Some(long) if long != &short => {
+                return Err(format!(
+                    "psc_multiplier ({}) and postSynapticCurrent_multiplier ({}) disagree",
+                    short, long
+                ));
+            }
+            Some(_) => {}
+            None => {
+                rule.insert("postSynapticCurrent_multiplier".to_string(), short);
+            }
+        }
+    }
+    if !rule.contains_key("postSynapticCurrent_multiplier") {
+        rule.insert("postSynapticCurrent_multiplier".to_string(), json!(1.0));
+        changed = true;
+    }
+    match rule.get("plasticity_flag") {
+        Some(v) if v.is_boolean() => {}
+        Some(v) => return Err(format!("plasticity_flag must be a boolean, got {}", v)),
+        None => {
+            rule.insert("plasticity_flag".to_string(), json!(false));
+            changed = true;
+        }
+    }
+
+    if changed {
+        warn!(
+            target: "feagi-evo",
+            "dstmap rule {:?} normalized (psc_multiplier alias or missing defaults filled)",
+            rule.get("morphology_id")
+        );
+    }
+    Ok(changed)
+}
+
+/// A plastic rule (plasticity_flag true) needs the full plasticity parameter set.
+pub fn require_plasticity_params(rule: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if rule.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true) {
+        let missing: Vec<&str> = [
+            "plasticity_constant",
+            "ltp_multiplier",
+            "ltd_multiplier",
+            "plasticity_window",
+        ]
+        .into_iter()
+        .filter(|k| !rule.contains_key(*k))
+        .collect();
+        if !missing.is_empty() {
+            return Err(format!("plastic rule is missing keys {:?}", missing));
+        }
+    }
+    Ok(())
+}
+
 /// Process destination mapping (dstmap) - COMPLETE implementation
 fn process_dstmap(
     dstmap_value: &Value,
@@ -515,10 +596,12 @@ fn process_dstmap(
     let mut hierarchical_dstmap = serde_json::Map::new();
 
     for (destination_area, rules) in dstmap_obj {
-        let rules_array = match rules.as_array() {
-            Some(arr) => arr,
-            None => continue,
-        };
+        let rules_array = rules.as_array().ok_or_else(|| {
+            EvoError::InvalidGenome(format!(
+                "dstmap rules for destination {} must be an array, got {}",
+                destination_area, rules
+            ))
+        })?;
 
         let mut converted_rules = Vec::new();
 
@@ -527,61 +610,35 @@ fn process_dstmap(
             // - Array format (legacy flat): ["projector", 1, 1.0, false, ...]
             // - Object format (already hierarchical-like): {"morphology_id": "...", ...}
             if let Some(rule_obj) = rule.as_object() {
-                // Minimal validation to avoid silently accepting garbage.
-                if !rule_obj.contains_key("morphology_id")
-                    || !rule_obj.contains_key("postSynapticCurrent_multiplier")
-                    || !rule_obj.contains_key("plasticity_flag")
-                {
-                    warn!(
-                        target: "feagi-evo",
-                        "Invalid dstmap rule object for destination {}: missing required keys",
-                        destination_area
-                    );
-                    continue;
-                }
-
-                // Strict plasticity validation (no backward compatibility):
-                // If plasticity_flag=true, the full plasticity parameter set must be present.
-                if rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true) {
-                    let required = [
-                        "plasticity_constant",
-                        "ltp_multiplier",
-                        "ltd_multiplier",
-                        "plasticity_window",
-                    ];
-                    let missing: Vec<&str> = required
-                        .iter()
-                        .copied()
-                        .filter(|k| !rule_obj.contains_key(*k))
-                        .collect();
-                    if !missing.is_empty() {
-                        warn!(
-                            target: "feagi-evo",
-                            "Invalid plastic dstmap rule object for destination {}: missing keys {:?}",
-                            destination_area,
-                            missing
-                        );
-                        continue;
-                    }
-                }
-
-                converted_rules.push(Value::Object(rule_obj.clone()));
+                // Never drop a rule: repair the known aliases and defaults, or fail the
+                // conversion with the destination named. A dropped rule disappears from the
+                // brain on the next save or load without any other sign.
+                let mut rule_obj = rule_obj.clone();
+                normalize_dstmap_rule_object(&mut rule_obj)
+                    .and_then(|_| require_plasticity_params(&rule_obj))
+                    .map_err(|reason| {
+                        EvoError::InvalidGenome(format!(
+                            "dstmap rule for destination {}: {}",
+                            destination_area, reason
+                        ))
+                    })?;
+                converted_rules.push(Value::Object(rule_obj));
                 continue;
             }
 
-            let rule_array = match rule.as_array() {
-                Some(arr) => arr,
-                None => continue,
-            };
+            let rule_array = rule.as_array().ok_or_else(|| {
+                EvoError::InvalidGenome(format!(
+                    "dstmap rule for destination {} must be an object or an array, got {}",
+                    destination_area, rule
+                ))
+            })?;
 
             // Validate minimum required elements
             if rule_array.len() < 4 {
-                warn!(
-                    target: "feagi-evo",
-                    "Invalid mapping recipe format (need at least 4 elements): {:?}",
-                    rule_array
-                );
-                continue;
+                return Err(EvoError::InvalidGenome(format!(
+                    "dstmap rule for destination {} needs at least 4 elements, got {:?}",
+                    destination_area, rule_array
+                )));
             }
 
             // Parse rule (flat array format):
@@ -668,6 +725,45 @@ mod tests {
         assert!(map.contains_key("dstmap-d"));
         assert!(map.contains_key("fire_t-f"));
         assert!(map.contains_key("twinrf-t"));
+    }
+
+    #[test]
+    fn dstmap_rule_with_short_psc_key_is_kept_not_dropped() {
+        // A rule written with `psc_multiplier` and no `plasticity_flag` used to be dropped here.
+        let dstmap_flat = json!({
+            "dest_area": [
+                {"morphology_id": "m_a", "morphology_scalar": 1, "psc_multiplier": 0.5},
+                {"morphology_id": "m_b", "morphology_scalar": [1, 1, 1],
+                 "postSynapticCurrent_multiplier": 2, "plasticity_flag": false}
+            ]
+        });
+        let mut area_data = serde_json::Map::new();
+        process_dstmap(&dstmap_flat, &mut area_data).unwrap();
+        let rules = area_data["cortical_mapping_dst"]["dest_area"]
+            .as_array()
+            .unwrap();
+        assert_eq!(rules.len(), 2, "no rule may be dropped");
+        assert_eq!(rules[0]["postSynapticCurrent_multiplier"], 0.5);
+        assert!(rules[0].get("psc_multiplier").is_none());
+        assert_eq!(rules[0]["plasticity_flag"], false);
+        assert_eq!(rules[1]["postSynapticCurrent_multiplier"], 2);
+    }
+
+    #[test]
+    fn dstmap_rule_that_cannot_be_repaired_fails_loudly() {
+        for bad in [
+            json!({"morphology_scalar": 1}),
+            json!({"morphology_id": "m", "psc_multiplier": 1,
+                   "postSynapticCurrent_multiplier": 2}),
+            json!({"morphology_id": "m", "plasticity_flag": true}),
+            json!(7),
+        ] {
+            let dstmap_flat = json!({"dest_area": [bad.clone()]});
+            let mut area_data = serde_json::Map::new();
+            let err = process_dstmap(&dstmap_flat, &mut area_data)
+                .expect_err(&format!("rule {bad} must be rejected, not skipped"));
+            assert!(err.to_string().contains("dest_area"), "{err}");
+        }
     }
 
     #[test]

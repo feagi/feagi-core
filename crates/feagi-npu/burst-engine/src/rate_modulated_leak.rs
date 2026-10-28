@@ -44,6 +44,21 @@ pub struct RateModulatedLeakConfig {
     /// `per_neuron` only: changing this value restarts arming (re-arm trigger).
     #[serde(default)]
     pub arm_epoch: u32,
+    /// `per_neuron` only: how neurons armed below `min_target_firing_per_burst` are handled.
+    #[serde(default)]
+    pub silent_neurons: SilentNeurons,
+}
+
+/// Handling of neurons whose armed target is below `min_target_firing_per_burst`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SilentNeurons {
+    /// Target 0; the leak may rise above base when the neuron fires and relaxes back to base
+    /// (never below) when it is silent.
+    #[default]
+    OneSided,
+    /// Not regulated: the leak stays at the area's base leak (legacy behavior).
+    Unregulated,
 }
 
 /// Source of the firing-rate set-point.
@@ -72,8 +87,10 @@ pub struct NeuronHomeostatState {
     pub rate_ema: f32,
     /// Set-point in use (per-neuron mode while arming: the running estimate of the armed target).
     pub rate_target: f32,
-    /// Whether the leak of this neuron is being adjusted now.
+    /// Whether the leak of this neuron is being adjusted now (true for two-sided and one-sided).
     pub regulated: bool,
+    /// Regulated one-sided (silent-armed neuron): target 0, leak floor at the base leak.
+    pub one_sided: bool,
 }
 
 fn default_target() -> f32 {
@@ -118,8 +135,23 @@ struct AreaState {
     /// Frozen per-neuron targets (valid once `arm_remaining == 0`).
     target: Vec<f32>,
     regulated: Vec<bool>,
+    /// Regulated neurons armed below the minimum target (one-sided: target 0, leak floor = base).
+    one_sided: Vec<bool>,
     /// Next `apply_burstal` writes `base_leak` into every neuron's leak slot (fresh arming).
     reset_leaks_pending: bool,
+}
+
+impl AreaState {
+    /// Decide, from the frozen targets, which neurons are regulated two-sided, one-sided or not.
+    fn classify_targets(&mut self) {
+        let min_t = self.config.min_target_firing_per_burst;
+        let one_sided_mode = self.config.silent_neurons == SilentNeurons::OneSided;
+        for j in 0..self.neuron_idx.len() {
+            let active = self.target[j] >= min_t;
+            self.regulated[j] = active || one_sided_mode;
+            self.one_sided[j] = !active && one_sided_mode;
+        }
+    }
 }
 
 /// Registry of areas that receive the homeostatic post-pass. Empty: zero overhead in [`crate::npu::RustNPU`].
@@ -143,6 +175,16 @@ impl RateModulatedLeakConfig {
             Some(Value::Bool(false)) => return Ok(None),
             Some(Value::Bool(true)) => {}
             Some(_) => return Err("rate_modulated_leak.enabled must be a boolean".to_string()),
+        }
+        if let Some(sn) = obj.get("silent_neurons") {
+            match sn.as_str() {
+                Some("one_sided") | Some("unregulated") => {}
+                _ => {
+                    return Err(format!(
+                        "rate_modulated_leak.silent_neurons must be \"one_sided\" or \"unregulated\" (got {sn})"
+                    ))
+                }
+            }
         }
         if let Some(mode) = obj.get("target_mode") {
             match mode.as_str() {
@@ -256,17 +298,18 @@ impl RateModulatedLeakRegistry {
                 .iter()
                 .enumerate()
                 .map(|(j, &idx)| {
-                    let (rate_target, regulated) = if !per_neuron {
-                        (st.config.target_firing_per_burst, true)
+                    let (rate_target, regulated, one_sided) = if !per_neuron {
+                        (st.config.target_firing_per_burst, true, false)
                     } else if arming {
                         let t = if bias > 0.0 {
                             st.arm_ema[j] / bias
                         } else {
                             0.0
                         };
-                        (t, false)
+                        (t, false, false)
                     } else {
-                        (st.target[j], st.regulated[j])
+                        let os = st.one_sided[j];
+                        (if os { 0.0 } else { st.target[j] }, st.regulated[j], os)
                     };
                     (
                         idx,
@@ -274,6 +317,7 @@ impl RateModulatedLeakRegistry {
                             rate_ema: st.r_ema[j],
                             rate_target,
                             regulated,
+                            one_sided,
                         },
                     )
                 })
@@ -346,6 +390,9 @@ impl RateModulatedLeakRegistry {
             {
                 prev.config = cfg;
                 prev.base_leak = g0;
+                if prev.arm_remaining == 0 {
+                    prev.classify_targets();
+                }
                 return;
             }
         }
@@ -363,6 +410,7 @@ impl RateModulatedLeakRegistry {
                 arm_ema: vec![0.0; n],
                 target: vec![0.0; n],
                 regulated: vec![false; n],
+                one_sided: vec![false; n],
                 reset_leaks_pending: per_neuron,
             },
         );
@@ -436,6 +484,7 @@ impl RateModulatedLeakRegistry {
                 }
                 let fired: f32 = if first_bm.contains(nid) { 1.0 } else { 0.0 };
                 st.r_ema[j] = (1.0 - alpha_r) * st.r_ema[j] + alpha_r * fired;
+                let mut one_sided = false;
                 let target = if per_neuron {
                     if arming {
                         st.arm_ema[j] = (1.0 - alpha_a) * st.arm_ema[j] + alpha_a * fired;
@@ -444,7 +493,12 @@ impl RateModulatedLeakRegistry {
                     if !st.regulated[j] {
                         continue;
                     }
-                    st.target[j]
+                    one_sided = st.one_sided[j];
+                    if one_sided {
+                        0.0
+                    } else {
+                        st.target[j]
+                    }
                 } else {
                     t
                 };
@@ -452,7 +506,19 @@ impl RateModulatedLeakRegistry {
                     continue;
                 }
                 let e: f32 = st.r_ema[j] - target;
-                st.g_leak[j] = (st.g_leak[j] + gain * e).clamp(g_min, g_max);
+                if one_sided {
+                    // One-sided: e >= 0 raises the leak; a silent neuron relaxes toward base at
+                    // the same gain; the floor is the base leak (kept inside [g_min, g_max]).
+                    let floor = st.base_leak.clamp(g_min, g_max);
+                    let next = if st.r_ema[j] >= st.config.min_target_firing_per_burst {
+                        st.g_leak[j] + gain * e
+                    } else {
+                        st.g_leak[j] - gain * (st.g_leak[j] - st.base_leak)
+                    };
+                    st.g_leak[j] = next.clamp(floor, g_max);
+                } else {
+                    st.g_leak[j] = (st.g_leak[j] + gain * e).clamp(g_min, g_max);
+                }
                 let g: f32 = st.g_leak[j].clamp(0.0, 1.0);
                 if let Some(slot) = storage_leaks.get_mut(idx) {
                     if per_neuron && *slot != g {
@@ -467,7 +533,6 @@ impl RateModulatedLeakRegistry {
                 if st.arm_remaining == 0 {
                     // Freeze: bias-corrected EMA is each neuron's own rate.
                     let bias = 1.0 - (1.0 - alpha_a).powi(st.arm_n as i32);
-                    let min_t = st.config.min_target_firing_per_burst;
                     for j in 0..st.neuron_idx.len() {
                         let tj = if bias > 0.0 {
                             st.arm_ema[j] / bias
@@ -475,8 +540,8 @@ impl RateModulatedLeakRegistry {
                             0.0
                         };
                         st.target[j] = tj.clamp(0.0, 1.0);
-                        st.regulated[j] = tj >= min_t;
                     }
+                    st.classify_targets();
                 }
             }
         }
@@ -1188,6 +1253,156 @@ mod tests {
         assert_eq!(c2.arm_tau_bursts, Some(40.0));
         assert_eq!(c2.arm_epoch, 2);
         assert_eq!(back["target_mode"], "per_neuron");
+        assert_eq!(c2.silent_neurons, SilentNeurons::OneSided, "default");
+        assert_eq!(back["silent_neurons"], "one_sided");
+        let v = json!({ "enabled": true, "target_mode": "per_neuron",
+                        "silent_neurons": "unregulated" });
+        let c = RateModulatedLeakConfig::validate(&v).unwrap().unwrap();
+        let back = serde_json::to_value(&c).unwrap();
+        assert_eq!(back["silent_neurons"], "unregulated");
+        let c2 = RateModulatedLeakConfig::validate(&back).unwrap().unwrap();
+        assert_eq!(c2.silent_neurons, SilentNeurons::Unregulated);
+        let bad = json!({ "enabled": true, "silent_neurons": "both" });
+        let err = RateModulatedLeakConfig::validate(&bad).unwrap_err();
+        assert!(err.contains("silent_neurons"), "{err}");
+    }
+
+    /// Neuron 0 fires every 4th burst (two-sided), neuron 1 is silent while arming (one-sided).
+    /// Afterwards neuron 1 is driven, then released.
+    #[test]
+    fn per_neuron_silent_armed_is_one_sided() {
+        let cortical = 33u32;
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(
+            cortical,
+            &json!({
+                "enabled": true, "target_mode": "per_neuron", "arm_bursts": 80,
+                "arm_tau_bursts": 20.0, "min_target_firing_per_burst": 0.01,
+                "rate_ema_tau_bursts": 5.0, "gain": 0.1, "leak_min": 0.0, "leak_max": 0.6,
+            }),
+            0.2,
+            vec![0, 1],
+        );
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(cortical, 16).unwrap();
+        let mut leaks = vec![0.2_f32; 4];
+        for t in 1..=80u64 {
+            if t % 4 == 0 {
+                archive_burst_fires(&mut ledger, t, cortical, &[0]);
+            } else {
+                archive_burst_silent(&mut ledger, t);
+            }
+            reg.apply_burstal(t, &ledger, &mut leaks);
+        }
+        let s = reg.neuron_state_by_neuron(cortical).unwrap();
+        assert!(s[&0].regulated && !s[&0].one_sided, "{:?}", s[&0]);
+        assert!(s[&1].regulated && s[&1].one_sided, "{:?}", s[&1]);
+        assert_eq!(s[&1].rate_target, 0.0);
+        // Silence keeps the one-sided neuron exactly at base (never below).
+        for t in 81..=100u64 {
+            archive_burst_silent(&mut ledger, t);
+            reg.apply_burstal(t, &ledger, &mut leaks);
+            assert!(leaks[1] >= 0.2 - 1e-7, "below base at {t}: {}", leaks[1]);
+        }
+        assert!((leaks[1] - 0.2).abs() < 1e-6);
+        // Added input: neuron 1 fires every other burst; its leak rises above base.
+        let mut rate_early = 0.0;
+        for t in 101..=200u64 {
+            if t % 2 == 0 {
+                archive_burst_fires(&mut ledger, t, cortical, &[1]);
+            } else {
+                archive_burst_silent(&mut ledger, t);
+            }
+            reg.apply_burstal(t, &ledger, &mut leaks);
+            if t == 110 {
+                rate_early = reg.neuron_state_by_neuron(cortical).unwrap()[&1].rate_ema;
+            }
+        }
+        assert!(leaks[1] > 0.2 + 0.05, "leak raised: {}", leaks[1]);
+        assert!(leaks[1] <= 0.6 + 1e-7);
+        assert!(rate_early > 0.0);
+        let raised = leaks[1];
+        // Input stops: leak relaxes back toward base, never below.
+        let mut prev = raised;
+        for t in 201..=500u64 {
+            archive_burst_silent(&mut ledger, t);
+            reg.apply_burstal(t, &ledger, &mut leaks);
+            assert!(leaks[1] >= 0.2 - 1e-7, "below base at {t}: {}", leaks[1]);
+            assert!(leaks[1] <= prev + 1e-7 || t < 230, "not monotone at {t}");
+            prev = leaks[1];
+        }
+        assert!((leaks[1] - 0.2).abs() < 1e-3, "relaxed to base: {}", leaks[1]);
+        // Two-sided neuron 0 was driven by the same rule as before (still regulated two-sided).
+        let s = reg.neuron_state_by_neuron(cortical).unwrap();
+        assert!(!s[&0].one_sided);
+    }
+
+    /// One-sided regulation reduces the rate of a driven silent-armed neuron versus unregulated.
+    #[test]
+    fn per_neuron_one_sided_reduces_rate_vs_unregulated() {
+        // Deterministic stand-in for a LIF neuron: fires when drive * (1 - leak) accumulates >= 1.
+        fn run(silent: &str) -> (f32, f32) {
+            let cortical = 34u32;
+            let mut reg = RateModulatedLeakRegistry::default();
+            reg.sync_cortical(
+                cortical,
+                &json!({
+                    "enabled": true, "target_mode": "per_neuron", "arm_bursts": 20,
+                    "arm_tau_bursts": 5.0, "rate_ema_tau_bursts": 10.0, "gain": 0.2,
+                    "leak_min": 0.0, "leak_max": 0.9, "silent_neurons": silent,
+                }),
+                0.1,
+                vec![0],
+            );
+            let mut ledger = FireLedger::new(16);
+            ledger.track_area(cortical, 16).unwrap();
+            let mut leaks = vec![0.1_f32];
+            let mut v = 0.0_f32;
+            let mut fires_late = 0;
+            for t in 1..=600u64 {
+                let drive = if t > 20 { 0.5 } else { 0.0 };
+                v = v * (1.0 - leaks[0]) + drive;
+                if v >= 1.0 {
+                    v = 0.0;
+                    archive_burst_fires(&mut ledger, t, cortical, &[0]);
+                    if t > 400 {
+                        fires_late += 1;
+                    }
+                } else {
+                    archive_burst_silent(&mut ledger, t);
+                }
+                reg.apply_burstal(t, &ledger, &mut leaks);
+            }
+            (fires_late as f32 / 200.0, leaks[0])
+        }
+        let (r_one, g_one) = run("one_sided");
+        let (r_off, g_off) = run("unregulated");
+        assert!(g_one > 0.1 + 0.05, "leak raised {g_one}");
+        assert_eq!(g_off, 0.1);
+        assert!(r_one < r_off, "rate {r_one} vs unregulated {r_off}");
+    }
+
+    #[test]
+    fn per_neuron_unregulated_flag_keeps_legacy_and_resync_reclassifies() {
+        let cortical = 35u32;
+        let cfg = |silent: &str| {
+            json!({ "enabled": true, "target_mode": "per_neuron", "arm_bursts": 5,
+                    "silent_neurons": silent })
+        };
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(cortical, &cfg("unregulated"), 0.1, vec![0]);
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(cortical, 16).unwrap();
+        let mut leaks = vec![0.1_f32; 2];
+        for t in 1..=5u64 {
+            archive_burst_silent(&mut ledger, t);
+            reg.apply_burstal(t, &ledger, &mut leaks);
+        }
+        let s = reg.neuron_state_by_neuron(cortical).unwrap()[&0];
+        assert!(!s.regulated && !s.one_sided);
+        reg.sync_cortical(cortical, &cfg("one_sided"), 0.1, vec![0]);
+        let s = reg.neuron_state_by_neuron(cortical).unwrap()[&0];
+        assert!(s.regulated && s.one_sided);
     }
 
     /// Neuron 0 fires every 4th burst, neuron 1 never. Arming freezes 0 at ~its rate, leaves 1 out,
@@ -1201,6 +1416,7 @@ mod tests {
             &json!({
                 "enabled": true, "target_mode": "per_neuron", "arm_bursts": 80,
                 "arm_tau_bursts": 20.0, "min_target_firing_per_burst": 0.01,
+                "silent_neurons": "unregulated",
                 "rate_ema_tau_bursts": 5.0, "gain": 0.1, "leak_min": 0.0, "leak_max": 1.0,
             }),
             0.2,

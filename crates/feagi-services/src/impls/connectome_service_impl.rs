@@ -2935,6 +2935,19 @@ impl ConnectomeService for ConnectomeServiceImpl {
         for rule in &mapping_data {
             if let Some(obj) = rule.as_object() {
                 let mut normalized = obj.clone();
+                // Store the canonical key names. The burst engine reads
+                // `postSynapticCurrent_multiplier` and defaults a missing one to 1, so a rule
+                // stored under the alias `psc_multiplier` worked live, then was dropped by the
+                // genome export on the next save.
+                feagi_evolutionary::converter_flat_full::normalize_dstmap_rule_object(
+                    &mut normalized,
+                )
+                .map_err(|reason| {
+                    ServiceError::InvalidInput(format!(
+                        "mapping rule {} -> {}: {}",
+                        src_area_id, dst_area_id, reason
+                    ))
+                })?;
                 let morphology_id = normalized
                     .get("morphology_id")
                     .and_then(|v| v.as_str())
@@ -6566,6 +6579,105 @@ mod tests {
         svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), two_rules(1.0))
             .await?;
         assert_eq!(saved_rules().len(), 2);
+        Ok(())
+    }
+
+    /// A rule written with the short key `psc_multiplier` and no `plasticity_flag` (what the MCP
+    /// `update_cortical_mapping` documents) is stored under the canonical keys, so the genome
+    /// export no longer drops it on the next save, load or restart. A rule that cannot be
+    /// repaired is rejected instead of stored.
+    #[tokio::test]
+    async fn short_psc_key_mapping_is_stored_canonically_and_survives_save_and_load(
+    ) -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        mgr.setup_core_morphologies_for_testing();
+
+        let src_id = CorticalID::try_from_bytes(b"czasrc01").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"czadst01").unwrap();
+        for (id, label) in [(src_id, "src"), (dst_id, "dst")] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        mgr.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        mgr.add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+
+        let connectome = Arc::new(RwLock::new(mgr));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        svc.update_cortical_mapping(
+            src_id.as_base_64(),
+            dst_id.as_base_64(),
+            vec![serde_json::json!({
+                "morphology_id": "projector",
+                "morphology_scalar": 1,
+                "psc_multiplier": 0.5,
+            })],
+        )
+        .await?;
+
+        let stored = {
+            let manager = connectome.read();
+            manager
+                .get_cortical_area(&src_id)
+                .and_then(|area| area.properties.get("cortical_mapping_dst").cloned())
+                .and_then(|dst| dst.get(dst_id.as_base_64()).cloned())
+                .and_then(|rules| rules.as_array().cloned())
+                .unwrap_or_default()
+        };
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0]["postSynapticCurrent_multiplier"].as_f64(), Some(0.5));
+        assert!(stored[0].get("psc_multiplier").is_none());
+        assert_eq!(stored[0]["plasticity_flag"], false);
+
+        let mut shell = super::empty_runtime_genome("short-psc-key");
+        crate::impls::genome_service_impl::sync_runtime_genome_from_connectome(
+            &mut shell,
+            &connectome.read(),
+        );
+        let json = feagi_evolutionary::save_genome_to_json(&shell).expect("genome saves");
+        let genome = feagi_evolutionary::load_genome_from_json(&json).expect("saved genome loads");
+        let reloaded = genome
+            .cortical_areas
+            .get(&src_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|dst| dst.get(dst_id.as_base_64()))
+            .and_then(|rules| rules.as_array().cloned())
+            .unwrap_or_default();
+        assert_eq!(reloaded.len(), 1, "short-key rule survives save and load");
+
+        let rejected = svc
+            .update_cortical_mapping(
+                src_id.as_base_64(),
+                dst_id.as_base_64(),
+                vec![serde_json::json!({"morphology_scalar": 1})],
+            )
+            .await;
+        assert!(rejected.is_err(), "a rule without morphology_id is rejected");
         Ok(())
     }
 

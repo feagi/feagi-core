@@ -73,9 +73,9 @@ impl ScheduledEvent {
             } => {
                 named("src", src)?;
                 named("dst", dst)?;
-                if !psc_multiplier.is_finite() || *psc_multiplier < 0.0 {
+                if !psc_multiplier.is_finite() {
                     return Err(TrainerError::Config(format!(
-                        "scheduled event {:?}: psc_multiplier must be finite and >= 0",
+                        "scheduled event {:?}: psc_multiplier must be finite (negative values are allowed for inhibitory mappings)",
                         self.label
                     )));
                 }
@@ -154,5 +154,24 @@ mod tests {
         event.at_s = 0.0;
         event.label = " ".to_string();
         assert!(event.validate().is_err());
+    }
+
+    #[test]
+    fn negative_psc_multiplier_is_accepted_and_non_finite_rejected() {
+        let psc = |value: f64| ScheduledEvent {
+            at_s: 0.0,
+            label: "l".to_string(),
+            action: ScheduledAction::SetMappingPsc {
+                src: "a".to_string(),
+                dst: "b".to_string(),
+                psc_multiplier: value,
+            },
+        };
+        for ok in [-2.5, -0.0, 0.0, 3.0] {
+            assert!(psc(ok).validate().is_ok(), "{ok}");
+        }
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(psc(bad).validate().is_err(), "{bad}");
+        }
     }
 }
