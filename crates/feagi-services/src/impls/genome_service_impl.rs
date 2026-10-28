@@ -833,6 +833,27 @@ impl GenomeServiceImpl {
     }
 }
 
+/// Merge a `rate_modulated_leak` update into the stored object. Object onto object: given
+/// keys override, absent keys are kept, a null key deletes it. A null update clears the whole
+/// setting; anything that is not an object (rejected later by validation) passes through.
+fn merge_rate_modulated_leak(existing: Option<&Value>, update: &Value) -> Value {
+    let Value::Object(given) = update else {
+        return update.clone();
+    };
+    let mut merged = match existing {
+        Some(Value::Object(stored)) => stored.clone(),
+        _ => serde_json::Map::new(),
+    };
+    for (key, value) in given {
+        if value.is_null() {
+            merged.remove(key);
+        } else {
+            merged.insert(key.clone(), value.clone());
+        }
+    }
+    Value::Object(merged)
+}
+
 #[async_trait]
 impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
@@ -1389,6 +1410,20 @@ impl GenomeService for GenomeServiceImpl {
         }
 
         // Reject a malformed homeostat config before anything is applied; null clears it.
+        // An object update merges into the stored one (given keys override, absent keys are
+        // kept, a null key deletes it), so a partial update such as only `arm_epoch` keeps
+        // the other fields. A null value clears the whole setting. Validation and apply both
+        // see the merged object.
+        if let Some(update) = changes.get("rate_modulated_leak").cloned() {
+            let merged = {
+                let manager = self.connectome.read();
+                let existing = manager
+                    .get_cortical_area(&cortical_id_typed_for_lock)
+                    .and_then(|area| area.properties.get("rate_modulated_leak"));
+                merge_rate_modulated_leak(existing, &update)
+            };
+            changes.insert("rate_modulated_leak".to_string(), merged);
+        }
         if let Some(value) = changes.get("rate_modulated_leak") {
             if !value.is_null() {
                 feagi_npu_burst_engine::rate_modulated_leak::RateModulatedLeakConfig::validate(
@@ -6252,6 +6287,112 @@ mod tests {
         )
         .await
         .expect("valid rate_modulated_leak is accepted");
+    }
+
+    #[test]
+    fn merge_rate_modulated_leak_overrides_keeps_and_deletes_keys() {
+        use super::merge_rate_modulated_leak;
+        let stored = serde_json::json!({ "enabled": true, "gain": 0.2, "arm_epoch": 1 });
+        // Given keys override, absent keys are kept.
+        assert_eq!(
+            merge_rate_modulated_leak(Some(&stored), &serde_json::json!({ "arm_epoch": 2 })),
+            serde_json::json!({ "enabled": true, "gain": 0.2, "arm_epoch": 2 })
+        );
+        // A null key deletes it.
+        assert_eq!(
+            merge_rate_modulated_leak(Some(&stored), &serde_json::json!({ "gain": null })),
+            serde_json::json!({ "enabled": true, "arm_epoch": 1 })
+        );
+        // Nothing stored: the update (minus nulls) is the object.
+        assert_eq!(
+            merge_rate_modulated_leak(None, &serde_json::json!({ "enabled": true, "gain": null })),
+            serde_json::json!({ "enabled": true })
+        );
+        // A null update clears the whole setting; a non-object passes through to validation.
+        assert!(merge_rate_modulated_leak(Some(&stored), &serde_json::Value::Null).is_null());
+        assert_eq!(
+            merge_rate_modulated_leak(Some(&stored), &serde_json::json!("on")),
+            serde_json::json!("on")
+        );
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rate_modulated_leak_partial_update_merges() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"crmlmrg1").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            11,
+            "rml-merge-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(
+            connectome.clone(),
+            ParameterUpdateQueue::new(),
+        );
+        let id = area_id.as_base_64();
+        let stored = |connectome: &Arc<RwLock<ConnectomeManager>>| {
+            connectome
+                .read()
+                .get_cortical_area(&area_id)
+                .expect("area")
+                .properties
+                .get("rate_modulated_leak")
+                .cloned()
+        };
+        let send = |value: serde_json::Value| {
+            svc.update_cortical_area(
+                &id,
+                HashMap::from([("rate_modulated_leak".to_string(), value)]),
+            )
+        };
+
+        // A full object still works.
+        send(serde_json::json!({
+            "enabled": true, "target_mode": "per_neuron", "gain": 0.3, "arm_epoch": 1
+        }))
+        .await
+        .expect("full object");
+        // Bumping only arm_epoch keeps target_mode and gain.
+        send(serde_json::json!({ "arm_epoch": 2 })).await.expect("partial");
+        assert_eq!(
+            stored(&connectome).unwrap(),
+            serde_json::json!({
+                "enabled": true, "target_mode": "per_neuron", "gain": 0.3, "arm_epoch": 2
+            })
+        );
+        // Only `enabled` keeps the rest.
+        send(serde_json::json!({ "enabled": false })).await.expect("disable");
+        assert_eq!(
+            stored(&connectome).unwrap(),
+            serde_json::json!({
+                "enabled": false, "target_mode": "per_neuron", "gain": 0.3, "arm_epoch": 2
+            })
+        );
+        // The merged object is validated: a bad partial is rejected and changes nothing.
+        let before = stored(&connectome);
+        send(serde_json::json!({ "enabled": true, "leak_min": 0.9, "leak_max": 0.1 }))
+            .await
+            .expect_err("merged object must validate");
+        assert_eq!(stored(&connectome), before);
+        // A null clears the whole setting.
+        send(serde_json::Value::Null).await.expect("clear");
+        assert!(stored(&connectome).is_none_or(|v| v.is_null()));
     }
 
     #[tokio::test]
