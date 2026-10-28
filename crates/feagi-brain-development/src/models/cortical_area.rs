@@ -47,7 +47,10 @@ pub trait CorticalAreaExt {
     /// Get snooze_period from properties (defaults to 0)
     fn snooze_period(&self) -> u16;
 
-    /// Get leak_coefficient from properties (defaults to 0.0)
+    /// Get leak_coefficient from properties (defaults to 0.0).
+    ///
+    /// Per-burst fraction of membrane potential lost, `g` in `V_t = V_{t-1} * (1 - g) + I_t`.
+    /// The NPU applies it lazily: at the next input, `V = V * (1 - g)^(t - t_last)` before adding `I`.
     fn leak_coefficient(&self) -> f32;
 
     /// Get firing_threshold from properties (defaults to 1.0)

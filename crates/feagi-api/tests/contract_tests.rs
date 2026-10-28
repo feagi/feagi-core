@@ -4222,7 +4222,7 @@ async fn test_sensory_hold_last_frame_put_get_and_save() {
     assert_eq!(hold_entry, Some(json!(false)));
 }
 
-// ---- simulation_timestep: physiology stores + applies live; burst_engine/config is live only ----
+// ---- simulation_timestep: physiology stores + applies live; burst_engine/config stores too ----
 
 /// Tests share one process-wide mock frequency cell, so they run under this lock.
 /// Async mutex so the guard can stay held across `.await` without blocking a worker.
@@ -4288,7 +4288,7 @@ async fn test_physiology_timestep_is_stored_and_applied_live() {
 }
 
 #[tokio::test]
-async fn test_burst_engine_config_leaves_stored_timestep_unchanged() {
+async fn test_burst_engine_config_stores_timestep_and_reloads() {
     let _guard = TIMESTEP_TEST_LOCK.lock().await;
     let state = build_test_state();
     MOCK_RUNTIME_FREQUENCY_BITS.store(0, Ordering::SeqCst);
@@ -4314,7 +4314,22 @@ async fn test_burst_engine_config_leaves_stored_timestep_unchanged() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert!((mock_applied_frequency_hz() - 40.0).abs() < 1e-9);
-    assert!((stored_timestep(&state).await - stored_before).abs() < 1e-15);
+    // Stored: a save/export carries 1/40 s, and the info a reload applies matches.
+    assert!((stored_timestep(&state).await - 0.025).abs() < 1e-12);
+    let info = state.genome_service.get_genome_info().await.expect("info");
+    assert!((info.simulation_timestep - 0.025).abs() < 1e-12);
+
+    // A non-positive rate is rejected and changes nothing.
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/burst_engine/config",
+        "t",
+        json!({"burst_frequency_hz": 0.0}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!((stored_timestep(&state).await - 0.025).abs() < 1e-12);
 }
 
 #[tokio::test]

@@ -95,8 +95,8 @@ pub(crate) async fn apply_simulation_timestep(state: &ApiState, timestep_s: f64)
 /// `simulation_timestep` (seconds, finite and > 0) is stored in the in-memory genome
 /// (`physiology.simulation_timestep`) AND applied live as burst rate 1/timestep Hz, so a later
 /// genome save, download or connectome export carries it and the next load restores it.
-/// Contrast `PUT /v1/burst_engine/config`, which changes the running engine only and leaves the
-/// stored genome unchanged. Body: `{"physiology": {"simulation_timestep": 0.025}}`; the response
+/// `PUT /v1/burst_engine/config` with `burst_frequency_hz` stores the same value.
+/// Body: `{"physiology": {"simulation_timestep": 0.025}}`; the response
 /// `updated.simulation_timestep` is the stored value. Other keys are accepted but not yet stored.
 #[utoipa::path(
     put,

@@ -53,6 +53,7 @@ pub trait NeuronStorage: Send + Sync {
     fn membrane_potentials(&self) -> &[Self::Value];
     fn thresholds(&self) -> &[Self::Value];
     fn leak_coefficients(&self) -> &[f32];
+    fn last_update_bursts(&self) -> &[u64];   // burst of the last V write (lazy leak clock)
     // ... 20+ properties
     
     fn add_neuron(&mut self, /* ... */) -> Result<usize>;

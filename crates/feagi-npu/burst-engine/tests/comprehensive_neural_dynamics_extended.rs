@@ -344,17 +344,28 @@ fn test_mp_accumulation_with_leak() {
     // Neuron with mp_accumulation=true and moderate leak
     let neuron = add_test_neuron(&mut npu, 100.0, 0.2, true, 0, 10, 0);
 
-    // Inject 60, wait, inject 60 again
-    // With 20% leak: 60 -> 48 + 60 = 108 > 100, should fire
+    // Lazy per-burst LIF: V_t = V_{t-1} * (1 - g) + I_t.
+    // Inject 60 on consecutive bursts: 60 * 0.8 + 60 = 108 > 100, should fire.
     npu.inject_sensory_with_potentials(&[(neuron, 60.0)]);
     npu.process_burst().unwrap();
-
-    npu.process_burst().unwrap(); // Let it leak
 
     npu.inject_sensory_with_potentials(&[(neuron, 60.0)]);
     let result = npu.process_burst().unwrap();
     assert!(
         result.fired_neurons.contains(&neuron),
         "Should fire when leaked+new potential exceeds threshold"
+    );
+
+    // One idle burst in between leaks twice: 60 * 0.8^2 + 60 = 98.4 < 100, must not fire.
+    let mut npu = create_test_npu();
+    let neuron = add_test_neuron(&mut npu, 100.0, 0.2, true, 0, 10, 0);
+    npu.inject_sensory_with_potentials(&[(neuron, 60.0)]);
+    npu.process_burst().unwrap();
+    npu.process_burst().unwrap(); // idle burst: leak still applies (lazily)
+    npu.inject_sensory_with_potentials(&[(neuron, 60.0)]);
+    let result = npu.process_burst().unwrap();
+    assert!(
+        !result.fired_neurons.contains(&neuron),
+        "Idle bursts must leak: 98.4 < 100"
     );
 }

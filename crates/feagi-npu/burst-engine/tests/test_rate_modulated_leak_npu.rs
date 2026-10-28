@@ -7,7 +7,7 @@
 //! from neuron storage.
 
 use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::RustNPU;
+use feagi_npu_burst_engine::{NeuronStateField, RustNPU};
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
@@ -231,4 +231,167 @@ fn e_removed_area_leak_unchanged() {
             "leak changed after removal: {l}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// target_mode = "per_neuron"
+// ---------------------------------------------------------------------------------------
+
+const ARM_BURSTS: usize = 400;
+
+fn per_neuron_cfg(epoch: u32) -> serde_json::Value {
+    json!({
+        "enabled": true,
+        "target_mode": "per_neuron",
+        "arm_bursts": ARM_BURSTS,
+        "arm_tau_bursts": 100.0,
+        "min_target_firing_per_burst": 0.01,
+        "arm_epoch": epoch,
+        "rate_ema_tau_bursts": 20.0,
+        "gain": 0.02,
+        "leak_min": 0.0,
+        "leak_max": 0.9,
+    })
+}
+
+fn register_per_neuron(npu: &mut TestNpu, ids: &[NeuronId], epoch: u32) {
+    npu.sync_rate_modulated_leak_from_cortical_property(
+        AREA,
+        &per_neuron_cfg(epoch),
+        BASE_LEAK,
+        ids.iter().map(|n| n.0 as usize).collect(),
+    );
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+}
+
+/// Drive each neuron with its own constant per-burst input for `bursts` bursts.
+fn drive(npu: &mut TestNpu, ids: &[NeuronId], inputs: &[f32], bursts: usize) {
+    for _ in 0..bursts {
+        let pots: Vec<(NeuronId, f32)> = ids
+            .iter()
+            .zip(inputs)
+            .filter(|(_, &p)| p > 0.0)
+            .map(|(&i, &p)| (i, p))
+            .collect();
+        npu.inject_sensory_with_potentials(&pots);
+        npu.process_burst().unwrap();
+    }
+}
+
+fn column(npu: &TestNpu, field: NeuronStateField) -> Vec<f32> {
+    npu.read_neuron_state_columns(AREA, &[field])
+        .fields
+        .remove(0)
+        .1
+        .into_iter()
+        .map(|v| v.expect("area is registered"))
+        .collect()
+}
+
+/// Arming sets each neuron's target to its own rate (no leak change), the silent neuron is not
+/// regulated, and after a constant extra input the rate moves back toward the target.
+#[test]
+fn per_neuron_arms_to_own_rate_then_holds_under_added_input() {
+    let (mut npu, ids) = make_npu(3);
+    register_per_neuron(&mut npu, &ids, 0);
+    drive(&mut npu, &ids, &[0.3, 0.0, 0.45], ARM_BURSTS);
+
+    let ema = column(&npu, NeuronStateField::RateEma);
+    let target = column(&npu, NeuronStateField::RateTarget);
+    let reg = column(&npu, NeuronStateField::HomeostatRegulated);
+    let leak = column(&npu, NeuronStateField::LeakCoefficient);
+    println!("armed: ema {ema:?} target {target:?} regulated {reg:?} leak {leak:?}");
+    // Each target is the neuron's own rate, not an area mean.
+    assert!((target[0] - ema[0]).abs() < 0.05, "{target:?} vs {ema:?}");
+    assert!((target[2] - ema[2]).abs() < 0.05, "{target:?} vs {ema:?}");
+    assert!(
+        target[0] > 0.15 && target[2] > target[0] + 0.03,
+        "{target:?}"
+    );
+    assert_eq!(target[1], 0.0);
+    assert_eq!(reg, vec![1.0, 0.0, 1.0]);
+    // No leak adjustment while arming, and the silent neuron is never pinned.
+    assert!(
+        leak.iter().all(|&l| (l - BASE_LEAK).abs() < 1e-6),
+        "{leak:?}"
+    );
+
+    // Constant extra input: rate jumps above the frozen target, then the leak pulls it back.
+    drive(&mut npu, &ids, &[0.4, 0.0, 0.6], 50);
+    let early = column(&npu, NeuronStateField::RateEma);
+    drive(&mut npu, &ids, &[0.4, 0.0, 0.6], 600);
+    let late = column(&npu, NeuronStateField::RateEma);
+    let leak = column(&npu, NeuronStateField::LeakCoefficient);
+    let target_after = column(&npu, NeuronStateField::RateTarget);
+    println!("early {early:?} late {late:?} leak {leak:?}");
+    assert_eq!(target_after, target, "targets stay frozen");
+    for j in [0usize, 2] {
+        assert!(
+            early[j] > target[j] + 0.03,
+            "disturbance raises rate: {early:?}"
+        );
+        assert!(
+            (late[j] - target[j]).abs() < (early[j] - target[j]).abs() * 0.6,
+            "neuron {j} rate should return toward target: early {early:?} late {late:?} target {target:?}"
+        );
+        assert!(leak[j] > BASE_LEAK + 0.01, "leak rose: {leak:?}");
+    }
+    assert!(
+        (leak[1] - BASE_LEAK).abs() < 1e-6,
+        "silent neuron leak stays at base: {leak:?}"
+    );
+}
+
+/// A re-sync with the same `arm_epoch` keeps the armed targets; a new epoch restarts arming
+/// from the base leak.
+#[test]
+fn per_neuron_rearm_resets() {
+    let (mut npu, ids) = make_npu(2);
+    register_per_neuron(&mut npu, &ids, 0);
+    drive(&mut npu, &ids, &[0.3, 0.0], ARM_BURSTS);
+    drive(&mut npu, &ids, &[0.5, 0.0], 200);
+    let leak = column(&npu, NeuronStateField::LeakCoefficient);
+    let target = column(&npu, NeuronStateField::RateTarget);
+    assert!(
+        leak[0] > BASE_LEAK + 0.005,
+        "regulated leak moved: {leak:?}"
+    );
+
+    // Same epoch: parameters update, armed state kept.
+    register_per_neuron(&mut npu, &ids, 0);
+    assert_eq!(column(&npu, NeuronStateField::RateTarget), target);
+    assert_eq!(column(&npu, NeuronStateField::HomeostatRegulated)[0], 1.0);
+
+    // New epoch: arming restarts (not regulated), leaks go back to the base value.
+    register_per_neuron(&mut npu, &ids, 1);
+    drive(&mut npu, &ids, &[0.5, 0.0], 10);
+    assert_eq!(
+        column(&npu, NeuronStateField::HomeostatRegulated),
+        vec![0.0, 0.0]
+    );
+    let leak = column(&npu, NeuronStateField::LeakCoefficient);
+    assert!(
+        leak.iter().all(|&l| (l - BASE_LEAK).abs() < 1e-6),
+        "{leak:?}"
+    );
+    // It re-arms to the new input's own rate.
+    drive(&mut npu, &ids, &[0.5, 0.0], ARM_BURSTS);
+    let target2 = column(&npu, NeuronStateField::RateTarget);
+    assert_eq!(
+        column(&npu, NeuronStateField::HomeostatRegulated),
+        vec![1.0, 0.0]
+    );
+    assert!(target2[0] > target[0] + 0.03, "{target2:?} vs {target:?}");
+}
+
+/// Area mode reports its single target and `regulated = 1` for every neuron.
+#[test]
+fn area_mode_reports_area_target_and_regulated() {
+    let (mut npu, ids) = make_npu(2);
+    register(&mut npu, &ids, 0.2);
+    assert_eq!(column(&npu, NeuronStateField::RateTarget), vec![0.2, 0.2]);
+    assert_eq!(
+        column(&npu, NeuronStateField::HomeostatRegulated),
+        vec![1.0, 1.0]
+    );
 }

@@ -28,6 +28,52 @@ pub struct RateModulatedLeakConfig {
     /// If 0, treated as 1.
     #[serde(default = "one_u32")]
     pub update_every_n_bursts: u32,
+    /// Where each neuron's set-point comes from (default: one `target_firing_per_burst` per area).
+    #[serde(default)]
+    pub target_mode: TargetMode,
+    /// `per_neuron` only: bursts spent measuring each neuron's own rate before the targets freeze.
+    #[serde(default = "default_arm_bursts")]
+    pub arm_bursts: u32,
+    /// `per_neuron` only: time constant (bursts) of the arming-phase rate EMA. `None` means
+    /// `arm_bursts / 4`.
+    #[serde(default)]
+    pub arm_tau_bursts: Option<f32>,
+    /// `per_neuron` only: neurons whose armed target is below this are not regulated.
+    #[serde(default = "default_min_target")]
+    pub min_target_firing_per_burst: f32,
+    /// `per_neuron` only: changing this value restarts arming (re-arm trigger).
+    #[serde(default)]
+    pub arm_epoch: u32,
+}
+
+/// Source of the firing-rate set-point.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetMode {
+    /// One `target_firing_per_burst` for every neuron of the area.
+    #[default]
+    Area,
+    /// Each neuron's target is its own firing rate measured during the arming phase.
+    PerNeuron,
+}
+
+impl RateModulatedLeakConfig {
+    /// Arming-phase EMA time constant in bursts (`arm_tau_bursts`, else `arm_bursts / 4`).
+    pub fn effective_arm_tau(&self) -> f32 {
+        self.arm_tau_bursts
+            .unwrap_or_else(|| (self.arm_bursts.max(1) as f32) / 4.0)
+            .max(1e-3)
+    }
+}
+
+/// Per-neuron homeostat readout (see the neuron state endpoint).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NeuronHomeostatState {
+    pub rate_ema: f32,
+    /// Set-point in use (per-neuron mode while arming: the running estimate of the armed target).
+    pub rate_target: f32,
+    /// Whether the leak of this neuron is being adjusted now.
+    pub regulated: bool,
 }
 
 fn default_target() -> f32 {
@@ -48,6 +94,12 @@ fn default_leak_max() -> f32 {
 fn one_u32() -> u32 {
     1
 }
+fn default_arm_bursts() -> u32 {
+    500
+}
+fn default_min_target() -> f32 {
+    0.001
+}
 
 #[derive(Debug)]
 struct AreaState {
@@ -55,12 +107,29 @@ struct AreaState {
     neuron_idx: Vec<usize>,
     r_ema: Vec<f32>,
     g_leak: Vec<f32>,
+    /// Area's static leak; inactive per-neuron neurons stay here.
+    base_leak: f32,
+    // --- per_neuron mode ---
+    /// Bursts of arming left; 0 means targets are frozen.
+    arm_remaining: u32,
+    /// Bursts accumulated in the current arming phase (for EMA bias correction).
+    arm_n: u32,
+    arm_ema: Vec<f32>,
+    /// Frozen per-neuron targets (valid once `arm_remaining == 0`).
+    target: Vec<f32>,
+    regulated: Vec<bool>,
+    /// Next `apply_burstal` writes `base_leak` into every neuron's leak slot (fresh arming).
+    reset_leaks_pending: bool,
 }
 
 /// Registry of areas that receive the homeostatic post-pass. Empty: zero overhead in [`crate::npu::RustNPU`].
 #[derive(Debug, Default)]
 pub struct RateModulatedLeakRegistry {
     areas: AHashMap<u32, AreaState>,
+    /// `(neuron storage index, previous leak)` for neurons whose leak changed in the last pass.
+    /// The caller catches their membrane charge up with the previous leak (see
+    /// [`Self::drain_leak_changes`]) so the lazy per-burst leak stays exact.
+    leak_changes: Vec<(usize, f32)>,
 }
 
 impl RateModulatedLeakConfig {
@@ -74,6 +143,16 @@ impl RateModulatedLeakConfig {
             Some(Value::Bool(false)) => return Ok(None),
             Some(Value::Bool(true)) => {}
             Some(_) => return Err("rate_modulated_leak.enabled must be a boolean".to_string()),
+        }
+        if let Some(mode) = obj.get("target_mode") {
+            match mode.as_str() {
+                Some("area") | Some("per_neuron") => {}
+                _ => {
+                    return Err(format!(
+                        "rate_modulated_leak.target_mode must be \"area\" or \"per_neuron\" (got {mode})"
+                    ))
+                }
+            }
         }
         let cfg: Self = serde_json::from_value(value.clone())
             .map_err(|e| format!("rate_modulated_leak has invalid field types: {e}"))?;
@@ -113,6 +192,22 @@ impl RateModulatedLeakConfig {
                 cfg.leak_min, cfg.leak_max
             ));
         }
+        if cfg.arm_bursts == 0 {
+            return Err("rate_modulated_leak.arm_bursts must be >= 1".to_string());
+        }
+        if let Some(tau) = cfg.arm_tau_bursts {
+            if !tau.is_finite() || tau <= 0.0 {
+                return Err(format!(
+                    "rate_modulated_leak.arm_tau_bursts must be finite and > 0 (got {tau})"
+                ));
+            }
+        }
+        if !(0.0..=1.0).contains(&cfg.min_target_firing_per_burst) {
+            return Err(format!(
+                "rate_modulated_leak.min_target_firing_per_burst must be in [0, 1] (got {})",
+                cfg.min_target_firing_per_burst
+            ));
+        }
         Ok(Some(cfg))
     }
 
@@ -146,9 +241,65 @@ impl RateModulatedLeakRegistry {
         })
     }
 
+    /// Per-neuron readout (rate EMA, set-point, regulated flag) keyed by global neuron index for
+    /// one area, or `None` when not registered.
+    pub fn neuron_state_by_neuron(
+        &self,
+        cortical_idx: u32,
+    ) -> Option<AHashMap<usize, NeuronHomeostatState>> {
+        let st = self.areas.get(&cortical_idx)?;
+        let per_neuron = st.config.target_mode == TargetMode::PerNeuron;
+        let arming = per_neuron && st.arm_remaining > 0;
+        let bias = Self::arm_bias(&st.config, st.arm_n);
+        Some(
+            st.neuron_idx
+                .iter()
+                .enumerate()
+                .map(|(j, &idx)| {
+                    let (rate_target, regulated) = if !per_neuron {
+                        (st.config.target_firing_per_burst, true)
+                    } else if arming {
+                        let t = if bias > 0.0 {
+                            st.arm_ema[j] / bias
+                        } else {
+                            0.0
+                        };
+                        (t, false)
+                    } else {
+                        (st.target[j], st.regulated[j])
+                    };
+                    (
+                        idx,
+                        NeuronHomeostatState {
+                            rate_ema: st.r_ema[j],
+                            rate_target,
+                            regulated,
+                        },
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// `1 - (1 - alpha_arm)^n`: bias of an EMA started at 0 after `n` samples.
+    fn arm_bias(cfg: &RateModulatedLeakConfig, n: u32) -> f32 {
+        let alpha: f32 = 1.0 - (-1.0_f32 / cfg.effective_arm_tau()).exp();
+        1.0 - (1.0 - alpha).powi(n as i32)
+    }
+
+    /// Hand each `(neuron index, previous leak)` pair recorded by the last pass to `f` and clear
+    /// the list. Call right after [`Self::apply_burstal`], before the next burst, and catch the
+    /// neuron's charge up with the previous leak there.
+    pub fn drain_leak_changes(&mut self, mut f: impl FnMut(usize, f32)) {
+        for (idx, old) in self.leak_changes.drain(..) {
+            f(idx, old);
+        }
+    }
+
     /// Drop every registration.
     pub fn clear(&mut self) {
         self.areas.clear();
+        self.leak_changes.clear();
     }
 
     /// Restart the homeostat for an area from `leak` after an explicit leak edit.
@@ -160,6 +311,7 @@ impl RateModulatedLeakRegistry {
         if let Some(st) = self.areas.get_mut(&cortical_idx) {
             let g = leak.clamp(0.0, 1.0);
             st.g_leak.iter_mut().for_each(|x| *x = g);
+            st.base_leak = g;
         }
     }
 
@@ -181,6 +333,23 @@ impl RateModulatedLeakRegistry {
         }
         let n = neuron_global_indices.len();
         let g0 = base_leak.clamp(0.0, 1.0);
+        let per_neuron = cfg.target_mode == TargetMode::PerNeuron;
+        // A re-sync that keeps the same neurons, mode and `arm_epoch` keeps the armed targets
+        // and their state; only parameters change. A new `arm_epoch` (or any other change of
+        // mode or neuron set) restarts arming.
+        if let Some(prev) = self.areas.get_mut(&cortical_idx) {
+            if per_neuron
+                && prev.config.target_mode == TargetMode::PerNeuron
+                && prev.config.arm_epoch == cfg.arm_epoch
+                && prev.config.arm_bursts == cfg.arm_bursts
+                && prev.neuron_idx == neuron_global_indices
+            {
+                prev.config = cfg;
+                prev.base_leak = g0;
+                return;
+            }
+        }
+        let arm_remaining = if per_neuron { cfg.arm_bursts } else { 0 };
         self.areas.insert(
             cortical_idx,
             AreaState {
@@ -188,11 +357,20 @@ impl RateModulatedLeakRegistry {
                 neuron_idx: neuron_global_indices,
                 r_ema: vec![0.0; n],
                 g_leak: vec![g0; n],
+                base_leak: g0,
+                arm_remaining,
+                arm_n: 0,
+                arm_ema: vec![0.0; n],
+                target: vec![0.0; n],
+                regulated: vec![false; n],
+                reset_leaks_pending: per_neuron,
             },
         );
     }
 
     /// @cursor:critical-path — call after the fire ledger is archived for `burst_count`.
+    ///
+    /// Neurons whose leak changed in `per_neuron` mode are recorded for [`Self::drain_leak_changes`].
     pub fn apply_burstal(
         &mut self,
         burst_count: u64,
@@ -202,7 +380,23 @@ impl RateModulatedLeakRegistry {
         if self.areas.is_empty() {
             return;
         }
+        let leak_changes = &mut self.leak_changes;
         for (cortical_idx, st) in self.areas.iter_mut() {
+            let per_neuron = st.config.target_mode == TargetMode::PerNeuron;
+            if per_neuron && st.reset_leaks_pending {
+                // Fresh arming: measure natural rates at the area's static leak.
+                st.reset_leaks_pending = false;
+                let base = st.base_leak;
+                for (j, &idx) in st.neuron_idx.iter().enumerate() {
+                    st.g_leak[j] = base;
+                    if let Some(slot) = storage_leaks.get_mut(idx) {
+                        if *slot != base {
+                            leak_changes.push((idx, *slot));
+                            *slot = base;
+                        }
+                    }
+                }
+            }
             let n_period = st.config.update_every_n_bursts.max(1) as u64;
             // EMA samples every burst; only the leak step is gated by the cadence.
             let leak_step_due = (burst_count % n_period) == 0;
@@ -211,6 +405,7 @@ impl RateModulatedLeakRegistry {
                 continue;
             }
             let alpha_r: f32 = 1.0 - (-1.0_f32 / tau_r).exp();
+            let alpha_a: f32 = 1.0 - (-1.0_f32 / st.config.effective_arm_tau()).exp();
             let t = st.config.target_firing_per_burst.clamp(0.0, 1.0);
             let g_min = st.config.leak_min.clamp(0.0, 1.0);
             let g_max = st.config.leak_max.clamp(0.0, 1.0);
@@ -230,6 +425,7 @@ impl RateModulatedLeakRegistry {
                 Some((_, b)) => b,
                 None => continue,
             };
+            let arming = per_neuron && st.arm_remaining > 0;
             for (j, &idx) in st.neuron_idx.iter().enumerate() {
                 if idx >= storage_leaks.len() {
                     continue;
@@ -240,14 +436,47 @@ impl RateModulatedLeakRegistry {
                 }
                 let fired: f32 = if first_bm.contains(nid) { 1.0 } else { 0.0 };
                 st.r_ema[j] = (1.0 - alpha_r) * st.r_ema[j] + alpha_r * fired;
+                let target = if per_neuron {
+                    if arming {
+                        st.arm_ema[j] = (1.0 - alpha_a) * st.arm_ema[j] + alpha_a * fired;
+                        continue;
+                    }
+                    if !st.regulated[j] {
+                        continue;
+                    }
+                    st.target[j]
+                } else {
+                    t
+                };
                 if !leak_step_due {
                     continue;
                 }
-                let e: f32 = st.r_ema[j] - t;
+                let e: f32 = st.r_ema[j] - target;
                 st.g_leak[j] = (st.g_leak[j] + gain * e).clamp(g_min, g_max);
                 let g: f32 = st.g_leak[j].clamp(0.0, 1.0);
                 if let Some(slot) = storage_leaks.get_mut(idx) {
+                    if per_neuron && *slot != g {
+                        leak_changes.push((idx, *slot));
+                    }
                     *slot = g;
+                }
+            }
+            if arming {
+                st.arm_n += 1;
+                st.arm_remaining -= 1;
+                if st.arm_remaining == 0 {
+                    // Freeze: bias-corrected EMA is each neuron's own rate.
+                    let bias = 1.0 - (1.0 - alpha_a).powi(st.arm_n as i32);
+                    let min_t = st.config.min_target_firing_per_burst;
+                    for j in 0..st.neuron_idx.len() {
+                        let tj = if bias > 0.0 {
+                            st.arm_ema[j] / bias
+                        } else {
+                            0.0
+                        };
+                        st.target[j] = tj.clamp(0.0, 1.0);
+                        st.regulated[j] = tj >= min_t;
+                    }
                 }
             }
         }
@@ -901,5 +1130,152 @@ mod tests {
         assert_eq!(m.get(&4), Some(&0.0));
         reg.remove(7);
         assert!(reg.rate_ema_by_neuron(7).is_none());
+    }
+
+    #[test]
+    fn per_neuron_defaults_and_area_default_mode() {
+        let c = RateModulatedLeakConfig::validate(&json!({ "enabled": true }))
+            .unwrap()
+            .unwrap();
+        assert_eq!(c.target_mode, TargetMode::Area);
+        assert_eq!(c.arm_bursts, 500);
+        assert_eq!(c.arm_tau_bursts, None);
+        assert!((c.effective_arm_tau() - 125.0).abs() < 1e-4);
+        assert!((c.min_target_firing_per_burst - 0.001).abs() < 1e-9);
+        assert_eq!(c.arm_epoch, 0);
+        let p = RateModulatedLeakConfig::validate(
+            &json!({ "enabled": true, "target_mode": "per_neuron", "arm_epoch": 3 }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(p.target_mode, TargetMode::PerNeuron);
+        assert_eq!(p.arm_epoch, 3);
+    }
+
+    #[test]
+    fn validate_rejects_bad_per_neuron_fields() {
+        let cases = [
+            ("target_mode", json!("mean"), "target_mode"),
+            ("target_mode", json!(3), "target_mode"),
+            ("arm_bursts", json!(0), "arm_bursts"),
+            ("arm_tau_bursts", json!(0.0), "arm_tau_bursts"),
+            ("arm_tau_bursts", json!(-5.0), "arm_tau_bursts"),
+            (
+                "min_target_firing_per_burst",
+                json!(1.5),
+                "min_target_firing_per_burst",
+            ),
+            ("arm_epoch", json!(-1), "invalid field types"),
+        ];
+        for (field, val, needle) in cases {
+            let err = RateModulatedLeakConfig::validate(&enabled_with(field, val.clone()))
+                .expect_err(&format!("{field}={val} should be rejected"));
+            assert!(err.contains(needle), "{field}={val}: {err}");
+        }
+    }
+
+    #[test]
+    fn config_serde_round_trip_keeps_per_neuron_fields() {
+        let v = json!({
+            "enabled": true, "target_mode": "per_neuron", "arm_bursts": 120,
+            "arm_tau_bursts": 40.0, "min_target_firing_per_burst": 0.01, "arm_epoch": 2
+        });
+        let c = RateModulatedLeakConfig::validate(&v).unwrap().unwrap();
+        let back = serde_json::to_value(&c).unwrap();
+        let c2 = RateModulatedLeakConfig::validate(&back).unwrap().unwrap();
+        assert_eq!(c2.target_mode, TargetMode::PerNeuron);
+        assert_eq!(c2.arm_bursts, 120);
+        assert_eq!(c2.arm_tau_bursts, Some(40.0));
+        assert_eq!(c2.arm_epoch, 2);
+        assert_eq!(back["target_mode"], "per_neuron");
+    }
+
+    /// Neuron 0 fires every 4th burst, neuron 1 never. Arming freezes 0 at ~its rate, leaves 1 out,
+    /// changes no leak while arming, and records leak changes only after the freeze.
+    #[test]
+    fn per_neuron_arming_freezes_own_rate_and_skips_silent() {
+        let cortical = 30u32;
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(
+            cortical,
+            &json!({
+                "enabled": true, "target_mode": "per_neuron", "arm_bursts": 80,
+                "arm_tau_bursts": 20.0, "min_target_firing_per_burst": 0.01,
+                "rate_ema_tau_bursts": 5.0, "gain": 0.1, "leak_min": 0.0, "leak_max": 1.0,
+            }),
+            0.2,
+            vec![0, 1],
+        );
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(cortical, 16).unwrap();
+        let mut leaks = vec![0.2_f32; 4];
+        let mut changes = 0;
+        for t in 1..=80u64 {
+            if t % 4 == 0 {
+                archive_burst_fires(&mut ledger, t, cortical, &[0]);
+            } else {
+                archive_burst_silent(&mut ledger, t);
+            }
+            reg.apply_burstal(t, &ledger, &mut leaks);
+            reg.drain_leak_changes(|_, _| changes += 1);
+            if t < 80 {
+                let s = reg.neuron_state_by_neuron(cortical).unwrap();
+                assert!(!s[&0].regulated, "arming at burst {t}");
+            }
+        }
+        assert_eq!(changes, 0, "no leak adjustment while arming");
+        assert_eq!(leaks[0], 0.2);
+        let s = reg.neuron_state_by_neuron(cortical).unwrap();
+        assert!((s[&0].rate_target - 0.25).abs() < 0.04, "{:?}", s[&0]);
+        assert!(s[&0].regulated);
+        assert_eq!(s[&1].rate_target, 0.0);
+        assert!(!s[&1].regulated);
+        // After the freeze a burst of silence (rate below target) lowers neuron 0 only.
+        for t in 81..=90u64 {
+            archive_burst_silent(&mut ledger, t);
+            reg.apply_burstal(t, &ledger, &mut leaks);
+        }
+        let mut seen = Vec::new();
+        reg.drain_leak_changes(|i, old| seen.push((i, old)));
+        assert!(!seen.is_empty() && seen.iter().all(|(i, _)| *i == 0));
+        assert!(leaks[0] < 0.2, "{}", leaks[0]);
+        assert_eq!(leaks[1], 0.2, "inactive neuron stays at base leak");
+    }
+
+    #[test]
+    fn per_neuron_resync_same_epoch_keeps_state_new_epoch_rearms() {
+        let cortical = 31u32;
+        let cfg = |epoch: u32| {
+            json!({ "enabled": true, "target_mode": "per_neuron", "arm_bursts": 5,
+                    "arm_epoch": epoch })
+        };
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(cortical, &cfg(0), 0.1, vec![0]);
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(cortical, 16).unwrap();
+        let mut leaks = vec![0.1_f32; 2];
+        for t in 1..=5u64 {
+            archive_burst_fires(&mut ledger, t, cortical, &[0]);
+            reg.apply_burstal(t, &ledger, &mut leaks);
+        }
+        assert!(reg.neuron_state_by_neuron(cortical).unwrap()[&0].regulated);
+        reg.sync_cortical(cortical, &cfg(0), 0.1, vec![0]);
+        assert!(reg.neuron_state_by_neuron(cortical).unwrap()[&0].regulated);
+        reg.sync_cortical(cortical, &cfg(1), 0.1, vec![0]);
+        assert!(!reg.neuron_state_by_neuron(cortical).unwrap()[&0].regulated);
+    }
+
+    #[test]
+    fn area_mode_state_reports_area_target() {
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(
+            32,
+            &json!({ "enabled": true, "target_firing_per_burst": 0.3 }),
+            0.1,
+            vec![2, 3],
+        );
+        let s = reg.neuron_state_by_neuron(32).unwrap();
+        assert_eq!(s[&2].rate_target, 0.3);
+        assert!(s[&3].regulated);
     }
 }

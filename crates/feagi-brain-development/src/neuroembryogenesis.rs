@@ -1322,6 +1322,7 @@ impl Neuroembryogenesis {
                                 }
                             }
 
+                            manager.sync_memory_associative_lif_params(area_id);
                             if let Ok(exec) = executor.lock() {
                                 let lifecycle_config = crate::memory_lifecycle_config(&mem_props);
 

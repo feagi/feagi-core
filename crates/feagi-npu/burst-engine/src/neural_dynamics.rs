@@ -37,7 +37,7 @@ use std::sync::{Once, OnceLock};
 use tracing::debug;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
-use feagi_npu_neural::{excitability_random, update_neurons_lif_batch};
+use feagi_npu_neural::{decayed_charge, excitability_random, update_neurons_lif_batch};
 
 // SIMD support (architecture-agnostic)
 // Note: Using LLVM auto-vectorization for now (architecture-agnostic)
@@ -230,16 +230,66 @@ pub fn finish_burst_refractory_period<T: NeuralValue>(
     }
 }
 
+/// Membrane charge of neuron `idx` as of `burst`, without mutating storage.
+///
+/// Neurons are only updated when they receive input, so the stored value is the charge at
+/// `last_update_burst`. Readers apply the same lazy leak the burst step uses:
+/// `V * (1 - g) ^ (burst - last_update_burst)`.
+pub(crate) fn caught_up_membrane_charge<T: NeuralValue>(
+    neuron_array: &impl NeuronStorage<Value = T>,
+    idx: usize,
+    burst: u64,
+) -> f32 {
+    decayed_charge(
+        neuron_array.membrane_potentials()[idx].to_f32() + neuron_array.membrane_fractions()[idx],
+        neuron_array.leak_coefficients()[idx],
+        burst.saturating_sub(neuron_array.last_update_bursts()[idx]),
+    )
+}
+
+/// Apply the lazy leak of the idle stretch with `old_leak` and stamp `burst` as the last update.
+///
+/// Call before changing a neuron's leak coefficient outside the LIF step, so the idle stretch
+/// decays with the leak that was in force, not the new one. No-op when already current.
+pub(crate) fn catch_up_before_leak_change<T: NeuralValue>(
+    neuron_array: &mut impl NeuronStorage<Value = T>,
+    idx: usize,
+    old_leak: f32,
+    burst: u64,
+) {
+    if idx >= neuron_array.count() {
+        return;
+    }
+    let elapsed = burst.saturating_sub(neuron_array.last_update_bursts()[idx]);
+    if elapsed == 0 {
+        return;
+    }
+    let charge =
+        neuron_array.membrane_potentials()[idx].to_f32() + neuron_array.membrane_fractions()[idx];
+    if charge != 0.0 {
+        let decayed = decayed_charge(charge, old_leak, elapsed);
+        let (p, f) = T::zero().integrate_charge(decayed, 0.0);
+        neuron_array.membrane_potentials_mut()[idx] = p;
+        neuron_array.membrane_fractions_mut()[idx] = f;
+    }
+    neuron_array.last_update_bursts_mut()[idx] = burst;
+}
+
 /// Process neural dynamics for all candidate neurons
 ///
 /// This is the CRITICAL HOT PATH - every microsecond matters!
 ///
-/// ## Algorithm:
-/// 1. Apply leak/decay to membrane potentials (non-refractory FCL neurons only)
+/// ## Algorithm (standard per-burst LIF, leak applied lazily):
+/// Per burst `V_t = V_{t-1} * (1 - g) + I_t`. Only FCL candidates are touched; each neuron
+/// stores the burst of its last update, so the leak of the idle stretch is applied in one step.
+/// 1. Catch up leak: `V = V * (1 - g) ^ (burst - last_update_burst)` (non-refractory FCL neurons)
 /// 2. Add candidate potentials from FCL (skipped when refractory — Option B freeze)
-/// 3. Check firing thresholds (with refractory period)
+/// 3. Check firing thresholds (with refractory period); firing resets `V` to 0
 /// 4. Apply probabilistic excitability
-/// 5. Create Fire Queue from firing neurons
+/// 5. Store `last_update_burst = burst` (fired or not); no post-input leak is applied
+/// 6. Create Fire Queue from firing neurons
+///
+/// Readers between inputs apply the same catch-up without mutating state (see `RustNPU`).
 ///
 /// **Refractory:** After this returns, callers **must** invoke [`finish_burst_refractory_period`]
 /// once per burst so countdown advances for **all** neurons, including those not listed in the FCL.
@@ -539,6 +589,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         let mut batch_threshold_fractions = Vec::with_capacity(batch_size);
         let mut batch_threshold_limits = Vec::with_capacity(batch_size);
         let mut batch_leaks = Vec::with_capacity(batch_size);
+        let mut batch_elapsed: Vec<u64> = Vec::with_capacity(batch_size);
         let mut batch_candidates = Vec::with_capacity(batch_size);
         let mut batch_consecutive_fire_counts = Vec::with_capacity(batch_size);
         let mut batch_consecutive_fire_limits = Vec::with_capacity(batch_size);
@@ -553,6 +604,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             batch_threshold_fractions.push(neuron_array.threshold_fractions()[idx]);
             batch_threshold_limits.push(neuron_array.threshold_limits()[idx]);
             batch_leaks.push(neuron_array.leak_coefficients()[idx]);
+            batch_elapsed.push(burst_count.saturating_sub(neuron_array.last_update_bursts()[idx]));
             let mut cand = candidate_potential;
             if neuron_array.mp_charge_accumulation()[idx] && cand < 0.0 {
                 cand = 0.0;
@@ -572,8 +624,17 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         // IMPORTANT: `update_neurons_lif_batch` resets membrane potential to 0 for fired neurons
         // (matching LIF behavior). For downstream features (e.g., mp_driven_psp) and visualization,
         // we must preserve the *pre-reset* membrane potential at the moment of firing.
-        let batch_mp_before_update = batch_mp.clone();
-        let batch_mp_fractions_before = batch_mp_fractions.clone();
+        // Lazy leak: the stored value is as of `last_update_burst`, so the pre-update charge
+        // used for firing-time reporting and constraint checks is the caught-up charge.
+        let batch_charge_decayed: Vec<f32> = (0..batch_size)
+            .map(|i| {
+                decayed_charge(
+                    batch_mp[i].to_f32() + batch_mp_fractions[i],
+                    batch_leaks[i],
+                    batch_elapsed[i],
+                )
+            })
+            .collect();
         let mut fired_mask = vec![false; batch_size];
         update_neurons_lif_batch(
             &mut batch_mp,
@@ -582,6 +643,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             &batch_threshold_fractions,
             &batch_leaks,
             &batch_candidates,
+            &batch_elapsed,
             &mut fired_mask,
         );
         if let Some(lif_start) = lif_start {
@@ -603,16 +665,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             // `update_neurons_lif_batch` resets MP to 0 for firing candidates, so we must
             // evaluate constraints using pre-reset MP to preserve scalar-path semantics.
             let threshold_limit = batch_threshold_limits[i];
-            let charge_before_reset = batch_mp_before_update[i].to_f32()
-                + batch_mp_fractions_before[i]
-                + batch_candidates[i];
+            let charge_before_reset = batch_charge_decayed[i] + batch_candidates[i];
             // threshold_limit == T::MAX means no upper bound.
             let limit_open = threshold_limit.to_f32() == T::max_value().to_f32();
             if !limit_open && charge_before_reset > threshold_limit.to_f32() {
                 fired_mask[i] = false; // Blocked by threshold_limit
-                                       // Match scalar path: blocked firings become no-fire path and leak is applied.
-                let (level, fraction) =
-                    T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                                       // Match scalar path: blocked firings keep the caught-up charge (no post-input leak).
+                let (level, fraction) = T::split_charge(charge_before_reset);
                 batch_mp[i] = level;
                 batch_mp_fractions[i] = fraction;
                 continue;
@@ -632,9 +691,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             // If consecutive_fire_limit == u16::MAX, count will always be < MAX
             if consecutive_fire_count >= consecutive_fire_limit {
                 fired_mask[i] = false; // Blocked by consecutive_fire_limit
-                                       // Match scalar path: blocked firings become no-fire path and leak is applied.
-                let (level, fraction) =
-                    T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                                       // Match scalar path: blocked firings keep the caught-up charge (no post-input leak).
+                let (level, fraction) = T::split_charge(charge_before_reset);
                 batch_mp[i] = level;
                 batch_mp_fractions[i] = fraction;
                 continue;
@@ -645,9 +703,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             if excitability < 0.999 {
                 if excitability <= 0.0 {
                     fired_mask[i] = false; // Never fire
-                                           // Match scalar path: blocked firings become no-fire path and leak is applied.
-                    let (level, fraction) =
-                        T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                                           // Match scalar path: blocked firings keep the caught-up charge (no post-input leak).
+                    let (level, fraction) = T::split_charge(charge_before_reset);
                     batch_mp[i] = level;
                     batch_mp_fractions[i] = fraction;
                     continue;
@@ -656,9 +713,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 let random_val = excitability_random(neuron_id.0, burst_count);
                 if random_val >= excitability {
                     fired_mask[i] = false; // Blocked by excitability
-                                           // Match scalar path: blocked firings become no-fire path and leak is applied.
-                    let (level, fraction) =
-                        T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                                           // Match scalar path: blocked firings keep the caught-up charge (no post-input leak).
+                    let (level, fraction) = T::split_charge(charge_before_reset);
                     batch_mp[i] = level;
                     batch_mp_fractions[i] = fraction;
                     continue;
@@ -675,6 +731,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             // Update membrane potential
             neuron_array.membrane_potentials_mut()[*idx] = batch_mp[i];
             neuron_array.membrane_fractions_mut()[*idx] = batch_mp_fractions[i];
+            neuron_array.last_update_bursts_mut()[*idx] = burst_count;
 
             if fired_mask[i] {
                 // Neuron fired - handle firing logic
@@ -697,10 +754,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 );
 
                 // Capture firing-time membrane potential BEFORE reset.
-                // LIF semantics: MP_fire = MP_old + candidate (no leak when firing).
-                let mp_at_fire = batch_mp_before_update[i].to_f32()
-                    + batch_mp_fractions_before[i]
-                    + batch_candidates[i];
+                // LIF semantics: MP_fire = MP_old * (1-g)^elapsed + candidate.
+                let mp_at_fire = batch_charge_decayed[i] + batch_candidates[i];
 
                 results.push(FiringNeuron {
                     neuron_id: *neuron_id,
@@ -718,7 +773,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                     neuron_array.consecutive_fire_counts_mut()[*idx] = 0;
                 }
             }
-            // If not fired, leak was already applied by update_neurons_lif_batch
+            // If not fired, the caught-up charge was stored (no post-input leak).
         }
         if let Some(scatter_start) = scatter_start {
             total_scatter_time += scatter_start.elapsed();
@@ -828,14 +883,23 @@ fn process_single_neuron<T: NeuralValue>(
         return None;
     }
 
-    // 2. Add candidate potential (matches Python: add BEFORE checking threshold).
+    // 2. Catch up the leak of the idle stretch, then add the candidate potential (add BEFORE
+    // checking threshold). V_t = V_last * (1-g)^(t - t_last) + I_t.
     // The fraction keeps a sub-byte PSP and an inhibitory current that a byte cannot hold.
     let old_potential = neuron_array.membrane_potentials()[idx];
     let old_fraction = neuron_array.membrane_fractions()[idx];
+    let leak_coefficient = neuron_array.leak_coefficients()[idx];
+    let elapsed = burst_count.saturating_sub(neuron_array.last_update_bursts()[idx]);
+    let decayed = decayed_charge(
+        old_potential.to_f32() + old_fraction,
+        leak_coefficient,
+        elapsed,
+    );
     let (current_potential, current_fraction) =
-        old_potential.integrate_charge(old_fraction, candidate_potential);
+        T::zero().integrate_charge(decayed, candidate_potential);
     neuron_array.membrane_potentials_mut()[idx] = current_potential;
     neuron_array.membrane_fractions_mut()[idx] = current_fraction;
+    neuron_array.last_update_bursts_mut()[idx] = burst_count;
     let charge = current_potential.to_f32() + current_fraction;
 
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
@@ -997,8 +1061,8 @@ fn process_single_neuron<T: NeuralValue>(
         }
     }
 
-    // Neuron did not fire - apply leak and reset consecutive fire count
-    // (matches Python: "Apply membrane decay to remaining neurons (leak behavior)")
+    // Neuron did not fire - reset consecutive fire count. The caught-up charge stays stored;
+    // the next leak is applied lazily at the next input (or by readers).
 
     // Reset consecutive fire count (matches Python SIMD implementation)
     let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
@@ -1006,24 +1070,17 @@ fn process_single_neuron<T: NeuralValue>(
         neuron_array.consecutive_fire_counts_mut()[idx] = 0;
     }
 
-    // Apply LIF leak to the full charge, then store the byte and the leftover.
-    let leak_coefficient = neuron_array.leak_coefficients()[idx];
-    let leaked = charge * (1.0 - leak_coefficient);
-    let (leaked_level, leaked_fraction) = T::split_charge(leaked);
-    neuron_array.membrane_potentials_mut()[idx] = leaked_level;
-    neuron_array.membrane_fractions_mut()[idx] = leaked_fraction;
-
     if allow_trace {
         debug!(
             target: "feagi-npu-trace",
-            "[DYN] burst={} neuron={} area={} mp_acc={} NOFIRE mp_old={:.6} cand={:.6} mp_preleak={:.6} mp_postleak={:.6} thr={:.6} leak={:.6}",
+            "[DYN] burst={} neuron={} area={} mp_acc={} NOFIRE mp_old={:.6} cand={:.6} mp_decayed={:.6} mp_stored={:.6} thr={:.6} leak={:.6}",
             burst_count,
             neuron_id.0,
             cortical_idx,
             mp_acc,
             old_potential.to_f32() + old_fraction,
             candidate_potential,
-            charge,
+            decayed,
             neuron_array.membrane_potentials()[idx].to_f32()
                 + neuron_array.membrane_fractions()[idx],
             threshold_charge,
@@ -1420,12 +1477,13 @@ mod tests {
             &mut empty_sparse,
             None,
             &mut neurons,
-            0,
+            1,
         )
         .unwrap();
 
-        // Expected LIF: (1.0 + 0.1) + 0.5 * (0.0 - 1.1) = 1.1 - 0.55 = 0.55
-        assert!((neurons.membrane_potentials[0].to_f32() - 0.55).abs() < 0.001);
+        // Per-burst LIF, leak first then input: V_1 = 1.0 * (1 - 0.5) + 0.1 = 0.6
+        // (V_0 = 1.0 was last updated at burst 0, so one burst of leak is caught up.)
+        assert!((neurons.membrane_potentials[0].to_f32() - 0.6).abs() < 0.001);
     }
 
     #[test]
@@ -1637,6 +1695,45 @@ mod tests {
     }
 
     #[test]
+    fn test_memory_neuron_associative_lif_threshold_three_needs_accumulated_drive() {
+        let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut sparse = empty_assoc_sparse();
+        let memory_id = NeuronId(50_000_000);
+        let cortical_idx = 7u32;
+        let mut mem_map = ahash::AHashMap::new();
+        mem_map.insert(memory_id.0, cortical_idx);
+        let mut lif_params = ahash::AHashMap::new();
+        lif_params.insert(
+            cortical_idx,
+            MemoryAssociativeLifParams {
+                threshold: 3.0,
+                ..Default::default()
+            },
+        );
+
+        let mut fired_per_burst = Vec::new();
+        for burst in 0..3u64 {
+            let mut fcl = FireCandidateList::new();
+            fcl.add_candidate(memory_id, 1.0);
+            let mut assoc_psp = ahash::AHashMap::new();
+            assoc_psp.insert(memory_id.0, 1.0);
+            let result = process_neural_dynamics(
+                &fcl,
+                Some(&mem_map),
+                None,
+                Some(&assoc_psp),
+                &mut sparse,
+                Some(&lif_params),
+                &mut neurons,
+                burst,
+            )
+            .unwrap();
+            fired_per_burst.push(result.neurons_fired);
+        }
+        assert_eq!(fired_per_burst, vec![0, 0, 1]);
+    }
+
+    #[test]
     fn test_memory_neuron_associative_lif_no_fire_below_threshold() {
         let mut neurons = StdNeuronArray::<f32>::new(1);
         let mut empty_sparse = empty_assoc_sparse();
@@ -1719,5 +1816,225 @@ mod tests {
         assert_eq!(result.neurons_fired, 1);
         let area = result.fire_queue.get_area_neurons(cortical_idx).unwrap();
         assert_eq!(area[0].fire_kind, FIRE_KIND_EPISODIC_MEMORY);
+    }
+
+    // ---- Lazy per-burst LIF: V_t = V_{t-1} * (1 - g) + I_t, applied when input arrives ----
+
+    /// One non-refractory, never-firing-by-default neuron array for the leak tests.
+    fn lif_test_neuron(threshold: f32, leak: f32) -> StdNeuronArray<f32> {
+        let mut neurons = StdNeuronArray::new(4);
+        neurons
+            .add_neuron(
+                threshold,
+                f32::MAX, // no upper limit
+                leak,
+                0.0,
+                0,
+                0, // no refractory
+                1.0,
+                u16::MAX,
+                0,
+                true, // mp_charge_accumulation
+                1,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+        neurons
+    }
+
+    /// Run one burst with `input` on neuron 0. Returns whether it fired.
+    fn lif_burst(neurons: &mut StdNeuronArray<f32>, burst: u64, input: f32) -> bool {
+        let mut sparse = empty_assoc_sparse();
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(NeuronId(0), input);
+        process_neural_dynamics(&fcl, None, None, None, &mut sparse, None, neurons, burst)
+            .unwrap()
+            .neurons_fired
+            == 1
+    }
+
+    fn stored_v(neurons: &StdNeuronArray<f32>) -> f64 {
+        (neurons.membrane_potentials[0] + neurons.membrane_fractions[0]) as f64
+    }
+
+    #[test]
+    fn lazy_leak_constant_input_matches_per_burst_recurrence() {
+        // Storage is f32, so the per-burst recurrence is evaluated in f32 as well (f64 closed
+        // form checked to f32 rounding, 5e-6).
+        let (g, input) = (0.15_f32, 0.4_f32);
+        let mut neurons = lif_test_neuron(1000.0, g);
+        let mut v = 0.0_f32;
+        let mut max_err = 0.0_f64;
+        let mut max_closed_err = 0.0_f64;
+        for n in 1..=40u64 {
+            assert!(!lif_burst(&mut neurons, n, input));
+            v = v * (1.0 - g) + input;
+            let closed = input as f64 * (1.0 - (1.0 - g as f64).powi(n as i32)) / g as f64;
+            let err = (stored_v(&neurons) - v as f64).abs();
+            let closed_err = (stored_v(&neurons) - closed).abs();
+            max_err = max_err.max(err);
+            max_closed_err = max_closed_err.max(closed_err);
+            assert!(
+                err < 1e-6,
+                "burst {n}: stored {} recurrence {v}",
+                stored_v(&neurons)
+            );
+            assert!(
+                closed_err < 5e-6,
+                "burst {n}: stored {} closed {closed}",
+                stored_v(&neurons)
+            );
+        }
+        eprintln!(
+            "constant input: V_40={:.6} max_err_vs_recurrence={:.2e} max_err_vs_closed_form={:.2e}",
+            stored_v(&neurons),
+            max_err,
+            max_closed_err
+        );
+    }
+
+    #[test]
+    fn lazy_leak_input_every_fifth_burst_matches_brute_force() {
+        let (g, input) = (0.15_f32, 0.4_f32);
+        let mut neurons = lif_test_neuron(1000.0, g);
+        let mut v = 0.0_f32;
+        let mut max_err = 0.0_f64;
+        for t in 1..=100u64 {
+            // Brute force: leak every burst, add input only on every 5th.
+            let i_t = if t % 5 == 0 { input } else { 0.0 };
+            v = v * (1.0 - g) + i_t;
+            if t % 5 == 0 {
+                lif_burst(&mut neurons, t, input);
+                let err = (stored_v(&neurons) - v as f64).abs();
+                max_err = max_err.max(err);
+                assert!(
+                    err < 1e-6,
+                    "burst {t}: stored {} brute force {v}",
+                    stored_v(&neurons)
+                );
+            }
+        }
+        eprintln!(
+            "every 5th: V_100={:.6} max_err={:.2e}",
+            stored_v(&neurons),
+            max_err
+        );
+    }
+
+    #[test]
+    fn lazy_leak_strong_leak_never_fires_weak_leak_fires_on_sparse_input() {
+        // Input 0.4 every 3rd burst, threshold 1.0.
+        // g=0.5: V saturates at 0.4 / (1 - 0.5^3) = 0.457 < 1.0, never fires.
+        let mut strong = lif_test_neuron(1.0, 0.5);
+        let mut peak = 0.0_f64;
+        for t in (3..=300u64).step_by(3) {
+            assert!(!lif_burst(&mut strong, t, 0.4), "g=0.5 fired at burst {t}");
+            peak = peak.max(stored_v(&strong));
+        }
+        assert!((peak - 0.4 / (1.0 - 0.125)).abs() < 1e-4, "peak {peak}");
+
+        // g=0.02: V -> 0.4 / (1 - 0.98^3) = 6.8 > 1.0, fires.
+        let mut weak = lif_test_neuron(1.0, 0.02);
+        let first_fire = (3..=300u64)
+            .step_by(3)
+            .find(|&t| lif_burst(&mut weak, t, 0.4));
+        eprintln!(
+            "g=0.5 peak V={peak:.4} (never fired); g=0.02 first fire at burst {first_fire:?}"
+        );
+        assert!(first_fire.is_some(), "g=0.02 must fire");
+    }
+
+    #[test]
+    fn lazy_leak_simd_batch_path_matches_scalar_path() {
+        // 10_000+ candidates take the batch path; neuron 0 is compared with a scalar array.
+        let (g, input) = (0.15_f32, 0.4_f32);
+        let n = 10_050usize;
+        let mut batch = StdNeuronArray::<f32>::new(n);
+        for _ in 0..n {
+            batch
+                .add_neuron(
+                    1000.0,
+                    f32::MAX,
+                    g,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    true,
+                    1,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+        }
+        let mut scalar = lif_test_neuron(1000.0, g);
+        for t in (5..=50u64).step_by(5) {
+            let mut sparse = empty_assoc_sparse();
+            let mut fcl = FireCandidateList::new();
+            for id in 0..n {
+                fcl.add_candidate(NeuronId(id as u32), input);
+            }
+            process_neural_dynamics(&fcl, None, None, None, &mut sparse, None, &mut batch, t)
+                .unwrap();
+            lif_burst(&mut scalar, t, input);
+            let b = (batch.membrane_potentials[7] + batch.membrane_fractions[7]) as f64;
+            assert!(
+                (b - stored_v(&scalar)).abs() < 1e-6,
+                "burst {t}: batch {b} scalar {}",
+                stored_v(&scalar)
+            );
+            assert_eq!(batch.last_update_bursts[7], t);
+        }
+    }
+
+    #[test]
+    fn caught_up_reader_decays_without_mutating() {
+        let g = 0.1_f32;
+        let mut neurons = lif_test_neuron(1000.0, g);
+        lif_burst(&mut neurons, 10, 5.0);
+        let (mp, fr, last) = (
+            neurons.membrane_potentials[0],
+            neurons.membrane_fractions[0],
+            neurons.last_update_bursts[0],
+        );
+        let at_input = caught_up_membrane_charge(&neurons, 0, 10);
+        let later = caught_up_membrane_charge(&neurons, 0, 13);
+        assert!((at_input - 5.0).abs() < 1e-6);
+        assert!(
+            (later - 5.0 * 0.9_f32.powi(3)).abs() < 1e-6,
+            "later {later}"
+        );
+        // State untouched, repeated reads agree.
+        assert_eq!(neurons.membrane_potentials[0], mp);
+        assert_eq!(neurons.membrane_fractions[0], fr);
+        assert_eq!(neurons.last_update_bursts[0], last);
+        assert_eq!(later, caught_up_membrane_charge(&neurons, 0, 13));
+        eprintln!("reader: V at input burst={at_input:.6}, 3 bursts later={later:.6}");
+    }
+
+    #[test]
+    fn catch_up_before_leak_change_decays_with_old_leak() {
+        let mut neurons = lif_test_neuron(1000.0, 0.1);
+        lif_burst(&mut neurons, 10, 5.0);
+        // Homeostat changes the leak at burst 13; the idle stretch must decay with 0.1.
+        catch_up_before_leak_change(&mut neurons, 0, 0.1, 13);
+        neurons.leak_coefficients[0] = 0.5;
+        assert_eq!(neurons.last_update_bursts[0], 13);
+        let v13 = caught_up_membrane_charge(&neurons, 0, 13);
+        assert!((v13 - 5.0 * 0.9_f32.powi(3)).abs() < 1e-5, "v13 {v13}");
+        // Later bursts decay with the new leak from the catch-up point.
+        let v14 = caught_up_membrane_charge(&neurons, 0, 14);
+        assert!(
+            (v14 - 5.0 * 0.9_f32.powi(3) * 0.5).abs() < 1e-5,
+            "v14 {v14}"
+        );
+        // Already current: no-op.
+        catch_up_before_leak_change(&mut neurons, 0, 0.9, 13);
+        assert!((caught_up_membrane_charge(&neurons, 0, 13) - v13).abs() < 1e-7);
     }
 }

@@ -1083,7 +1083,7 @@ impl<
     /// * `threshold_increment_y` - Threshold increment per Y position
     /// * `threshold_increment_z` - Threshold increment per Z position
     /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, MAX = no limit, SIMD-friendly encoding)
-    /// * `default_leak_coefficient` - Default leak rate
+    /// * `default_leak_coefficient` - Default leak `g` (fraction of V lost per burst): `V_t = V_{t-1} * (1 - g) + I_t`, applied lazily as `V * (1 - g)^(t - t_last)` at the next input
     /// * `default_resting_potential` - Default resting potential
     /// * `default_neuron_type` - Default neuron type
     /// * `default_refractory_period` - Default refractory period
@@ -2961,7 +2961,11 @@ impl<
 
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
-        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
+        self.apply_stdp_updates_for_burst(
+            burst_count,
+            &fire_structures.fire_ledger,
+            &fire_structures.episodic_memory_fire_ledger,
+        )?;
 
         {
             // Phase 3.6: opt-in homeostatic leak (cold path; no-op if registry is empty)
@@ -2984,6 +2988,16 @@ impl<
                         &fire_structures.fire_ledger,
                         ns.leak_coefficients_mut(),
                     );
+                    // Per-neuron leak changes: decay each idle neuron with the leak it had
+                    // (lazy leak stays exact), then the new leak applies from the next burst.
+                    rml.drain_leak_changes(|idx, old_leak| {
+                        crate::neural_dynamics::catch_up_before_leak_change(
+                            &mut *ns,
+                            idx,
+                            old_leak,
+                            burst_count,
+                        );
+                    });
                 }
             }
             if let (Ok(mut modulators), Ok(mut ns)) =
@@ -3278,10 +3292,13 @@ impl<
                 .get(idx)
                 .map(|&v| v.to_f32()),
             "leak_coefficient" => neuron_storage.leak_coefficients().get(idx).copied(),
-            "membrane_potential" => neuron_storage
-                .membrane_potentials()
-                .get(idx)
-                .map(|&v| v.to_f32() + neuron_storage.membrane_fractions()[idx]),
+            "membrane_potential" => (idx < neuron_storage.count()).then(|| {
+                crate::neural_dynamics::caught_up_membrane_charge(
+                    &*neuron_storage,
+                    idx,
+                    self.get_burst_count(),
+                )
+            }),
             "resting_potential" => neuron_storage
                 .resting_potentials()
                 .get(idx)
@@ -3764,11 +3781,16 @@ impl<
             count: neuron_storage.count(),
             capacity: neuron_storage.count(),
             // Convert T to f32 for serialization
-            membrane_potentials: neuron_storage
-                .membrane_potentials()
-                .iter()
-                .enumerate()
-                .map(|(i, &v)| v.to_f32() + neuron_storage.membrane_fractions()[i])
+            // Caught up to the current burst: the snapshot stores V as of `burst_count`, and
+            // `apply_connectome_snapshot` sets every neuron's last-update burst to that value.
+            membrane_potentials: (0..neuron_storage.count())
+                .map(|i| {
+                    crate::neural_dynamics::caught_up_membrane_charge(
+                        &*neuron_storage,
+                        i,
+                        self.get_burst_count(),
+                    )
+                })
                 .collect(),
             thresholds: neuron_storage
                 .thresholds()
@@ -3944,6 +3966,8 @@ impl<
                         T::split_charge(snapshot.neurons.membrane_potentials[i]);
                     storage.membrane_potentials_mut()[i] = membrane_level;
                     storage.membrane_fractions_mut()[i] = membrane_fraction;
+                    // Exported V is already caught up to `snapshot.burst_count`.
+                    storage.last_update_bursts_mut()[i] = snapshot.burst_count;
                     let (threshold_level, threshold_fraction) =
                         T::split_charge(snapshot.neurons.thresholds[i]);
                     storage.thresholds_mut()[i] = threshold_level;
@@ -4318,6 +4342,9 @@ impl<
         cortical_area: u32,
         excitability: f32,
     ) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| {
+            p.excitability = excitability.clamp(0.0, 1.0)
+        });
         let clamped_excitability = excitability.clamp(0.0, 1.0);
         let mut updated_count = 0;
 
@@ -4343,6 +4370,7 @@ impl<
         cortical_area: u32,
         refractory_period: u16,
     ) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| p.refractory_period = refractory_period);
         info!("[RUST-UPDATE] update_cortical_area_refractory_period: cortical_area={}, refractory_period={}",
                  cortical_area, refractory_period);
 
@@ -4394,6 +4422,7 @@ impl<
 
     /// Update threshold for all neurons in a cortical area (bulk parameter change)
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| p.threshold = threshold);
         let mut updated_count = 0;
 
         // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
@@ -4426,6 +4455,9 @@ impl<
         cortical_area: u32,
         limit: f32,
     ) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| {
+            p.threshold_limit = if limit == 0.0 { f32::MAX } else { limit };
+        });
         let mut updated_count = 0;
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
@@ -4734,8 +4766,8 @@ impl<
     /// Bulk read of per-neuron runtime state for one cortical area (dense neurons only).
     ///
     /// `leak_coefficient` is the value the LIF step uses: the homeostat writes its leak into
-    /// neuron storage, so storage is the single source. `rate_ema` is `None` per neuron when
-    /// the area is not registered with the homeostat.
+    /// neuron storage, so storage is the single source. `rate_ema`, `rate_target` and
+    /// `homeostat_regulated` are `None` per neuron when the area is not registered with the homeostat.
     pub fn read_neuron_state_columns(
         &self,
         cortical_idx: u32,
@@ -4743,15 +4775,21 @@ impl<
     ) -> crate::neuron_state::NeuronStateColumns {
         use crate::neuron_state::{NeuronStateColumns, NeuronStateField as F};
         // Lock order matches the burst loop: homeostat registry first, then storage.
-        let rate_ema: Option<ahash::AHashMap<usize, f32>> = if fields.contains(&F::RateEma) {
+        let homeostat: Option<
+            ahash::AHashMap<usize, crate::rate_modulated_leak::NeuronHomeostatState>,
+        > = if fields
+            .iter()
+            .any(|f| matches!(f, F::RateEma | F::RateTarget | F::HomeostatRegulated))
+        {
             self.rate_modulated_leak
                 .lock()
                 .ok()
-                .and_then(|g| g.rate_ema_by_neuron(cortical_idx))
+                .and_then(|g| g.neuron_state_by_neuron(cortical_idx))
         } else {
             None
         };
         let ns = self.neuron_storage.read().unwrap();
+        let burst = self.get_burst_count();
         let ids = ns.get_neurons_in_cortical_area(cortical_idx);
         let mut out = NeuronStateColumns::default();
         let mut keep: Vec<usize> = Vec::with_capacity(ids.len());
@@ -4767,9 +4805,9 @@ impl<
             let col: Vec<Option<f32>> = keep
                 .iter()
                 .map(|&i| match field {
-                    F::MembranePotential => {
-                        Some(ns.membrane_potentials()[i].to_f32() + ns.membrane_fractions()[i])
-                    }
+                    F::MembranePotential => Some(
+                        crate::neural_dynamics::caught_up_membrane_charge(&*ns, i, burst),
+                    ),
                     F::Threshold => Some(ns.thresholds()[i].to_f32() + ns.threshold_fractions()[i]),
                     F::ThresholdLimit => Some(ns.threshold_limits()[i].to_f32()),
                     F::LeakCoefficient => Some(ns.leak_coefficients()[i]),
@@ -4786,7 +4824,15 @@ impl<
                     } else {
                         0.0
                     }),
-                    F::RateEma => rate_ema.as_ref().and_then(|m| m.get(&i).copied()),
+                    F::RateEma => homeostat
+                        .as_ref()
+                        .and_then(|m| m.get(&i).map(|h| h.rate_ema)),
+                    F::RateTarget => homeostat
+                        .as_ref()
+                        .and_then(|m| m.get(&i).map(|h| h.rate_target)),
+                    F::HomeostatRegulated => homeostat
+                        .as_ref()
+                        .and_then(|m| m.get(&i).map(|h| if h.regulated { 1.0 } else { 0.0 })),
                 })
                 .collect();
             out.fields.push((field, col));
@@ -4825,6 +4871,9 @@ impl<
         cortical_area: u32,
         limit: u16,
     ) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| {
+            p.consecutive_fire_limit = if limit == 0 { u16::MAX } else { limit };
+        });
         let mut updated_count = 0;
         // Semantics: 0 disables the limiter (unlimited). Internally we use MAX encoding.
         let encoded_limit = if limit == 0 { u16::MAX } else { limit };
@@ -4851,6 +4900,7 @@ impl<
         cortical_area: u32,
         snooze_period: u16,
     ) -> usize {
+        self.patch_memory_lif_params(cortical_area, |p| p.snooze_period = snooze_period);
         let mut updated_count = 0;
 
         // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
@@ -5040,6 +5090,8 @@ impl<
                 let mut storage = self.neuron_storage.write().unwrap();
                 storage.membrane_potentials_mut()[idx] = level;
                 storage.membrane_fractions_mut()[idx] = fraction;
+                // The written value is V as of now; restart its leak clock.
+                storage.last_update_bursts_mut()[idx] = self.get_burst_count();
                 updated_count += 1;
             }
         }
@@ -6138,6 +6190,7 @@ impl<
         &self,
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
+        episodic_fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
         // Frozen mappings keep their registration (and ledger tracking) but are invisible
         // to this pass, so their weights, traces and synapse set stay exactly as they are.
@@ -6197,9 +6250,38 @@ impl<
         struct StdpActivityWindow {
             src_any: RoaringBitmap,
             dst_any: RoaringBitmap,
-            src_all: RoaringBitmap,
-            dst_all: RoaringBitmap,
+            /// Synthesis candidates: `*_any` / `*_all` with memory neurons kept only when they
+            /// fired by episodic encode in the window (not by associative recall).
+            src_any_encoded: RoaringBitmap,
+            dst_any_encoded: RoaringBitmap,
+            src_all_encoded: RoaringBitmap,
+            dst_all_encoded: RoaringBitmap,
         }
+
+        // Memory neurons that fired by episodic encode (pattern injection) anywhere in the
+        // window, or `None` when the episodic ledger cannot answer for this area and depth
+        // (callers then fall back to all fires).
+        let episodic_memory_any = |area: u32, depth: usize| -> Option<RoaringBitmap> {
+            let window = episodic_fire_ledger
+                .get_dense_window_bitmaps(area, burst_timestep, depth)
+                .ok()?;
+            let mut any = RoaringBitmap::new();
+            for (_t, bm) in window {
+                any |= &bm;
+            }
+            Some(any)
+        };
+        // Keep non-memory ids; keep memory ids only when they fired by encode.
+        let encoded_only =
+            |ids: &RoaringBitmap, encoded: &Option<RoaringBitmap>| -> RoaringBitmap {
+                match encoded {
+                    Some(enc) => RoaringBitmap::from_iter(
+                        ids.iter()
+                            .filter(|&id| id < MEMORY_NEURON_ID_START || enc.contains(id)),
+                    ),
+                    None => ids.clone(),
+                }
+            };
 
         // Precompute which mappings carry associative-memory behavior.
         // This decouples "memory-neuron IDs are eligible for STDP windows" from
@@ -6289,13 +6371,22 @@ impl<
                 )
             };
 
+            let src_encoded = episodic_memory_any(*src_area, depth);
+            let dst_encoded = episodic_memory_any(*dst_area, depth);
+            let src_any_encoded = encoded_only(&src_any, &src_encoded);
+            let dst_any_encoded = encoded_only(&dst_any, &dst_encoded);
+            let src_all_encoded = encoded_only(&src_all, &src_encoded);
+            let dst_all_encoded = encoded_only(&dst_all, &dst_encoded);
+
             activity_sets.insert(
                 *key,
                 StdpActivityWindow {
                     src_any,
                     dst_any,
-                    src_all,
-                    dst_all,
+                    src_any_encoded,
+                    dst_any_encoded,
+                    src_all_encoded,
+                    dst_all_encoded,
                 },
             );
         }
@@ -6531,10 +6622,12 @@ impl<
             }
 
             let delta_plus = params.delta_plus_u8();
+            // New links are taught by encoding, not by recall: a memory neuron that only
+            // fired through an associative synapse is not a synthesis candidate.
             let (source_candidates, destination_candidates) = if params.associative_memory_mapping {
-                (&activity.src_any, &activity.dst_any)
+                (&activity.src_any_encoded, &activity.dst_any_encoded)
             } else {
-                (&activity.src_all, &activity.dst_all)
+                (&activity.src_all_encoded, &activity.dst_all_encoded)
             };
             if delta_plus == 0 || source_candidates.is_empty() || destination_candidates.is_empty()
             {
@@ -6713,8 +6806,11 @@ impl<
                 .unwrap()
                 .consecutive_fire_limits()[idx],
             self.neuron_storage.read().unwrap().snooze_periods()[idx], // Extended refractory period (additive)
-            self.neuron_storage.read().unwrap().membrane_potentials()[idx].to_f32()
-                + self.neuron_storage.read().unwrap().membrane_fractions()[idx],
+            crate::neural_dynamics::caught_up_membrane_charge(
+                &*self.neuron_storage.read().unwrap(),
+                idx,
+                self.get_burst_count(),
+            ),
             self.neuron_storage.read().unwrap().thresholds()[idx].to_f32()
                 + self.neuron_storage.read().unwrap().threshold_fractions()[idx],
             self.neuron_storage.read().unwrap().refractory_countdowns()[idx],
@@ -7154,6 +7250,39 @@ impl<
             .memory_associative_lif_params
             .insert(cortical_idx, params);
     }
+
+    /// Associative sparse LIF params currently registered for a memory area, if any.
+    pub fn get_memory_associative_lif_params(
+        &self,
+        cortical_idx: u32,
+    ) -> Option<MemoryAssociativeLifParams> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .memory_associative_lif_params
+            .get(&cortical_idx)
+            .cloned()
+    }
+
+    /// Patch one field of an already-registered memory area's associative LIF params.
+    ///
+    /// No-op for areas without an entry (non-memory areas), so the regular per-area
+    /// `update_cortical_area_*` setters keep memory areas in sync without a separate path.
+    pub(crate) fn patch_memory_lif_params(
+        &self,
+        cortical_idx: u32,
+        patch: impl FnOnce(&mut MemoryAssociativeLifParams),
+    ) {
+        if let Some(p) = self
+            .fire_structures
+            .lock()
+            .unwrap()
+            .memory_associative_lif_params
+            .get_mut(&cortical_idx)
+        {
+            patch(p);
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -7387,23 +7516,33 @@ mod tests {
         let _b = npu
             .add_neuron(1.0, 0.0, 0.25, 0.0, 0, 0, 1.0, 1, 0, true, area, 1, 0, 0)
             .unwrap();
-        let fields = [F::LeakCoefficient, F::Threshold, F::RateEma];
+        let fields = [
+            F::LeakCoefficient,
+            F::Threshold,
+            F::RateEma,
+            F::RateTarget,
+            F::HomeostatRegulated,
+        ];
 
         let cols = npu.read_neuron_state_columns(area, &fields);
         assert_eq!(cols.count(), 2);
-        assert_eq!(cols.fields.len(), 3);
+        assert_eq!(cols.fields.len(), 5);
         assert!(cols.fields[0].1.iter().all(|v| *v == Some(0.25)));
         assert!(cols.fields[1].1.iter().all(|v| *v == Some(1.0)));
         assert!(cols.fields[2].1.iter().all(|v| v.is_none()));
+        assert!(cols.fields[3].1.iter().all(|v| v.is_none()));
+        assert!(cols.fields[4].1.iter().all(|v| v.is_none()));
 
         npu.sync_rate_modulated_leak_from_cortical_property(
             area,
-            &serde_json::json!({ "enabled": true }),
+            &serde_json::json!({ "enabled": true, "target_firing_per_burst": 0.1 }),
             0.25,
             vec![a.0 as usize, (a.0 + 1) as usize],
         );
         let cols = npu.read_neuron_state_columns(area, &fields);
         assert!(cols.fields[2].1.iter().all(|v| *v == Some(0.0)));
+        assert!(cols.fields[3].1.iter().all(|v| *v == Some(0.1)));
+        assert!(cols.fields[4].1.iter().all(|v| *v == Some(1.0)));
         // An unrelated area reads empty.
         assert_eq!(npu.read_neuron_state_columns(99, &fields).count(), 0);
     }
@@ -7928,6 +8067,137 @@ mod tests {
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 1);
+    }
+
+    /// Lazy leak: a reader between inputs reports V decayed to the current burst and leaves
+    /// storage (value and last-update burst) untouched.
+    #[test]
+    fn test_membrane_reader_catches_up_leak_without_mutating_state() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        let nid = npu
+            .add_neuron(
+                1000.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                0,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                10,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+        let idx = nid.0 as usize;
+
+        npu.inject_sensory_with_potentials(&[(nid, 5.0)]);
+        npu.process_burst().unwrap(); // burst 1 receives the input
+        let input_burst = npu.get_burst_count();
+        for _ in 0..3 {
+            npu.process_burst().unwrap(); // idle bursts: neuron is not touched
+        }
+        let now = npu.get_burst_count();
+        assert_eq!(now, input_burst + 3);
+
+        let (raw_before, last_before) = {
+            let ns = npu.neuron_storage.read().unwrap();
+            (ns.membrane_potentials()[idx], ns.last_update_bursts()[idx])
+        };
+        assert_eq!(
+            last_before, input_burst,
+            "idle bursts must not touch the neuron"
+        );
+
+        let read = npu
+            .get_neuron_property_by_index(idx, "membrane_potential")
+            .unwrap();
+        let expected = 5.0_f32 * 0.9_f32.powi(3);
+        assert!(
+            (read - expected).abs() < 1e-5,
+            "read {read} expected {expected}"
+        );
+        let state_mp = npu.get_neuron_state(nid).unwrap().3;
+        assert!(
+            (state_mp - expected).abs() < 1e-5,
+            "get_neuron_state {state_mp}"
+        );
+
+        let ns = npu.neuron_storage.read().unwrap();
+        assert_eq!(
+            ns.membrane_potentials()[idx],
+            raw_before,
+            "reader mutated V"
+        );
+        assert_eq!(
+            ns.last_update_bursts()[idx],
+            last_before,
+            "reader mutated t_last"
+        );
+        eprintln!(
+            "reader: stored V={} (t_last={}), V read at burst {}={:.6}",
+            raw_before, last_before, now, read
+        );
+    }
+
+    /// Save/load: export stores V caught up to the saved burst; import sets t_last to that burst.
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn test_connectome_roundtrip_keeps_caught_up_membrane() {
+        type TestNpu = RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>;
+        let mut npu = TestNpu::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        let nid = npu
+            .add_neuron(
+                1000.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                0,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                10,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+        npu.inject_sensory_with_potentials(&[(nid, 5.0)]);
+        for _ in 0..4 {
+            npu.process_burst().unwrap();
+        }
+        let saved_burst = npu.get_burst_count();
+        let expected = 5.0_f32 * 0.9_f32.powi(3);
+
+        let snapshot = npu.export_connectome();
+        assert_eq!(snapshot.burst_count, saved_burst);
+        assert!((snapshot.neurons.membrane_potentials[0] - expected).abs() < 1e-5);
+
+        let mut restored = TestNpu::new_cpu_only(100, 1000, 10);
+        restored.apply_connectome_snapshot(&snapshot).unwrap();
+        let idx = nid.0 as usize;
+        assert_eq!(restored.get_burst_count(), saved_burst);
+        {
+            let ns = restored.neuron_storage.read().unwrap();
+            assert_eq!(ns.last_update_bursts()[idx], saved_burst);
+        }
+        let read = restored
+            .get_neuron_property_by_index(idx, "membrane_potential")
+            .unwrap();
+        assert!(
+            (read - expected).abs() < 1e-5,
+            "restored V {read} expected {expected}"
+        );
     }
 
     /// Option B: Phase 1 sparse MP clear (mp_charge_accumulation=false) must not wipe membrane while

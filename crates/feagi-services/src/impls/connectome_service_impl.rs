@@ -111,6 +111,10 @@ fn merge_memory_area_properties(
 ) -> HashMap<String, Value> {
     let mut defaults = get_default_neural_properties();
     let memory_defaults = MemoryAreaProperties::default();
+    defaults.insert(
+        "firing_threshold".to_string(),
+        Value::from(feagi_evolutionary::DEFAULT_MEMORY_FIRING_THRESHOLD),
+    );
     defaults
         .entry("cortical_group".to_string())
         .or_insert(Value::from("MEMORY"));
@@ -4978,6 +4982,18 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    #[test]
+    fn new_memory_area_defaults_to_firing_threshold_one() {
+        use super::merge_memory_area_properties;
+        let merged = merge_memory_area_properties(HashMap::new(), None);
+        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(1.0)));
+        // Caller-provided value still wins.
+        let mut extra = HashMap::new();
+        extra.insert("firing_threshold".to_string(), serde_json::json!(0.4));
+        let merged = merge_memory_area_properties(HashMap::new(), Some(&extra));
+        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(0.4)));
+    }
+
     /// Connectome import rebuilds via neuroembryogenesis, which requires an attached NPU.
     fn connectome_manager_for_import_tests() -> ConnectomeManager {
         use feagi_npu_burst_engine::backend::CPUBackend;
@@ -6442,6 +6458,117 @@ mod tests {
         assert_eq!(stats.incoming_synapse_count, 2);
         assert_eq!(stats.outgoing_synapse_count, 1);
     }
+    /// A mapping whose postsynaptic current multiplier is 0 stays a mapping: the rule is kept in
+    /// the connectome and survives a save and load of the genome JSON.
+    #[tokio::test]
+    async fn zero_multiplier_mapping_is_kept_and_saved() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        mgr.setup_core_morphologies_for_testing();
+
+        let src_id = CorticalID::try_from_bytes(b"czmsrc01").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"czmdst01").unwrap();
+        for (id, label) in [(src_id, "src"), (dst_id, "dst")] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        mgr.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        mgr.add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+
+        let connectome = Arc::new(RwLock::new(mgr));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        let rule = |multiplier: f64| {
+            serde_json::json!({
+                "morphology_id": "projector",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": multiplier,
+                "plasticity_flag": false,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+            })
+        };
+        let saved_rules = || -> Vec<serde_json::Value> {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&src_id).expect("source area");
+            area.properties
+                .get("cortical_mapping_dst")
+                .and_then(|dst| dst.get(dst_id.as_base_64()))
+                .and_then(|rules| rules.as_array().cloned())
+                .unwrap_or_default()
+        };
+
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule(1.0)])
+            .await?;
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule(0.0)])
+            .await?;
+        assert_eq!(saved_rules().len(), 1, "zero multiplier must not drop the rule");
+        assert_eq!(
+            saved_rules()[0]["postSynapticCurrent_multiplier"].as_f64(),
+            Some(0.0)
+        );
+
+        // Round-trip through the saved genome JSON, as a restart does.
+        let mut shell = super::empty_runtime_genome("zero-multiplier");
+        crate::impls::genome_service_impl::sync_runtime_genome_from_connectome(
+            &mut shell,
+            &connectome.read(),
+        );
+        let json = feagi_evolutionary::save_genome_to_json(&shell).expect("genome saves");
+        let genome = feagi_evolutionary::load_genome_from_json(&json).expect("saved genome loads");
+        let reloaded = genome
+            .cortical_areas
+            .get(&src_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|dst| dst.get(dst_id.as_base_64()))
+            .and_then(|rules| rules.as_array().cloned())
+            .unwrap_or_default();
+        assert_eq!(reloaded.len(), 1, "zero-multiplier rule survives save and load");
+
+        let two_rules = |multiplier: f64| {
+            let mut second = rule(multiplier);
+            second["morphology_id"] = serde_json::json!("block_to_block");
+            vec![rule(multiplier), second]
+        };
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), two_rules(1.0))
+            .await?;
+        assert_eq!(saved_rules().len(), 2);
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), two_rules(0.0))
+            .await?;
+        assert_eq!(saved_rules().len(), 2, "two zero-multiplier rules are kept");
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), two_rules(1.0))
+            .await?;
+        assert_eq!(saved_rules().len(), 2);
+        Ok(())
+    }
+
     /// Freezing a mapping stores `plasticity_frozen` on the rule and in the NPU, a later PUT of
     /// the same rule without the flag carries it over and does not regenerate (so learned
     /// weights survive), and `reset_mapping_weights` puts the weight back to the rule's value.

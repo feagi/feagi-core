@@ -7,6 +7,8 @@ For opt-in **custom** (dense LIF) cortical areas, FEAGI can run a **cold** post-
 ## Hot path vs cold path
 
 - The **LIF** integrate step only **reads** the per-neuron leak value already in storage, unchanged.
+- **Leak formula (all neurons, homeostat or not):** per burst `V_t = V_{t-1} * (1 - g) + I_t`, where `g` is the per-neuron `leak_coefficient` (fraction of V lost per burst). Neurons are only touched when they receive input, so the leak is applied lazily: each neuron stores `t_last`, the burst of its last update, and at burst `t` its charge is `V * (1 - g)^(t - t_last) + I_t` before the threshold test (fire resets `V` to 0). Readers (neuron state endpoint, property reads, connectome export) apply the same decay to the current burst without mutating state. Idle neurons therefore decay exactly as if they had been updated every burst, except that in `area` mode the *current* `g` is used for the whole idle stretch (the homeostat changes `g` only for the next burst, so a long idle stretch is decayed with the latest value). In `per_neuron` mode the idle stretch is made exact: before the homeostat changes a neuron's `g`, the burst engine catches its charge up with the previous `g` (`V <- V * (1 - g_old)^(t - t_last)`, `t_last <- t`), so each stretch decays with the leak that was in force.
+- **Rate EMA:** unchanged. The EMA is already sampled for every neuron of a registered area on every burst (a neuron that does not fire contributes 0, whether or not it received input), so idle neurons' rate decays and the leak step sees the true rate.
 - The **homeostat** runs **only** in areas that have a `rate_modulated_leak` entry in the genome / cortical properties with `"enabled": true`, and only **after** the current burst is archived to the fire ledger. **No** extra work when no area opts in (registry is empty: early return).
 
 ## Genome and flat 3.0
@@ -27,6 +29,20 @@ For each **enabled** area and each regular neuron in that area on eligible burst
 
 Registering an area also ensures the main fire ledger tracks it (window >= 1; an existing larger window is never shrunk), since the homeostat reads firing from the ledger. Removing the area does not untrack it.
 
+## Target modes
+
+`target_mode` selects where each neuron's set-point comes from.
+
+- **`"area"` (default, unchanged):** one `target_firing_per_burst` for every neuron. Right for populations whose neurons share one natural rate. In a population code (a few neurons active, the rest silent) it drives active neurons down to the area mean and pins silent ones at `leak_min`.
+- **`"per_neuron"`:** each neuron is held at its own equilibrium.
+  1. **Arming** (`arm_bursts`, default 500, after enable or re-arm): `r_arm <- (1-α_a) r_arm + α_a * fired`, `α_a = 1 - exp(-1/τ_a)`, `τ_a = arm_tau_bursts` (default `arm_bursts / 4`). The leak is not adjusted; every neuron runs at the area's base leak. At the end the target is the bias-corrected estimate `target = r_arm / (1 - (1-α_a)^arm_bursts)`.
+  2. **Freeze:** targets stop changing. Each regulated neuron then follows `g <- clamp(g + gain * (r_ema - target_j), leak_min, leak_max)` with the usual cadence, gain and clamps (`r_ema` is the fast EMA of `rate_ema_tau_bursts`, which also runs during arming).
+  3. **Inactive neurons:** if `target_j < min_target_firing_per_burst` (default 0.001) the neuron is not regulated; its leak stays at the area's base leak.
+  4. **Re-arm:** changing `arm_epoch` (or `arm_bursts`, the neuron set, or the mode) in the area parameters restarts arming: leaks return to the base leak and targets are re-measured. Re-sending the config with the same `arm_epoch` keeps the armed targets and only updates parameters (gain, clamps, tau). A reseed from a bulk leak edit changes the base leak but keeps targets.
+  Arming is counted in bursts since registration, so a brain that is not driven during arming arms to silence; arm while the brain is in the regime to be held.
+
+`target_firing_per_burst` is ignored in `per_neuron` mode.
+
 Neurons are skipped when their storage index is above the memory neuron band or invalid.
 
 ## Parameters (JSON)
@@ -39,10 +55,15 @@ Neurons are skipped when their storage index is above the memory neuron band or 
 | `gain` | f32 | Maps rate error to leak change; finite and >= 0. |
 | `leak_min`, `leak_max` | f32 | Clamps; each finite and in `[0,1]`, `leak_min <= leak_max`. |
 | `update_every_n_bursts` | u32 | Default 1. |
+| `target_mode` | string | `"area"` (default) or `"per_neuron"`. |
+| `arm_bursts` | u32 | `per_neuron`: arming length in bursts; default 500, >= 1. |
+| `arm_tau_bursts` | f32 | `per_neuron`: arming EMA time constant; finite and > 0; default `arm_bursts / 4`. |
+| `min_target_firing_per_burst` | f32 | `per_neuron`: neurons with a lower armed target are not regulated; in `[0,1]`, default 0.001. |
+| `arm_epoch` | u32 | `per_neuron`: change it to re-arm; default 0. |
 
 ## Validation
 
-`RateModulatedLeakConfig::validate(&Value) -> Result<Option<Config>, String>` is the single check. A disabled config (`enabled` false or absent) is `Ok(None)`. An enabled config is rejected, naming the field, when: `rate_ema_tau_bursts` is not finite or <= 0; `gain` is not finite or < 0; `target_firing_per_burst`, `leak_min` or `leak_max` is outside `[0,1]` or not finite; `leak_min > leak_max`; or the JSON is not an object / a field has the wrong type. `parse_from_cortical_property` uses it and returns `None` on any `Err`. The cortical-area update endpoint calls it first and returns `InvalidInput` before anything is applied (`null` is accepted and clears the setting).
+`RateModulatedLeakConfig::validate(&Value) -> Result<Option<Config>, String>` is the single check. A disabled config (`enabled` false or absent) is `Ok(None)`. An enabled config is rejected, naming the field, when: `rate_ema_tau_bursts` is not finite or <= 0; `gain` is not finite or < 0; `target_firing_per_burst`, `leak_min` or `leak_max` is outside `[0,1]` or not finite; `leak_min > leak_max`; `target_mode` is not `"area"` or `"per_neuron"`; `arm_bursts` is 0; `arm_tau_bursts` is not finite or <= 0; `min_target_firing_per_burst` is outside `[0,1]`; or the JSON is not an object / a field has the wrong type. `parse_from_cortical_property` uses it and returns `None` on any `Err`. The cortical-area update endpoint calls it first and returns `InvalidInput` before anything is applied (`null` is accepted and clears the setting).
 
 ## Leak edits, delete and import
 
@@ -53,7 +74,7 @@ Neurons are skipped when their storage index is above the memory neuron band or 
 ## API and Brain Visualizer
 
 - Updates use the key `rate_modulated_leak` in `PUT` `/v1/cortical_area/cortical_area` with a JSON object (classifier: **parameter** change, no synapse rebuild).
-- Read the live homeostat with the generic per-neuron state endpoint, `GET /v1/connectome/cortical_area/<cortical_id>/neuron_state?fields=leak_coefficient,rate_ema`. The response is columnar: `{cortical_id, count, x[], y[], z[], fields:{leak_coefficient:[..], rate_ema:[..]}}`. `leak_coefficient` is the value the LIF step uses (the homeostat writes its leak into neuron storage), `rate_ema` is the firing-rate EMA in fraction of bursts and is `null` for neurons of an area that is not registered. It is a read-only snapshot, not a stream. An unknown area returns 404; an unknown field returns 400 listing the valid ones.
+- Read the live homeostat with the generic per-neuron state endpoint, `GET /v1/connectome/cortical_area/<cortical_id>/neuron_state?fields=leak_coefficient,rate_ema`. The response is columnar: `{cortical_id, count, x[], y[], z[], fields:{leak_coefficient:[..], rate_ema:[..]}}`. `leak_coefficient` is the value the LIF step uses (the homeostat writes its leak into neuron storage), `rate_ema` is the firing-rate EMA in fraction of bursts and is `null` for neurons of an area that is not registered. `rate_target` is the set-point held now (the area target; in `per_neuron` mode the frozen target, or the running estimate while arming); `homeostat_regulated` is 1.0 when the neuron's leak is being adjusted (always in `area` mode; in `per_neuron` mode 0.0 while arming and for inactive neurons). Both are `null` for an unregistered area. Studio's run-data recorder passes field names through unchanged, so `rate_target` and `homeostat_regulated` can be requested by name. It is a read-only snapshot, not a stream. An unknown area returns 404; an unknown field returns 400 listing the valid ones.
 - BV exposes the fields under **Cortical area details** → **Advanced** (the existing Advanced / Danger section).
 
 ## See also

@@ -33,6 +33,10 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Leftover membrane charge below one stored level, in `[0, 1)`.
     pub membrane_fractions: Vec<f32>,
 
+    /// Burst index of the last membrane update; the leak since then is applied lazily
+    /// (`V * (1 - leak) ^ (burst - last_update_burst)`) when the neuron next gets input.
+    pub last_update_bursts: Vec<u64>,
+
     /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: Vec<T>,
 
@@ -107,6 +111,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             count: 0,
             membrane_potentials: Vec::with_capacity(capacity),
             membrane_fractions: Vec::with_capacity(capacity),
+            last_update_bursts: Vec::with_capacity(capacity),
             thresholds: Vec::with_capacity(capacity),
             threshold_fractions: Vec::with_capacity(capacity),
             threshold_limits: Vec::with_capacity(capacity),
@@ -129,6 +134,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
         result.membrane_fractions.resize(capacity, 0.0);
+        result.last_update_bursts.resize(capacity, 0);
         result.thresholds.resize(capacity, T::from_f32(1.0));
         result.threshold_fractions.resize(capacity, 0.0);
         result.threshold_limits.resize(capacity, T::max_value()); // MAX = no limit (SIMD-friendly encoding)
@@ -187,7 +193,7 @@ impl<T: NeuralValue> NeuronArray<T> {
     pub fn process_burst_parallel(
         &mut self,
         candidate_potentials: &[T],
-        _burst_count: u64,
+        burst_count: u64,
     ) -> Vec<usize> {
         // Phase 1: Compute in parallel (read-only)
         let results: Vec<_> = (0..self.count)
@@ -214,6 +220,7 @@ impl<T: NeuralValue> NeuronArray<T> {
                     self.leak_coefficients[idx],
                     T::zero(),
                     input.to_f32(),
+                    burst_count.saturating_sub(self.last_update_bursts[idx]),
                 );
 
                 (idx, fired, potential, fraction)
@@ -232,6 +239,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             // Apply potential update
             self.membrane_potentials[idx] = new_potential;
             self.membrane_fractions[idx] = new_fraction;
+            self.last_update_bursts[idx] = burst_count;
 
             if fired {
                 self.refractory_countdowns[idx] = self.refractory_periods[idx];
@@ -246,7 +254,7 @@ impl<T: NeuralValue> NeuronArray<T> {
     pub fn process_burst_sequential(
         &mut self,
         candidate_potentials: &[T],
-        _burst_count: u64,
+        burst_count: u64,
     ) -> Vec<usize> {
         let mut fired_indices = Vec::new();
 
@@ -268,7 +276,9 @@ impl<T: NeuralValue> NeuronArray<T> {
                 self.leak_coefficients[idx],
                 T::zero(),
                 input.to_f32(),
+                burst_count.saturating_sub(self.last_update_bursts[idx]),
             );
+            self.last_update_bursts[idx] = burst_count;
 
             if fired {
                 self.refractory_countdowns[idx] = self.refractory_periods[idx];
@@ -320,6 +330,10 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
 
     fn membrane_fractions(&self) -> &[f32] {
         &self.membrane_fractions[..self.count]
+    }
+
+    fn last_update_bursts(&self) -> &[u64] {
+        &self.last_update_bursts[..self.count]
     }
 
     fn thresholds(&self) -> &[Self::Value] {
@@ -395,6 +409,11 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn membrane_fractions_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.membrane_fractions[..count]
+    }
+
+    fn last_update_bursts_mut(&mut self) -> &mut [u64] {
+        let count = self.count;
+        &mut self.last_update_bursts[..count]
     }
 
     fn threshold_fractions_mut(&mut self) -> &mut [f32] {
@@ -513,6 +532,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         if idx >= self.membrane_potentials.len() {
             self.membrane_potentials.push(T::zero());
             self.membrane_fractions.push(0.0);
+            self.last_update_bursts.push(0);
             self.thresholds.push(threshold);
             self.threshold_fractions.push(0.0);
             self.threshold_limits.push(threshold_limit);
@@ -533,6 +553,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             self.valid_mask.push(true);
         } else {
             self.membrane_fractions[idx] = 0.0;
+            self.last_update_bursts[idx] = 0;
             self.thresholds[idx] = threshold;
             self.threshold_fractions[idx] = 0.0;
             self.threshold_limits[idx] = threshold_limit;

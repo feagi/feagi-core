@@ -4912,4 +4912,441 @@ mod tests {
         rig.burst(Some(2));
         assert_eq!(rig.active_ids(), before);
     }
+    // ---- Classifier-shaped rig: sample/class inputs and memories joined associatively ----
+
+    const SAMPLE_IN_IDX: u32 = 21;
+    const CLASS_IN_IDX: u32 = 22;
+    const SAMPLE_MEM_IDX: u32 = 23;
+    const CLASS_MEM_IDX: u32 = 24;
+    /// Window shared by the memories' temporal depth and the associative mapping.
+    const CLASSIFIER_WINDOW: usize = 1;
+
+    /// What one burst of the classifier rig did, for failure messages and assertions.
+    struct ClassifierBurst {
+        burst: u64,
+        /// Memory neurons (ids at or above `MEMORY_NEURON_ID_START`) that fired this burst.
+        fired_memory: Vec<u32>,
+    }
+
+    struct ClassifierRig {
+        npu: Arc<TracingMutex<DynamicNPU>>,
+        service: PlasticityService,
+        sample_in: Vec<u32>,
+        class_in: Vec<u32>,
+        sample_mem_cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        class_mem_cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        log: std::cell::RefCell<Vec<ClassifierBurst>>,
+    }
+
+    /// Sample input 2x1x1 and class input 1x1x2 feeding a sample memory and a class memory
+    /// (temporal depth 1) by episodic encode, joined by a plastic `associative_memory`
+    /// mapping sample memory -> class memory (the shape `classifier_mapping_rule` stores).
+    fn classifier_rig() -> ClassifierRig {
+        use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 256, 4096, 8).unwrap(),
+            "plasticity-classifier-test-npu",
+        ));
+        let service = PlasticityService::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            Arc::clone(&npu),
+        );
+        let sample_in_id = CorticalID::try_from_bytes(b"csmp0001").unwrap();
+        let class_in_id = CorticalID::try_from_bytes(b"ccls0001").unwrap();
+        let sample_mem_cortical_id = CorticalID::try_from_bytes(b"msmp0001").unwrap();
+        let class_mem_cortical_id = CorticalID::try_from_bytes(b"mcls0001").unwrap();
+        let (sample_in, class_in) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(SAMPLE_IN_IDX, sample_in_id.as_base_64());
+            guard.register_cortical_area(CLASS_IN_IDX, class_in_id.as_base_64());
+            guard.register_cortical_area(SAMPLE_MEM_IDX, sample_mem_cortical_id.as_base_64());
+            guard.register_cortical_area(CLASS_MEM_IDX, class_mem_cortical_id.as_base_64());
+            for (idx, w, d) in [(SAMPLE_IN_IDX, 2, 1), (CLASS_IN_IDX, 1, 2)] {
+                guard
+                    .create_cortical_area_neurons(
+                        idx,
+                        w,
+                        1,
+                        d,
+                        1,
+                        0.1,
+                        0.0,
+                        0.0,
+                        0.0,
+                        f32::MAX,
+                        0.0,
+                        0.0,
+                        0,
+                        0,
+                        1.0,
+                        0,
+                        0,
+                        false,
+                    )
+                    .unwrap();
+            }
+            // Same registration `register_stdp_mapping_for_rule` performs for the rule.
+            guard
+                .register_stdp_mapping(
+                    SAMPLE_MEM_IDX,
+                    CLASS_MEM_IDX,
+                    StdpMappingParams {
+                        plasticity_window: CLASSIFIER_WINDOW,
+                        plasticity_constant: 1,
+                        ltp_multiplier: 1,
+                        ltd_multiplier: 1,
+                        associative_memory_mapping: true,
+                        synapse_psp: 1.0,
+                        plasticity_mode: PlasticityMode::Stdp,
+                        ..StdpMappingParams::default()
+                    },
+                )
+                .unwrap();
+            for idx in [SAMPLE_MEM_IDX, CLASS_MEM_IDX] {
+                guard
+                    .configure_fire_ledger_window(idx, CLASSIFIER_WINDOW)
+                    .unwrap();
+            }
+            (
+                guard.get_neurons_in_cortical_area(SAMPLE_IN_IDX),
+                guard.get_neurons_in_cortical_area(CLASS_IN_IDX),
+            )
+        };
+        for (idx, id, upstream) in [
+            (SAMPLE_MEM_IDX, sample_mem_cortical_id, SAMPLE_IN_IDX),
+            (CLASS_MEM_IDX, class_mem_cortical_id, CLASS_IN_IDX),
+        ] {
+            assert!(service.register_memory_area(
+                idx,
+                id.as_base_64(),
+                1,
+                vec![upstream],
+                Some(cfg(0, LtmEviction::Lru, 1000)),
+                MemoryMpMode::PatternOnly,
+            ));
+        }
+        ClassifierRig {
+            npu,
+            service,
+            sample_in,
+            class_in,
+            sample_mem_cortical_id,
+            class_mem_cortical_id,
+            log: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    impl ClassifierRig {
+        /// One burst: fire the listed sample and class input neurons, run the plasticity pass,
+        /// then apply its commands the way the runtime does (map the new memory neuron to its
+        /// area and inject it, so it fires on the next burst).
+        fn burst(&self, sample: &[usize], class: &[usize]) -> u64 {
+            let (burst, fired_memory) = {
+                let mut guard = self.npu.lock().unwrap();
+                let injected: Vec<_> = sample
+                    .iter()
+                    .map(|&i| self.sample_in[i])
+                    .chain(class.iter().map(|&i| self.class_in[i]))
+                    .map(|id| (feagi_npu_neural::types::NeuronId(id), 10.0))
+                    .collect();
+                if !injected.is_empty() {
+                    guard.inject_sensory_with_potentials(&injected);
+                }
+                let result = guard.process_burst().unwrap();
+                let fired_memory: Vec<u32> = result
+                    .fired_neurons
+                    .iter()
+                    .map(|n| n.0)
+                    .filter(|&id| id >= crate::neuron_id_manager::MEMORY_NEURON_ID_START)
+                    .collect();
+                (result.burst, fired_memory)
+            };
+            let limiter = Arc::clone(&self.service.creation_failure_warn_limiter);
+            let pool = Arc::clone(&self.service.pool_counters);
+            PlasticityService::compute_plasticity(
+                burst,
+                &self.service.npu,
+                &self.service.memory_neuron_array,
+                &self.service.memory_areas,
+                &self.service.memory_lifecycle_configs,
+                &self.service.memory_area_names,
+                &self.service.pattern_detector,
+                &self.service.command_queue,
+                &self.service.stats,
+                &self.service.config,
+                &self.service.memory_stats_cache,
+                &self.service.mp_window_warn_limiter,
+                &limiter,
+                &pool,
+            );
+            for command in self.service.drain_commands() {
+                if let PlasticityCommand::InjectMemoryNeuronToFCL {
+                    neuron_id,
+                    area_idx,
+                    membrane_potential,
+                    ..
+                } = command
+                {
+                    let cortical_id = if area_idx == SAMPLE_MEM_IDX {
+                        self.sample_mem_cortical_id
+                    } else {
+                        self.class_mem_cortical_id
+                    };
+                    let mut guard = self.npu.lock().unwrap();
+                    guard.register_dynamic_neuron_mapping(neuron_id, cortical_id);
+                    guard.inject_memory_neuron_to_fcl(neuron_id, area_idx, membrane_potential);
+                }
+            }
+            self.log.borrow_mut().push(ClassifierBurst {
+                burst,
+                fired_memory,
+            });
+            burst
+        }
+
+        /// Fire the same inputs for `bursts` bursts.
+        fn present(&self, sample: &[usize], class: &[usize], bursts: usize) {
+            for _ in 0..bursts {
+                self.burst(sample, class);
+            }
+        }
+
+        /// Quiet bursts, long enough for every window to empty.
+        fn silence(&self, bursts: usize) {
+            self.present(&[], &[], bursts);
+        }
+
+        fn memory_ids(&self, area_idx: u32) -> Vec<u32> {
+            let mut ids = self
+                .service
+                .memory_neuron_array
+                .lock()
+                .unwrap()
+                .get_active_neurons_by_area(area_idx);
+            ids.sort_unstable();
+            ids
+        }
+
+        /// Memory neurons of `area_idx` not in `known`.
+        fn new_memory_ids(&self, area_idx: u32, known: &[u32]) -> Vec<u32> {
+            self.memory_ids(area_idx)
+                .into_iter()
+                .filter(|id| !known.contains(id))
+                .collect()
+        }
+
+        fn has_synapse(&self, source: u32, target: u32) -> bool {
+            self.npu
+                .lock()
+                .unwrap()
+                .get_outgoing_synapses(source)
+                .iter()
+                .any(|(t, _, _, _)| *t == target)
+        }
+
+        fn targets_of(&self, source: u32) -> Vec<u32> {
+            let mut targets: Vec<u32> = self
+                .npu
+                .lock()
+                .unwrap()
+                .get_outgoing_synapses(source)
+                .iter()
+                .map(|(t, _, _, _)| *t)
+                .collect();
+            targets.sort_unstable();
+            targets
+        }
+
+        /// Bursts (from the log index `from`) in which `neuron` fired.
+        fn fires_of_since(&self, neuron: u32, from: usize) -> Vec<u64> {
+            self.log
+                .borrow()
+                .iter()
+                .skip(from)
+                .filter(|b| b.fired_memory.contains(&neuron))
+                .map(|b| b.burst)
+                .collect()
+        }
+
+        fn log_len(&self) -> usize {
+            self.log.borrow().len()
+        }
+
+        /// Memory neurons that fired since log index `from`, as `(burst, ids)` for messages.
+        fn memory_fires_since(&self, from: usize) -> Vec<(u64, Vec<u32>)> {
+            self.log
+                .borrow()
+                .iter()
+                .skip(from)
+                .filter(|b| !b.fired_memory.is_empty())
+                .map(|b| (b.burst, b.fired_memory.clone()))
+                .collect()
+        }
+    }
+
+    /// The two trained pairs of a classifier rig: sample memory and class memory neurons.
+    struct TrainedPairs {
+        sample_mem: [u32; 2],
+        class_mem: [u32; 2],
+    }
+
+    /// Train (sample 0 + class 0), a silent gap longer than the window, then (sample 1 +
+    /// class 1), and a second gap, leaving one memory neuron per pattern.
+    fn train_two_separated_pairs(rig: &ClassifierRig) -> TrainedPairs {
+        rig.present(&[0], &[0], 4);
+        rig.silence(4);
+        let s0 = rig.memory_ids(SAMPLE_MEM_IDX);
+        let c0 = rig.memory_ids(CLASS_MEM_IDX);
+        assert_eq!((s0.len(), c0.len()), (1, 1), "pair 0 makes one neuron each");
+
+        rig.present(&[1], &[1], 4);
+        rig.silence(4);
+        let s1 = rig.new_memory_ids(SAMPLE_MEM_IDX, &s0);
+        let c1 = rig.new_memory_ids(CLASS_MEM_IDX, &c0);
+        assert_eq!((s1.len(), c1.len()), (1, 1), "pair 1 makes one neuron each");
+
+        let pairs = TrainedPairs {
+            sample_mem: [s0[0], s1[0]],
+            class_mem: [c0[0], c1[0]],
+        };
+        assert!(rig.has_synapse(pairs.sample_mem[0], pairs.class_mem[0]));
+        assert!(rig.has_synapse(pairs.sample_mem[1], pairs.class_mem[1]));
+        pairs
+    }
+
+    /// The user's scenario: both samples on together, class input silent, is an unseen
+    /// pattern and must not recall either trained class.
+    #[test]
+    fn combined_unseen_sample_does_not_recall_a_trained_class() {
+        let rig = classifier_rig();
+        let pairs = train_two_separated_pairs(&rig);
+        let before = rig.log_len();
+        let known: Vec<u32> = pairs.sample_mem.to_vec();
+
+        rig.present(&[0, 1], &[], 6);
+
+        let combined = rig.new_memory_ids(SAMPLE_MEM_IDX, &known);
+        for class in pairs.class_mem {
+            assert!(
+                rig.fires_of_since(class, before).is_empty(),
+                "class memory neuron {class} fired for an unseen combined sample; \
+                 memory fires (burst, ids): {:?}; combined sample neurons {combined:?} \
+                 target {:?}",
+                rig.memory_fires_since(before),
+                combined
+                    .iter()
+                    .map(|&c| rig.targets_of(c))
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
+
+    /// Sample 0 arrives one burst before sample 1. The first burst is exactly the trained
+    /// pattern, so the trained sample neuron fires and recalls class 0 through its
+    /// associative synapse. That recall is not encoding: the combined-pattern neuron must not
+    /// be linked to class 0, and the combined pattern alone must not recall it afterward.
+    #[test]
+    fn staggered_onset_does_not_link_recalled_class() {
+        let rig = classifier_rig();
+        let pairs = train_two_separated_pairs(&rig);
+        let known: Vec<u32> = pairs.sample_mem.to_vec();
+
+        rig.burst(&[0], &[]);
+        rig.present(&[0, 1], &[], 5);
+        let combined = rig.new_memory_ids(SAMPLE_MEM_IDX, &known);
+        assert_eq!(
+            combined.len(),
+            1,
+            "the combined pattern gets its own neuron"
+        );
+        for class in pairs.class_mem {
+            assert!(
+                !rig.has_synapse(combined[0], class),
+                "combined sample neuron {} links to class neuron {class}; targets {:?}",
+                combined[0],
+                rig.targets_of(combined[0])
+            );
+        }
+
+        rig.silence(4);
+        let before = rig.log_len();
+        rig.present(&[0, 1], &[], 4);
+        for class in pairs.class_mem {
+            assert!(
+                rig.fires_of_since(class, before).is_empty(),
+                "combined pattern alone recalled class neuron {class}; memory fires: {:?}",
+                rig.memory_fires_since(before)
+            );
+        }
+    }
+
+    /// Training one pair right after the other, with no silent gap, must not link a sample
+    /// to the other pair's class.
+    #[test]
+    fn back_to_back_training_creates_no_cross_link() {
+        let rig = classifier_rig();
+        rig.present(&[0], &[0], 4);
+        let s0 = rig.memory_ids(SAMPLE_MEM_IDX);
+        let c0 = rig.memory_ids(CLASS_MEM_IDX);
+        rig.present(&[1], &[1], 4);
+        rig.silence(4);
+        let s1 = rig.new_memory_ids(SAMPLE_MEM_IDX, &s0);
+        let c1 = rig.new_memory_ids(CLASS_MEM_IDX, &c0);
+        assert_eq!((s0.len(), c0.len()), (1, 1));
+        assert_eq!((s1.len(), c1.len()), (1, 1));
+
+        assert!(rig.has_synapse(s0[0], c0[0]), "own-pair link 0 exists");
+        assert!(rig.has_synapse(s1[0], c1[0]), "own-pair link 1 exists");
+        assert!(
+            !rig.has_synapse(s1[0], c0[0]),
+            "sample 1 neuron {} links to class 0 neuron {}; its targets {:?}",
+            s1[0],
+            c0[0],
+            rig.targets_of(s1[0])
+        );
+        assert!(
+            !rig.has_synapse(s0[0], c1[0]),
+            "sample 0 neuron {} links to class 1 neuron {}; its targets {:?}",
+            s0[0],
+            c1[0],
+            rig.targets_of(s0[0])
+        );
+    }
+
+    /// While testing, the class input is still driving class 0. The combined sample then
+    /// co-fires with class 0 and is taught as a new sample of that class. Records whether the
+    /// link forms and survives the class input going quiet.
+    #[test]
+    fn class_input_active_during_test_links_new_sample_to_class() {
+        let rig = classifier_rig();
+        let pairs = train_two_separated_pairs(&rig);
+        let known: Vec<u32> = pairs.sample_mem.to_vec();
+
+        rig.present(&[0, 1], &[0], 6);
+        let combined = rig.new_memory_ids(SAMPLE_MEM_IDX, &known);
+        assert_eq!(
+            combined.len(),
+            1,
+            "the combined pattern gets its own neuron"
+        );
+        assert!(
+            rig.has_synapse(combined[0], pairs.class_mem[0]),
+            "combined sample neuron {} should be linked to class 0 neuron {}; targets {:?}",
+            combined[0],
+            pairs.class_mem[0],
+            rig.targets_of(combined[0])
+        );
+
+        // Class input quiet again: the combined sample alone now recalls class 0.
+        rig.silence(4);
+        let before = rig.log_len();
+        rig.present(&[0, 1], &[], 4);
+        assert!(
+            !rig.fires_of_since(pairs.class_mem[0], before).is_empty(),
+            "combined sample should recall class 0 after being linked; memory fires: {:?}",
+            rig.memory_fires_since(before)
+        );
+    }
 }

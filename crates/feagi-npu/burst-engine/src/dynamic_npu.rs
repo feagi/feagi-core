@@ -1486,6 +1486,16 @@ where
         }
     }
 
+    pub fn get_memory_associative_lif_params(
+        &self,
+        cortical_idx: u32,
+    ) -> Option<crate::MemoryAssociativeLifParams> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.get_memory_associative_lif_params(cortical_idx),
+            DynamicNPUGeneric::INT8(npu) => npu.get_memory_associative_lif_params(cortical_idx),
+        }
+    }
+
     /// See [`crate::npu::RustNPU::fired_neuron_ids_if_queue_timestep`].
     pub fn fired_neuron_ids_if_queue_timestep(
         &self,

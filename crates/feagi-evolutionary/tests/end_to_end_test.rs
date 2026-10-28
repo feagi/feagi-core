@@ -382,3 +382,72 @@ fn test_save_load_roundtrip_memory_plastic_and_regions() {
         true
     );
 }
+
+#[test]
+fn test_save_load_roundtrip_rate_modulated_leak_per_neuron() {
+    use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+    };
+    use std::collections::HashMap;
+
+    let id = CorticalID::try_from_bytes(b"chom_e2e").expect("id");
+    let cfg = serde_json::json!({
+        "enabled": true,
+        "target_mode": "per_neuron",
+        "arm_bursts": 300,
+        "arm_tau_bursts": 75.0,
+        "min_target_firing_per_burst": 0.002,
+        "arm_epoch": 4,
+        "gain": 0.05,
+    });
+    let mut area = CorticalArea::new(
+        id,
+        7,
+        "pop".to_string(),
+        CorticalAreaDimensions::new(3, 3, 1).unwrap(),
+        (0, 0, 0).into(),
+        CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+    )
+    .unwrap();
+    area.properties
+        .insert("rate_modulated_leak".to_string(), cfg.clone());
+    let region = BrainRegion::new(RegionID::new(), "r".to_string(), RegionType::Undefined)
+        .unwrap()
+        .with_areas([id]);
+    let region_key = region.region_id.to_string();
+    let mut cortical_areas = HashMap::new();
+    cortical_areas.insert(id, area);
+    let mut brain_regions = HashMap::new();
+    brain_regions.insert(region_key.clone(), region);
+    let genome = feagi_evolutionary::RuntimeGenome {
+        metadata: feagi_evolutionary::GenomeMetadata {
+            genome_id: "e2e_rml".to_string(),
+            genome_title: "E2E rml".to_string(),
+            genome_description: "".to_string(),
+            version: "2.0".to_string(),
+            timestamp: 1.0,
+            brain_regions_root: Some(region_key.clone()),
+        },
+        cortical_areas,
+        brain_regions,
+        classifiers: std::collections::HashMap::new(),
+        morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+        modulators: feagi_evolutionary::ModulatorRegistry::new(),
+        physiology: feagi_evolutionary::PhysiologyConfig::default(),
+        signatures: feagi_evolutionary::GenomeSignatures {
+            genome: "0".to_string(),
+            blueprint: "0".to_string(),
+            physiology: "0".to_string(),
+            morphologies: None,
+        },
+        stats: feagi_evolutionary::GenomeStats::default(),
+        change_history: Vec::new(),
+    };
+    let json = save_genome_to_json(&genome).expect("save");
+    let loaded = load_genome_from_json(&json).expect("load");
+    assert_eq!(
+        loaded.cortical_areas[&id].properties["rate_modulated_leak"],
+        cfg
+    );
+}

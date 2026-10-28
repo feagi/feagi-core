@@ -48,6 +48,10 @@ pub struct NeuronArray<T: NeuralValue, const N: usize> {
     /// Leftover membrane charge below one stored level, in `[0, 1)`.
     pub membrane_fractions: alloc::boxed::Box<[f32; N]>,
 
+    /// Burst index of the last membrane update; the leak since then is applied lazily
+    /// (`V * (1 - leak) ^ (burst - last_update_burst)`) when the neuron next gets input.
+    pub last_update_bursts: alloc::boxed::Box<[u64; N]>,
+
     /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: alloc::boxed::Box<[T; N]>,
 
@@ -106,6 +110,7 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
             count: 0,
             membrane_potentials: crate::embedded_impl::boxed_repeat(T::zero()),
             membrane_fractions: crate::embedded_impl::boxed_repeat(0.0),
+            last_update_bursts: crate::embedded_impl::boxed_repeat(0),
             thresholds: crate::embedded_impl::boxed_repeat(T::from_f32(1.0)),
             threshold_fractions: crate::embedded_impl::boxed_repeat(0.0),
             threshold_limits: crate::embedded_impl::boxed_repeat(T::max_value()),
@@ -208,6 +213,7 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
                 self.leak_coefficients[idx],
                 T::zero(), // resting_potential
                 input.to_f32(),
+                1, // dense path: every neuron is updated once per call (one burst)
             );
 
             if fired {
@@ -243,6 +249,10 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
 
     fn membrane_fractions(&self) -> &[f32] {
         &self.membrane_fractions[..self.count]
+    }
+
+    fn last_update_bursts(&self) -> &[u64] {
+        &self.last_update_bursts[..self.count]
     }
 
     fn thresholds(&self) -> &[Self::Value] {
@@ -317,6 +327,11 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
     fn membrane_fractions_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.membrane_fractions[..count]
+    }
+
+    fn last_update_bursts_mut(&mut self) -> &mut [u64] {
+        let count = self.count;
+        &mut self.last_update_bursts[..count]
     }
 
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
@@ -423,6 +438,7 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
 
         let idx = self.count;
         self.membrane_fractions[idx] = 0.0;
+        self.last_update_bursts[idx] = 0;
         self.thresholds[idx] = threshold;
         self.threshold_fractions[idx] = 0.0;
         self.threshold_limits[idx] = threshold_limit;

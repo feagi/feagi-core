@@ -34,7 +34,7 @@ pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult
 
 /// Set the simulation timestep in seconds: stored in the genome's physiology AND applied live as
 /// burst frequency 1/timestep Hz (same behavior as `PUT /v1/physiology/`). Body:
-/// `{"simulation_timestep": 0.025}`. Contrast `PUT /v1/burst_engine/config`, which is live only.
+/// `{"simulation_timestep": 0.025}`. `PUT /v1/burst_engine/config` also stores it.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/simulation_timestep",
@@ -1108,9 +1108,9 @@ pub async fn get_config(
 
 /// Update burst engine configuration including frequency and timing parameters.
 ///
-/// LIVE ONLY: changes the running engine and leaves the stored genome's
-/// `physiology.simulation_timestep` unchanged (a save or export still carries the genome's
-/// value). To store a rate in the genome and apply it live, use `PUT /v1/physiology/`.
+/// `burst_frequency_hz` is applied live AND stored in the loaded genome's
+/// `physiology.simulation_timestep` (1 / Hz seconds), so a save, export or restart loads the
+/// same rate (same as `PUT /v1/physiology/`). When no genome is loaded the rate is live only.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/config",
@@ -1133,6 +1133,26 @@ pub async fn put_config(
             return Err(ApiError::invalid_input("Frequency must be positive"));
         }
 
+        // Store first: a value the genome rejects (non-finite period) changes nothing. With no
+        // genome loaded there is nothing to store into, so the rate stays live only.
+        match state
+            .genome_service
+            .set_simulation_timestep(1.0 / freq)
+            .await
+        {
+            Ok(_) => {}
+            Err(feagi_services::ServiceError::InvalidInput(msg)) if msg.contains("No genome") => {
+                tracing::warn!(target: "feagi-api", "Burst rate {freq} Hz applied live only: {msg}");
+            }
+            Err(feagi_services::ServiceError::InvalidInput(msg)) => {
+                return Err(ApiError::invalid_input(msg));
+            }
+            Err(e) => {
+                return Err(ApiError::internal(format!(
+                    "Failed to store simulation_timestep: {e}"
+                )));
+            }
+        }
         runtime_service
             .set_frequency(freq)
             .await

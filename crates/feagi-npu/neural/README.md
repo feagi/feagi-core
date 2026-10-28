@@ -21,12 +21,14 @@ Platform-agnostic neural dynamics algorithms for FEAGI.
 use feagi_neural::update_neuron_lif;
 
 let mut potential = 0.5;
+let mut fraction = 0.0;
 let threshold = 1.0;
 let leak = 0.1;
 let input = 0.6;
 
-let fired = update_neuron_lif(&mut potential, threshold, leak, 0.0, input);
-assert!(fired); // 0.5 + 0.6 = 1.1 > 1.0
+// `elapsed_bursts` = bursts since the neuron last updated; V = V*(1-leak)^elapsed + input
+let fired = update_neuron_lif(&mut potential, &mut fraction, threshold, 0.0, leak, 0.0, input, 1);
+assert!(fired); // 0.5 * 0.9 + 0.6 = 1.05 >= 1.0
 assert_eq!(potential, 0.0); // Reset after firing
 ```
 

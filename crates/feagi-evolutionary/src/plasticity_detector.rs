@@ -243,6 +243,10 @@ pub fn validate_memory_mp_properties(properties: &HashMap<String, Value>) -> Res
     Ok(())
 }
 
+/// Default `firing_threshold` for newly created memory areas (applied to their memory
+/// neurons' associative firing). Callers and stored genomes may override it per area.
+pub const DEFAULT_MEMORY_FIRING_THRESHOLD: f64 = 1.0;
+
 /// Memory-specific cortical area properties
 #[derive(Debug, Clone)]
 pub struct MemoryAreaProperties {

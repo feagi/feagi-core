@@ -27,11 +27,17 @@ pub enum NeuronStateField {
     MpChargeAccumulation,
     /// Firing-rate EMA from the rate-modulated-leak registry; absent for unregistered areas.
     RateEma,
+    /// Set-point the homeostat holds the neuron at (area target, or the armed per-neuron target;
+    /// while arming, the running estimate). Absent for unregistered areas.
+    RateTarget,
+    /// 1.0 when the homeostat is adjusting this neuron's leak now (0.0 while arming or for an
+    /// inactive per-neuron neuron). Absent for unregistered areas.
+    HomeostatRegulated,
 }
 
 impl NeuronStateField {
     /// Every field, in the order reported to clients.
-    pub const ALL: [NeuronStateField; 14] = [
+    pub const ALL: [NeuronStateField; 16] = [
         NeuronStateField::MembranePotential,
         NeuronStateField::Threshold,
         NeuronStateField::ThresholdLimit,
@@ -46,6 +52,8 @@ impl NeuronStateField {
         NeuronStateField::SnoozePeriod,
         NeuronStateField::MpChargeAccumulation,
         NeuronStateField::RateEma,
+        NeuronStateField::RateTarget,
+        NeuronStateField::HomeostatRegulated,
     ];
 
     /// Plain wire name.
@@ -65,6 +73,8 @@ impl NeuronStateField {
             Self::SnoozePeriod => "snooze_period",
             Self::MpChargeAccumulation => "mp_charge_accumulation",
             Self::RateEma => "rate_ema",
+            Self::RateTarget => "rate_target",
+            Self::HomeostatRegulated => "homeostat_regulated",
         }
     }
 

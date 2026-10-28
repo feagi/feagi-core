@@ -78,6 +78,10 @@ fn merge_memory_area_properties(
 ) -> HashMap<String, Value> {
     let mut defaults = get_default_neural_properties();
     let memory_defaults = MemoryAreaProperties::default();
+    defaults.insert(
+        "firing_threshold".to_string(),
+        Value::from(feagi_evolutionary::DEFAULT_MEMORY_FIRING_THRESHOLD),
+    );
     defaults
         .entry("cortical_group".to_string())
         .or_insert(Value::from("MEMORY"));
@@ -3313,6 +3317,8 @@ impl GenomeServiceImpl {
                             }
                         }
 
+                        manager.sync_memory_associative_lif_params(&cortical_id_typed);
+
                         // Re-register memory area config in PlasticityExecutor so temporal_depth/lifecycle changes apply immediately.
                         if let Some(executor) = manager.get_plasticity_executor() {
                             if let Ok(exec) = executor.lock() {
@@ -5752,6 +5758,19 @@ impl GenomeServiceImpl {
 #[cfg(test)]
 mod tests {
     use super::{normalize_quantization_precision, precision_import_warning_reason};
+    use std::collections::HashMap;
+
+    #[test]
+    fn new_memory_area_defaults_to_firing_threshold_one() {
+        use super::merge_memory_area_properties;
+        let merged = merge_memory_area_properties(HashMap::new(), None);
+        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(1.0)));
+        // Caller-provided value still wins.
+        let mut extra = HashMap::new();
+        extra.insert("firing_threshold".to_string(), serde_json::json!(0.4));
+        let merged = merge_memory_area_properties(HashMap::new(), Some(&extra));
+        assert_eq!(merged.get("firing_threshold"), Some(&serde_json::json!(0.4)));
+    }
 
     #[test]
     fn normalize_quantization_precision_handles_aliases() {

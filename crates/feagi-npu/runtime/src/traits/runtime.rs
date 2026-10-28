@@ -110,6 +110,13 @@ pub trait NeuronStorage: Send + Sync {
     /// `f32` storage keeps this at 0 because the level already holds the full value.
     fn membrane_fractions(&self) -> &[f32];
 
+    /// Burst index at which each neuron's membrane potential was last written.
+    ///
+    /// The stored membrane value is the charge *as of* this burst. The leak of the idle
+    /// stretch since then is applied lazily: at burst `t` the effective charge is
+    /// `V * (1 - leak) ^ (t - last_update_burst)`. Readers use the same rule without mutating.
+    fn last_update_bursts(&self) -> &[u64];
+
     /// Firing thresholds slice (minimum MP to fire)
     fn thresholds(&self) -> &[Self::Value];
 
@@ -165,6 +172,9 @@ pub trait NeuronStorage: Send + Sync {
 
     /// Mutable membrane fractions slice
     fn membrane_fractions_mut(&mut self) -> &mut [f32];
+
+    /// Mutable last-update burst indices (see [`NeuronStorage::last_update_bursts`])
+    fn last_update_bursts_mut(&mut self) -> &mut [u64];
 
     /// Mutable firing thresholds slice
     fn thresholds_mut(&mut self) -> &mut [Self::Value];

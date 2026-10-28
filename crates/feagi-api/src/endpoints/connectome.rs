@@ -483,7 +483,8 @@ pub struct NeuronStateResponse {
     pub y: Vec<u32>,
     pub z: Vec<u32>,
     /// One array per requested field, aligned with `x`/`y`/`z`; `null` where the value does not
-    /// exist for that neuron (for example `rate_ema` in an area without the homeostat).
+    /// exist for that neuron (for example `rate_ema`, `rate_target` or `homeostat_regulated` in an area
+    /// without the homeostat).
     #[schema(value_type = Object)]
     pub fields: serde_json::Map<String, serde_json::Value>,
 }
@@ -528,7 +529,8 @@ fn neuron_state_response(
 /// GET /v1/connectome/cortical_area/{cortical_id}/neuron_state?fields=a,b
 ///
 /// Bulk read of per-neuron runtime state (membrane potential, threshold, leak coefficient,
-/// refractory countdown, consecutive fire count, excitability, ..., `rate_ema`) in columnar form.
+/// refractory countdown, consecutive fire count, excitability, ..., `rate_ema`, `rate_target`,
+/// `homeostat_regulated`) in columnar form.
 #[utoipa::path(
     get,
     path = "/v1/connectome/cortical_area/{cortical_id}/neuron_state",
@@ -1767,12 +1769,19 @@ mod tests {
                     vec![Some(0.25), Some(0.5)],
                 ),
                 (NeuronStateField::RateEma, vec![None, None]),
+                (NeuronStateField::RateTarget, vec![Some(0.25), None]),
+                (NeuronStateField::HomeostatRegulated, vec![Some(1.0), None]),
             ],
         };
         let r = super::neuron_state_response("area".to_string(), cols);
         assert_eq!(r.count, 2);
         assert_eq!(r.fields["leak_coefficient"], serde_json::json!([0.25, 0.5]));
         assert_eq!(r.fields["rate_ema"], serde_json::json!([null, null]));
+        assert_eq!(r.fields["rate_target"], serde_json::json!([0.25, null]));
+        assert_eq!(
+            r.fields["homeostat_regulated"],
+            serde_json::json!([1.0, null])
+        );
     }
 
     #[test]

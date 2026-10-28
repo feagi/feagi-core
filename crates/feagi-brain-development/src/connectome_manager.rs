@@ -1057,6 +1057,15 @@ impl ConnectomeManager {
 
         self.initialized = true;
 
+        // Memory neurons fire through per-area associative LIF params: seed them from the area.
+        if self
+            .cortical_areas
+            .get(&cortical_id)
+            .is_some_and(Self::area_is_memory)
+        {
+            self.sync_memory_associative_lif_params(&cortical_id);
+        }
+
         self.refresh_cortical_area_hashes(true, true);
         self.refresh_brain_regions_hash();
 
@@ -2832,7 +2841,8 @@ impl ConnectomeManager {
             "ltd_multiplier": 0,
             "plasticity_window": 0,
         })];
-        self.update_cortical_mapping(memory_area_id, twin_id, mapping_data)?;
+        // Core-generated twin recall edge, not user wiring, so region IO designation does not apply.
+        self.update_cortical_mapping_with_policy(memory_area_id, twin_id, mapping_data, false)?;
         if regenerate {
             let _ = self.regenerate_synapses_for_mapping(memory_area_id, twin_id)?;
         }
@@ -3977,15 +3987,29 @@ impl ConnectomeManager {
         dst_area_id: &CorticalID,
         mapping_data: Vec<serde_json::Value>,
     ) -> BduResult<()> {
+        self.update_cortical_mapping_with_policy(src_area_id, dst_area_id, mapping_data, true)
+    }
+
+    /// Same as [`Self::update_cortical_mapping`], with the region IO designation check optional.
+    /// Internal callers that write core-generated edges pass `enforce_region_io = false`.
+    fn update_cortical_mapping_with_policy(
+        &mut self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        mapping_data: Vec<serde_json::Value>,
+        enforce_region_io: bool,
+    ) -> BduResult<()> {
         use tracing::info;
 
         self.validate_memory_outbound_mapping_contract(src_area_id, dst_area_id, &mapping_data)?;
-        crate::region_io_designation::validate_cross_region_mapping_proposal(
-            self,
-            src_area_id,
-            dst_area_id,
-            &mapping_data,
-        )?;
+        if enforce_region_io {
+            crate::region_io_designation::validate_cross_region_mapping_proposal(
+                self,
+                src_area_id,
+                dst_area_id,
+                &mapping_data,
+            )?;
+        }
 
         debug!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
 
@@ -4708,6 +4732,10 @@ impl ConnectomeManager {
             if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
                 if matches!(dst_area.cortical_type, CorticalAreaType::Memory(_))
                     && !Self::area_belongs_to_classifier_assembly(dst_area)
+                    // Memory -> memory links (e.g. associative_memory) have no twin.
+                    && !self.cortical_areas.get(src_area_id).is_some_and(|src| {
+                        matches!(src.cortical_type, CorticalAreaType::Memory(_))
+                    })
                 {
                     let is_scan = self.mapping_from_src_to_dst_has_scan(src_area_id, dst_area_id);
                     let twin_result = if is_scan {
@@ -4716,14 +4744,13 @@ impl ConnectomeManager {
                         self.ensure_memory_twin_area(dst_area_id, src_area_id)
                     };
                     if let Err(e) = twin_result {
-                        warn!(
-                            target: "feagi-bdu",
+                        return Err(BduError::InvalidArea(format!(
                             "Failed to ensure {} twin for {} -> {}: {}",
                             if is_scan { "scan" } else { "memory" },
                             src_area_id.as_base_64(),
                             dst_area_id.as_base_64(),
                             e
-                        );
+                        )));
                     }
                 }
             }
@@ -4779,6 +4806,7 @@ impl ConnectomeManager {
                             }
                         }
 
+                        self.sync_memory_associative_lif_params(dst_area_id);
                         if let Ok(exec) = executor.lock() {
                             use feagi_npu_plasticity::PlasticityExecutor;
 
@@ -7216,6 +7244,7 @@ impl ConnectomeManager {
                     continue;
                 }
             };
+            self.sync_memory_associative_lif_params(&memory_id);
             let exec = executor.lock().map_err(|_| {
                 BduError::Internal(
                     "Failed to lock PlasticityExecutor for memory-area rebind".to_string(),
@@ -7232,6 +7261,46 @@ impl ConnectomeManager {
             self.configure_memory_scan_on_executor(&*exec, &memory_id);
         }
         Ok(())
+    }
+
+    /// Push a memory area's own neuron properties into the NPU's associative sparse LIF.
+    ///
+    /// Memory neurons fire through `MemoryAssociativeLifParams` (per `cortical_idx`), not the dense
+    /// neuron arrays, so without this every memory area would use the LIF defaults. Properties are
+    /// read through the same accessors (and encodings) as regular neurons: threshold limit 0 means
+    /// no limit, consecutive fire limit 0 means unlimited, excitability is clamped to 0..=1.
+    pub fn sync_memory_associative_lif_params(&self, memory_id: &CorticalID) {
+        use crate::models::CorticalAreaExt;
+        let (Some(npu), Some(area), Some(&idx)) = (
+            self.npu.as_ref(),
+            self.cortical_areas.get(memory_id),
+            self.cortical_id_to_idx.get(memory_id),
+        ) else {
+            return;
+        };
+        let limit = area.firing_threshold_limit();
+        let consecutive = area.consecutive_fire_count().min(u16::MAX as u32) as u16;
+        let params = feagi_npu_burst_engine::MemoryAssociativeLifParams {
+            threshold: area.firing_threshold(),
+            threshold_limit: if limit == 0.0 { f32::MAX } else { limit },
+            excitability: area.neuron_excitability().clamp(0.0, 1.0),
+            refractory_period: area.refractory_period(),
+            consecutive_fire_limit: if consecutive == 0 {
+                u16::MAX
+            } else {
+                consecutive
+            },
+            snooze_period: area.snooze_period(),
+        };
+        match npu.lock() {
+            Ok(mut npu) => npu.set_memory_associative_lif_params(idx, params),
+            Err(e) => warn!(
+                target: "feagi-bdu",
+                "Failed to lock NPU to set memory LIF params for {}: {}",
+                memory_id.as_base_64(),
+                e
+            ),
+        }
     }
 
     #[cfg(feature = "plasticity")]
@@ -7676,7 +7745,7 @@ impl ConnectomeManager {
     /// * `z` - Z coordinate
     /// * `firing_threshold` - Firing threshold (minimum MP to fire)
     /// * `firing_threshold_limit` - Firing threshold limit (maximum MP to fire, 0 = no limit)
-    /// * `leak_coefficient` - Leak coefficient
+    /// * `leak_coefficient` - Per-burst fraction of V lost (0..1): V_t = V_{t-1}*(1-g) + I_t, applied lazily as V*(1-g)^(t - t_last) when the neuron next gets input
     /// * `resting_potential` - Resting membrane potential
     /// * `neuron_type` - Neuron type (0=excitatory, 1=inhibitory)
     /// * `refractory_period` - Refractory period
@@ -9580,7 +9649,7 @@ impl ConnectomeManager {
     ///
     /// * `neuron_id` - Target neuron ID
     /// * `firing_threshold` - Optional new firing threshold
-    /// * `leak_coefficient` - Optional new leak coefficient
+    /// * `leak_coefficient` - Optional new leak coefficient. Per-burst fraction of V lost (0..1): V_t = V_{t-1}*(1-g) + I_t, applied lazily as V*(1-g)^(t - t_last) when the neuron next gets input
     /// * `resting_potential` - Optional new resting potential
     /// * `excitability` - Optional new excitability
     ///
@@ -12517,6 +12586,96 @@ mod tests {
     }
 
     #[test]
+    fn memory_area_properties_drive_associative_lif_params() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let id = CorticalID::try_from_bytes(b"mmem0410").unwrap();
+        let mut area = CorticalArea::new(
+            id,
+            0,
+            "Memory LIF".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        area.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(3.0));
+        area.properties
+            .insert("firing_threshold_limit".to_string(), serde_json::json!(0.0));
+        area.properties
+            .insert("refractory_period".to_string(), serde_json::json!(2));
+        area.properties
+            .insert("consecutive_fire_limit".to_string(), serde_json::json!(0));
+        area.properties
+            .insert("snooze_period".to_string(), serde_json::json!(4));
+        let idx = manager.add_cortical_area(area).unwrap();
+
+        let p = dyn_npu
+            .lock()
+            .unwrap()
+            .get_memory_associative_lif_params(idx)
+            .expect("memory area registration must set its associative LIF params");
+        assert_eq!(p.threshold, 3.0);
+        assert_eq!(p.threshold_limit, f32::MAX);
+        assert_eq!(p.excitability, 1.0);
+        assert_eq!(p.refractory_period, 2);
+        assert_eq!(p.consecutive_fire_limit, u16::MAX);
+        assert_eq!(p.snooze_period, 4);
+
+        // Live update through the regular per-area setter takes effect without restart.
+        dyn_npu
+            .lock()
+            .unwrap()
+            .update_cortical_area_threshold(idx, 5.0);
+        let p = dyn_npu
+            .lock()
+            .unwrap()
+            .get_memory_associative_lif_params(idx)
+            .unwrap();
+        assert_eq!(p.threshold, 5.0);
+    }
+
+    #[test]
+    fn default_memory_firing_threshold_drives_associative_lif_params() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let id = CorticalID::try_from_bytes(b"mmem0411").unwrap();
+        let mut area = CorticalArea::new(
+            id,
+            0,
+            "Memory default".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        area.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        area.properties.insert(
+            "firing_threshold".to_string(),
+            serde_json::json!(feagi_evolutionary::DEFAULT_MEMORY_FIRING_THRESHOLD),
+        );
+        let idx = manager.add_cortical_area(area).unwrap();
+        let p = dyn_npu
+            .lock()
+            .unwrap()
+            .get_memory_associative_lif_params(idx)
+            .expect("memory area registration must set its associative LIF params");
+        assert_eq!(p.threshold, 1.0);
+    }
+
+    #[test]
     fn test_associative_memory_between_memory_areas_creates_synapses() {
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
@@ -13688,6 +13847,250 @@ mod tests {
         assert_ne!(
             hash_after_remove, hash_after_clear,
             "removing a classifier must change classifiers_hash"
+        );
+    }
+
+    #[test]
+    fn generated_memory_twin_edge_ignores_region_io_designation() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10)
+            .expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+        let root_id = RegionID::new();
+        let r1_id = RegionID::new();
+        let r2_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let r1_key = r1_id.to_string();
+        let r2_key = r2_id.to_string();
+        for (id, name, parent) in [
+            (root_id, "Root", None),
+            (r1_id, "R1", Some(root_key.clone())),
+            (r2_id, "R2", Some(root_key.clone())),
+        ] {
+            manager
+                .add_brain_region(
+                    BrainRegion::new(id, name.to_string(), RegionType::Undefined).unwrap(),
+                    parent,
+                )
+                .unwrap();
+        }
+
+        let upstream_id = CorticalID::try_from_bytes(b"cupstrm1").unwrap();
+        let other_id = CorticalID::try_from_bytes(b"cother01").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mtwinio1").unwrap();
+        for (idx, (id, name)) in [(upstream_id, "upstream"), (other_id, "other")]
+            .into_iter()
+            .enumerate()
+        {
+            let area = CorticalArea::new(
+                id,
+                idx as u32,
+                name.to_string(),
+                CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            manager.add_cortical_area(area).unwrap();
+        }
+        let mut mem = CorticalArea::new(
+            mem_id,
+            2,
+            "mem".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        manager.add_cortical_area(mem).unwrap();
+
+        // R1 holds the memory area (designated input); R2 holds the upstream and another area.
+        manager
+            .brain_regions
+            .get_region_mut(&r1_key)
+            .expect("region")
+            .add_area(mem_id);
+        manager
+            .brain_regions
+            .get_region_mut(&r2_key)
+            .expect("region")
+            .add_area(upstream_id);
+        manager
+            .brain_regions
+            .get_region_mut(&r2_key)
+            .expect("region")
+            .add_area(other_id);
+        manager
+            .brain_regions
+            .get_region_mut(&r1_key)
+            .expect("R1")
+            .properties
+            .insert(
+                "designated_inputs".to_string(),
+                serde_json::json!([mem_id.as_base_64()]),
+            );
+
+        // (a) upstream -> memory episodic mapping creates the memory -> twin episodic edge.
+        manager
+            .update_cortical_mapping(
+                &upstream_id,
+                &mem_id,
+                vec![serde_json::json!({
+                    "morphology_id": "episodic_memory",
+                    "morphology_scalar": 1,
+                    "postSynapticCurrent_multiplier": 1.0,
+                })],
+            )
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&upstream_id, &mem_id)
+            .unwrap();
+        let memory_area = manager.get_cortical_area(&mem_id).unwrap();
+        let twin_key = memory_area
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&upstream_id.as_base_64()))
+            .and_then(|v| v.as_str())
+            .expect("twin entry for upstream")
+            .to_string();
+        let twin_rules = memory_area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&twin_key))
+            .and_then(|v| v.as_array())
+            .expect("memory -> twin mapping");
+        assert!(twin_rules.iter().any(|rule| {
+            rule.get("morphology_id").and_then(|v| v.as_str()) == Some("episodic_memory")
+        }));
+
+        // (b) rebuilding the generated twin mappings must not trip region IO designation.
+        manager
+            .rebuild_memory_twin_mappings()
+            .expect("twin rebuild must ignore region IO designation");
+
+        // (c) a user-authored edge out of the designated input is still rejected.
+        let err = manager
+            .update_cortical_mapping(
+                &mem_id,
+                &other_id,
+                vec![serde_json::json!({
+                    "morphology_id": "associative_memory",
+                    "postSynapticCurrent_multiplier": 1.0,
+                })],
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, BduError::RegionIoPolicyViolation(_)),
+            "expected RegionIoPolicyViolation, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regenerate_mapping_returns_error_when_memory_twin_cannot_be_created() {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10)
+            .expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        // A non-root region exists, but both areas are only in root, so no twin region is available.
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let upstream_id = CorticalID::try_from_bytes(b"cupstrm2").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mtwinerr").unwrap();
+        let upstream = CorticalArea::new(
+            upstream_id,
+            0,
+            "upstream".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mut mem = CorticalArea::new(
+            mem_id,
+            1,
+            "mem".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        manager.add_cortical_area(upstream).unwrap();
+        manager.add_cortical_area(mem).unwrap();
+        for id in [upstream_id, mem_id] {
+            manager
+                .brain_regions
+                .get_region_mut(&root_key)
+                .expect("root")
+                .add_area(id);
+        }
+
+        manager
+            .update_cortical_mapping(
+                &upstream_id,
+                &mem_id,
+                vec![serde_json::json!({
+                    "morphology_id": "episodic_memory",
+                    "morphology_scalar": 1,
+                    "postSynapticCurrent_multiplier": 1.0,
+                })],
+            )
+            .unwrap();
+        let err = manager
+            .regenerate_synapses_for_mapping(&upstream_id, &mem_id)
+            .expect_err("twin creation failure must surface from regeneration");
+        assert!(
+            err.to_string().contains("twin"),
+            "error should name the twin failure, got {err}"
         );
     }
 
