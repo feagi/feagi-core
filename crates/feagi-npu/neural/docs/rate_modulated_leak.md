@@ -53,6 +53,7 @@ Neurons are skipped when their storage index is above the memory neuron band or 
 ## API and Brain Visualizer
 
 - Updates use the key `rate_modulated_leak` in `PUT` `/v1/cortical_area/cortical_area` with a JSON object (classifier: **parameter** change, no synapse rebuild).
+- Read the live homeostat with the generic per-neuron state endpoint, `GET /v1/connectome/cortical_area/<cortical_id>/neuron_state?fields=leak_coefficient,rate_ema`. The response is columnar: `{cortical_id, count, x[], y[], z[], fields:{leak_coefficient:[..], rate_ema:[..]}}`. `leak_coefficient` is the value the LIF step uses (the homeostat writes its leak into neuron storage), `rate_ema` is the firing-rate EMA in fraction of bursts and is `null` for neurons of an area that is not registered. It is a read-only snapshot, not a stream. An unknown area returns 404; an unknown field returns 400 listing the valid ones.
 - BV exposes the fields under **Cortical area details** → **Advanced** (the existing Advanced / Danger section).
 
 ## See also

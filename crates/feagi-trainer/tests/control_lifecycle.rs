@@ -180,6 +180,8 @@ fn controller_runs_full_rollout_and_streams_lifecycle_events() {
                 },
                 events,
                 cancel,
+                None,
+                0,
             )?;
 
             Ok(RunSummary {
@@ -245,6 +247,8 @@ fn controller_surfaces_cancellation_as_cancelled() {
             },
             events,
             cancel,
+            None,
+            0,
         )?;
         Ok(RunSummary {
             schema_version: RUN_SUMMARY_SCHEMA_VERSION,
@@ -343,6 +347,8 @@ fn controller_skip_scores_seen_samples_and_emits_skipped() {
                 },
                 events,
                 cancel,
+                None,
+                0,
             )?;
             Ok(RunSummary {
                 scorecard_id: Some(scorecard_id.clone()),

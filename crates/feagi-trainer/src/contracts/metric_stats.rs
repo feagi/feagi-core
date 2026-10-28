@@ -5,7 +5,7 @@
 //! re-plans the sampler order with a derived seed and runs the full train+eval against the same
 //! pinned connectome; because reward-modulated plasticity makes the learning trajectory
 //! order-dependent (ADR-003: the runtime itself is deterministic), the spread across repeats is
-//! the genuine run-to-run variance a journal reviewer expects to see quantified.
+//! the genuine run-to-run variance a peer reviewer expects to see quantified.
 //!
 //! A `MetricStat` is descriptive provenance: it carries the sample size `n`, the mean, the
 //! sample standard deviation, and a two-sided confidence interval at `confidence_level`. The

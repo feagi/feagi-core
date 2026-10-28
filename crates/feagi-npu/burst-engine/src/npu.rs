@@ -4731,6 +4731,69 @@ impl<
             .unwrap_or(false)
     }
 
+    /// Bulk read of per-neuron runtime state for one cortical area (dense neurons only).
+    ///
+    /// `leak_coefficient` is the value the LIF step uses: the homeostat writes its leak into
+    /// neuron storage, so storage is the single source. `rate_ema` is `None` per neuron when
+    /// the area is not registered with the homeostat.
+    pub fn read_neuron_state_columns(
+        &self,
+        cortical_idx: u32,
+        fields: &[crate::neuron_state::NeuronStateField],
+    ) -> crate::neuron_state::NeuronStateColumns {
+        use crate::neuron_state::{NeuronStateColumns, NeuronStateField as F};
+        // Lock order matches the burst loop: homeostat registry first, then storage.
+        let rate_ema: Option<ahash::AHashMap<usize, f32>> = if fields.contains(&F::RateEma) {
+            self.rate_modulated_leak
+                .lock()
+                .ok()
+                .and_then(|g| g.rate_ema_by_neuron(cortical_idx))
+        } else {
+            None
+        };
+        let ns = self.neuron_storage.read().unwrap();
+        let ids = ns.get_neurons_in_cortical_area(cortical_idx);
+        let mut out = NeuronStateColumns::default();
+        let mut keep: Vec<usize> = Vec::with_capacity(ids.len());
+        for &idx in &ids {
+            if let Some((x, y, z)) = ns.get_coordinates(idx) {
+                out.x.push(x);
+                out.y.push(y);
+                out.z.push(z);
+                keep.push(idx);
+            }
+        }
+        for &field in fields {
+            let col: Vec<Option<f32>> = keep
+                .iter()
+                .map(|&i| match field {
+                    F::MembranePotential => {
+                        Some(ns.membrane_potentials()[i].to_f32() + ns.membrane_fractions()[i])
+                    }
+                    F::Threshold => Some(ns.thresholds()[i].to_f32() + ns.threshold_fractions()[i]),
+                    F::ThresholdLimit => Some(ns.threshold_limits()[i].to_f32()),
+                    F::LeakCoefficient => Some(ns.leak_coefficients()[i]),
+                    F::RestingPotential => Some(ns.resting_potentials()[i].to_f32()),
+                    F::NeuronType => Some(ns.neuron_types()[i] as f32),
+                    F::RefractoryPeriod => Some(ns.refractory_periods()[i] as f32),
+                    F::RefractoryCountdown => Some(ns.refractory_countdowns()[i] as f32),
+                    F::Excitability => Some(ns.excitabilities()[i]),
+                    F::ConsecutiveFireCount => Some(ns.consecutive_fire_counts()[i] as f32),
+                    F::ConsecutiveFireLimit => Some(ns.consecutive_fire_limits()[i] as f32),
+                    F::SnoozePeriod => Some(ns.snooze_periods()[i] as f32),
+                    F::MpChargeAccumulation => Some(if ns.mp_charge_accumulation()[i] {
+                        1.0
+                    } else {
+                        0.0
+                    }),
+                    F::RateEma => rate_ema.as_ref().and_then(|m| m.get(&i).copied()),
+                })
+                .collect();
+            out.fields.push((field, col));
+        }
+        out
+    }
+
     /// Whether the modulator engine treats a cortical area as a homeostatic leak area.
     pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
         self.modulator_engine
@@ -7307,6 +7370,42 @@ mod tests {
         );
         assert!(!npu.has_rate_modulated_leak(idx));
         assert!(!npu.is_homeostatic_leak_area(idx));
+    }
+
+    #[test]
+    fn neuron_state_columns_report_storage_and_rate_ema_only_when_registered() {
+        use crate::neuron_state::NeuronStateField as F;
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                64, 64, 4,
+            );
+        let area = 7u32;
+        npu.register_cortical_area(area, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        let a = npu
+            .add_neuron(1.0, 0.0, 0.25, 0.0, 0, 0, 1.0, 1, 0, true, area, 0, 0, 0)
+            .unwrap();
+        let _b = npu
+            .add_neuron(1.0, 0.0, 0.25, 0.0, 0, 0, 1.0, 1, 0, true, area, 1, 0, 0)
+            .unwrap();
+        let fields = [F::LeakCoefficient, F::Threshold, F::RateEma];
+
+        let cols = npu.read_neuron_state_columns(area, &fields);
+        assert_eq!(cols.count(), 2);
+        assert_eq!(cols.fields.len(), 3);
+        assert!(cols.fields[0].1.iter().all(|v| *v == Some(0.25)));
+        assert!(cols.fields[1].1.iter().all(|v| *v == Some(1.0)));
+        assert!(cols.fields[2].1.iter().all(|v| v.is_none()));
+
+        npu.sync_rate_modulated_leak_from_cortical_property(
+            area,
+            &serde_json::json!({ "enabled": true }),
+            0.25,
+            vec![a.0 as usize, (a.0 + 1) as usize],
+        );
+        let cols = npu.read_neuron_state_columns(area, &fields);
+        assert!(cols.fields[2].1.iter().all(|v| *v == Some(0.0)));
+        // An unrelated area reads empty.
+        assert_eq!(npu.read_neuron_state_columns(99, &fields).count(), 0);
     }
 
     #[test]

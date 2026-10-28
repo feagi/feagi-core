@@ -24,6 +24,8 @@ pub mod plasticity_freeze;
 pub mod plugins;
 pub mod pole_balance;
 pub mod reach_hold;
+pub mod run_actions;
 pub mod run_config;
+pub mod run_data;
 pub mod samplers;
 pub mod stats;

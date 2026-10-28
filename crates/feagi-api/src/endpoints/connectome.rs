@@ -466,6 +466,121 @@ pub async fn get_cortical_area_neurons(
     Ok(Json(neuron_ids))
 }
 
+/// Query parameters for [`get_cortical_area_neuron_state`].
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct NeuronStateQuery {
+    /// Comma-separated per-neuron fields. Omitted or empty returns every field.
+    pub fields: Option<String>,
+}
+
+/// Columnar per-neuron runtime state for one cortical area (dense neurons only).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct NeuronStateResponse {
+    pub cortical_id: String,
+    pub count: usize,
+    pub x: Vec<u32>,
+    pub y: Vec<u32>,
+    pub z: Vec<u32>,
+    /// One array per requested field, aligned with `x`/`y`/`z`; `null` where the value does not
+    /// exist for that neuron (for example `rate_ema` in an area without the homeostat).
+    #[schema(value_type = Object)]
+    pub fields: serde_json::Map<String, serde_json::Value>,
+}
+
+fn neuron_state_json_number(v: f32) -> serde_json::Value {
+    // Round-trip through the shortest f32 decimal so 0.1 stays 0.1 instead of 0.10000000149.
+    v.to_string()
+        .parse::<f64>()
+        .ok()
+        .and_then(serde_json::Number::from_f64)
+        .map(serde_json::Value::Number)
+        .unwrap_or(serde_json::Value::Null)
+}
+
+#[cfg(feature = "services")]
+fn neuron_state_response(
+    cortical_id: String,
+    cols: feagi_npu_burst_engine::NeuronStateColumns,
+) -> NeuronStateResponse {
+    let count = cols.count();
+    let fields = cols
+        .fields
+        .into_iter()
+        .map(|(field, values)| {
+            let arr = values
+                .into_iter()
+                .map(|v| v.map_or(serde_json::Value::Null, neuron_state_json_number))
+                .collect();
+            (field.name().to_string(), serde_json::Value::Array(arr))
+        })
+        .collect();
+    NeuronStateResponse {
+        cortical_id,
+        count,
+        x: cols.x,
+        y: cols.y,
+        z: cols.z,
+        fields,
+    }
+}
+
+/// GET /v1/connectome/cortical_area/{cortical_id}/neuron_state?fields=a,b
+///
+/// Bulk read of per-neuron runtime state (membrane potential, threshold, leak coefficient,
+/// refractory countdown, consecutive fire count, excitability, ..., `rate_ema`) in columnar form.
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/cortical_area/{cortical_id}/neuron_state",
+    tag = "connectome",
+    params(
+        ("cortical_id" = String, Path, description = "Cortical area ID"),
+        NeuronStateQuery
+    ),
+    responses(
+        (status = 200, description = "Columnar per-neuron state", body = NeuronStateResponse),
+        (status = 400, description = "Unknown field name; the message lists the valid ones"),
+        (status = 404, description = "Unknown cortical area")
+    )
+)]
+pub async fn get_cortical_area_neuron_state(
+    State(state): State<ApiState>,
+    Path(cortical_id): Path<String>,
+    Query(params): Query<NeuronStateQuery>,
+) -> ApiResult<Json<NeuronStateResponse>> {
+    #[cfg(feature = "services")]
+    {
+        use feagi_npu_burst_engine::NeuronStateField;
+        let fields = NeuronStateField::parse_list(params.fields.as_deref()).map_err(|unknown| {
+            ApiError::invalid_input(format!(
+                "Unknown neuron state field(s): {}. Valid fields: {}",
+                unknown.join(", "),
+                NeuronStateField::all_names().join(", ")
+            ))
+        })?;
+        let area = state
+            .connectome_service
+            .as_ref()
+            .get_cortical_area(&cortical_id)
+            .await
+            .map_err(ApiError::from)?;
+        let cols = {
+            let manager = feagi_brain_development::ConnectomeManager::instance();
+            let mgr = manager.read();
+            mgr.neuron_state_columns(area.cortical_idx, &fields)
+        }
+        .ok_or_else(|| ApiError::internal("NPU not available"))?;
+        Ok(Json(neuron_state_response(cortical_id, cols)))
+    }
+    #[cfg(not(feature = "services"))]
+    {
+        let _ = (state, cortical_id, params);
+        Err(ApiError::not_implemented(
+            "Neuron state requires the services feature".to_string(),
+        ))
+    }
+}
+
 /// Neuron ids whose synapses belong to an area listing.
 ///
 /// Dense storage ids come from `list_neurons_in_area`. Dynamic memory neurons
@@ -1628,6 +1743,37 @@ mod tests {
         connectome_dir, connectome_file_name, connectome_save_path, list_connectome_directory,
         resolve_connectome_file_name, save_connectome_snapshot, synapse_query_neuron_ids,
     };
+
+    #[test]
+    fn neuron_state_json_number_keeps_short_decimals() {
+        assert_eq!(super::neuron_state_json_number(0.1), serde_json::json!(0.1));
+        assert_eq!(
+            super::neuron_state_json_number(f32::NAN),
+            serde_json::Value::Null
+        );
+    }
+
+    #[cfg(feature = "services")]
+    #[test]
+    fn neuron_state_response_is_columnar_with_nulls() {
+        use feagi_npu_burst_engine::{NeuronStateColumns, NeuronStateField};
+        let cols = NeuronStateColumns {
+            x: vec![0, 1],
+            y: vec![0, 0],
+            z: vec![0, 0],
+            fields: vec![
+                (
+                    NeuronStateField::LeakCoefficient,
+                    vec![Some(0.25), Some(0.5)],
+                ),
+                (NeuronStateField::RateEma, vec![None, None]),
+            ],
+        };
+        let r = super::neuron_state_response("area".to_string(), cols);
+        assert_eq!(r.count, 2);
+        assert_eq!(r.fields["leak_coefficient"], serde_json::json!([0.25, 0.5]));
+        assert_eq!(r.fields["rate_ema"], serde_json::json!([null, null]));
+    }
 
     #[test]
     fn synapse_query_includes_memory_ids_absent_from_dense_storage() {

@@ -40,7 +40,7 @@ pub struct AttemptStand {
     pub balanced_s: f64,
     /// Support level of the attempt, from 0 to 1.
     pub support_level: f64,
-    /// `success`, `death`, `interrupted`, or `truncated`.
+    /// `success`, `death`, `interrupted`, `truncated`, `fell`, or `lost_stance`.
     pub outcome: String,
     /// Seed the controller used to home the attempt.
     pub seed: u64,
@@ -50,6 +50,10 @@ pub struct AttemptStand {
     /// Training attempts completed when a probe ran. Absent for a non-probe attempt.
     #[serde(default)]
     pub train_attempts_before: Option<u32>,
+    /// Adaptive-assist numbers of the attempt (adaptive attempts only), so results can show
+    /// them while the phase is still running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptive: Option<crate::balance_feet::AdaptiveAttemptStats>,
 }
 
 /// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.

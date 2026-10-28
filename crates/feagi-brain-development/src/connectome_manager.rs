@@ -6647,6 +6647,18 @@ impl ConnectomeManager {
         count
     }
 
+    /// Bulk per-neuron runtime state for one cortical area (dense neurons only).
+    /// `None` when there is no NPU.
+    pub fn neuron_state_columns(
+        &self,
+        cortical_idx: u32,
+        fields: &[feagi_npu_burst_engine::NeuronStateField],
+    ) -> Option<feagi_npu_burst_engine::NeuronStateColumns> {
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        Some(npu_lock.read_neuron_state_columns(cortical_idx, fields))
+    }
+
     /// Re-register NPU runtime that `apply_connectome_snapshot` clears.
     ///
     /// Neurons, synapses, and LTM rows are restored from the snapshot. Twin routes,
@@ -10720,6 +10732,24 @@ mod tests {
 
         assert!(!npu.lock().unwrap().has_rate_modulated_leak(idx));
         assert!(!npu.lock().unwrap().is_homeostatic_leak_area(idx));
+    }
+
+    #[test]
+    fn neuron_state_columns_leak_and_rate_ema_for_registered_area() {
+        use feagi_npu_burst_engine::NeuronStateField as F;
+        let (manager, npu, _area_id, idx) = homeostat_test_manager();
+        let cols = manager
+            .neuron_state_columns(idx, &[F::LeakCoefficient, F::RateEma])
+            .expect("npu present");
+        assert_eq!(cols.count(), 2);
+        assert!(cols.fields[1].1.iter().all(|v| *v == Some(0.0)));
+        npu.lock().unwrap().clear_rate_modulated_leak();
+        let cols = manager
+            .neuron_state_columns(idx, &[F::LeakCoefficient, F::RateEma])
+            .unwrap();
+        assert_eq!(cols.count(), 2);
+        assert!(cols.fields[0].1.iter().all(|v| v.is_some()));
+        assert!(cols.fields[1].1.iter().all(|v| v.is_none()));
     }
 
     #[test]

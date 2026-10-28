@@ -23,6 +23,7 @@ use crate::contracts::{
 use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
+use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Operator criterion for one reach-and-hold session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -524,6 +525,7 @@ pub fn run_reach_hold(
     events: &mut dyn RunEventSink,
     run_id: &RunId,
     cancel: &CancelToken,
+    mut data: Option<&mut (dyn RunDataSink + '_)>,
 ) -> Result<ReachHoldReport, TrainerError> {
     config.validate()?;
     let train = run_reach_phase(
@@ -538,6 +540,7 @@ pub fn run_reach_hold(
         coach,
         events,
         cancel,
+        data.as_deref_mut(),
     )?;
     let test = run_reach_phase(
         &ReachPhaseRun {
@@ -551,6 +554,7 @@ pub fn run_reach_hold(
         coach,
         events,
         cancel,
+        data,
     )?;
     Ok(ReachHoldReport { train, test })
 }
@@ -576,6 +580,7 @@ pub fn run_reach_phase(
     coach: &mut dyn FnMut(ReachCoachWrite) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    mut data: Option<&mut (dyn RunDataSink + '_)>,
 ) -> Result<ReachPhaseReport, TrainerError> {
     if run.phase != "train" && run.phase != "test" {
         return Err(TrainerError::Config(
@@ -594,12 +599,18 @@ pub fn run_reach_phase(
     }
     let samples_total = run.seeds.len() as u64;
     let mut attempts = Vec::with_capacity(run.seeds.len());
+    if let Some(sink) = data.as_deref_mut() {
+        sink.declare_table(&reach_steps_spec());
+        sink.declare_table(&reach_attempts_spec());
+        sink.event(EventTime::default(), "phase_start", run.phase);
+    }
     for seed in run.seeds {
         if cancel.is_cancelled() {
             return Err(TrainerError::Cancelled(
                 "reach-and-hold run cancelled".to_string(),
             ));
         }
+        let attempt_index = attempts.len() as u64;
         let record = run_attempt(
             *seed,
             run.criterion,
@@ -608,7 +619,25 @@ pub fn run_reach_phase(
             run.phase == "train",
             run.poll_timeout,
             cancel,
+            ReachDataContext {
+                sink: data.as_deref_mut(),
+                phase: run.phase,
+                attempt: attempt_index,
+            },
         )?;
+        if let Some(sink) = data.as_deref_mut() {
+            sink.row(
+                REACH_ATTEMPTS_TABLE,
+                &[
+                    RunDataValue::text(run.phase),
+                    RunDataValue::count(attempt_index),
+                    RunDataValue::count(record.seed),
+                    RunDataValue::Text(name_of(&record.outcome)),
+                    RunDataValue::count(u64::from(record.bursts)),
+                    RunDataValue::Float(record.final_distance_mm),
+                ],
+            );
+        }
         attempts.push(record);
         events.emit(RunEvent::new(
             run.run_id.clone(),
@@ -629,6 +658,16 @@ pub fn run_reach_phase(
             },
         ));
     }
+    if let Some(sink) = data {
+        sink.event(
+            EventTime {
+                episode: Some(attempts.len() as u64),
+                ..EventTime::default()
+            },
+            "phase_end",
+            run.phase,
+        );
+    }
     let report = ReachPhaseReport::from_attempts(attempts)?;
     events.emit(RunEvent::new(
         run.run_id.clone(),
@@ -641,6 +680,64 @@ pub fn run_reach_phase(
     Ok(report)
 }
 
+const REACH_STEPS_TABLE: &str = "steps";
+const REACH_ATTEMPTS_TABLE: &str = "attempts";
+
+fn reach_steps_spec() -> TableSpec {
+    let mut columns = vec![
+        ColumnSpec::unitless("phase", "Phase the sample belongs to."),
+        ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+        ColumnSpec::unitless("seed", "Attempt seed."),
+        ColumnSpec::unitless("seq", "Controller sample counter within the attempt."),
+        ColumnSpec::with_unit("distance", "mm", "Fingertip-to-target distance."),
+    ];
+    for (prefix, what) in [("ee", "Fingertip"), ("target", "Target")] {
+        for axis in ["x", "y", "z"] {
+            columns.push(ColumnSpec::with_unit(
+                &format!("{prefix}_{axis}"),
+                "mm",
+                &format!("{what} position, {axis} axis."),
+            ));
+        }
+    }
+    columns.push(ColumnSpec::unitless(
+        "fence_violated",
+        "The fingertip is outside the safety box.",
+    ));
+    columns.push(ColumnSpec::unitless(
+        "terminal",
+        "Latched end cause, when one was latched.",
+    ));
+    TableSpec {
+        name: REACH_STEPS_TABLE.to_string(),
+        description: "One row per controller sample.".to_string(),
+        columns,
+    }
+}
+
+fn reach_attempts_spec() -> TableSpec {
+    TableSpec {
+        name: REACH_ATTEMPTS_TABLE.to_string(),
+        description: "One row per finished attempt.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
+            ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+            ColumnSpec::unitless("seed", "Attempt seed."),
+            ColumnSpec::unitless("outcome", "How the attempt ended."),
+            ColumnSpec::unitless("bursts", "Bursts observed."),
+            ColumnSpec::with_unit("final_distance", "mm", "Distance at the terminal burst."),
+        ],
+    }
+}
+
+/// Where one attempt writes its rows and events.
+struct ReachDataContext<'s, 'a> {
+    sink: Option<&'s mut (dyn RunDataSink + 'a)>,
+    phase: &'s str,
+    attempt: u64,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_attempt(
     seed: u64,
     criterion: &ReachHoldCriterion,
@@ -649,6 +746,7 @@ fn run_attempt(
     train_affect: bool,
     poll_timeout: Duration,
     cancel: &CancelToken,
+    mut data: ReachDataContext<'_, '_>,
 ) -> Result<ReachAttemptRecord, TrainerError> {
     let placement =
         probe.begin_attempt(seed, &criterion.target_object_id, &criterion.reach_body)?;
@@ -657,6 +755,15 @@ fn run_attempt(
             "controller placed seed {} for requested seed {seed}",
             placement.seed
         )));
+    }
+    let attempt = data.attempt;
+    let at = |step: u64| EventTime {
+        sim_time_s: None,
+        step: Some(step),
+        episode: Some(attempt),
+    };
+    if let Some(sink) = data.sink.as_deref_mut() {
+        sink.event(at(0), "attempt_start", &format!("seed {seed}"));
     }
     let mut open = OpenAttempt::fresh();
     loop {
@@ -667,15 +774,50 @@ fn run_attempt(
         }
         coach(ReachCoachWrite::Step)?;
         let sample = probe.poll(open.last_seq, poll_timeout)?;
+        if let Some(sink) = data.sink.as_deref_mut() {
+            let mut row = vec![
+                RunDataValue::text(data.phase),
+                RunDataValue::count(attempt),
+                RunDataValue::count(sample.seed),
+                RunDataValue::count(sample.seq),
+                RunDataValue::Float(sample.distance_mm),
+            ];
+            row.extend(sample.ee_mm.iter().map(|v| RunDataValue::Float(*v)));
+            row.extend(sample.target_mm.iter().map(|v| RunDataValue::Float(*v)));
+            row.push(RunDataValue::Bool(sample.fence_violated));
+            row.push(
+                sample
+                    .terminal
+                    .as_ref()
+                    .map_or(RunDataValue::Null, |t| RunDataValue::Text(name_of(t))),
+            );
+            sink.row(REACH_STEPS_TABLE, &row);
+        }
         if train_affect && open.bursts > 0 {
             if let Some(signal) = reach_distance_affect(open.last_distance_mm, sample.distance_mm)?
             {
+                if let Some(sink) = data.sink.as_deref_mut() {
+                    sink.event(
+                        at(u64::from(open.bursts)),
+                        "affect",
+                        &format!("{:?} {}", signal.channel, signal.magnitude).to_lowercase(),
+                    );
+                }
                 coach(ReachCoachWrite::Affect(signal))?;
             }
         }
         match observe_sample(&open, &sample, criterion, seed)? {
             AttemptStep::Continue(next) => open = next,
-            AttemptStep::Finished(record) => return Ok(record),
+            AttemptStep::Finished(record) => {
+                if let Some(sink) = data.sink.as_deref_mut() {
+                    sink.event(
+                        at(u64::from(record.bursts)),
+                        "attempt_end",
+                        &name_of(&record.outcome),
+                    );
+                }
+                return Ok(record);
+            }
         }
     }
 }
@@ -995,6 +1137,7 @@ mod tests {
             &mut events,
             &run_id,
             &CancelToken::new(),
+            None,
         )
         .expect("report");
         let affects: Vec<_> = writes
@@ -1028,6 +1171,7 @@ mod tests {
         };
         let mut events = CollectingEventSink::default();
         let run_id = RunId("reach-test".to_string());
+        let mut data = crate::run_data::RecordingRunDataSink::default();
         let report = run_reach_hold(
             &config,
             &mut probe,
@@ -1040,8 +1184,25 @@ mod tests {
             &mut events,
             &run_id,
             &CancelToken::new(),
+            Some(&mut data),
         )
         .expect("report");
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        assert_eq!(data.rows_of("steps").len(), 3);
+        assert_eq!(data.rows_of("attempts").len(), 2);
+        assert_eq!(
+            data.event_kinds(),
+            vec![
+                "phase_start",
+                "attempt_start",
+                "attempt_end",
+                "phase_end",
+                "phase_start",
+                "attempt_start",
+                "attempt_end",
+                "phase_end"
+            ]
+        );
         assert_eq!(report.train.attempts[0].outcome, ReachAttemptOutcome::Death);
         assert_eq!(
             report.test.attempts[0].outcome,

@@ -231,6 +231,8 @@ fn rollout_for_seed(
             ticks_per_sample: 3,
             silence_bursts: 0,
         },
+        None,
+        0,
     )?;
     Ok(outcome.summary.metrics)
 }

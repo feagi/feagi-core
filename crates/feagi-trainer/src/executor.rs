@@ -54,6 +54,7 @@ use crate::error::TrainerError;
 use crate::planned_samples::SampleVisit;
 use crate::plugins::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 use crate::plugins::{MetricPackPlugin, MetricResult};
+use crate::run_data::{ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Tuning knobs for one rollout that are not part of the immutable [`RunSpec`] provenance.
 ///
@@ -122,6 +123,184 @@ pub(crate) fn emit_no_detection_warning(
             message: format!("{NO_DETECTION_RESULT_WARNING} (sample {})", sample_id.0),
         },
     ));
+}
+
+/// Name of the per-sample table written by the sample-wise runners.
+pub(crate) const SAMPLES_TABLE: &str = "samples";
+
+fn split_name(split: &Split) -> String {
+    match split {
+        Split::Train => "train".to_string(),
+        Split::Val => "val".to_string(),
+        Split::Test => "test".to_string(),
+        Split::Custom(name) => name.clone(),
+    }
+}
+
+fn join_numbers(values: &[f64]) -> String {
+    values
+        .iter()
+        .map(|v| v.to_string())
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+/// Compact text of a target: class id, class set, scalar or vector. Dense masks are summarised
+/// by their size.
+pub(crate) fn describe_target(target: &TypedTarget) -> String {
+    match target {
+        TypedTarget::Class { class_id, .. } => class_id.to_string(),
+        TypedTarget::ClassSet(ids) => ids.iter().map(u32::to_string).collect::<Vec<_>>().join(";"),
+        TypedTarget::SegmentationMask { width, height, .. } => format!("mask {width}x{height}"),
+        TypedTarget::Scalar(v) => v.to_string(),
+        TypedTarget::Vector(v) => join_numbers(v),
+    }
+}
+
+/// Compact text of a prediction, in the same form as [`describe_target`].
+pub(crate) fn describe_prediction(prediction: &TypedPrediction) -> String {
+    match prediction {
+        TypedPrediction::Class { class_id, .. } => class_id.to_string(),
+        TypedPrediction::ClassSet(ids) => {
+            ids.iter().map(u32::to_string).collect::<Vec<_>>().join(";")
+        }
+        TypedPrediction::SegmentationMask { width, height, .. } => {
+            format!("mask {width}x{height}")
+        }
+        TypedPrediction::Scalar(v) => v.to_string(),
+        TypedPrediction::Vector(v) => join_numbers(v),
+    }
+}
+
+/// Whether a prediction equals its target, for the kinds where equality is defined.
+pub(crate) fn prediction_matches(
+    prediction: &TypedPrediction,
+    target: &TypedTarget,
+) -> Option<bool> {
+    match (prediction, target) {
+        (TypedPrediction::Class { class_id, .. }, TypedTarget::Class { class_id: want, .. }) => {
+            Some(class_id == want)
+        }
+        (TypedPrediction::ClassSet(got), TypedTarget::ClassSet(want)) => Some(got == want),
+        _ => None,
+    }
+}
+
+/// Declaration of the `samples` table.
+pub(crate) fn samples_table_spec() -> TableSpec {
+    TableSpec {
+        name: SAMPLES_TABLE.to_string(),
+        description: "One row per visited sample.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("repeat", "Repeat index of the pass over the samples."),
+            ColumnSpec::unitless("split", "Split the sample belongs to."),
+            ColumnSpec::unitless("sample_index", "Position in the visit order."),
+            ColumnSpec::unitless("sample_id", "Stable sample id."),
+            ColumnSpec::unitless("target", "Target, when the sample is labeled."),
+            ColumnSpec::unitless("predicted", "Decoded prediction, when one was collected."),
+            ColumnSpec::unitless(
+                "correct",
+                "Whether the prediction equals the target, when defined.",
+            ),
+            ColumnSpec::unitless(
+                "scores",
+                "Per-class scores of the prediction, separated by semicolons.",
+            ),
+        ],
+    }
+}
+
+/// Writes the `samples` table and the split start/end events for one pass.
+pub(crate) struct SampleDataWriter<'a> {
+    sink: Option<&'a mut dyn RunDataSink>,
+    repeat: u64,
+    open_split: Option<String>,
+}
+
+impl<'a> SampleDataWriter<'a> {
+    pub(crate) fn new(sink: Option<&'a mut dyn RunDataSink>, repeat: u64) -> Self {
+        let mut writer = Self {
+            sink,
+            repeat,
+            open_split: None,
+        };
+        if let Some(sink) = writer.sink.as_deref_mut() {
+            sink.declare_table(&samples_table_spec());
+        }
+        writer
+    }
+
+    fn at(&self, index: u64) -> EventTime {
+        EventTime {
+            sim_time_s: None,
+            step: Some(index),
+            episode: Some(self.repeat),
+        }
+    }
+
+    /// Record one visited sample with the prediction collected for it, if any.
+    pub(crate) fn sample(
+        &mut self,
+        index: u64,
+        sample: &IRSample,
+        prediction: Option<&TypedPrediction>,
+    ) {
+        let name = split_name(&sample.split);
+        let at = self.at(index);
+        let repeat = self.repeat;
+        let changed = self.open_split.as_deref() != Some(name.as_str());
+        let previous = if changed {
+            self.open_split.replace(name.clone())
+        } else {
+            None
+        };
+        let Some(sink) = self.sink.as_deref_mut() else {
+            return;
+        };
+        if changed {
+            if let Some(previous) = previous {
+                sink.event(at, "split_end", &previous);
+            }
+            sink.event(at, "split_start", &name);
+        }
+        let correct = match (prediction, sample.target.as_ref()) {
+            (Some(p), Some(t)) => {
+                prediction_matches(p, t).map_or(RunDataValue::Null, RunDataValue::Bool)
+            }
+            _ => RunDataValue::Null,
+        };
+        let scores = match prediction {
+            Some(TypedPrediction::Class { scores, .. }) if !scores.is_empty() => {
+                RunDataValue::Text(join_numbers(scores))
+            }
+            _ => RunDataValue::Null,
+        };
+        sink.row(
+            SAMPLES_TABLE,
+            &[
+                RunDataValue::count(repeat),
+                RunDataValue::Text(name),
+                RunDataValue::count(index),
+                RunDataValue::Text(sample.sample_id.0.clone()),
+                sample.target.as_ref().map_or(RunDataValue::Null, |t| {
+                    RunDataValue::Text(describe_target(t))
+                }),
+                prediction.map_or(RunDataValue::Null, |p| {
+                    RunDataValue::Text(describe_prediction(p))
+                }),
+                correct,
+                scores,
+            ],
+        );
+    }
+
+    /// Close the open split after `visited` samples.
+    pub(crate) fn finish(&mut self, visited: u64) {
+        let at = self.at(visited);
+        if let (Some(sink), Some(open)) = (self.sink.as_deref_mut(), self.open_split.take()) {
+            sink.event(at, "split_end", &open);
+        }
+    }
 }
 
 /// Class id and per-class confidence from one decoded sample, when the decoder emitted a class.
@@ -259,6 +438,9 @@ pub struct ScorecardProvenance {
 /// # Errors
 /// Returns the first [`TrainerError`] raised by any stage (encode/submit/step/collect/decode/
 /// reward/metric). The loop is fail-fast and deterministic: it does not partially score.
+///
+/// `repeat` is the zero-based index of this pass over the samples; it fills the `repeat` column
+/// of the `samples` table and the episode of its events.
 #[allow(clippy::too_many_arguments)]
 pub fn run_rollout<R, E, D, RP, M, S>(
     run_id: &RunId,
@@ -271,6 +453,8 @@ pub fn run_rollout<R, E, D, RP, M, S>(
     reward_policy: &RP,
     metric_pack: &M,
     config: &ExecutorConfig,
+    data: Option<&mut dyn RunDataSink>,
+    repeat: u64,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -296,6 +480,8 @@ where
         config,
         &mut sink,
         &CancelToken::new(),
+        data,
+        repeat,
     )
 }
 
@@ -328,6 +514,8 @@ pub fn run_rollout_with_events<R, E, D, RP, M, S>(
     config: &ExecutorConfig,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    data: Option<&mut dyn RunDataSink>,
+    repeat: u64,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -349,6 +537,7 @@ where
     let mut scored_predictions = Vec::new();
     let mut scored_targets = Vec::new();
     let mut processed_samples = 0u64;
+    let mut data = SampleDataWriter::new(data, repeat);
 
     for index in 0..samples.visit_count() {
         cancel.interrupt(format!("stopped after {index} of {total_samples} samples"))?;
@@ -361,10 +550,12 @@ where
         runtime.submit_sensory(frame)?;
         runtime.step(config.ticks_per_sample)?;
 
+        let mut collected: Option<TypedPrediction> = None;
         if observes_detection(&sample.split) {
             match runtime.collect_motor()? {
                 Some(motor) => {
                     let prediction = decoder.decode(motor, decoder_profile)?;
+                    collected = Some(prediction.clone());
                     if let Some(target) = &sample.target {
                         scored_predictions.push(prediction.clone());
                         scored_targets.push(target.clone());
@@ -386,6 +577,7 @@ where
             }
         }
 
+        data.sample(index as u64, &sample, collected.as_ref());
         let (image_png_base64, mask_png_base64, preview_name) =
             segmentation_progress_preview(&sample, decoder_profile)?;
         let (predicted_class, class_scores) = predictions
@@ -427,6 +619,7 @@ where
         }
     }
 
+    data.finish(processed_samples);
     let metric_result = evaluate_or_empty(metric_pack, &scored_predictions, &scored_targets)?;
 
     events.emit(RunEvent::new(
@@ -602,6 +795,50 @@ pub struct ControlRolloutOutcome {
     pub metric_result: MetricResult,
 }
 
+const CONTROL_STEPS_TABLE: &str = "steps";
+const CONTROL_EPISODES_TABLE: &str = "episodes";
+
+fn control_steps_spec(action_dim: usize, observation_dim: usize) -> TableSpec {
+    let mut columns = vec![
+        ColumnSpec::unitless("episode", "Episode index."),
+        ColumnSpec::unitless("step", "Control step within the episode."),
+        ColumnSpec::unitless("reward", "Environment reward of the step."),
+        ColumnSpec::unitless("terminated", "The step ended the episode in failure."),
+        ColumnSpec::unitless("truncated", "The step hit the step cap while healthy."),
+    ];
+    columns.extend((0..action_dim).map(|i| {
+        ColumnSpec::unitless(
+            &format!("action_{i}"),
+            "Applied action component, in actuator units.",
+        )
+    }));
+    columns.extend((0..observation_dim).map(|i| {
+        ColumnSpec::unitless(
+            &format!("observation_{i}"),
+            "Observation component after the step.",
+        )
+    }));
+    TableSpec {
+        name: CONTROL_STEPS_TABLE.to_string(),
+        description: "One row per control step.".to_string(),
+        columns,
+    }
+}
+
+fn control_episodes_spec() -> TableSpec {
+    TableSpec {
+        name: CONTROL_EPISODES_TABLE.to_string(),
+        description: "One row per episode.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("episode", "Episode index."),
+            ColumnSpec::unitless("seed", "Seed the environment was reset with."),
+            ColumnSpec::unitless("steps", "Control steps taken."),
+            ColumnSpec::unitless("total_reward", "Sum of the step rewards."),
+            ColumnSpec::unitless("outcome", "How the episode ended."),
+        ],
+    }
+}
+
 /// Scales a normalized action (each component in `[-1, 1]`) to the environment's per-dimension
 /// actuator bounds `(low, high)`, clamping defensively. Length mismatch is an explicit error.
 fn scale_action(
@@ -657,6 +894,7 @@ pub fn run_control_rollout<Env, R, E, D, RP, M>(
     reward_policy: &RP,
     metric_pack: &M,
     config: &ControlConfig,
+    mut data: Option<&mut dyn RunDataSink>,
 ) -> Result<ControlRolloutOutcome, TrainerError>
 where
     Env: Environment,
@@ -684,13 +922,30 @@ where
 
     let bounds = env.action_bounds();
     let mut episodes = Vec::with_capacity(config.episodes as usize);
+    let mut steps_declared = false;
+    if let Some(sink) = data.as_deref_mut() {
+        sink.declare_table(&control_episodes_spec());
+    }
 
     for episode_index in 0..config.episodes {
-        let mut observation = env.reset(config.seed.wrapping_add(episode_index as u64))?;
+        let episode_seed = config.seed.wrapping_add(episode_index as u64);
+        let mut observation = env.reset(episode_seed)?;
         let mut step_rewards = Vec::new();
         let mut terminated = false;
+        let episode = u64::from(episode_index);
+        if let Some(sink) = data.as_deref_mut() {
+            sink.event(
+                EventTime {
+                    sim_time_s: None,
+                    step: Some(0),
+                    episode: Some(episode),
+                },
+                "episode_start",
+                &format!("seed {episode_seed}"),
+            );
+        }
 
-        for _ in 0..config.max_steps {
+        for step_index in 0..config.max_steps {
             let frame = encoder.encode_observation(&observation, encoder_profile)?;
             runtime.submit_sensory(frame)?;
             runtime.step(config.ticks_per_step)?;
@@ -715,6 +970,25 @@ where
             let signals = reward_policy.reward(outcome.reward, outcome.terminated)?;
             runtime.submit_reward(&signals)?;
 
+            if let Some(sink) = data.as_deref_mut() {
+                if !steps_declared {
+                    sink.declare_table(&control_steps_spec(
+                        action.len(),
+                        outcome.observation.len(),
+                    ));
+                    steps_declared = true;
+                }
+                let mut row = vec![
+                    RunDataValue::count(episode),
+                    RunDataValue::count(u64::from(step_index)),
+                    RunDataValue::Float(outcome.reward),
+                    RunDataValue::Bool(outcome.terminated),
+                    RunDataValue::Bool(outcome.truncated),
+                ];
+                row.extend(action.iter().map(|v| RunDataValue::Float(*v)));
+                row.extend(outcome.observation.iter().map(|v| RunDataValue::Float(*v)));
+                sink.row(CONTROL_STEPS_TABLE, &row);
+            }
             step_rewards.push(outcome.reward);
             observation = outcome.observation;
 
@@ -727,6 +1001,32 @@ where
             }
         }
 
+        let outcome_name = if terminated {
+            "terminated"
+        } else {
+            "truncated"
+        };
+        if let Some(sink) = data.as_deref_mut() {
+            sink.row(
+                CONTROL_EPISODES_TABLE,
+                &[
+                    RunDataValue::count(episode),
+                    RunDataValue::count(episode_seed),
+                    RunDataValue::count(step_rewards.len() as u64),
+                    RunDataValue::Float(step_rewards.iter().sum()),
+                    RunDataValue::text(outcome_name),
+                ],
+            );
+            sink.event(
+                EventTime {
+                    sim_time_s: None,
+                    step: Some(step_rewards.len() as u64),
+                    episode: Some(episode),
+                },
+                "episode_end",
+                outcome_name,
+            );
+        }
         episodes.push(EpisodeTrajectory {
             step_rewards,
             outcome: if terminated {
@@ -985,6 +1285,7 @@ mod tests {
         let reward = PainPleasureReward::new(0.8).unwrap();
         let metric = ClassificationMetricPack::new();
 
+        let mut data = crate::run_data::RecordingRunDataSink::default();
         let outcome = run_rollout(
             &RunId("run-0001".to_string()),
             &samples,
@@ -996,8 +1297,18 @@ mod tests {
             &reward,
             &metric,
             &config(),
+            Some(&mut data),
+            0,
         )
         .expect("rollout");
+
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        let rows = data.rows_of("samples");
+        assert_eq!(rows.len(), 3);
+        let correct = data.column_index("samples", "correct").expect("correct");
+        assert!(rows.iter().all(|r| r[correct] == RunDataValue::Bool(true)));
+        assert_eq!(data.event_kinds(), vec!["split_start", "split_end"]);
+        assert_eq!(data.events[1].at.step, Some(3));
 
         assert_eq!(outcome.summary.status, RunStatus::Completed);
         assert_eq!(outcome.summary.total_samples, 3);
@@ -1043,6 +1354,8 @@ mod tests {
             &reward,
             &metric,
             &config(),
+            None,
+            0,
         )
         .expect("rollout");
 
@@ -1078,6 +1391,8 @@ mod tests {
             &reward,
             &metric,
             &config(),
+            None,
+            0,
         )
         .expect("rollout");
 
@@ -1109,6 +1424,8 @@ mod tests {
             &reward,
             &metric,
             &config(),
+            None,
+            0,
         )
         .expect("rollout");
 
@@ -1150,6 +1467,8 @@ mod tests {
             &reward,
             &metric,
             &gap,
+            None,
+            0,
         )
         .expect("rollout");
         // Three holds, and a gap only between samples (not after the last).
@@ -1167,6 +1486,8 @@ mod tests {
             &reward,
             &metric,
             &gap,
+            None,
+            0,
         )
         .expect("single sample");
         assert_eq!(single.burst_count(), 4);
@@ -1197,6 +1518,8 @@ mod tests {
             &config(),
             &mut sink,
             &CancelToken::new(),
+            None,
+            0,
         )
         .expect("rollout");
 
@@ -1246,6 +1569,8 @@ mod tests {
             &config(),
             &mut sink,
             &CancelToken::new(),
+            None,
+            0,
         )
         .expect("rollout");
 
@@ -1306,6 +1631,8 @@ mod tests {
             &config(),
             &mut sink,
             &cancel,
+            None,
+            0,
         );
 
         assert!(matches!(result, Err(TrainerError::Cancelled(_))));
@@ -1383,6 +1710,8 @@ mod tests {
             &config(),
             &mut sink,
             &cancel,
+            None,
+            0,
         )
         .expect("skip scores");
 
@@ -1427,6 +1756,8 @@ mod tests {
                 &config(),
                 &mut sink,
                 &waiter,
+                None,
+                0,
             )
         });
         cancel.resume();
@@ -1458,6 +1789,8 @@ mod tests {
                 ticks_per_sample: 0,
                 silence_bursts: 0,
             },
+            None,
+            0,
         );
         assert!(matches!(result, Err(TrainerError::Config(_))));
     }
@@ -1597,6 +1930,7 @@ mod tests {
             &reward,
             &metric,
             &control_config(3, 5),
+            None,
         )
         .expect("control rollout");
 
@@ -1615,6 +1949,113 @@ mod tests {
         assert!(rewards
             .iter()
             .all(|r| r.channel == crate::binding::AffectChannel::Pleasure));
+    }
+
+    #[test]
+    fn samples_table_marks_split_changes_and_leaves_train_predictions_null() {
+        let mut first = one_hot_sample(0, 0, 3);
+        first.split = Split::Train;
+        let samples = vec![first, one_hot_sample(1, 1, 3)];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut data = crate::run_data::RecordingRunDataSink::default();
+        run_rollout(
+            &RunId("run-split".to_string()),
+            &samples,
+            &mut runtime,
+            &mut PassthroughEncoder,
+            &encoder_profile(),
+            &mut ArgmaxDecoder,
+            &decoder_profile(),
+            &PainPleasureReward::new(0.8).unwrap(),
+            &ClassificationMetricPack::new(),
+            &config(),
+            Some(&mut data),
+            0,
+        )
+        .expect("rollout");
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        let predicted = data
+            .column_index("samples", "predicted")
+            .expect("predicted");
+        let rows = data.rows_of("samples");
+        assert_eq!(rows[0][predicted], RunDataValue::Null);
+        assert_ne!(rows[1][predicted], RunDataValue::Null);
+        let labels: Vec<(&str, &str)> = data
+            .events
+            .iter()
+            .map(|e| (e.kind.as_str(), e.label.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            vec![
+                ("split_start", "train"),
+                ("split_end", "train"),
+                ("split_start", "test"),
+                ("split_end", "test"),
+            ]
+        );
+    }
+
+    #[test]
+    fn repeat_index_flows_into_sample_rows_and_events() {
+        let samples = vec![one_hot_sample(0, 0, 3), one_hot_sample(1, 1, 3)];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut data = crate::run_data::RecordingRunDataSink::default();
+        run_rollout(
+            &RunId("run-repeat".to_string()),
+            &samples,
+            &mut runtime,
+            &mut PassthroughEncoder,
+            &encoder_profile(),
+            &mut ArgmaxDecoder,
+            &decoder_profile(),
+            &PainPleasureReward::new(0.8).unwrap(),
+            &ClassificationMetricPack::new(),
+            &config(),
+            Some(&mut data),
+            3,
+        )
+        .expect("rollout");
+        let repeat = data.column_index("samples", "repeat").expect("repeat");
+        let rows = data.rows_of("samples");
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|row| row[repeat] == RunDataValue::Int(3)));
+        assert!(data.events.iter().all(|e| e.at.episode == Some(3)));
+    }
+
+    #[test]
+    fn control_rollout_writes_steps_episodes_and_events() {
+        let mut env = StubEnvironment::new(10.0, 10_000, -1.0, 1.0).unwrap();
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut data = crate::run_data::RecordingRunDataSink::default();
+        run_control_rollout(
+            &RunId("ctrl-data".to_string()),
+            &mut env,
+            &mut runtime,
+            &mut PassthroughObsEncoder,
+            &encoder_profile(),
+            &mut FixedActionDecoder(0.0),
+            &decoder_profile(),
+            &SurvivalReward::new(0.6, 0.9).unwrap(),
+            &EpisodicControlMetricPack::new(5).unwrap(),
+            &control_config(2, 3),
+            Some(&mut data),
+        )
+        .expect("control rollout");
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        assert_eq!(data.rows_of("steps").len(), 6);
+        assert_eq!(data.rows_of("episodes").len(), 2);
+        assert!(data.column_index("steps", "action_0").is_some());
+        assert_eq!(
+            data.event_kinds(),
+            vec![
+                "episode_start",
+                "episode_end",
+                "episode_start",
+                "episode_end"
+            ]
+        );
+        assert_eq!(data.events[1].label, "truncated");
     }
 
     #[test]
@@ -1638,6 +2079,7 @@ mod tests {
             &reward,
             &metric,
             &control_config(2, 100),
+            None,
         )
         .expect("control rollout");
 
@@ -1672,6 +2114,7 @@ mod tests {
             &reward,
             &metric,
             &control_config(0, 5),
+            None,
         );
         assert!(matches!(result, Err(TrainerError::Config(_))));
     }

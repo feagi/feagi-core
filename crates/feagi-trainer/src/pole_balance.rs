@@ -23,6 +23,7 @@ use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::reach_hold::trainer_package_version;
+use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Operator criterion for one pole-balance session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -373,6 +374,7 @@ pub fn run_pole_phase(
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    mut data: Option<&mut (dyn RunDataSink + '_)>,
 ) -> Result<PolePhaseReport, TrainerError> {
     if run.phase != "train" && run.phase != "test" {
         return Err(TrainerError::Config(
@@ -391,12 +393,18 @@ pub fn run_pole_phase(
     }
     let samples_total = run.seeds.len() as u64;
     let mut attempts = Vec::with_capacity(run.seeds.len());
+    if let Some(sink) = data.as_deref_mut() {
+        sink.declare_table(&pole_steps_spec());
+        sink.declare_table(&pole_attempts_spec());
+        sink.event(EventTime::default(), "phase_start", run.phase);
+    }
     for seed in run.seeds {
         if cancel.is_cancelled() {
             return Err(TrainerError::Cancelled(
                 "pole-balance run cancelled".to_string(),
             ));
         }
+        let attempt_index = attempts.len() as u64;
         let record = run_pole_attempt(
             *seed,
             run.criterion,
@@ -404,7 +412,26 @@ pub fn run_pole_phase(
             present_goal,
             run.poll_timeout,
             cancel,
+            PoleDataContext {
+                sink: data.as_deref_mut(),
+                phase: run.phase,
+                attempt: attempt_index,
+            },
         )?;
+        if let Some(sink) = data.as_deref_mut() {
+            sink.row(
+                POLE_ATTEMPTS_TABLE,
+                &[
+                    RunDataValue::text(run.phase),
+                    RunDataValue::count(attempt_index),
+                    RunDataValue::count(record.seed),
+                    RunDataValue::Text(name_of(&record.outcome)),
+                    RunDataValue::count(u64::from(record.bursts)),
+                    RunDataValue::count(u64::from(record.balanced_bursts)),
+                    RunDataValue::Float(record.final_tilt_deg),
+                ],
+            );
+        }
         attempts.push(record);
         events.emit(RunEvent::new(
             run.run_id.clone(),
@@ -425,6 +452,16 @@ pub fn run_pole_phase(
             },
         ));
     }
+    if let Some(sink) = data {
+        sink.event(
+            EventTime {
+                episode: Some(attempts.len() as u64),
+                ..EventTime::default()
+            },
+            "phase_end",
+            run.phase,
+        );
+    }
     let report = PolePhaseReport::from_attempts(attempts, run.criterion.attempt_burst_cap)?;
     events.emit(RunEvent::new(
         run.run_id.clone(),
@@ -437,6 +474,47 @@ pub fn run_pole_phase(
     Ok(report)
 }
 
+const POLE_STEPS_TABLE: &str = "steps";
+const POLE_ATTEMPTS_TABLE: &str = "attempts";
+
+fn pole_steps_spec() -> TableSpec {
+    TableSpec {
+        name: POLE_STEPS_TABLE.to_string(),
+        description: "One row per controller sample.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("phase", "Phase the sample belongs to."),
+            ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+            ColumnSpec::unitless("seed", "Attempt seed."),
+            ColumnSpec::unitless("seq", "Controller sample counter within the attempt."),
+            ColumnSpec::with_unit("tilt", "deg", "Pole tilt from world up."),
+            ColumnSpec::unitless("terminal", "Latched end cause, when one was latched."),
+        ],
+    }
+}
+
+fn pole_attempts_spec() -> TableSpec {
+    TableSpec {
+        name: POLE_ATTEMPTS_TABLE.to_string(),
+        description: "One row per finished attempt.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
+            ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+            ColumnSpec::unitless("seed", "Attempt seed."),
+            ColumnSpec::unitless("outcome", "How the attempt ended."),
+            ColumnSpec::unitless("bursts", "Bursts observed."),
+            ColumnSpec::unitless("balanced_bursts", "Bursts within the tilt limit."),
+            ColumnSpec::with_unit("final_tilt", "deg", "Tilt at the terminal burst."),
+        ],
+    }
+}
+
+/// Where one attempt writes its rows and events.
+struct PoleDataContext<'s, 'a> {
+    sink: Option<&'s mut (dyn RunDataSink + 'a)>,
+    phase: &'s str,
+    attempt: u64,
+}
+
 fn run_pole_attempt(
     seed: u64,
     criterion: &PoleBalanceCriterion,
@@ -444,6 +522,7 @@ fn run_pole_attempt(
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     poll_timeout: Duration,
     cancel: &CancelToken,
+    mut data: PoleDataContext<'_, '_>,
 ) -> Result<PoleAttemptRecord, TrainerError> {
     let begun = probe.begin_attempt(seed, criterion)?;
     if begun.seed != seed {
@@ -451,6 +530,15 @@ fn run_pole_attempt(
             "controller homed seed {} for requested seed {seed}",
             begun.seed
         )));
+    }
+    let at = |step: u64| EventTime {
+        sim_time_s: None,
+        step: Some(step),
+        episode: Some(data.attempt),
+    };
+    let start = at(0);
+    if let Some(sink) = data.sink.as_deref_mut() {
+        sink.event(start, "attempt_start", &format!("seed {seed}"));
     }
     let features = pole_upright_goal_features();
     let mut open = OpenPoleAttempt::fresh();
@@ -462,9 +550,35 @@ fn run_pole_attempt(
         }
         present_goal(features)?;
         let sample = probe.poll(open.last_seq, poll_timeout)?;
+        if let Some(sink) = data.sink.as_deref_mut() {
+            sink.row(
+                POLE_STEPS_TABLE,
+                &[
+                    RunDataValue::text(data.phase),
+                    RunDataValue::count(data.attempt),
+                    RunDataValue::count(sample.seed),
+                    RunDataValue::count(sample.seq),
+                    RunDataValue::Float(sample.tilt_deg),
+                    sample
+                        .terminal
+                        .as_ref()
+                        .map_or(RunDataValue::Null, |t| RunDataValue::Text(name_of(t))),
+                ],
+            );
+        }
         match observe_pole_sample(&open, &sample, criterion, seed)? {
             PoleAttemptStep::Continue(next) => open = next,
-            PoleAttemptStep::Finished(record) => return Ok(record),
+            PoleAttemptStep::Finished(record) => {
+                let end = EventTime {
+                    sim_time_s: None,
+                    step: Some(u64::from(record.bursts)),
+                    episode: Some(data.attempt),
+                };
+                if let Some(sink) = data.sink.as_deref_mut() {
+                    sink.event(end, "attempt_end", &name_of(&record.outcome));
+                }
+                return Ok(record);
+            }
         }
     }
 }
@@ -754,6 +868,7 @@ mod tests {
         let mut events = CollectingEventSink::default();
         let run_id = RunId("pole-test".to_string());
         let mut presented = 0;
+        let mut data = crate::run_data::RecordingRunDataSink::default();
         let report = run_pole_phase(
             &PolePhaseRun {
                 phase: "train",
@@ -769,11 +884,19 @@ mod tests {
             },
             &mut events,
             &CancelToken::new(),
+            Some(&mut data),
         )
         .expect("phase");
         assert_eq!(report.success_rate, 1.0);
         assert_eq!(report.median_balanced_bursts, 2.0);
         assert_eq!(presented, 2);
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        assert_eq!(data.rows_of("steps").len(), 2);
+        assert_eq!(data.rows_of("attempts").len(), 1);
+        assert_eq!(
+            data.event_kinds(),
+            vec!["phase_start", "attempt_start", "attempt_end", "phase_end"]
+        );
         let card = pole_phase_scorecard(
             "sc-1",
             "sha256:abc",

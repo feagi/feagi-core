@@ -12,6 +12,7 @@ use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile, Stre
 use crate::binding::{FeagiRuntime, RewardPolicy};
 use crate::contracts::ir_sample::{HoldEnd, Payload};
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
+use crate::contracts::TypedPrediction;
 use crate::contracts::{
     IRSample, MetricScope, PredictionRecord, RunEvent, RunEventKind, RunId, TypedTarget,
 };
@@ -21,6 +22,7 @@ use crate::executor::{
     emit_no_detection_warning, evaluate_or_empty, rollout_summary, ExecutorConfig, RolloutOutcome,
 };
 use crate::plugins::MetricPackPlugin;
+use crate::run_data::{ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Closed-loop stream rollout: one burst per analog sample, score at each hold end.
 #[allow(clippy::too_many_arguments)]
@@ -37,6 +39,7 @@ pub fn run_stream_rollout_with_events<R, E, D, RP, M>(
     config: &ExecutorConfig,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    data: Option<&mut dyn RunDataSink>,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -80,6 +83,7 @@ where
             config,
             events,
             cancel,
+            data,
             stream.parallel_width,
         ),
         StreamMode::Infer => run_stream_infer(
@@ -95,7 +99,63 @@ where
             config,
             events,
             cancel,
+            data,
         ),
+    }
+}
+
+const TICKS_TABLE: &str = "ticks";
+const HOLDS_TABLE: &str = "holds";
+
+fn ticks_spec() -> TableSpec {
+    TableSpec {
+        name: TICKS_TABLE.to_string(),
+        description: "One row per presented tick and slot.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("sample_id", "Sample the tick belongs to."),
+            ColumnSpec::unitless("slot", "Parallel slot of the batch."),
+            ColumnSpec::unitless("tick", "Tick index within the sample."),
+            ColumnSpec::unitless("amplitude", "Value presented at the tick."),
+            ColumnSpec::unitless("target_class", "Class taught at the tick, when teaching."),
+        ],
+    }
+}
+
+fn holds_spec() -> TableSpec {
+    TableSpec {
+        name: HOLDS_TABLE.to_string(),
+        description: "One row per scored hold end.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("sample_id", "Sample the hold belongs to."),
+            ColumnSpec::unitless("tick", "Tick of the hold end."),
+            ColumnSpec::unitless("target", "Class expected at the hold end."),
+            ColumnSpec::unitless("predicted", "Decoded prediction."),
+            ColumnSpec::unitless("correct", "Whether the prediction equals the target."),
+            ColumnSpec::unitless("scores", "Per-class scores, separated by semicolons."),
+        ],
+    }
+}
+
+fn begin_stream_data(sink: Option<&mut (dyn RunDataSink + '_)>, mode: &str, holds: bool) {
+    if let Some(sink) = sink {
+        sink.declare_table(&ticks_spec());
+        if holds {
+            sink.declare_table(&holds_spec());
+        }
+        sink.event(EventTime::default(), "phase_start", mode);
+    }
+}
+
+fn end_stream_data(sink: Option<&mut (dyn RunDataSink + '_)>, mode: &str, done: u64) {
+    if let Some(sink) = sink {
+        sink.event(
+            EventTime {
+                step: Some(done),
+                ..EventTime::default()
+            },
+            "phase_end",
+            mode,
+        );
     }
 }
 
@@ -113,6 +173,7 @@ fn run_stream_train<R, E, D, RP, M>(
     config: &ExecutorConfig,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    mut data: Option<&mut dyn RunDataSink>,
     parallel_width: u32,
 ) -> Result<RolloutOutcome, TrainerError>
 where
@@ -124,6 +185,7 @@ where
 {
     let total_samples = samples.len() as u64;
     let mut done = 0u64;
+    begin_stream_data(data.as_deref_mut(), "train", false);
 
     'train: for batch in samples.chunks(parallel_width as usize) {
         cancel.interrupt(format!("stopped after {done} of {total_samples} samples"))?;
@@ -167,6 +229,21 @@ where
             )?;
             runtime.submit_sensory(frame)?;
             runtime.step(config.ticks_per_sample)?;
+            if let Some(sink) = data.as_deref_mut() {
+                for (slot, amplitude) in amplitudes.iter().enumerate() {
+                    sink.row(
+                        TICKS_TABLE,
+                        &[
+                            RunDataValue::Text(batch[slot].sample_id.0.clone()),
+                            RunDataValue::count(slot as u64),
+                            RunDataValue::count(tick as u64),
+                            RunDataValue::Float(*amplitude),
+                            class_ids[slot]
+                                .map_or(RunDataValue::Null, |c| RunDataValue::Int(i64::from(c))),
+                        ],
+                    );
+                }
+            }
             events.emit(RunEvent::new(
                 run_id.clone(),
                 RunEventKind::Progress {
@@ -212,6 +289,7 @@ where
         ));
     }
 
+    end_stream_data(data, "train", done);
     finish_rollout(
         run_id,
         total_samples,
@@ -239,6 +317,7 @@ fn run_stream_infer<R, E, D, RP, M>(
     config: &ExecutorConfig,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
+    mut data: Option<&mut dyn RunDataSink>,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -262,6 +341,7 @@ where
         ));
     }
     let mut done = 0u64;
+    begin_stream_data(data.as_deref_mut(), "infer", true);
 
     'infer: for sample in samples {
         let series = time_series_samples(sample)?;
@@ -283,6 +363,18 @@ where
             )?;
             runtime.submit_sensory(frame)?;
             runtime.step(config.ticks_per_sample)?;
+            if let Some(sink) = data.as_deref_mut() {
+                sink.row(
+                    TICKS_TABLE,
+                    &[
+                        RunDataValue::Text(sample.sample_id.0.clone()),
+                        RunDataValue::Int(0),
+                        RunDataValue::count(tick as u64),
+                        RunDataValue::Float(*amplitude),
+                        RunDataValue::Null,
+                    ],
+                );
+            }
             events.emit(RunEvent::new(
                 run_id.clone(),
                 RunEventKind::Progress {
@@ -316,6 +408,33 @@ where
                         class_id,
                         label: None,
                     };
+                    if let Some(sink) = data.as_deref_mut() {
+                        sink.row(
+                            HOLDS_TABLE,
+                            &[
+                                RunDataValue::Text(sample.sample_id.0.clone()),
+                                RunDataValue::count(tick as u64),
+                                RunDataValue::Int(i64::from(class_id)),
+                                RunDataValue::Text(crate::executor::describe_prediction(
+                                    &prediction,
+                                )),
+                                crate::executor::prediction_matches(&prediction, &target)
+                                    .map_or(RunDataValue::Null, RunDataValue::Bool),
+                                match &prediction {
+                                    TypedPrediction::Class { scores, .. } if !scores.is_empty() => {
+                                        RunDataValue::Text(
+                                            scores
+                                                .iter()
+                                                .map(f64::to_string)
+                                                .collect::<Vec<_>>()
+                                                .join(";"),
+                                        )
+                                    }
+                                    _ => RunDataValue::Null,
+                                },
+                            ],
+                        );
+                    }
                     scored_predictions.push(prediction.clone());
                     scored_targets.push(target.clone());
                     predictions.push(PredictionRecord {
@@ -355,6 +474,7 @@ where
         }
     }
 
+    end_stream_data(data, "infer", done);
     finish_rollout(
         run_id,
         total_holds,
@@ -608,6 +728,7 @@ mod tests {
         let reward = PainPleasureReward::new(0.5).unwrap();
         let metric = ClassificationMetricPack::new();
         let mut sink = NoopEventSink;
+        let mut data = crate::run_data::RecordingRunDataSink::default();
         let outcome = run_stream_rollout_with_events(
             &RunId("run-stream".to_string()),
             &samples,
@@ -624,8 +745,12 @@ mod tests {
             },
             &mut sink,
             &CancelToken::new(),
+            Some(&mut data),
         )
         .expect("rollout");
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        assert_eq!(data.rows_of("ticks").len(), 3);
+        assert_eq!(data.event_kinds(), vec!["phase_start", "phase_end"]);
         assert_eq!(runtime.burst_count(), 6);
         assert_eq!(runtime.motor_collects(), 0);
         assert!(runtime.submitted_rewards().is_empty());
@@ -658,6 +783,7 @@ mod tests {
             },
             &mut sink,
             &CancelToken::new(),
+            None,
         );
         assert!(matches!(result, Err(TrainerError::Config(_))));
     }
@@ -689,6 +815,7 @@ mod tests {
             },
             &mut sink,
             &CancelToken::new(),
+            None,
         )
         .expect("rollout");
         let ticks: Vec<(Option<u64>, Vec<f64>, Vec<f64>)> = sink
@@ -753,6 +880,7 @@ mod tests {
         let reward = PainPleasureReward::new(0.5).unwrap();
         let metric = ClassificationMetricPack::new();
         let mut sink = NoopEventSink;
+        let mut data = crate::run_data::RecordingRunDataSink::default();
         let outcome = run_stream_rollout_with_events(
             &RunId("run-infer".to_string()),
             &[sample],
@@ -769,8 +897,13 @@ mod tests {
             },
             &mut sink,
             &CancelToken::new(),
+            Some(&mut data),
         )
         .expect("rollout");
+        assert!(data.errors.is_empty(), "{:?}", data.errors);
+        assert_eq!(data.rows_of("ticks").len(), 4);
+        assert_eq!(data.rows_of("holds").len(), 1);
+        assert_eq!(data.event_kinds(), vec!["phase_start", "phase_end"]);
         assert_eq!(runtime.burst_count(), 4);
         assert_eq!(outcome.predictions.len(), 1);
         assert!(runtime.submitted_rewards().is_empty());
@@ -825,6 +958,7 @@ mod tests {
             },
             &mut sink,
             &CancelToken::new(),
+            None,
         )
         .expect("rollout");
         assert_eq!(
@@ -947,6 +1081,7 @@ mod tests {
             },
             &mut sink,
             &cancel,
+            None,
         )
         .expect("skip scores");
         assert_eq!(outcome.summary.status, crate::contracts::RunStatus::Skipped);

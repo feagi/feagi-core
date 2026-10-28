@@ -25,6 +25,8 @@ use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::plasticity_freeze::PlasticityControl;
 use crate::reach_hold::trainer_package_version;
+use crate::run_actions::{ApplyEvent, ScheduledEvent};
+use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 fn default_support_deadband_deg() -> f64 {
     0.0
@@ -73,6 +75,52 @@ fn default_only_contacts_touch() -> bool {
 fn default_min_height_fraction() -> f64 {
     0.8
 }
+/// Default `lift_tolerance`: a torso 5% above its reset height counts as lifted.
+fn default_lift_tolerance() -> f64 {
+    0.05
+}
+/// Default `over_assist_margin`: effort 0.25 above the predicted need counts as over-assist.
+fn default_over_assist_margin() -> f64 {
+    0.25
+}
+/// Default `over_support_flag_fraction`: a level is flagged when 20% of its samples are carried
+/// or over-assisted.
+fn default_over_support_flag_fraction() -> f64 {
+    0.2
+}
+/// Default `fade_tau_s`: the adaptive assist fades with a 20 s time constant.
+fn default_fade_tau_s() -> f64 {
+    20.0
+}
+/// Default `catch_tau_s`: the adaptive assist rises on overshoot with a 0.2 s time constant.
+fn default_catch_tau_s() -> f64 {
+    0.2
+}
+/// Default `hold_after_catch_s`: fading pauses for 1 s after a catch.
+fn default_hold_after_catch_s() -> f64 {
+    1.0
+}
+/// Default `cone_min_deg`: the narrowest tolerance cone, at full assist.
+fn default_cone_min_deg() -> f64 {
+    2.0
+}
+/// Default `lean_grace_s`: a lean beyond the cone is re-centred after 2 s.
+fn default_lean_grace_s() -> f64 {
+    2.0
+}
+/// Default `stance_grace_s`: an attempt ends after 1 s without a standing stance.
+fn default_stance_grace_s() -> f64 {
+    1.0
+}
+/// Default `standing_fraction_for_success`: an adaptive attempt succeeds when it stood for 80%
+/// of its counted bursts.
+fn default_standing_fraction_for_success() -> f64 {
+    0.8
+}
+/// Default `catch_threshold`: an assist increase of 0.05 in one burst counts as a catch.
+fn default_catch_threshold() -> f64 {
+    0.05
+}
 fn default_fall_confirm_s() -> f64 {
     0.25
 }
@@ -98,6 +146,29 @@ pub fn bursts_for_seconds(seconds: f64, burst_period_s: f64) -> u32 {
         u32::MAX
     } else {
         bursts as u32
+    }
+}
+
+/// How the train phase lowers the support.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssistMode {
+    /// The stepwise [`SupportSchedule`]: one level per block of attempts.
+    #[default]
+    Ladder,
+    /// Continuous assist that fades slowly while the robot copes and rises fast on overshoot
+    /// ([`AdaptiveAssist`]). Attempts end on a fall, on a lost stance, or at `attempt_cap_s` (a success when
+    /// the robot stood for `standing_fraction_for_success` of it).
+    Adaptive,
+}
+
+impl AssistMode {
+    /// Wire name of the mode.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ladder => "ladder",
+            Self::Adaptive => "adaptive",
+        }
     }
 }
 
@@ -208,6 +279,58 @@ pub struct BalanceFeetCriterion {
     /// the reset. 0 turns the check off; otherwise in (0, 1]. Default 0.8.
     #[serde(default = "default_min_height_fraction")]
     pub min_height_fraction: f64,
+    /// A sample whose torso is higher than `reset height * (1 + lift_tolerance)` counts as
+    /// carried by the support. At or above 0; default 0.05.
+    #[serde(default = "default_lift_tolerance")]
+    pub lift_tolerance: f64,
+    /// A sample whose support effort exceeds the predicted need by more than this margin counts
+    /// as over-assisted. In [0, 1]; default 0.25.
+    #[serde(default = "default_over_assist_margin")]
+    pub over_assist_margin: f64,
+    /// A support level is flagged `over_support` when its mean carried fraction or mean
+    /// over-assist fraction exceeds this share. In [0, 1]; default 0.2.
+    #[serde(default = "default_over_support_flag_fraction")]
+    pub over_support_flag_fraction: f64,
+    /// `ladder` (default) lowers support in blocks; `adaptive` runs the continuous assist below.
+    #[serde(default)]
+    pub support_mode: AssistMode,
+    /// Adaptive: time constant, seconds, of the slow fade (and of the slow average that widens
+    /// the tolerance cone). > 0; default 20.
+    #[serde(default = "default_fade_tau_s")]
+    pub fade_tau_s: f64,
+    /// Adaptive: time constant, seconds, of the fast rise on overshoot. > 0 and < `fade_tau_s`;
+    /// default 0.2.
+    #[serde(default = "default_catch_tau_s")]
+    pub catch_tau_s: f64,
+    /// Adaptive: seconds the fade pauses after a catch. >= 0; default 1.
+    #[serde(default = "default_hold_after_catch_s")]
+    pub hold_after_catch_s: f64,
+    /// Adaptive: narrowest tolerance cone, degrees, at full assist. In [0, `max_tilt_deg`);
+    /// default 2.
+    #[serde(default = "default_cone_min_deg")]
+    pub cone_min_deg: f64,
+    /// Adaptive: assist increase within one burst that counts as a catch. In [0, 1]; default 0.05.
+    #[serde(default = "default_catch_threshold")]
+    pub catch_threshold: f64,
+    /// Adaptive: seconds the predicted tilt may stay beyond the current cone before the cone
+    /// drops to `cone_min_deg` (the support re-centres the robot). > 0; default 2.
+    #[serde(default = "default_lean_grace_s")]
+    pub lean_grace_s: f64,
+    /// Adaptive: seconds without a standing stance (see [`sample_is_upright`]) that end the
+    /// attempt as `lost_stance`. > 0; default 1.
+    #[serde(default = "default_stance_grace_s")]
+    pub stance_grace_s: f64,
+    /// Adaptive: share of the attempt's counted bursts that must be standing for a capped
+    /// attempt to count as a success. In (0, 1]; default 0.8.
+    #[serde(default = "default_standing_fraction_for_success")]
+    pub standing_fraction_for_success: f64,
+    /// Events applied to the brain at fixed seconds after settle ends, within each train
+    /// attempt (skipped in probes). A test phase refuses them. Empty by default.
+    #[serde(default, alias = "scheduledEvents")]
+    pub scheduled_events: Vec<ScheduledEvent>,
+    /// Ask the controller for every actuator command each burst and put it in the sample.
+    #[serde(default, alias = "recordActuators")]
+    pub record_actuators: bool,
 }
 
 /// Fading-support schedule parameters.
@@ -278,7 +401,26 @@ impl BalanceFeetCriterion {
             bws_max_fraction: default_bws_max_fraction(),
             only_contacts_touch: default_only_contacts_touch(),
             min_height_fraction: default_min_height_fraction(),
+            lift_tolerance: default_lift_tolerance(),
+            over_assist_margin: default_over_assist_margin(),
+            over_support_flag_fraction: default_over_support_flag_fraction(),
+            support_mode: AssistMode::Ladder,
+            fade_tau_s: default_fade_tau_s(),
+            catch_tau_s: default_catch_tau_s(),
+            hold_after_catch_s: default_hold_after_catch_s(),
+            cone_min_deg: default_cone_min_deg(),
+            catch_threshold: default_catch_threshold(),
+            lean_grace_s: default_lean_grace_s(),
+            stance_grace_s: default_stance_grace_s(),
+            standing_fraction_for_success: default_standing_fraction_for_success(),
+            scheduled_events: Vec::new(),
+            record_actuators: false,
         }
+    }
+
+    /// The adaptive assist is on.
+    pub fn is_adaptive(&self) -> bool {
+        self.support_mode == AssistMode::Adaptive
     }
 
     /// Bursts of continuous balance that accept an attempt, at the live burst period.
@@ -358,6 +500,66 @@ impl BalanceFeetCriterion {
         {
             return Err(TrainerError::Config(
                 "min_height_fraction must be 0 (off) or in (0, 1]".to_string(),
+            ));
+        }
+        if !self.lift_tolerance.is_finite() || !(0.0..=10.0).contains(&self.lift_tolerance) {
+            return Err(TrainerError::Config(
+                "lift_tolerance must be a finite value in [0, 10]".to_string(),
+            ));
+        }
+        if !self.over_assist_margin.is_finite() || !(0.0..=1.0).contains(&self.over_assist_margin) {
+            return Err(TrainerError::Config(
+                "over_assist_margin must be a finite value in [0, 1]".to_string(),
+            ));
+        }
+        if !self.over_support_flag_fraction.is_finite()
+            || !(0.0..=1.0).contains(&self.over_support_flag_fraction)
+        {
+            return Err(TrainerError::Config(
+                "over_support_flag_fraction must be a finite value in [0, 1]".to_string(),
+            ));
+        }
+        if !positive(self.fade_tau_s) {
+            return Err(TrainerError::Config(
+                "fade_tau_s must be finite and > 0".to_string(),
+            ));
+        }
+        if !positive(self.catch_tau_s) || self.catch_tau_s >= self.fade_tau_s {
+            return Err(TrainerError::Config(
+                "catch_tau_s must be finite, > 0 and < fade_tau_s".to_string(),
+            ));
+        }
+        if !non_negative(self.hold_after_catch_s) {
+            return Err(TrainerError::Config(
+                "hold_after_catch_s must be finite and >= 0".to_string(),
+            ));
+        }
+        if !non_negative(self.cone_min_deg) || self.cone_min_deg >= self.max_tilt_deg {
+            return Err(TrainerError::Config(
+                "cone_min_deg must be finite, >= 0 and < max_tilt_deg".to_string(),
+            ));
+        }
+        if !self.catch_threshold.is_finite() || !(0.0..=1.0).contains(&self.catch_threshold) {
+            return Err(TrainerError::Config(
+                "catch_threshold must be a finite value in [0, 1]".to_string(),
+            ));
+        }
+        if !positive(self.lean_grace_s) {
+            return Err(TrainerError::Config(
+                "lean_grace_s must be finite and > 0".to_string(),
+            ));
+        }
+        if !positive(self.stance_grace_s) {
+            return Err(TrainerError::Config(
+                "stance_grace_s must be finite and > 0".to_string(),
+            ));
+        }
+        if !self.standing_fraction_for_success.is_finite()
+            || self.standing_fraction_for_success <= 0.0
+            || self.standing_fraction_for_success > 1.0
+        {
+            return Err(TrainerError::Config(
+                "standing_fraction_for_success must be finite and in (0, 1]".to_string(),
             ));
         }
         if self.probe_every > MAX_PROBE_EVERY {
@@ -463,6 +665,9 @@ impl BalanceFeetCriterion {
             return Err(TrainerError::Config(format!(
                 "bws_max_fraction must be in [0, {MAX_BWS_FRACTION}]"
             )));
+        }
+        for event in &self.scheduled_events {
+            event.validate()?;
         }
         Ok(())
     }
@@ -622,7 +827,324 @@ pub enum SupportMode {
     /// Every attempt at this level.
     Fixed(f64),
     /// Train schedule whose first attempt is at this level. `config.start` stays the ceiling.
+    /// With the adaptive assist, both the level and its slow average start here.
     Resume(f64),
+    /// Adaptive assist resumed from a saved state. Without `support_mode: adaptive` it behaves
+    /// like `Resume(a)`.
+    ResumeAdaptive(AdaptiveAssistState),
+}
+
+/// Most points kept in a phase's assist timeline.
+pub const ASSIST_TIMELINE_MAX_POINTS: usize = 3600;
+
+/// The two numbers the adaptive assist carries between attempts and train runs.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AdaptiveAssistState {
+    /// Assist level now, in `[support_min, support_start]`.
+    pub a: f64,
+    /// Exponential average of `a` with time constant `fade_tau_s`; it sets the cone.
+    pub a_slow: f64,
+}
+
+/// Result of one adaptive-assist update.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AdaptiveStep {
+    /// Assist level after the update.
+    pub level: f64,
+    /// Slow average after the update.
+    pub a_slow: f64,
+    /// Tolerance cone, degrees, in force after the update.
+    pub cone_deg: f64,
+    /// Increase of `level` over the previous burst (0 when it did not rise).
+    pub rise: f64,
+    /// The rise was larger than `catch_threshold`.
+    pub catch: bool,
+}
+
+/// Continuous "patient parent" assist. It fades slowly while the robot copes (`a` decays with
+/// `fade_tau_s`), rises fast when the predicted tilt overshoots a tolerance cone (time
+/// constant `catch_tau_s`), pauses the fade for `hold_after_catch_s` after a catch, and widens
+/// the cone as the slow average `a_slow` falls. Every time constant is in seconds and meets the
+/// burst rate only through `burst_period_s`, so it means the same at any burst rate. Metrics
+/// observe this state; nothing feeds back into it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AdaptiveAssist {
+    a: f64,
+    a_slow: f64,
+    hold_left_s: f64,
+}
+
+impl AdaptiveAssist {
+    /// Full assist: both averages at `support_start`.
+    pub fn start(criterion: &BalanceFeetCriterion) -> Self {
+        Self {
+            a: criterion.support_start,
+            a_slow: criterion.support_start,
+            hold_left_s: 0.0,
+        }
+    }
+
+    /// Continue from a saved state, clamped to `[support_min, support_start]`.
+    pub fn resume(criterion: &BalanceFeetCriterion, state: AdaptiveAssistState) -> Self {
+        let clamp = |value: f64, fallback: f64| {
+            if value.is_finite() {
+                value.clamp(criterion.support_min, criterion.support_start)
+            } else {
+                fallback
+            }
+        };
+        Self {
+            a: clamp(state.a, criterion.support_start),
+            a_slow: clamp(state.a_slow, criterion.support_start),
+            hold_left_s: 0.0,
+        }
+    }
+
+    /// State to save for a later attempt or run.
+    pub fn state(&self) -> AdaptiveAssistState {
+        AdaptiveAssistState {
+            a: self.a,
+            a_slow: self.a_slow,
+        }
+    }
+
+    /// Assist level now.
+    pub fn level(&self) -> f64 {
+        self.a
+    }
+
+    /// Slow average of the level.
+    pub fn slow(&self) -> f64 {
+        self.a_slow
+    }
+
+    /// Tolerance cone in degrees: `cone_min + (max_tilt - cone_min) * (1 - a_slow)`.
+    pub fn cone_deg(&self, criterion: &BalanceFeetCriterion) -> f64 {
+        let min = criterion.cone_min_deg;
+        let max = criterion.max_tilt_deg;
+        (min + (max - min) * (1.0 - self.a_slow)).clamp(min, max)
+    }
+
+    /// One update from the predicted tilt (degrees) of `bursts` elapsed bursts (normally 1).
+    pub fn step(
+        &mut self,
+        criterion: &BalanceFeetCriterion,
+        predicted_deg: f64,
+        bursts: u32,
+    ) -> AdaptiveStep {
+        let dt = criterion.burst_period_s * f64::from(bursts.max(1));
+        self.a_slow += (self.a - self.a_slow) * (1.0 - (-dt / criterion.fade_tau_s).exp());
+        let cone = self.cone_deg(criterion);
+        let span = criterion.max_tilt_deg - cone;
+        let overshoot = if span > 1.0e-9 {
+            ((predicted_deg - cone) / span).clamp(0.0, 1.0)
+        } else if predicted_deg > cone {
+            1.0
+        } else {
+            0.0
+        };
+        let previous = self.a;
+        let hold_active = self.hold_left_s > 1.0e-9;
+        self.hold_left_s = (self.hold_left_s - dt).max(0.0);
+        let mut rise = 0.0;
+        let mut catch = false;
+        if overshoot > self.a {
+            self.a += (overshoot - self.a) * (1.0 - (-dt / criterion.catch_tau_s).exp());
+            self.a = self.a.clamp(criterion.support_min, criterion.support_start);
+            rise = (self.a - previous).max(0.0);
+            if rise > criterion.catch_threshold {
+                catch = true;
+                self.hold_left_s = criterion.hold_after_catch_s;
+            }
+        } else if !hold_active {
+            self.a = (self.a * (-dt / criterion.fade_tau_s).exp()).max(overshoot);
+            self.a = self.a.clamp(criterion.support_min, criterion.support_start);
+        }
+        AdaptiveStep {
+            level: self.a,
+            a_slow: self.a_slow,
+            cone_deg: self.cone_deg(criterion),
+            rise,
+            catch,
+        }
+    }
+}
+
+/// Predicted tilt in degrees: `tilt + lookahead * |omega_xy|` (the support-need prediction,
+/// not clamped).
+pub fn predicted_tilt_deg(tilt_rad: f64, ang_vel: [f64; 3], lookahead_s: f64) -> f64 {
+    (tilt_rad + lookahead_s * ang_vel[0].hypot(ang_vel[1])).to_degrees()
+}
+
+/// One point of a phase's assist timeline.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AssistPoint {
+    /// Seconds of scored simulated time since the phase started.
+    pub t_s: f64,
+    /// Assist level.
+    pub a: f64,
+    /// Slow average of the level.
+    pub a_slow: f64,
+    /// Tolerance cone, degrees.
+    pub cone_deg: f64,
+}
+
+/// One second of scored train time: mean goal deviation and mean applied assistance.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DeviationAssistPoint {
+    /// Seconds of scored simulated time since the phase started, at the end of the second.
+    pub t_s: f64,
+    /// Mean goal deviation over the bursts in that second, `[0, 1]`.
+    pub deviation_mean: f64,
+    /// Mean applied assistance over the bursts in that second, `[0, 1]`.
+    pub assistance_mean: f64,
+}
+
+/// Mean deviation and assistance over a stretch of the timeline.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct DeviationAssistMeans {
+    pub dev: f64,
+    pub assist: f64,
+}
+
+/// Deviation against assistance over a train phase (probes and settling excluded).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeviationAssist {
+    /// One point per second of scored time (at most [`ASSIST_TIMELINE_MAX_POINTS`]).
+    pub timeline: Vec<DeviationAssistPoint>,
+    /// Pearson r between deviation and assistance. Null with fewer than 3 points or no variance.
+    pub r: Option<f64>,
+    /// Least-squares slope of assistance on deviation. Null without deviation variance.
+    pub slope: Option<f64>,
+    /// Least-squares intercept of assistance on deviation. Null without deviation variance.
+    pub intercept: Option<f64>,
+    /// Points in the timeline.
+    pub n: usize,
+    /// Means over the first 20% of the timeline.
+    pub early: DeviationAssistMeans,
+    /// Means over the last 20% of the timeline.
+    pub late: DeviationAssistMeans,
+}
+
+impl DeviationAssist {
+    /// Summary of a timeline. `None` for an empty timeline.
+    pub fn from_timeline(timeline: Vec<DeviationAssistPoint>) -> Option<Self> {
+        let n = timeline.len();
+        if n == 0 {
+            return None;
+        }
+        let nf = n as f64;
+        let mean_x = timeline.iter().map(|p| p.deviation_mean).sum::<f64>() / nf;
+        let mean_y = timeline.iter().map(|p| p.assistance_mean).sum::<f64>() / nf;
+        let (mut sxx, mut syy, mut sxy) = (0.0, 0.0, 0.0);
+        for p in &timeline {
+            let dx = p.deviation_mean - mean_x;
+            let dy = p.assistance_mean - mean_y;
+            sxx += dx * dx;
+            syy += dy * dy;
+            sxy += dx * dy;
+        }
+        const EPS: f64 = 1.0e-12;
+        let slope = (sxx > EPS).then(|| sxy / sxx);
+        let intercept = slope.map(|m| mean_y - m * mean_x);
+        let r = (n >= 3 && sxx > EPS && syy > EPS).then(|| sxy / (sxx * syy).sqrt());
+        let k = ((nf * 0.2).round() as usize).clamp(1, n);
+        let means = |slice: &[DeviationAssistPoint]| DeviationAssistMeans {
+            dev: slice.iter().map(|p| p.deviation_mean).sum::<f64>() / slice.len() as f64,
+            assist: slice.iter().map(|p| p.assistance_mean).sum::<f64>() / slice.len() as f64,
+        };
+        Some(Self {
+            early: means(&timeline[..k]),
+            late: means(&timeline[n - k..]),
+            r,
+            slope,
+            intercept,
+            n,
+            timeline,
+        })
+    }
+}
+
+/// Collects the 1 Hz deviation and assistance timeline of a train phase.
+#[derive(Debug, Default)]
+struct DeviationAssistRun {
+    timeline: Vec<DeviationAssistPoint>,
+    phase_t_s: f64,
+    bucket: u64,
+    sum_dev: f64,
+    sum_assist: f64,
+    weight: f64,
+}
+
+impl DeviationAssistRun {
+    /// Fold `bursts` counted bursts of `burst_period_s` each into the open second.
+    fn add(&mut self, deviation: f64, assistance: f64, bursts: u32, burst_period_s: f64) {
+        let bucket = self.phase_t_s.max(0.0).floor() as u64;
+        if bucket != self.bucket {
+            self.flush((self.bucket + 1) as f64);
+            self.bucket = bucket;
+        }
+        let w = f64::from(bursts);
+        self.sum_dev += deviation * w;
+        self.sum_assist += assistance * w;
+        self.weight += w;
+        self.phase_t_s += w * burst_period_s;
+    }
+
+    fn flush(&mut self, t_s: f64) {
+        if self.weight <= 0.0 {
+            return;
+        }
+        if self.timeline.len() >= ASSIST_TIMELINE_MAX_POINTS {
+            // Full: keep every 2nd point and carry on.
+            let mut index = 0;
+            self.timeline.retain(|_| {
+                index += 1;
+                index % 2 == 1
+            });
+        }
+        self.timeline.push(DeviationAssistPoint {
+            t_s,
+            deviation_mean: self.sum_dev / self.weight,
+            assistance_mean: self.sum_assist / self.weight,
+        });
+        self.sum_dev = 0.0;
+        self.sum_assist = 0.0;
+        self.weight = 0.0;
+    }
+
+    fn finish(mut self) -> Option<DeviationAssist> {
+        let end = self.phase_t_s;
+        self.flush(end);
+        DeviationAssist::from_timeline(self.timeline)
+    }
+}
+
+/// Adaptive numbers of one attempt (observation only).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct AdaptiveAttemptStats {
+    /// Mean assist level over the scored bursts.
+    pub mean_a: f64,
+    /// Lowest assist level over the scored bursts.
+    pub min_a: f64,
+    /// Tolerance cone at the end of the attempt, degrees.
+    pub end_cone_deg: f64,
+    /// Catches (assist jumps above `catch_threshold` in one burst).
+    pub catches: u32,
+    /// Catches per minute of scored time.
+    pub catches_per_min: f64,
+    /// Share of the counted bursts that were standing (`sample_is_upright`).
+    #[serde(default)]
+    pub standing_fraction: f64,
+    /// Share of the counted bursts with every contact body down.
+    #[serde(default)]
+    pub feet_down_fraction: f64,
+    /// Times a lean was re-centred (the cone dropped to `cone_min_deg`).
+    #[serde(default)]
+    pub recenters: u32,
+    /// The attempt ended as `lost_stance`.
+    #[serde(default)]
+    pub lost_stance: bool,
 }
 
 /// Why one attempt ended.
@@ -639,6 +1161,9 @@ pub enum BalanceAttemptOutcome {
     Truncated,
     /// The torso stayed at or past `fall_tilt_deg` for `fall_confirm_s`. Not a death.
     Fell,
+    /// Adaptive assist only: the robot was not standing for longer than `stance_grace_s`.
+    /// Not a fall, not a success.
+    LostStance,
 }
 
 /// One finished attempt.
@@ -686,6 +1211,96 @@ pub struct BalanceAttemptRecord {
     /// result can say why balance broke.
     #[serde(default)]
     pub non_upright: NonUprightCounts,
+    /// Share of non-settling samples (support > 0 only) where the support held the body up: a
+    /// contact body off the floor while the torso is not under `min_height_fraction`, or the
+    /// torso above `reset height * (1 + lift_tolerance)`. 0 for an unassisted attempt.
+    #[serde(default)]
+    pub carried_fraction: f64,
+    /// Share of non-settling samples (support > 0 only) where the support effort exceeded the
+    /// predicted need by more than `over_assist_margin`. 0 for an unassisted attempt.
+    #[serde(default)]
+    pub over_assist_fraction: f64,
+    /// Adaptive-assist numbers. Absent for a ladder attempt and for probes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptive: Option<AdaptiveAttemptStats>,
+}
+
+/// Counted support-use samples of one attempt (support > 0, non-settling only).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SupportUseCounts {
+    /// Samples scored.
+    pub samples: u32,
+    /// Samples where the support carried the body.
+    pub carried: u32,
+    /// Samples where the effort exceeded the need by more than the margin.
+    pub over_assist: u32,
+}
+
+impl SupportUseCounts {
+    /// Add `bursts` samples with the given flags (`None` when the sample is not scored).
+    pub fn add(self, flags: Option<(bool, bool)>, bursts: u32) -> Self {
+        let Some((carried, over)) = flags else {
+            return self;
+        };
+        Self {
+            samples: self.samples.saturating_add(bursts),
+            carried: self
+                .carried
+                .saturating_add(if carried { bursts } else { 0 }),
+            over_assist: self
+                .over_assist
+                .saturating_add(if over { bursts } else { 0 }),
+        }
+    }
+
+    fn fraction(count: u32, samples: u32) -> f64 {
+        if samples == 0 {
+            0.0
+        } else {
+            f64::from(count) / f64::from(samples)
+        }
+    }
+
+    /// Carried share of the scored samples.
+    pub fn carried_fraction(&self) -> f64 {
+        Self::fraction(self.carried, self.samples)
+    }
+
+    /// Over-assist share of the scored samples.
+    pub fn over_assist_fraction(&self) -> f64 {
+        Self::fraction(self.over_assist, self.samples)
+    }
+}
+
+/// Whether the support carried the body and whether it over-assisted at one sample, as
+/// `(carried, over_assist)`. `None` when the sample is not scored: settling, or no support.
+/// `level` is the effective support level.
+pub fn support_use_flags(
+    sample: &BalanceSample,
+    criterion: &BalanceFeetCriterion,
+    reset_height_m: Option<f64>,
+    level: f64,
+) -> Option<(bool, bool)> {
+    if sample.settling || level.is_nan() || level <= 0.0 {
+        return None;
+    }
+    let reset = reset_height_m.filter(|reset| *reset > 0.0);
+    let torso_low = match (sample.torso_height_m, reset) {
+        (Some(now), Some(reset)) => {
+            criterion.min_height_fraction > 0.0 && now < criterion.min_height_fraction * reset
+        }
+        _ => false,
+    };
+    let feet_off_body_up = !sample.all_contacts_down() && !torso_low;
+    let lifted = match (sample.torso_height_m, reset) {
+        (Some(now), Some(reset)) => now > reset * (1.0 + criterion.lift_tolerance),
+        _ => false,
+    };
+    let over = match (sample.support_effort, sample.support_need) {
+        (Some(effort), Some(need)) => effort > need + criterion.over_assist_margin,
+        _ => false,
+    };
+    Some((feet_off_body_up || lifted, over))
 }
 
 /// Which upright tests one sample fails.
@@ -947,6 +1562,8 @@ pub struct MeasureRequest {
     /// descendants and the world are excluded too); the set is every other body touching the
     /// world. Sent as `{"a_except": [...], "b": "world"}`.
     pub contacts_except: Vec<Vec<String>>,
+    /// Also report every actuator's command. Sent only when true.
+    pub actuators: bool,
 }
 
 /// One body in a `measure` reply.
@@ -1018,6 +1635,9 @@ pub struct Measurement {
     /// Active springs by body name.
     #[serde(default, deserialize_with = "named_map")]
     pub springs: BTreeMap<String, SpringMeasure>,
+    /// Actuator command (ctrl) by actuator name; present only when requested.
+    #[serde(default)]
+    pub actuators: BTreeMap<String, f64>,
 }
 
 fn named_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
@@ -1120,6 +1740,16 @@ pub struct BalanceSample {
     /// it unset; the attempt tracker then uses the first sample's own height.
     #[serde(default)]
     pub reset_height_m: Option<f64>,
+    /// Adaptive assist: slow average of the level at this burst. Absent in ladder mode.
+    #[serde(default)]
+    pub assist_slow: Option<f64>,
+    /// Adaptive assist: increase of the level over the previous burst. Absent in ladder mode.
+    #[serde(default)]
+    pub assist_rise: Option<f64>,
+    /// Actuator command (ctrl) by actuator name at this burst. Empty unless the criterion sets
+    /// `record_actuators`.
+    #[serde(default)]
+    pub actuators: BTreeMap<String, f64>,
 }
 
 impl BalanceSample {
@@ -1192,6 +1822,10 @@ pub struct OpenBalanceAttempt {
     pub reset_height_m: Option<f64>,
     /// Non-settling bursts per failed upright test so far.
     pub non_upright: NonUprightCounts,
+    /// Support-use samples so far (support > 0, non-settling).
+    pub support_use: SupportUseCounts,
+    /// Consecutive elapsed bursts that were not standing, ending at the latest counted burst.
+    pub off_stance_bursts: u32,
 }
 
 impl OpenBalanceAttempt {
@@ -1228,6 +1862,8 @@ impl OpenBalanceAttempt {
             fall_bursts: 0,
             reset_height_m: None,
             non_upright: NonUprightCounts::default(),
+            support_use: SupportUseCounts::default(),
+            off_stance_bursts: 0,
         }
     }
 }
@@ -1269,6 +1905,27 @@ pub fn non_upright_reasons(
         other_body_contact: criterion.only_contacts_touch && sample.other_contact_touching,
         height: too_low,
     }
+}
+
+/// Goal deviation of one sample, in `[0, 1]`: how far the body is from the standing goal.
+///
+/// 1.0 when the sample is not in a standing stance for a reason other than tilt (a contact body
+/// is off the floor, another body is touching, or the torso is below `min_height_fraction` of
+/// the reset height; see [`non_upright_reasons`]). Otherwise `tilt_deg / max_tilt_deg`, clamped
+/// to `[0, 1]`.
+pub fn goal_deviation(
+    sample: &BalanceSample,
+    criterion: &BalanceFeetCriterion,
+    reset_height_m: Option<f64>,
+) -> f64 {
+    let reasons = non_upright_reasons(sample, criterion, reset_height_m);
+    if reasons.contact || reasons.other_body_contact || reasons.height {
+        return 1.0;
+    }
+    if criterion.max_tilt_deg <= 0.0 {
+        return 1.0;
+    }
+    (sample.tilt_deg / criterion.max_tilt_deg).clamp(0.0, 1.0)
 }
 
 /// Standing: tilt inside the limit, every contact body down, no other body on the world (when
@@ -1344,6 +2001,11 @@ pub fn observe_balance_sample(
         } else {
             open.non_upright.add(reasons, 1)
         };
+        let level = sample.support_level.unwrap_or(open.params_support_level);
+        let support_use = open.support_use.add(
+            support_use_flags(sample, criterion, reset_height_m, level),
+            1,
+        );
         return Ok(BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
             outcome,
@@ -1353,6 +2015,8 @@ pub fn observe_balance_sample(
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
             non_upright,
+            carried_fraction: support_use.carried_fraction(),
+            over_assist_fraction: support_use.over_assist_fraction(),
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -1405,6 +2069,11 @@ pub fn observe_balance_sample(
         0
     };
     let longest_balanced_bursts = open.longest_balanced_bursts.max(holding_bursts);
+    let off_stance_bursts = if upright {
+        0
+    } else {
+        open.off_stance_bursts.saturating_add(new_bursts)
+    };
     let fall_bursts = if criterion.fall_tilt_deg > 0.0 && sample.tilt_deg >= criterion.fall_tilt_deg
     {
         open.fall_bursts.saturating_add(new_bursts)
@@ -1415,6 +2084,11 @@ pub fn observe_balance_sample(
         open.first_violation_burst
             .or(if upright { None } else { Some(open.bursts) });
     let non_upright = open.non_upright.add(reasons, new_bursts);
+    let level = sample.support_level.unwrap_or(open.params_support_level);
+    let support_use = open.support_use.add(
+        support_use_flags(sample, criterion, reset_height_m, level),
+        new_bursts,
+    );
     let finish = |outcome| {
         BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
@@ -1425,6 +2099,8 @@ pub fn observe_balance_sample(
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
             non_upright,
+            carried_fraction: support_use.carried_fraction(),
+            over_assist_fraction: support_use.over_assist_fraction(),
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -1432,14 +2108,30 @@ pub fn observe_balance_sample(
             )
         })
     };
-    if holding_bursts >= criterion.hold_bursts() {
+    // The adaptive assist does not end an attempt at `hold_s`: it ends on a fall, on a lost
+    // stance, or at the cap (a success when the robot stood for most of it).
+    let adaptive = criterion.is_adaptive();
+    if !adaptive && holding_bursts >= criterion.hold_bursts() {
         return Ok(finish(BalanceAttemptOutcome::Success));
     }
     if fall_bursts > 0 && fall_bursts >= criterion.fall_confirm_bursts() {
         return Ok(finish(BalanceAttemptOutcome::Fell));
     }
+    if adaptive
+        && f64::from(off_stance_bursts) * criterion.burst_period_s
+            > criterion.stance_grace_s + 1.0e-9
+    {
+        return Ok(finish(BalanceAttemptOutcome::LostStance));
+    }
     if bursts >= criterion.attempt_burst_cap() {
-        return Ok(finish(BalanceAttemptOutcome::Truncated));
+        // The adaptive cap is a success only for an attempt that mostly stood.
+        let stood = f64::from(upright_bursts) / f64::from(bursts.max(1))
+            >= criterion.standing_fraction_for_success - 1.0e-9;
+        return Ok(finish(if adaptive && stood {
+            BalanceAttemptOutcome::Success
+        } else {
+            BalanceAttemptOutcome::Truncated
+        }));
     }
     Ok(BalanceAttemptStep::Continue(OpenBalanceAttempt {
         bursts,
@@ -1459,6 +2151,8 @@ pub fn observe_balance_sample(
         fall_bursts,
         reset_height_m,
         non_upright,
+        support_use,
+        off_stance_bursts,
     }))
 }
 
@@ -1483,6 +2177,9 @@ fn balance_time_fields(
         probe: false,
         train_attempts_before: None,
         non_upright: NonUprightCounts::default(),
+        carried_fraction: 0.0,
+        over_assist_fraction: 0.0,
+        adaptive: None,
     }
 }
 
@@ -1610,6 +2307,8 @@ pub enum BalanceRewardPolicy {
     Affect,
     /// [`BalanceAssistReward`] (mode name `assist`).
     Assist,
+    /// [`BalanceContributionReward`] (mode name `contribution`).
+    Contribution,
 }
 
 impl BalanceRewardPolicy {
@@ -1618,6 +2317,7 @@ impl BalanceRewardPolicy {
         match mode {
             "affect" => Some(Self::Affect),
             "assist" => Some(Self::Assist),
+            "contribution" => Some(Self::Contribution),
             _ => None,
         }
     }
@@ -1627,6 +2327,7 @@ impl BalanceRewardPolicy {
         match self {
             Self::Affect => BalanceAffectReward::policy_id(),
             Self::Assist => BalanceAssistReward::policy_id(),
+            Self::Contribution => BalanceContributionReward::policy_id(),
         }
     }
 }
@@ -1715,10 +2416,93 @@ impl BalanceAssistReward {
     }
 }
 
+/// Reward for what the robot does itself, not for being held. Per counted, non-settling burst,
+/// with `a` the sample's `support_level` (the assist level):
+/// Death or fall -> Pain 1.0; an assist increase since the previous burst (`assist_rise`) ->
+/// Pain `min(1, rise / catch_threshold) * 0.5` (a catch, the rise above the threshold, pays the
+/// full 0.5; a smaller rise pays a share of it); need below the previous burst's ->
+/// Pleasure `min(1, ASSIST_FALL_GAIN * drop) * (1 - a)`; an attempt that ends in Success ->
+/// Pleasure `1 - a_slow` (`assist_slow`, else `a`); an attempt that ends in `LostStance` ->
+/// Pain 0.5. Pleasure (recovery and the cap) is paid only on bursts where the robot is standing
+/// ([`sample_is_upright`]). Being upright, or being held, pays nothing by itself.
+/// Works with the ladder, where `a` is the constant level. Pleasure below
+/// `ASSIST_MIN_PLEASURE` is dropped. Settling bursts emit nothing but seed the previous need.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BalanceContributionReward {
+    previous_need: Option<f64>,
+}
+
+impl BalanceContributionReward {
+    /// Policy at the start of an attempt.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Stable identity recorded with the run.
+    pub fn policy_id() -> &'static str {
+        "reward.balance-contribution.v2"
+    }
+
+    /// Signals for one burst. `outcome` is the attempt outcome when this burst ended it.
+    pub fn on_sample(
+        &mut self,
+        burst_sample: &BalanceSample,
+        outcome: Option<&BalanceAttemptOutcome>,
+        criterion: &BalanceFeetCriterion,
+    ) -> Vec<RewardSignal> {
+        let need = burst_sample
+            .support_need
+            .unwrap_or_else(|| burst_sample.tilt_deg / criterion.max_tilt_deg)
+            .clamp(0.0, 1.0);
+        let previous = self.previous_need.unwrap_or(need);
+        self.previous_need = Some(need);
+        if burst_sample.settling {
+            return Vec::new();
+        }
+        let signal = |channel, magnitude: f64| RewardSignal { channel, magnitude };
+        if matches!(
+            outcome,
+            Some(BalanceAttemptOutcome::Death | BalanceAttemptOutcome::Fell)
+        ) {
+            return vec![signal(AffectChannel::Pain, 1.0)];
+        }
+        if outcome == Some(&BalanceAttemptOutcome::LostStance) {
+            return vec![signal(AffectChannel::Pain, 0.5)];
+        }
+        let standing = sample_is_upright(burst_sample, criterion);
+        let a = burst_sample.support_level.unwrap_or(0.0).clamp(0.0, 1.0);
+        let mut signals = Vec::new();
+        let rise = burst_sample.assist_rise.unwrap_or(0.0);
+        if rise > 1.0e-9 {
+            let share = if criterion.catch_threshold > 1.0e-9 {
+                (rise / criterion.catch_threshold).min(1.0)
+            } else {
+                1.0
+            };
+            signals.push(signal(AffectChannel::Pain, share * 0.5));
+        }
+        let mut pleasure = 0.0_f64;
+        if need < previous {
+            pleasure = (ASSIST_FALL_GAIN * (previous - need)).min(1.0) * (1.0 - a);
+        }
+        if outcome == Some(&BalanceAttemptOutcome::Success) {
+            let slow = burst_sample.assist_slow.unwrap_or(a).clamp(0.0, 1.0);
+            pleasure = 1.0 - slow;
+        }
+        // Recovery and the cap pay only while the robot stands: a body held up off its feet or
+        // leaning on the support earns nothing.
+        if standing && pleasure >= ASSIST_MIN_PLEASURE {
+            signals.push(signal(AffectChannel::Pleasure, pleasure));
+        }
+        signals
+    }
+}
+
 /// The reward policy instance of one attempt.
 enum AttemptReward {
     Affect(BalanceAffectReward),
     Assist(BalanceAssistReward),
+    Contribution(BalanceContributionReward),
 }
 
 impl AttemptReward {
@@ -1728,6 +2512,9 @@ impl AttemptReward {
                 Self::Affect(BalanceAffectReward::for_attempt(support_level))
             }
             BalanceRewardPolicy::Assist => Self::Assist(BalanceAssistReward::new()),
+            BalanceRewardPolicy::Contribution => {
+                Self::Contribution(BalanceContributionReward::new())
+            }
         }
     }
 
@@ -1740,6 +2527,7 @@ impl AttemptReward {
         match self {
             Self::Affect(r) => r.on_sample(sample, outcome, criterion),
             Self::Assist(r) => r.on_sample(sample, outcome, criterion),
+            Self::Contribution(r) => r.on_sample(sample, outcome, criterion),
         }
     }
 }
@@ -1791,6 +2579,73 @@ pub struct BalancePhaseReport {
     /// Every probe ran with plasticity frozen. Absent when no probe ran.
     #[serde(default)]
     pub probe_plasticity_frozen: Option<bool>,
+    /// Every probe: attempt index, the support level in force, balanced time and outcome.
+    #[serde(default)]
+    pub probes: Vec<ProbeResult>,
+    /// Support use per scheduled support level, keyed by the level formatted `{:.2}`. Filled by
+    /// [`BalancePhaseReport::assess_over_support`].
+    #[serde(default)]
+    pub support_use_by_support: BTreeMap<String, SupportUseStats>,
+    /// Levels (keys of `support_use_by_support`) flagged `over_support`, ascending.
+    #[serde(default)]
+    pub over_support_levels: Vec<String>,
+    /// Adaptive assist: level, slow average and cone sampled at 1 Hz of scored time across the
+    /// phase (at most [`ASSIST_TIMELINE_MAX_POINTS`]). Empty in ladder mode.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assist_timeline: Vec<AssistPoint>,
+    /// Goal deviation against applied assistance across a train phase. Absent for a brain-only test phase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deviation_assist: Option<DeviationAssist>,
+    /// Adaptive assist state at the end of the phase, to resume a later train run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptive_state_next: Option<AdaptiveAssistState>,
+}
+
+/// Result of one unassisted probe attempt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProbeResult {
+    /// 1-based position of the probe among all attempts of the phase.
+    pub attempt_index: u32,
+    /// Training attempts completed when the probe ran.
+    pub train_attempts_before: u32,
+    /// Scheduled support level of the training attempt just before the probe.
+    pub support_level: f64,
+    /// Longest continuous balanced stretch of the probe, seconds.
+    pub balanced_s: f64,
+    /// How the probe ended.
+    pub outcome: BalanceAttemptOutcome,
+}
+
+/// Why a support level was flagged `over_support`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OverSupportCause {
+    /// Mean carried fraction above the flag fraction.
+    Carried,
+    /// Mean over-assist fraction above the flag fraction.
+    OverAssist,
+    /// Training succeeded at the level but unassisted probes balanced under `hold_s` on median.
+    ProbeDependence,
+}
+
+/// Support use at one scheduled support level.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SupportUseStats {
+    /// Training attempts at the level.
+    pub attempts: u32,
+    /// Mean per-attempt `carried_fraction`.
+    pub mean_carried_fraction: f64,
+    /// Mean per-attempt `over_assist_fraction`.
+    pub mean_over_assist_fraction: f64,
+    /// The support is overdoing it at this level.
+    pub over_support: bool,
+    /// Why `over_support` is set (empty when it is not).
+    #[serde(default)]
+    pub over_support_causes: Vec<OverSupportCause>,
+    /// Median balanced seconds of the unassisted probes judged against this level (during it,
+    /// else the nearest after). Absent when none applies.
+    #[serde(default)]
+    pub probe_median_balanced_s: Option<f64>,
 }
 
 /// How a test phase ran: the brain alone, with nothing from the Trainer in the loop.
@@ -1876,6 +2731,21 @@ fn support_key(level: f64) -> String {
     format!("{level:.2}")
 }
 
+/// Summary key of a scored attempt: its support level (ladder), or its 1-based position among
+/// the scored attempts when the phase ran the adaptive assist, where the level keeps moving.
+fn group_key(adaptive: bool, index: usize, level: f64) -> String {
+    if adaptive {
+        format!("attempt_{:04}", index + 1)
+    } else {
+        support_key(level)
+    }
+}
+
+/// Every scored attempt carries adaptive numbers.
+fn phase_is_adaptive(scored: &[BalanceAttemptRecord]) -> bool {
+    !scored.is_empty() && scored.iter().all(|a| a.adaptive.is_some())
+}
+
 impl BalancePhaseReport {
     /// Summarize finished attempts with default support_min (0.0) and graduation rate (0.66).
     pub fn from_attempts(attempts: Vec<BalanceAttemptRecord>) -> Result<Self, TrainerError> {
@@ -1897,6 +2767,25 @@ impl BalancePhaseReport {
             ));
         }
         let probe_attempts = (all.len() - attempts.len()) as u32;
+        let probes: Vec<ProbeResult> = all
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.probe)
+            .map(|(i, a)| {
+                let before = a.train_attempts_before.unwrap_or(0);
+                let level = before
+                    .checked_sub(1)
+                    .and_then(|k| attempts.get(k as usize))
+                    .map_or(a.support_level, |t| t.support_level);
+                ProbeResult {
+                    attempt_index: i as u32 + 1,
+                    train_attempts_before: before,
+                    support_level: level,
+                    balanced_s: a.balanced_s,
+                    outcome: a.outcome,
+                }
+            })
+            .collect();
         let count = attempts.len() as f64;
         let is_success = |a: &BalanceAttemptRecord| a.outcome == BalanceAttemptOutcome::Success;
         let successes: Vec<u32> = attempts
@@ -1933,9 +2822,12 @@ impl BalancePhaseReport {
         };
         let mean_upright_fraction =
             attempts.iter().map(|a| a.upright_fraction).sum::<f64>() / count;
+        let adaptive = phase_is_adaptive(&attempts);
         let mut tally: BTreeMap<String, (u32, u32)> = BTreeMap::new();
-        for attempt in &attempts {
-            let entry = tally.entry(support_key(attempt.support_level)).or_default();
+        for (i, attempt) in attempts.iter().enumerate() {
+            let entry = tally
+                .entry(group_key(adaptive, i, attempt.support_level))
+                .or_default();
             entry.0 += 1;
             entry.1 += u32::from(is_success(attempt));
         }
@@ -1947,9 +2839,9 @@ impl BalancePhaseReport {
             success_rate_at_min_support.is_some_and(|rate| rate >= support.graduate_success_rate);
         let balanced = BalancedTimeStats::from_attempts(&attempts);
         let mut by_level: BTreeMap<String, Vec<&BalanceAttemptRecord>> = BTreeMap::new();
-        for attempt in &attempts {
+        for (i, attempt) in attempts.iter().enumerate() {
             by_level
-                .entry(support_key(attempt.support_level))
+                .entry(group_key(adaptive, i, attempt.support_level))
                 .or_default()
                 .push(attempt);
         }
@@ -1974,7 +2866,101 @@ impl BalancePhaseReport {
             brain_only: None,
             probe_attempts,
             probe_plasticity_frozen: None,
+            probes,
+            support_use_by_support: BTreeMap::new(),
+            over_support_levels: Vec::new(),
+            assist_timeline: Vec::new(),
+            deviation_assist: None,
+            adaptive_state_next: None,
         })
+    }
+
+    /// Fill `support_use_by_support` and `over_support_levels` from the criterion's thresholds.
+    /// A level is flagged when its mean carried or over-assist fraction exceeds
+    /// `over_support_flag_fraction`, or when its train success rate reaches
+    /// `graduate_success_rate` while the unassisted probes judged against it (those run during
+    /// the level, else the nearest after) balance under `hold_s` on median. Flags only; the
+    /// schedule and the success rules are untouched.
+    pub fn assess_over_support(&mut self, criterion: &BalanceFeetCriterion) {
+        let train: Vec<&BalanceAttemptRecord> = self.attempts.iter().filter(|a| !a.probe).collect();
+        let adaptive = !train.is_empty() && train.iter().all(|a| a.adaptive.is_some());
+        let mut by_level: BTreeMap<String, Vec<&BalanceAttemptRecord>> = BTreeMap::new();
+        // Last 1-based train index per level, for the "nearest probe after" rule.
+        let mut last_index: BTreeMap<String, u32> = BTreeMap::new();
+        for (i, attempt) in train.iter().enumerate() {
+            let key = group_key(adaptive, i, attempt.support_level);
+            by_level.entry(key.clone()).or_default().push(attempt);
+            last_index.insert(key, i as u32 + 1);
+        }
+        let threshold = criterion.over_support_flag_fraction;
+        let mut stats = BTreeMap::new();
+        let mut flagged = Vec::new();
+        for (key, group) in by_level {
+            let n = group.len() as f64;
+            let mean_carried = group.iter().map(|a| a.carried_fraction).sum::<f64>() / n;
+            let mean_over = group.iter().map(|a| a.over_assist_fraction).sum::<f64>() / n;
+            let mut causes = Vec::new();
+            if mean_carried > threshold {
+                causes.push(OverSupportCause::Carried);
+            }
+            if mean_over > threshold {
+                causes.push(OverSupportCause::OverAssist);
+            }
+            let level = group[0].support_level;
+            let successes = group
+                .iter()
+                .filter(|a| a.outcome == BalanceAttemptOutcome::Success)
+                .count() as f64;
+            let probe_median = if level > 1.0e-9 {
+                let last = last_index.get(&key).copied().unwrap_or(0);
+                let during: Vec<f64> = self
+                    .probes
+                    .iter()
+                    .filter(|p| {
+                        if adaptive {
+                            p.train_attempts_before == last
+                        } else {
+                            support_key(p.support_level) == key
+                        }
+                    })
+                    .map(|p| p.balanced_s)
+                    .collect();
+                let chosen = if during.is_empty() {
+                    self.probes
+                        .iter()
+                        .find(|p| p.train_attempts_before > last)
+                        .map(|p| vec![p.balanced_s])
+                        .unwrap_or_default()
+                } else {
+                    during
+                };
+                (!chosen.is_empty()).then(|| median_f64(&chosen))
+            } else {
+                None
+            };
+            if successes / n >= criterion.graduate_success_rate
+                && probe_median.is_some_and(|m| m < criterion.hold_s)
+            {
+                causes.push(OverSupportCause::ProbeDependence);
+            }
+            let over_support = !causes.is_empty();
+            if over_support {
+                flagged.push(key.clone());
+            }
+            stats.insert(
+                key,
+                SupportUseStats {
+                    attempts: group.len() as u32,
+                    mean_carried_fraction: mean_carried,
+                    mean_over_assist_fraction: mean_over,
+                    over_support,
+                    over_support_causes: causes,
+                    probe_median_balanced_s: probe_median,
+                },
+            );
+        }
+        self.support_use_by_support = stats;
+        self.over_support_levels = flagged;
     }
 }
 
@@ -2160,8 +3146,15 @@ pub trait BalanceController {
         deadband_rad: f64,
     ) -> Result<(), TrainerError>;
 
-    /// `update_body_spring`: change the level of a running spring.
-    fn update_body_spring(&mut self, body: &str, level: f64) -> Result<(), TrainerError>;
+    /// `update_body_spring`: change the level of a running spring and, when `deadband_rad` is
+    /// `Some`, its tilt deadband and, when `gravity_comp` is `Some`, its weight-support fraction.
+    fn update_body_spring(
+        &mut self,
+        body: &str,
+        level: f64,
+        deadband_rad: Option<f64>,
+        gravity_comp: Option<f64>,
+    ) -> Result<(), TrainerError>;
 
     /// `clear_body_spring`.
     fn clear_body_spring(&mut self, body: &str) -> Result<(), TrainerError>;
@@ -2202,6 +3195,12 @@ pub struct BalancePhaseRun<'a> {
     pub plasticity: Option<&'a mut dyn PlasticityControl>,
     /// Which policy builds the affect signals when `deliver_reward` is set.
     pub reward_policy: BalanceRewardPolicy,
+    /// Run data sink: the `steps` and `attempts` tables and the event log. `None` keeps
+    /// today's behavior exactly.
+    pub data: Option<&'a mut dyn RunDataSink>,
+    /// Applies the criterion's scheduled events. Required when the criterion has any; a test
+    /// phase refuses events.
+    pub apply_event: Option<ApplyEvent<'a>>,
 }
 
 /// Per-phase state: model facts and the gains sized once from the first reset.
@@ -2236,6 +3235,17 @@ pub fn run_balance_phase(
         )));
     }
     let brain_only = run.phase == "test";
+    if brain_only && !run.criterion.scheduled_events.is_empty() {
+        return Err(TrainerError::Config(
+            "the test phase measures the brain only and takes no scheduled events".to_string(),
+        ));
+    }
+    if !run.criterion.scheduled_events.is_empty() && run.apply_event.is_none() {
+        return Err(TrainerError::Config(
+            "the criterion has scheduled events but no way to apply them (no apply_event callback)"
+                .to_string(),
+        ));
+    }
     if brain_only {
         if run.deliver_reward.is_some() {
             return Err(TrainerError::Config(
@@ -2261,11 +3271,20 @@ pub fn run_balance_phase(
             ));
         }
     }
+    // The adaptive assist runs only in a train phase that follows the schedule. Anywhere else
+    // (test phase, fixed level) the attempt keeps the ladder's rules and ends at `hold_s`.
+    let adaptive_on =
+        run.criterion.is_adaptive() && !brain_only && !matches!(mode, SupportMode::Fixed(_));
     let mut test_criterion;
-    let criterion: &BalanceFeetCriterion = if brain_only && run.criterion.perturb_interval_s != 0.0
+    let criterion: &BalanceFeetCriterion = if (brain_only
+        && run.criterion.perturb_interval_s != 0.0)
+        || (run.criterion.is_adaptive() && !adaptive_on)
     {
         test_criterion = run.criterion.clone();
-        test_criterion.perturb_interval_s = 0.0;
+        if brain_only {
+            test_criterion.perturb_interval_s = 0.0;
+        }
+        test_criterion.support_mode = AssistMode::Ladder;
         &test_criterion
     } else {
         run.criterion
@@ -2308,6 +3327,7 @@ pub fn run_balance_phase(
         criterion,
         &support,
         mode,
+        adaptive_on,
         conditions,
         controller,
         present_goal,
@@ -2342,6 +3362,7 @@ fn run_phase_attempts(
     criterion: &BalanceFeetCriterion,
     support: &SupportConfig,
     mode: SupportMode,
+    adaptive_on: bool,
     conditions: Option<BrainOnlyTest>,
     controller: &mut dyn BalanceController,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
@@ -2354,8 +3375,23 @@ fn run_phase_attempts(
     let mut session = BalanceSession { info, sizing: None };
     let mut schedule = match mode {
         SupportMode::Resume(level) => SupportSchedule::resume(*support, level),
+        SupportMode::ResumeAdaptive(state) => SupportSchedule::resume(*support, state.a),
         _ => SupportSchedule::new(*support),
     };
+    let mut adaptive_run = adaptive_on.then(|| {
+        AdaptiveRun::new(match mode {
+            SupportMode::Resume(level) => AdaptiveAssist::resume(
+                criterion,
+                AdaptiveAssistState {
+                    a: level,
+                    a_slow: level,
+                },
+            ),
+            SupportMode::ResumeAdaptive(state) => AdaptiveAssist::resume(criterion, state),
+            _ => AdaptiveAssist::start(criterion),
+        })
+    });
+    let mut dev_assist = (!brain_only).then(DeviationAssistRun::default);
     let probe_every = if brain_only { 0 } else { criterion.probe_every };
     let planned_probes = if probe_every == 0 {
         0
@@ -2367,19 +3403,27 @@ fn run_phase_attempts(
     // 0 and no reward below, learning frozen around it.
     let mut probe_criterion = criterion.clone();
     probe_criterion.perturb_interval_s = 0.0;
+    probe_criterion.support_mode = AssistMode::Ladder;
+    probe_criterion.scheduled_events.clear();
     let mut attempts = Vec::with_capacity(samples_total as usize);
     let mut train_done: u32 = 0;
     let mut probes_run: u32 = 0;
     let mut probes_frozen = true;
+    let mut steps_table = StepsTable { actuators: None };
+    if let Some(sink) = run.data.as_deref_mut() {
+        sink.declare_table(&attempts_table_spec());
+        sink.event(EventTime::default(), "phase_start", run.phase);
+    }
     for seed in run.seeds {
         if cancel.is_cancelled() {
             return Err(TrainerError::Cancelled(
                 "balance-on-feet run cancelled".to_string(),
             ));
         }
-        let level = match mode {
-            SupportMode::Fixed(level) => level,
-            SupportMode::Schedule | SupportMode::Resume(_) => schedule.current_level(),
+        let level = match (&adaptive_run, mode) {
+            (Some(adaptive), _) => adaptive.assist.level(),
+            (None, SupportMode::Fixed(level)) => level,
+            (None, _) => schedule.current_level(),
         };
         let record = run_balance_attempt(
             *seed,
@@ -2391,6 +3435,16 @@ fn run_phase_attempts(
             present_goal,
             &mut run.deliver_reward,
             run.reward_policy,
+            adaptive_run.as_mut(),
+            dev_assist.as_mut(),
+            AttemptHooks {
+                data: &mut run.data,
+                steps: &mut steps_table,
+                apply_event: &mut run.apply_event,
+                phase: run.phase,
+                attempt_index: attempts.len(),
+                probe: false,
+            },
             cancel,
         )?;
         let stand = AttemptStand {
@@ -2400,8 +3454,15 @@ fn run_phase_attempts(
             seed: record.seed,
             probe: false,
             train_attempts_before: None,
+            adaptive: record.adaptive,
         };
         schedule.record_attempt(record.outcome, record.balanced_s);
+        if let Some(sink) = run.data.as_deref_mut() {
+            sink.row(
+                ATTEMPTS_TABLE,
+                &attempt_row(run.phase, attempts.len(), &record),
+            );
+        }
         attempts.push(record);
         train_done += 1;
         events.emit(progress_event(
@@ -2434,6 +3495,16 @@ fn run_phase_attempts(
             present_goal,
             &mut no_reward,
             run.reward_policy,
+            None,
+            None,
+            AttemptHooks {
+                data: &mut run.data,
+                steps: &mut steps_table,
+                apply_event: &mut None,
+                phase: run.phase,
+                attempt_index: attempts.len(),
+                probe: true,
+            },
             cancel,
         );
         if frozen {
@@ -2456,7 +3527,14 @@ fn run_phase_attempts(
             seed: record.seed,
             probe: true,
             train_attempts_before: Some(train_done),
+            adaptive: None,
         };
+        if let Some(sink) = run.data.as_deref_mut() {
+            sink.row(
+                ATTEMPTS_TABLE,
+                &attempt_row(run.phase, attempts.len(), &record),
+            );
+        }
         attempts.push(record);
         probes_run += 1;
         events.emit(progress_event(
@@ -2467,7 +3545,18 @@ fn run_phase_attempts(
             stand,
         ));
     }
+    if let Some(sink) = run.data.as_deref_mut() {
+        sink.event(
+            EventTime {
+                episode: Some(attempts.len() as u64),
+                ..EventTime::default()
+            },
+            "phase_end",
+            run.phase,
+        );
+    }
     let mut report = BalancePhaseReport::from_attempts_with(attempts, support)?;
+    report.assess_over_support(criterion);
     report.probe_plasticity_frozen = (probes_run > 0).then_some(probes_frozen);
     // A brain-only test applies no spring (zero gains), so there are no sized gains to report.
     report.spring_gains = if brain_only {
@@ -2475,9 +3564,14 @@ fn run_phase_attempts(
     } else {
         session.sizing.map(|(_, gains)| gains)
     };
-    if !matches!(mode, SupportMode::Fixed(_)) {
+    if let Some(adaptive) = adaptive_run {
+        report.support_level_next = Some(adaptive.assist.level());
+        report.adaptive_state_next = Some(adaptive.assist.state());
+        report.assist_timeline = adaptive.timeline;
+    } else if !matches!(mode, SupportMode::Fixed(_)) {
         report.support_level_next = Some(schedule.current_level());
     }
+    report.deviation_assist = dev_assist.and_then(DeviationAssistRun::finish);
     report.brain_only = conditions;
     events.emit(RunEvent::new(
         run.run_id.clone(),
@@ -2525,6 +3619,7 @@ fn outcome_name(outcome: BalanceAttemptOutcome) -> &'static str {
         BalanceAttemptOutcome::Interrupted => "interrupted",
         BalanceAttemptOutcome::Truncated => "truncated",
         BalanceAttemptOutcome::Fell => "fell",
+        BalanceAttemptOutcome::LostStance => "lost_stance",
     }
 }
 
@@ -2570,6 +3665,7 @@ fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
         } else {
             Vec::new()
         },
+        actuators: criterion.record_actuators,
     }
 }
 
@@ -2685,6 +3781,291 @@ fn applied_settle_s(criterion: &BalanceFeetCriterion, brain_only: bool) -> f64 {
     }
 }
 
+/// Adaptive assist state of one phase: the assist itself (kept across attempts), the 1 Hz
+/// timeline and the scored time that places its points.
+struct AdaptiveRun {
+    assist: AdaptiveAssist,
+    timeline: Vec<AssistPoint>,
+    phase_t_s: f64,
+    next_point_s: f64,
+}
+
+impl AdaptiveRun {
+    fn new(assist: AdaptiveAssist) -> Self {
+        Self {
+            assist,
+            timeline: Vec::new(),
+            phase_t_s: 0.0,
+            next_point_s: 0.0,
+        }
+    }
+
+    /// Advance the phase clock by `seconds` of scored time and keep a point once per second.
+    fn advance(&mut self, seconds: f64, criterion: &BalanceFeetCriterion) {
+        self.phase_t_s += seconds;
+        if self.timeline.len() < ASSIST_TIMELINE_MAX_POINTS
+            && self.phase_t_s + 1.0e-9 >= self.next_point_s
+        {
+            self.timeline.push(AssistPoint {
+                t_s: self.phase_t_s,
+                a: self.assist.level(),
+                a_slow: self.assist.slow(),
+                cone_deg: self.assist.cone_deg(criterion),
+            });
+            self.next_point_s = self.phase_t_s.floor() + 1.0;
+        }
+    }
+}
+
+/// Running numbers of one adaptive attempt.
+#[derive(Default)]
+struct AdaptiveAttemptTally {
+    sum_a: f64,
+    bursts: f64,
+    min_a: Option<f64>,
+    catches: u32,
+    feet_down_bursts: f64,
+    recenters: u32,
+}
+
+impl AdaptiveAttemptTally {
+    fn add(&mut self, level: f64, bursts: u32) {
+        self.sum_a += level * f64::from(bursts);
+        self.bursts += f64::from(bursts);
+        self.min_a = Some(self.min_a.map_or(level, |m| m.min(level)));
+    }
+
+    fn stats(
+        &self,
+        end_cone_deg: f64,
+        burst_period_s: f64,
+        standing_fraction: f64,
+        lost_stance: bool,
+    ) -> AdaptiveAttemptStats {
+        let seconds = self.bursts * burst_period_s;
+        AdaptiveAttemptStats {
+            mean_a: if self.bursts > 0.0 {
+                self.sum_a / self.bursts
+            } else {
+                0.0
+            },
+            min_a: self.min_a.unwrap_or(0.0),
+            end_cone_deg,
+            catches: self.catches,
+            catches_per_min: if seconds > 0.0 {
+                f64::from(self.catches) / (seconds / 60.0)
+            } else {
+                0.0
+            },
+            standing_fraction,
+            feet_down_fraction: if self.bursts > 0.0 {
+                self.feet_down_bursts / self.bursts
+            } else {
+                0.0
+            },
+            recenters: self.recenters,
+            lost_stance,
+        }
+    }
+}
+
+/// Name of the per-burst table.
+const STEPS_TABLE: &str = "steps";
+/// Name of the per-attempt table.
+const ATTEMPTS_TABLE: &str = "attempts";
+
+/// Column names of the per-burst table that depend on the model: filled at the first sample.
+struct StepsTable {
+    actuators: Option<Vec<String>>,
+}
+
+fn contact_column(body: &str) -> String {
+    format!("contact_{}", body.trim())
+}
+
+fn actuator_column(name: &str) -> String {
+    format!("actuator_{name}")
+}
+
+fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> TableSpec {
+    let mut columns = vec![
+        ColumnSpec::unitless("phase", "Phase the burst belongs to."),
+        ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+        ColumnSpec::unitless("probe", "The attempt is an unassisted probe."),
+        ColumnSpec::unitless("seed", "Attempt seed."),
+        ColumnSpec::unitless("seq", "Controller physics-step counter."),
+        ColumnSpec::with_unit("sim_time", "s", "Simulated time."),
+        ColumnSpec::with_unit("tilt", "deg", "Torso tilt from world up."),
+        ColumnSpec::with_unit("height", "m", "Torso height above world z."),
+    ];
+    columns.extend(criterion.contact_bodies.iter().map(|body| {
+        ColumnSpec::unitless(&contact_column(body), "The contact body touches the world.")
+    }));
+    columns.extend([
+        ColumnSpec::unitless(
+            "other_contact_touching",
+            "A body that is not a contact body touches the world.",
+        ),
+        ColumnSpec::unitless(
+            "upright",
+            "Tilt inside the limit and every contact body down.",
+        ),
+        ColumnSpec::unitless("settling", "The settle window is still running."),
+        ColumnSpec::unitless("perturbing", "A perturbation pulse is applied."),
+        ColumnSpec::unitless("terminal", "Latched end cause, when one was latched."),
+        ColumnSpec::unitless("support_level", "Effective support level, 0 to 1."),
+        ColumnSpec::unitless("support_need", "Predicted tilt fraction, 0 to 1."),
+        ColumnSpec::unitless("support_effort", "Spring effort, 0 to 1."),
+        ColumnSpec::with_unit("support_torque", "N*m", "Spring torque norm."),
+        ColumnSpec::with_unit("support_force", "N", "Spring force norm."),
+        ColumnSpec::unitless("assist_slow", "Slow average of the adaptive assist level."),
+        ColumnSpec::unitless(
+            "assist_rise",
+            "Adaptive assist rise over the previous burst.",
+        ),
+    ]);
+    columns.extend(
+        actuators
+            .iter()
+            .map(|name| ColumnSpec::unitless(&actuator_column(name), "Actuator command (ctrl).")),
+    );
+    TableSpec {
+        name: STEPS_TABLE.to_string(),
+        description: "One row per counted burst.".to_string(),
+        columns,
+    }
+}
+
+fn attempts_table_spec() -> TableSpec {
+    TableSpec {
+        name: ATTEMPTS_TABLE.to_string(),
+        description: "One row per finished attempt, probes included.".to_string(),
+        columns: vec![
+            ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
+            ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+            ColumnSpec::unitless("probe", "The attempt is an unassisted probe."),
+            ColumnSpec::unitless("seed", "Attempt seed."),
+            ColumnSpec::unitless("outcome", "How the attempt ended."),
+            ColumnSpec::unitless("bursts", "Non-settling bursts observed."),
+            ColumnSpec::with_unit("final_tilt", "deg", "Torso tilt at the terminal burst."),
+            ColumnSpec::unitless("support_level", "Scheduled support level."),
+            ColumnSpec::unitless("upright_fraction", "Share of bursts that were upright."),
+            ColumnSpec::unitless("perturbations", "Perturbation pulses seen."),
+            ColumnSpec::unitless("balanced_bursts", "Longest run of upright bursts."),
+            ColumnSpec::with_unit("balanced_time", "s", "Longest upright run."),
+            ColumnSpec::with_unit(
+                "time_to_first_violation",
+                "s",
+                "Time before the first non-upright burst, when there was one.",
+            ),
+            ColumnSpec::unitless("carried_fraction", "Share of bursts the support carried."),
+            ColumnSpec::unitless(
+                "over_assist_fraction",
+                "Share of bursts with support above the predicted need.",
+            ),
+        ],
+    }
+}
+
+fn attempt_row(phase: &str, index: usize, record: &BalanceAttemptRecord) -> Vec<RunDataValue> {
+    vec![
+        RunDataValue::text(phase),
+        RunDataValue::count(index as u64),
+        RunDataValue::Bool(record.probe),
+        RunDataValue::count(record.seed),
+        RunDataValue::text(outcome_name(record.outcome)),
+        RunDataValue::count(u64::from(record.bursts)),
+        RunDataValue::Float(record.final_tilt_deg),
+        RunDataValue::Float(record.support_level),
+        RunDataValue::Float(record.upright_fraction),
+        RunDataValue::count(u64::from(record.perturbations)),
+        RunDataValue::count(u64::from(record.balanced_bursts)),
+        RunDataValue::Float(record.balanced_s),
+        RunDataValue::opt_float(record.time_to_first_violation_s),
+        RunDataValue::Float(record.carried_fraction),
+        RunDataValue::Float(record.over_assist_fraction),
+    ]
+}
+
+/// What one attempt writes to, and the callback it applies events through.
+struct AttemptHooks<'r, 'a> {
+    data: &'r mut Option<&'a mut dyn RunDataSink>,
+    steps: &'r mut StepsTable,
+    apply_event: &'r mut Option<ApplyEvent<'a>>,
+    phase: &'r str,
+    attempt_index: usize,
+    probe: bool,
+}
+
+impl AttemptHooks<'_, '_> {
+    fn marker(&mut self, sim_time_s: f64, kind: &str, label: &str) {
+        let at = EventTime {
+            sim_time_s: Some(sim_time_s),
+            step: None,
+            episode: Some(self.attempt_index as u64),
+        };
+        if let Some(sink) = self.data.as_deref_mut() {
+            sink.event(at, kind, label);
+        }
+    }
+
+    fn sample(
+        &mut self,
+        sample: &BalanceSample,
+        sim_time_s: f64,
+        criterion: &BalanceFeetCriterion,
+    ) {
+        let Some(sink) = self.data.as_deref_mut() else {
+            return;
+        };
+        let actuators = self.steps.actuators.get_or_insert_with(|| {
+            let names: Vec<String> = sample.actuators.keys().cloned().collect();
+            sink.declare_table(&steps_table_spec(criterion, &names));
+            names
+        });
+        let mut row = vec![
+            RunDataValue::text(self.phase),
+            RunDataValue::count(self.attempt_index as u64),
+            RunDataValue::Bool(self.probe),
+            RunDataValue::count(sample.seed),
+            RunDataValue::count(sample.seq),
+            RunDataValue::Float(sim_time_s),
+            RunDataValue::Float(sample.tilt_deg),
+            RunDataValue::opt_float(sample.torso_height_m),
+        ];
+        row.extend((0..criterion.contact_bodies.len()).map(|i| {
+            sample
+                .contacts
+                .get(i)
+                .map_or(RunDataValue::Null, |c| RunDataValue::Bool(*c))
+        }));
+        row.extend([
+            RunDataValue::Bool(sample.other_contact_touching),
+            RunDataValue::Bool(sample_is_upright(sample, criterion)),
+            RunDataValue::Bool(sample.settling),
+            RunDataValue::Bool(sample.perturbing),
+            sample
+                .terminal
+                .as_ref()
+                .map_or(RunDataValue::Null, |t| RunDataValue::Text(name_of(t))),
+            RunDataValue::opt_float(sample.support_level),
+            RunDataValue::opt_float(sample.support_need),
+            RunDataValue::opt_float(sample.support_effort),
+            RunDataValue::opt_float(sample.support_torque_nm),
+            RunDataValue::opt_float(sample.support_force_n),
+            RunDataValue::opt_float(sample.assist_slow),
+            RunDataValue::opt_float(sample.assist_rise),
+        ]);
+        row.extend(actuators.iter().map(|name| {
+            sample
+                .actuators
+                .get(name)
+                .map_or(RunDataValue::Null, |v| RunDataValue::Float(*v))
+        }));
+        sink.row(STEPS_TABLE, &row);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_balance_attempt(
     seed: u64,
@@ -2696,6 +4077,9 @@ fn run_balance_attempt(
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     deliver_reward: &mut Option<DeliverReward<'_>>,
     reward_policy: BalanceRewardPolicy,
+    mut adaptive: Option<&mut AdaptiveRun>,
+    mut dev_assist: Option<&mut DeviationAssistRun>,
+    mut hooks: AttemptHooks<'_, '_>,
     cancel: &CancelToken,
 ) -> Result<BalanceAttemptRecord, TrainerError> {
     let torso = criterion.torso_body.trim().to_string();
@@ -2703,6 +4087,7 @@ fn run_balance_attempt(
     controller.reset_episode(keyframe)?;
     let request = measure_request(criterion);
     let first = measure_checked(controller, &request)?;
+    hooks.marker(first.sim_time_s, "attempt_start", &format!("seed {seed}"));
     let (sizing, gains) = match session.sizing {
         Some(sized) => sized,
         None => {
@@ -2764,10 +4149,27 @@ fn run_balance_attempt(
         criterion.perturb_torque_nm,
     );
     let mut spring_level = settle_level;
+    let mut spring_cone_deg = criterion.support_deadband_deg;
+    let mut tally = AdaptiveAttemptTally::default();
+    // Adaptive only: the spring starts with the criterion's weight support; `recentering` drops
+    // the cone to `cone_min_deg` after a lean that outlasted `lean_grace_s`.
+    let mut spring_gravity_on = true;
+    let mut recentering = false;
+    let mut lean_s = 0.0_f64;
     // Settle is only the opening window. A death homes the body and rewinds sim
     // time to the keyframe, so a later reading must not be labeled as settle.
     let mut past_settle = settle_s <= 0.0;
-    let result = loop {
+    // Scheduled events fire in time order, once per attempt; a brain-only attempt has none.
+    let mut due_events: Vec<&ScheduledEvent> = if brain_only {
+        Vec::new()
+    } else {
+        criterion.scheduled_events.iter().collect()
+    };
+    due_events.sort_by(|a, b| a.at_s.total_cmp(&b.at_s));
+    let mut next_event = 0usize;
+    let mut was_perturbing = false;
+    let mut last_sim_time_s: f64;
+    let mut result = loop {
         if cancel.is_cancelled() {
             let _ = controller.clear_body_spring(&torso);
             return Err(TrainerError::Cancelled(
@@ -2777,14 +4179,18 @@ fn run_balance_attempt(
         present_goal(features)?;
         let reading = measure_checked(controller, &request)?;
         let elapsed_s = reading.sim_time_s - t0;
+        last_sim_time_s = reading.sim_time_s;
         let settling = !past_settle && elapsed_s + 1.0e-9 < settle_s;
-        if !settling {
+        if !settling && !past_settle {
             past_settle = true;
+            hooks.marker(reading.sim_time_s, "settle_end", "");
         }
         let level_now = if brain_only {
             0.0
         } else if settling {
             1.0
+        } else if let Some(run) = adaptive.as_deref() {
+            run.assist.level()
         } else {
             support_level
         };
@@ -2806,10 +4212,46 @@ fn run_balance_attempt(
             )));
         }
         let other = reading.contacts.get(contact_count);
+        let feet_down = reading
+            .contacts
+            .iter()
+            .take(contact_count)
+            .all(|set| set.touching);
         let mut perturbing = false;
         if reading.terminal.is_none() {
-            if (spring_level - level_now).abs() > 1.0e-12 {
-                controller.update_body_spring(&torso, level_now)?;
+            if let Some(run) = adaptive.as_deref() {
+                // Level, cone and weight support are sent only when they changed enough to matter.
+                let cone_now = if settling {
+                    criterion.support_deadband_deg
+                } else if recentering {
+                    criterion.cone_min_deg
+                } else {
+                    run.assist.cone_deg(criterion)
+                };
+                // Weight support only while the feet are loaded: lifting a foot drops it to 0, and
+                // the criterion's fraction comes back once every contact body is down again.
+                let gravity_want = settling || feet_down;
+                let gravity_changed = gravity_want != spring_gravity_on;
+                if (spring_level - level_now).abs() > 0.005
+                    || (spring_cone_deg - cone_now).abs() > 0.1
+                    || gravity_changed
+                {
+                    controller.update_body_spring(
+                        &torso,
+                        level_now,
+                        Some(cone_now.to_radians()),
+                        gravity_changed.then_some(if gravity_want {
+                            criterion.bws_max_fraction
+                        } else {
+                            0.0
+                        }),
+                    )?;
+                    spring_level = level_now;
+                    spring_cone_deg = cone_now;
+                    spring_gravity_on = gravity_want;
+                }
+            } else if (spring_level - level_now).abs() > 1.0e-12 {
+                controller.update_body_spring(&torso, level_now, None, None)?;
                 spring_level = level_now;
             }
             if !settling {
@@ -2821,12 +4263,30 @@ fn run_balance_attempt(
                         [0.0; 3],
                         criterion.perturb_duration_s,
                     )?;
+                    hooks.marker(reading.sim_time_s, "perturb_start", "");
                 }
                 perturbing = perturb.active_at(post_settle_s);
+                while let Some(event) = due_events.get(next_event) {
+                    if event.at_s > post_settle_s + 1.0e-9 {
+                        break;
+                    }
+                    let apply = hooks.apply_event.as_deref_mut().ok_or_else(|| {
+                        TrainerError::Config(
+                            "scheduled events need an apply_event callback".to_string(),
+                        )
+                    })?;
+                    apply(&event.action)?;
+                    hooks.marker(reading.sim_time_s, "scheduled_event", &event.label);
+                    next_event += 1;
+                }
             }
+            if was_perturbing && !perturbing {
+                hooks.marker(reading.sim_time_s, "perturb_end", "");
+            }
+            was_perturbing = perturbing;
         }
         let wrench = reading.springs.get(&torso).copied();
-        let sample = BalanceSample {
+        let mut sample = BalanceSample {
             seq: reading.physics_steps,
             seed,
             tilt_deg: body.tilt_rad.to_degrees(),
@@ -2853,13 +4313,78 @@ fn run_balance_attempt(
             other_contact_bodies: other.map(|set| set.bodies.clone()).unwrap_or_default(),
             torso_height_m: Some(body.com[2]),
             reset_height_m: open.reset_height_m,
+            assist_slow: None,
+            assist_rise: None,
+            actuators: reading.actuators.clone(),
         };
         let step = observe_balance_sample(&open, &sample, criterion, seed)?;
         let (counted, outcome) = match &step {
             BalanceAttemptStep::Continue(next) => (next.counted_burst, None),
             BalanceAttemptStep::Finished(record) => (true, Some(record.outcome)),
         };
+        if let Some(run) = dev_assist.as_deref_mut() {
+            if counted && !settling {
+                let new_bursts = match &step {
+                    BalanceAttemptStep::Continue(next) => next.bursts,
+                    BalanceAttemptStep::Finished(record) => record.bursts,
+                }
+                .saturating_sub(open.bursts)
+                .max(1);
+                let reset_height_m = open
+                    .reset_height_m
+                    .or(sample.reset_height_m)
+                    .or(sample.torso_height_m);
+                run.add(
+                    goal_deviation(&sample, criterion, reset_height_m),
+                    level_now,
+                    new_bursts,
+                    criterion.burst_period_s,
+                );
+            }
+        }
+        if let Some(run) = adaptive.as_deref_mut() {
+            if counted && !settling {
+                let new_bursts = match &step {
+                    BalanceAttemptStep::Continue(next) => next.bursts,
+                    BalanceAttemptStep::Finished(record) => record.bursts,
+                }
+                .saturating_sub(open.bursts)
+                .max(1);
+                let mut rise = 0.0;
+                if matches!(step, BalanceAttemptStep::Continue(_)) && reading.terminal.is_none() {
+                    let predicted =
+                        predicted_tilt_deg(body.tilt_rad, body.ang_vel, criterion.need_lookahead_s);
+                    if recentering {
+                        if predicted <= criterion.cone_min_deg {
+                            recentering = false;
+                            lean_s = 0.0;
+                        }
+                    } else if predicted > run.assist.cone_deg(criterion) {
+                        lean_s += f64::from(new_bursts) * criterion.burst_period_s;
+                        if lean_s > criterion.lean_grace_s + 1.0e-9 {
+                            recentering = true;
+                            lean_s = 0.0;
+                            tally.recenters += 1;
+                        }
+                    } else {
+                        lean_s = 0.0;
+                    }
+                    let moved = run.assist.step(criterion, predicted, new_bursts);
+                    rise = moved.rise;
+                    tally.catches += u32::from(moved.catch);
+                }
+                tally.add(run.assist.level(), new_bursts);
+                if feet_down {
+                    tally.feet_down_bursts += f64::from(new_bursts);
+                }
+                run.advance(f64::from(new_bursts) * criterion.burst_period_s, criterion);
+                sample.support_level = Some(run.assist.level());
+                sample.assist_slow = Some(run.assist.slow());
+                sample.assist_rise = Some(rise);
+            }
+        }
         if counted {
+            hooks.sample(&sample, reading.sim_time_s, criterion);
             if let Some(deliver) = deliver_reward.as_deref_mut() {
                 let signals = affect.on_sample(&sample, outcome.as_ref(), criterion);
                 if !signals.is_empty() {
@@ -2872,6 +4397,18 @@ fn run_balance_attempt(
             BalanceAttemptStep::Finished(record) => break record,
         }
     };
+    if let Some(run) = adaptive.as_deref() {
+        result.adaptive = Some(tally.stats(
+            run.assist.cone_deg(criterion),
+            criterion.burst_period_s,
+            result.upright_fraction,
+            result.outcome == BalanceAttemptOutcome::LostStance,
+        ));
+    }
+    if was_perturbing {
+        hooks.marker(last_sim_time_s, "perturb_end", "");
+    }
+    hooks.marker(last_sim_time_s, "attempt_end", outcome_name(result.outcome));
     // The next reset clears it anyway; a death may already have cleared it.
     let _ = controller.clear_body_spring(&torso);
     Ok(result)
@@ -2922,9 +4459,23 @@ pub fn set_body_spring_request(
     })
 }
 
-/// JSON body of `update_body_spring`.
-pub fn update_body_spring_request(body: &str, level: f64) -> serde_json::Value {
-    serde_json::json!({"action": "update_body_spring", "body": body, "level": level})
+/// JSON body of `update_body_spring`. `deadband_rad` and `gravity_comp` are sent only when
+/// `Some`.
+pub fn update_body_spring_request(
+    body: &str,
+    level: f64,
+    deadband_rad: Option<f64>,
+    gravity_comp: Option<f64>,
+) -> serde_json::Value {
+    let mut request =
+        serde_json::json!({"action": "update_body_spring", "body": body, "level": level});
+    if let Some(deadband) = deadband_rad {
+        request["deadband_rad"] = serde_json::json!(deadband);
+    }
+    if let Some(fraction) = gravity_comp {
+        request["gravity_comp"] = serde_json::json!(fraction);
+    }
+    request
 }
 
 /// JSON body of `clear_body_spring`.
@@ -2961,11 +4512,15 @@ pub fn measure_request_body(request: &MeasureRequest) -> serde_json::Value {
                 .map(|set| serde_json::json!({"a_except": set, "b": "world"})),
         )
         .collect();
-    serde_json::json!({
+    let mut body = serde_json::json!({
         "action": "measure",
         "bodies": request.bodies,
         "contacts": contacts,
-    })
+    });
+    if request.actuators {
+        body["actuators"] = serde_json::Value::Bool(true);
+    }
+    body
 }
 
 /// One HTTP exchange: status code, whether the server keeps the connection, and the body.
@@ -3176,9 +4731,20 @@ impl BalanceController for HttpBalanceController {
             .map(|_| ())
     }
 
-    fn update_body_spring(&mut self, body: &str, level: f64) -> Result<(), TrainerError> {
-        self.command(&update_body_spring_request(body, level))
-            .map(|_| ())
+    fn update_body_spring(
+        &mut self,
+        body: &str,
+        level: f64,
+        deadband_rad: Option<f64>,
+        gravity_comp: Option<f64>,
+    ) -> Result<(), TrainerError> {
+        self.command(&update_body_spring_request(
+            body,
+            level,
+            deadband_rad,
+            gravity_comp,
+        ))
+        .map(|_| ())
     }
 
     fn clear_body_spring(&mut self, body: &str) -> Result<(), TrainerError> {
@@ -3260,6 +4826,7 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::run_actions::ScheduledAction;
     use crate::control::CollectingEventSink;
 
     /// One burst is 0.05 s; hold 0.1 s = 2 bursts, cap 0.2 s = 4 bursts. One physics step per
@@ -3294,6 +4861,9 @@ mod tests {
             other_contact_bodies: Vec::new(),
             torso_height_m: None,
             reset_height_m: None,
+            assist_slow: None,
+            assist_rise: None,
+            actuators: BTreeMap::new(),
         }
     }
 
@@ -3386,6 +4956,9 @@ mod tests {
             probe: false,
             train_attempts_before: None,
             non_upright: NonUprightCounts::default(),
+            carried_fraction: 0.0,
+            over_assist_fraction: 0.0,
+            adaptive: None,
         }
     }
 
@@ -4069,6 +5642,10 @@ mod tests {
         spring_sets: Vec<(SpringGains, f64, f64)>,
         /// (level, seconds since reset when it was sent)
         level_updates: Vec<(f64, f64)>,
+        /// Deadband (rad) sent with each level update, in the same order.
+        deadband_updates: Vec<Option<f64>>,
+        /// (gravity_comp, seconds since reset when it was sent)
+        gravity_updates: Vec<(f64, f64)>,
         /// (torque, force, duration_s, seconds since reset)
         pulses: Vec<([f64; 3], [f64; 3], f64, f64)>,
         measure_requests: Vec<MeasureRequest>,
@@ -4122,6 +5699,8 @@ mod tests {
                 resets: Vec::new(),
                 spring_sets: Vec::new(),
                 level_updates: Vec::new(),
+                deadband_updates: Vec::new(),
+                gravity_updates: Vec::new(),
                 pulses: Vec::new(),
                 measure_requests: Vec::new(),
                 other_touching: Vec::new(),
@@ -4171,9 +5750,19 @@ mod tests {
             Ok(())
         }
 
-        fn update_body_spring(&mut self, _body: &str, level: f64) -> Result<(), TrainerError> {
+        fn update_body_spring(
+            &mut self,
+            _body: &str,
+            level: f64,
+            deadband_rad: Option<f64>,
+            gravity_comp: Option<f64>,
+        ) -> Result<(), TrainerError> {
             self.calls.push("update_body_spring".to_string());
             self.level_updates.push((level, self.seconds()));
+            self.deadband_updates.push(deadband_rad);
+            if let Some(fraction) = gravity_comp {
+                self.gravity_updates.push((fraction, self.seconds()));
+            }
             self.spring_level = Some(level);
             Ok(())
         }
@@ -4262,6 +5851,11 @@ mod tests {
                 bodies,
                 contacts,
                 springs,
+                actuators: if request.actuators {
+                    BTreeMap::from([("joint_a".to_string(), f64::from(k))])
+                } else {
+                    BTreeMap::new()
+                },
             })
         }
     }
@@ -4296,6 +5890,8 @@ mod tests {
             deliver_reward: None,
             plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
         };
         run_balance_phase(
             &mut run,
@@ -4497,6 +6093,8 @@ mod tests {
             deliver_reward: None,
             plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
         };
         let report = run_balance_phase(
             &mut run,
@@ -4877,6 +6475,8 @@ mod tests {
             deliver_reward: Some(&mut sink),
             plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
         };
         run_balance_phase(
             &mut run,
@@ -4971,6 +6571,8 @@ mod tests {
                 deliver_reward: None,
                 plasticity: Some(plasticity),
                 reward_policy: BalanceRewardPolicy::Affect,
+                data: None,
+                apply_event: None,
             };
             run_balance_phase(
                 &mut run,
@@ -5039,6 +6641,8 @@ mod tests {
             deliver_reward: None,
             plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
         };
         let error = run_balance_phase(
             &mut run,
@@ -5085,6 +6689,8 @@ mod tests {
                 deliver_reward: Some(&mut sink),
                 plasticity: Some(&mut plasticity),
                 reward_policy: BalanceRewardPolicy::Affect,
+                data: None,
+                apply_event: None,
             };
             run_balance_phase(
                 &mut run,
@@ -5163,6 +6769,8 @@ mod tests {
                 deliver_reward: None,
                 plasticity: Some(&mut plasticity),
                 reward_policy: BalanceRewardPolicy::Affect,
+                data: None,
+                apply_event: None,
             };
             run_balance_phase(
                 &mut run,
@@ -5259,7 +6867,10 @@ mod tests {
         assert_eq!(body["gravity_comp"], 0.5);
         assert_eq!(body["ref"], "current");
         assert_eq!(body["deadband_rad"], 0.1);
-        assert_eq!(update_body_spring_request("torso", 0.4)["level"], 0.4);
+        assert_eq!(
+            update_body_spring_request("torso", 0.4, None, None)["level"],
+            0.4
+        );
         assert_eq!(
             clear_body_spring_request("torso")["action"],
             "clear_body_spring"
@@ -5273,7 +6884,9 @@ mod tests {
             bodies: vec!["torso".to_string()],
             contacts: vec![vec!["a".to_string()], vec!["b".to_string()]],
             contacts_except: vec![vec!["a".to_string(), "b".to_string()]],
+            actuators: false,
         });
+        assert!(m.get("actuators").is_none(), "{m}");
         assert_eq!(m["bodies"], serde_json::json!(["torso"]));
         assert_eq!(
             m["contacts"][1],
@@ -5443,6 +7056,8 @@ mod tests {
                 deliver_reward: None,
                 plasticity: Some(plasticity),
                 reward_policy: BalanceRewardPolicy::Affect,
+                data: None,
+                apply_event: None,
             };
             run_balance_phase(
                 &mut run,
@@ -5547,6 +7162,9 @@ mod tests {
         BalanceSample {
             torso_height_m: Some(torso_height),
             reset_height_m: reset,
+            assist_slow: None,
+            assist_rise: None,
+            actuators: BTreeMap::new(),
             ..sample(seq, 1, 2.0)
         }
     }
@@ -5721,5 +7339,1664 @@ mod tests {
             "{error}"
         );
         assert!(error.contains("a_except"), "{error}");
+    }
+
+    // ---- over-support: carried and over-assisted samples, flags, probe dependence ----
+
+    fn supported(seq: u64, level: f64) -> BalanceSample {
+        BalanceSample {
+            support_level: Some(level),
+            torso_height_m: Some(1.0),
+            reset_height_m: Some(1.0),
+            assist_slow: None,
+            assist_rise: None,
+            actuators: BTreeMap::new(),
+            support_need: Some(0.2),
+            support_effort: Some(0.3),
+            ..sample(seq, 1, 2.0)
+        }
+    }
+
+    fn use_flags(s: &BalanceSample, level: f64) -> Option<(bool, bool)> {
+        let c = criterion();
+        support_use_flags(s, &c, s.reset_height_m, level)
+    }
+
+    #[test]
+    fn carried_when_feet_are_off_and_the_body_is_up_or_when_lifted() {
+        assert_eq!(use_flags(&supported(1, 0.5), 0.5), Some((false, false)));
+        let mut feet_off = supported(1, 0.5);
+        feet_off.contacts = vec![true, false];
+        assert_eq!(use_flags(&feet_off, 0.5), Some((true, false)));
+        // feet off but the torso already collapsed under the height fraction: not carried
+        let mut fallen = feet_off.clone();
+        fallen.torso_height_m = Some(0.5);
+        assert_eq!(use_flags(&fallen, 0.5), Some((false, false)));
+        // feet down but the torso is lifted past the tolerance
+        let mut lifted = supported(1, 0.5);
+        lifted.torso_height_m = Some(1.06);
+        assert_eq!(use_flags(&lifted, 0.5), Some((true, false)));
+        lifted.torso_height_m = Some(1.04);
+        assert_eq!(use_flags(&lifted, 0.5), Some((false, false)));
+    }
+
+    #[test]
+    fn over_assist_needs_effort_beyond_need_plus_margin() {
+        let mut s = supported(1, 0.5);
+        s.support_need = Some(0.1);
+        s.support_effort = Some(0.4);
+        assert_eq!(use_flags(&s, 0.5), Some((false, true)));
+        s.support_effort = Some(0.35);
+        assert_eq!(use_flags(&s, 0.5), Some((false, false)));
+        s.support_effort = None;
+        assert_eq!(use_flags(&s, 0.5), Some((false, false)));
+    }
+
+    #[test]
+    fn settling_and_unassisted_samples_are_not_scored() {
+        let mut settling = supported(1, 0.5);
+        settling.settling = true;
+        assert_eq!(use_flags(&settling, 0.5), None);
+        assert_eq!(use_flags(&supported(1, 0.0), 0.0), None);
+    }
+
+    #[test]
+    fn attempt_record_carries_the_fractions() {
+        let mut c = criterion();
+        c.hold_s = 100.0;
+        c.attempt_cap_s = 100.0;
+        let mut open = OpenBalanceAttempt::for_attempt(1.0, 0.5);
+        for seq in 1..=4u64 {
+            let mut s = supported(seq, 0.5);
+            if seq <= 3 {
+                s.contacts = vec![false, true];
+            }
+            if seq == 4 {
+                s.support_effort = Some(0.9);
+            }
+            open = fed(&open, &s, &c);
+        }
+        assert_eq!(open.support_use.samples, 4);
+        let mut last = supported(5, 0.5);
+        last.terminal = Some(BalanceTerminal::Interrupted);
+        match observe_balance_sample(&open, &last, &c, 1).expect("observe") {
+            BalanceAttemptStep::Finished(r) => {
+                assert!((r.carried_fraction - 0.6).abs() < 1e-9, "{r:?}");
+                assert!((r.over_assist_fraction - 0.2).abs() < 1e-9, "{r:?}");
+            }
+            BalanceAttemptStep::Continue(_) => panic!("terminal ends the attempt"),
+        }
+    }
+
+    fn use_record(
+        level: f64,
+        outcome: BalanceAttemptOutcome,
+        carried: f64,
+        over: f64,
+    ) -> BalanceAttemptRecord {
+        BalanceAttemptRecord {
+            carried_fraction: carried,
+            over_assist_fraction: over,
+            ..record(outcome, level, 1.0)
+        }
+    }
+
+    fn probe_record(before: u32, balanced_s: f64) -> BalanceAttemptRecord {
+        BalanceAttemptRecord {
+            probe: true,
+            train_attempts_before: Some(before),
+            balanced_s,
+            ..record(BalanceAttemptOutcome::Truncated, 0.0, 0.0)
+        }
+    }
+
+    #[test]
+    fn level_is_flagged_only_above_the_flag_fraction() {
+        let mut c = criterion();
+        c.over_support_flag_fraction = 0.2;
+        let ok = BalanceAttemptOutcome::Success;
+        let attempts = vec![
+            use_record(0.8, ok, 0.2, 0.2),
+            use_record(0.8, ok, 0.2, 0.2),
+            use_record(0.6, ok, 0.1, 0.5),
+            use_record(0.4, ok, 0.34, 0.0),
+        ];
+        let mut report = BalancePhaseReport::from_attempts(attempts).expect("report");
+        report.assess_over_support(&c);
+        let at = |k: &str| &report.support_use_by_support[k];
+        assert!(
+            !at("0.80").over_support,
+            "equal to the fraction is not above"
+        );
+        assert!(at("0.80").over_support_causes.is_empty());
+        assert_eq!(
+            at("0.60").over_support_causes,
+            vec![OverSupportCause::OverAssist]
+        );
+        assert_eq!(
+            at("0.40").over_support_causes,
+            vec![OverSupportCause::Carried]
+        );
+        assert!((at("0.40").mean_carried_fraction - 0.34).abs() < 1e-9);
+        assert_eq!(report.over_support_levels, vec!["0.40", "0.60"]);
+    }
+
+    #[test]
+    fn probe_dependence_flags_a_graduating_level() {
+        let mut c = criterion();
+        c.hold_s = 3.0;
+        let ok = BalanceAttemptOutcome::Success;
+        let mut attempts = Vec::new();
+        for _ in 0..2 {
+            attempts.push(use_record(0.5, ok, 0.0, 0.0));
+        }
+        attempts.push(probe_record(2, 1.0));
+        attempts.push(use_record(0.4, BalanceAttemptOutcome::Truncated, 0.0, 0.0));
+        attempts.push(probe_record(3, 4.0));
+        let mut report = BalancePhaseReport::from_attempts(attempts).expect("report");
+        assert_eq!(report.probes.len(), 2);
+        assert_eq!(report.probes[0].attempt_index, 3);
+        assert_eq!(report.probes[0].support_level, 0.5);
+        assert_eq!(report.probes[1].support_level, 0.4);
+        report.assess_over_support(&c);
+        let level = &report.support_use_by_support["0.50"];
+        assert_eq!(
+            level.over_support_causes,
+            vec![OverSupportCause::ProbeDependence]
+        );
+        assert_eq!(level.probe_median_balanced_s, Some(1.0));
+        // the level that did not graduate is not flagged even though its probe was short
+        assert!(!report.support_use_by_support["0.40"].over_support);
+        // probes that hold long enough clear the flag
+        let mut good = report.clone();
+        good.probes[0].balanced_s = 3.0;
+        good.assess_over_support(&c);
+        assert!(good.over_support_levels.is_empty());
+    }
+
+    #[test]
+    fn probe_dependence_uses_the_nearest_probe_after_the_level() {
+        let mut c = criterion();
+        c.hold_s = 3.0;
+        let ok = BalanceAttemptOutcome::Success;
+        let attempts = vec![
+            use_record(0.5, ok, 0.0, 0.0),
+            use_record(0.4, BalanceAttemptOutcome::Truncated, 0.0, 0.0),
+            probe_record(2, 0.5),
+        ];
+        let mut report = BalancePhaseReport::from_attempts(attempts).expect("report");
+        // the probe ran at level 0.4, so 0.5 borrows the nearest probe after it
+        report.assess_over_support(&c);
+        assert_eq!(report.over_support_levels, vec!["0.50"]);
+    }
+
+    #[test]
+    fn over_support_fields_default_validate_and_old_documents_parse() {
+        let mut c = criterion_for(2, 0.05);
+        assert_eq!(c.lift_tolerance, 0.05);
+        assert_eq!(c.over_assist_margin, 0.25);
+        assert_eq!(c.over_support_flag_fraction, 0.2);
+        let parsed: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "t", "contact_bodies": ["a"],
+            "max_tilt_deg": 10.0, "hold_s": 1.0, "attempt_cap_s": 2.0
+        }))
+        .expect("older criterion");
+        assert_eq!(parsed.lift_tolerance, 0.05);
+        assert_eq!(parsed.over_assist_margin, 0.25);
+        assert_eq!(parsed.over_support_flag_fraction, 0.2);
+        for bad in [-0.1, f64::NAN] {
+            c.lift_tolerance = bad;
+            assert!(c.validate().is_err(), "{bad}");
+        }
+        c.lift_tolerance = 0.05;
+        for bad in [-0.1, 1.1] {
+            c.over_assist_margin = bad;
+            assert!(c.validate().is_err(), "{bad}");
+        }
+        c.over_assist_margin = 0.25;
+        for bad in [-0.1, 1.1] {
+            c.over_support_flag_fraction = bad;
+            assert!(c.validate().is_err(), "{bad}");
+        }
+        c.over_support_flag_fraction = 0.0;
+        assert!(c.validate().is_ok());
+    }
+
+    // ---- adaptive assist and contribution reward ----
+
+    fn adaptive_criterion(period_s: f64) -> BalanceFeetCriterion {
+        let mut c = criterion_for(2, period_s);
+        c.support_mode = AssistMode::Adaptive;
+        c
+    }
+
+    fn at(c: &BalanceFeetCriterion, a: f64, a_slow: f64) -> AdaptiveAssist {
+        AdaptiveAssist::resume(c, AdaptiveAssistState { a, a_slow })
+    }
+
+    #[test]
+    fn adaptive_rises_fast_on_overshoot_and_fades_with_the_slow_constant() {
+        let c = adaptive_criterion(0.05);
+        // a_slow 0.5 puts the cone at 2 + 13 * 0.5 = 8.5 deg; 14 deg predicted overshoots it.
+        let mut assist = at(&c, 0.5, 0.5);
+        let step = assist.step(&c, 14.0, 1);
+        let cone = 2.0 + 13.0 * (1.0 - step_slow_before(0.5, 0.5, &c));
+        let e = (14.0 - cone) / (15.0 - cone);
+        let expected = 0.5 + (e - 0.5) * (1.0 - (-0.05_f64 / 0.2).exp());
+        assert!(
+            (step.level - expected).abs() < 1e-12,
+            "{} vs {expected}",
+            step.level
+        );
+        assert!(step.rise > c.catch_threshold && step.catch, "{step:?}");
+        // Fade: no overshoot, hold over. a decays by exp(-dt / fade_tau_s) per burst.
+        let mut fading = at(&c, 0.8, 0.8);
+        for _ in 0..40 {
+            fading.step(&c, 0.0, 1);
+        }
+        let expected = 0.8 * (-(40.0 * 0.05) / 20.0_f64).exp();
+        assert!(
+            (fading.level() - expected).abs() < 1e-12,
+            "{}",
+            fading.level()
+        );
+    }
+
+    fn step_slow_before(a: f64, a_slow: f64, c: &BalanceFeetCriterion) -> f64 {
+        a_slow + (a - a_slow) * (1.0 - (-c.burst_period_s / c.fade_tau_s).exp())
+    }
+
+    #[test]
+    fn adaptive_fading_pauses_for_hold_after_catch_s() {
+        let c = adaptive_criterion(0.05);
+        let mut assist = at(&c, 0.5, 0.5);
+        assert!(assist.step(&c, 14.0, 1).catch);
+        let after_catch = assist.level();
+        // 1.0 s hold at 0.05 s per burst = 20 bursts with no fade.
+        for burst in 1..=20 {
+            assist.step(&c, 0.0, 1);
+            assert_eq!(assist.level(), after_catch, "burst {burst} must not fade");
+        }
+        assist.step(&c, 0.0, 1);
+        let faded = after_catch * (-0.05_f64 / 20.0).exp();
+        assert!((assist.level() - faded).abs() < 1e-12, "{}", assist.level());
+        // hold_after_catch_s 0 never pauses.
+        let mut quick = c.clone();
+        quick.hold_after_catch_s = 0.0;
+        let mut assist = at(&quick, 0.5, 0.5);
+        assert!(assist.step(&quick, 14.0, 1).catch);
+        let level = assist.level();
+        assist.step(&quick, 0.0, 1);
+        assert!(assist.level() < level);
+    }
+
+    #[test]
+    fn adaptive_cone_widens_as_a_slow_falls_and_stays_in_range() {
+        let c = adaptive_criterion(0.05);
+        let mut assist = AdaptiveAssist::start(&c);
+        assert!(
+            (assist.cone_deg(&c) - c.cone_min_deg).abs() < 1e-12,
+            "full assist, narrowest cone"
+        );
+        let mut last = assist.cone_deg(&c);
+        for _ in 0..4000 {
+            let step = assist.step(&c, 0.0, 1);
+            assert!(
+                step.cone_deg >= last - 1e-12,
+                "cone never narrows while fading"
+            );
+            assert!(
+                step.cone_deg >= c.cone_min_deg - 1e-12 && step.cone_deg <= c.max_tilt_deg + 1e-12,
+                "{}",
+                step.cone_deg
+            );
+            last = step.cone_deg;
+        }
+        assert!(
+            last > 10.0,
+            "after 200 s of fading the cone is wide: {last}"
+        );
+        // Fully faded: cone == max_tilt, and the overshoot stays finite.
+        let mut gone = at(&c, 0.0, 0.0);
+        assert_eq!(gone.cone_deg(&c), c.max_tilt_deg);
+        let step = gone.step(&c, 20.0, 1);
+        assert!(step.level > 0.0 && step.level <= 1.0);
+    }
+
+    #[test]
+    fn adaptive_time_constants_mean_the_same_at_two_burst_rates() {
+        let slow = adaptive_criterion(0.05);
+        let fast = adaptive_criterion(0.025);
+        // Fade for 10 s.
+        let (mut a, mut b) = (at(&slow, 0.9, 0.9), at(&fast, 0.9, 0.9));
+        for _ in 0..200 {
+            a.step(&slow, 0.0, 1);
+        }
+        for _ in 0..400 {
+            b.step(&fast, 0.0, 1);
+        }
+        assert!(
+            (a.level() - b.level()).abs() < 1e-9,
+            "{} vs {}",
+            a.level(),
+            b.level()
+        );
+        // Rise for 0.5 s at full overshoot (predicted tilt at the limit gives e = 1).
+        let (mut a, mut b) = (at(&slow, 0.2, 0.2), at(&fast, 0.2, 0.2));
+        for _ in 0..10 {
+            a.step(&slow, 15.0, 1);
+        }
+        for _ in 0..20 {
+            b.step(&fast, 15.0, 1);
+        }
+        let expected = 1.0 - 0.8 * (-0.5_f64 / 0.2).exp();
+        assert!((a.level() - expected).abs() < 1e-9, "{}", a.level());
+        assert!((b.level() - expected).abs() < 1e-9, "{}", b.level());
+    }
+
+    #[test]
+    fn adaptive_level_stays_between_support_min_and_support_start() {
+        let mut c = adaptive_criterion(0.05);
+        c.support_start = 0.8;
+        c.support_min = 0.2;
+        let mut assist = AdaptiveAssist::start(&c);
+        for _ in 0..3000 {
+            assist.step(&c, 0.0, 1);
+        }
+        assert!((assist.level() - 0.2).abs() < 1e-12, "{}", assist.level());
+        for _ in 0..100 {
+            assist.step(&c, 15.0, 1);
+        }
+        assert!((assist.level() - 0.8).abs() < 1e-3, "{}", assist.level());
+        let resumed = at(&c, 5.0, -1.0);
+        assert_eq!((resumed.level(), resumed.slow()), (0.8, 0.2));
+    }
+
+    #[test]
+    fn adaptive_attempt_does_not_end_at_hold_s_but_succeeds_at_the_cap() {
+        let mut c = adaptive_criterion(0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        let mut open = OpenBalanceAttempt::fresh();
+        for seq in 1..=39 {
+            open = fed(&open, &balanced(seq, 1), &c);
+        }
+        assert!(open.holding_bursts > c.hold_bursts(), "well past hold_s");
+        match observe_balance_sample(&open, &balanced(40, 1), &c, 1).expect("obs") {
+            BalanceAttemptStep::Finished(r) => {
+                assert_eq!(r.outcome, BalanceAttemptOutcome::Success);
+                assert_eq!(r.bursts, 40);
+            }
+            BalanceAttemptStep::Continue(_) => panic!("the cap ends an adaptive attempt"),
+        }
+        // A fall at the cap burst is a fall, not a success.
+        let mut falling = OpenBalanceAttempt::fresh();
+        for seq in 1..=35 {
+            falling = fed(&falling, &balanced(seq, 1), &c);
+        }
+        for seq in 36..=39 {
+            falling = fed(&falling, &sample(seq, 1, 70.0), &c);
+        }
+        match observe_balance_sample(&falling, &sample(40, 1, 70.0), &c, 1).expect("obs") {
+            BalanceAttemptStep::Finished(r) => assert_eq!(r.outcome, BalanceAttemptOutcome::Fell),
+            BalanceAttemptStep::Continue(_) => panic!("a confirmed fall ends the attempt"),
+        }
+        // The ladder still ends at hold_s.
+        let ladder = BalanceFeetCriterion {
+            support_mode: AssistMode::Ladder,
+            ..c
+        };
+        let mut open = OpenBalanceAttempt::fresh();
+        for seq in 1..=9 {
+            open = fed(&open, &balanced(seq, 1), &ladder);
+        }
+        assert!(matches!(
+            observe_balance_sample(&open, &balanced(10, 1), &ladder, 1).expect("obs"),
+            BalanceAttemptStep::Finished(r) if r.outcome == BalanceAttemptOutcome::Success
+        ));
+    }
+
+    fn adaptive_train(
+        c: &BalanceFeetCriterion,
+        mock: &mut MockController,
+        seeds: &[u64],
+        mode: Option<SupportMode>,
+        policy: BalanceRewardPolicy,
+        delivered: &mut Vec<RewardSignal>,
+    ) -> BalancePhaseReport {
+        let mut sink = |signals: &[RewardSignal]| -> Result<(), TrainerError> {
+            delivered.extend_from_slice(signals);
+            Ok(())
+        };
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-adaptive".to_string());
+        let mut run = BalancePhaseRun {
+            phase: "train",
+            seeds,
+            criterion: c,
+            run_id: &run_id,
+            support_mode: mode,
+            deliver_reward: Some(&mut sink),
+            plasticity: None,
+            reward_policy: policy,
+            data: None,
+            apply_event: None,
+        };
+        run_balance_phase(
+            &mut run,
+            mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("phase")
+    }
+
+    fn quick_adaptive() -> BalanceFeetCriterion {
+        let mut c = adaptive_criterion(0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 3.0;
+        c.settle_s = 0.2;
+        c.fade_tau_s = 1.0;
+        c.probe_every = 0;
+        c
+    }
+
+    #[test]
+    fn adaptive_phase_keeps_the_level_across_attempts_and_reports_it() {
+        let c = quick_adaptive();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1, 2],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let (first, second) = (&report.attempts[0], &report.attempts[1]);
+        assert_eq!(
+            first.outcome,
+            BalanceAttemptOutcome::Success,
+            "ends at the 3 s cap"
+        );
+        assert_eq!(first.bursts, 60, "not at hold_s (0.5 s = 10 bursts)");
+        assert_eq!(first.support_level, 1.0);
+        let stats = first.adaptive.expect("adaptive numbers");
+        assert!(
+            second.support_level < 1.0,
+            "a reset does not restore full support"
+        );
+        assert!(
+            (second.support_level - stats.min_a).abs() < 1e-12,
+            "{} vs {}",
+            second.support_level,
+            stats.min_a
+        );
+        assert!(stats.mean_a < 1.0 && stats.min_a <= stats.mean_a);
+        assert!(stats.end_cone_deg > c.cone_min_deg && stats.end_cone_deg <= c.max_tilt_deg);
+        assert_eq!(stats.catches, 0);
+        // Group by attempt, not by level.
+        assert_eq!(
+            report
+                .success_rate_by_support
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec!["attempt_0001".to_string(), "attempt_0002".to_string()]
+        );
+        assert!(report.balanced_by_support.contains_key("attempt_0002"));
+        assert!(report.support_use_by_support.contains_key("attempt_0001"));
+        // Timeline: ~1 Hz over 6 scored seconds, and the state to resume from.
+        assert!(
+            report.assist_timeline.len() >= 6,
+            "{}",
+            report.assist_timeline.len()
+        );
+        assert!(report
+            .assist_timeline
+            .windows(2)
+            .all(|w| w[1].t_s > w[0].t_s));
+        assert!(report
+            .assist_timeline
+            .windows(2)
+            .all(|w| w[1].cone_deg >= w[0].cone_deg - 1e-12));
+        let next = report.adaptive_state_next.expect("state to resume");
+        assert_eq!(report.support_level_next, Some(next.a));
+        assert!(next.a < second.support_level && next.a_slow > next.a);
+        // The first non-settling update changed level and cone together; deadband in radians.
+        assert!(!mock.level_updates.is_empty());
+        assert!(mock
+            .deadband_updates
+            .iter()
+            .all(|d| d.is_some_and(|rad| rad > 0.0)));
+        // Settle stays at full support; the first update comes after it.
+        assert_eq!(mock.spring_sets[0].1, 1.0);
+        assert!(
+            mock.level_updates[0].1 >= 0.2 - 1e-9,
+            "{:?}",
+            mock.level_updates[0]
+        );
+    }
+
+    #[test]
+    fn adaptive_resume_continues_from_a_saved_state() {
+        let c = quick_adaptive();
+        let state = AdaptiveAssistState {
+            a: 0.4,
+            a_slow: 0.6,
+        };
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            Some(SupportMode::ResumeAdaptive(state)),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert_eq!(report.attempts[0].support_level, 0.4);
+        // A level-only resume starts both averages there.
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            Some(SupportMode::Resume(0.5)),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert_eq!(report.attempts[0].support_level, 0.5);
+        let state = report.adaptive_state_next.expect("state");
+        assert!(state.a <= 0.5 && state.a_slow <= 0.5);
+    }
+
+    #[test]
+    fn adaptive_counts_catches_and_a_fall_ends_the_attempt() {
+        let c = quick_adaptive();
+        // Calm, then a lean that overshoots the cone, then a fall.
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|k, _| Scripted {
+                tilt_deg: match k {
+                    0..=30 => 2.0,
+                    31..=33 => 14.5,
+                    34..=39 => 5.0,
+                    _ => 70.0,
+                },
+                down: true,
+                terminal: None,
+                sim_time_s: None,
+            }),
+        );
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Contribution,
+            &mut delivered,
+        );
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Fell);
+        let stats = attempt.adaptive.expect("adaptive numbers");
+        assert!(stats.catches >= 1, "{stats:?}");
+        assert!(stats.catches_per_min > 0.0);
+        assert!(delivered
+            .iter()
+            .any(|s| s.channel == AffectChannel::Pain && s.magnitude < 1.0));
+        assert_eq!(
+            delivered.last().map(|s| (s.channel, s.magnitude)),
+            Some((AffectChannel::Pain, 1.0))
+        );
+    }
+
+    #[test]
+    fn adaptive_is_ignored_by_the_test_phase_and_by_probes() {
+        let mut c = adaptive_criterion(0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "test", &[1]).expect("test phase");
+        assert_eq!(
+            report.attempts[0].bursts, 10,
+            "the test phase ends at hold_s"
+        );
+        assert!(report.attempts[0].adaptive.is_none());
+        assert!(report.assist_timeline.is_empty());
+        // A probe in an adaptive train phase ends at hold_s with support 0.
+        let mut c = quick_adaptive();
+        c.probe_every = 1;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let probe = report.attempts.iter().find(|a| a.probe).expect("probe");
+        assert_eq!(probe.bursts, 10);
+        assert!(probe.adaptive.is_none() && probe.support_level == 0.0);
+    }
+
+    /// Adaptive phase with a long cap so the stance and lean timers can run.
+    fn stance_adaptive() -> BalanceFeetCriterion {
+        let mut c = quick_adaptive();
+        c.attempt_cap_s = 12.0;
+        c
+    }
+
+    fn one_adaptive_attempt(
+        c: &BalanceFeetCriterion,
+        mode: Option<SupportMode>,
+        policy: BalanceRewardPolicy,
+        script: Script,
+    ) -> (BalancePhaseReport, MockController, Vec<RewardSignal>) {
+        let mut mock = MockController::new(0.05, 2, script);
+        let mut delivered = Vec::new();
+        let report = adaptive_train(c, &mut mock, &[1], mode, policy, &mut delivered);
+        (report, mock, delivered)
+    }
+
+    fn feet_up_between(from_s: f64, to_s: f64) -> Script {
+        Box::new(move |_, t| Scripted {
+            down: !(from_s - 1e-9..to_s - 1e-9).contains(&t),
+            ..upright_step()
+        })
+    }
+
+    #[test]
+    fn adaptive_weight_support_is_zeroed_while_a_foot_is_up_and_restored_when_both_are_down() {
+        let c = stance_adaptive();
+        let (report, mock, _) = one_adaptive_attempt(
+            &c,
+            None,
+            BalanceRewardPolicy::Affect,
+            feet_up_between(1.0, 1.5),
+        );
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        assert_eq!(mock.gravity_updates.len(), 2, "{:?}", mock.gravity_updates);
+        let (off, off_at) = mock.gravity_updates[0];
+        let (on, on_at) = mock.gravity_updates[1];
+        assert_eq!(off, 0.0);
+        assert!((off_at - 1.0).abs() < 1e-6, "{off_at}");
+        assert_eq!(on, c.bws_max_fraction);
+        assert!((on_at - 1.5).abs() < 1e-6, "{on_at}");
+        // The opening spring carries the criterion's fraction.
+        assert_eq!(mock.spring_sets[0].0.gravity_comp, c.bws_max_fraction);
+        // Feet always down: weight support is never touched.
+        let (_, mock, _) = one_adaptive_attempt(
+            &c,
+            None,
+            BalanceRewardPolicy::Affect,
+            Box::new(|_, _| upright_step()),
+        );
+        assert!(mock.gravity_updates.is_empty());
+    }
+
+    #[test]
+    fn adaptive_recenters_after_lean_grace_and_ends_once_tilt_is_inside_cone_min() {
+        let c = stance_adaptive();
+        // A wide cone (slow average well below the level's ceiling), then a lean inside the tilt
+        // limit but beyond that cone for 4 s, then upright again.
+        let state = AdaptiveAssistState {
+            a: 0.3,
+            a_slow: 0.3,
+        };
+        let (report, mock, _) = one_adaptive_attempt(
+            &c,
+            Some(SupportMode::ResumeAdaptive(state)),
+            BalanceRewardPolicy::Affect,
+            Box::new(|_, t| Scripted {
+                tilt_deg: if (1.0..5.0).contains(&t) { 13.0 } else { 1.0 },
+                ..upright_step()
+            }),
+        );
+        let stats = report.attempts[0].adaptive.expect("adaptive numbers");
+        assert_eq!(stats.recenters, 1, "{stats:?}");
+        let cone_min_rad = c.cone_min_deg.to_radians();
+        let at_min: Vec<usize> = mock
+            .deadband_updates
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.is_some_and(|rad| (rad - cone_min_rad).abs() < 1e-9))
+            .map(|(i, _)| i)
+            .collect();
+        assert!(!at_min.is_empty(), "{:?}", mock.deadband_updates);
+        // One continuous stretch at cone_min (the level moves, so it is re-sent each burst).
+        assert!(at_min.windows(2).all(|w| w[1] == w[0] + 1), "{at_min:?}");
+        // Not before the grace: the lean starts at 1.0 s, so the cone drops after 3.0 s.
+        let at = mock.level_updates[at_min[0]].1;
+        assert!(
+            at >= 1.0 + c.lean_grace_s - 1e-6 && at <= 1.0 + c.lean_grace_s + 0.3,
+            "{at}"
+        );
+        // Tilt is back inside cone_min at 5.0 s: the adaptive cone returns.
+        let restored = mock.deadband_updates[at_min[at_min.len() - 1] + 1..]
+            .iter()
+            .flatten()
+            .any(|rad| *rad > cone_min_rad + 0.01);
+        assert!(restored, "{:?}", mock.deadband_updates);
+        assert!(stats.end_cone_deg > c.cone_min_deg);
+        // A short lean (shorter than the grace) never recenters.
+        let (report, _, _) = one_adaptive_attempt(
+            &c,
+            Some(SupportMode::ResumeAdaptive(state)),
+            BalanceRewardPolicy::Affect,
+            Box::new(|_, t| Scripted {
+                tilt_deg: if (1.0..2.5).contains(&t) { 13.0 } else { 1.0 },
+                ..upright_step()
+            }),
+        );
+        assert_eq!(report.attempts[0].adaptive.expect("stats").recenters, 0);
+    }
+
+    #[test]
+    fn adaptive_attempt_ends_lost_stance_only_after_the_grace() {
+        let c = stance_adaptive();
+        let (report, _, delivered) = one_adaptive_attempt(
+            &c,
+            None,
+            BalanceRewardPolicy::Contribution,
+            Box::new(|_, t| Scripted {
+                down: t < 1.0,
+                ..upright_step()
+            }),
+        );
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::LostStance);
+        assert_eq!(outcome_name(attempt.outcome), "lost_stance");
+        // Settle 0.2 s, feet up at 1.0 s, ended just past 1.0 s later: 2.05 s of 0.05 s bursts.
+        assert!(
+            (35..=39).contains(&attempt.bursts),
+            "ended after {} bursts",
+            attempt.bursts
+        );
+        let stats = attempt.adaptive.expect("stats");
+        assert!(stats.lost_stance && stats.standing_fraction < 1.0);
+        assert!(stats.feet_down_fraction < 1.0 && stats.feet_down_fraction > 0.0);
+        assert_eq!(
+            delivered.last().map(|s| (s.channel, s.magnitude)),
+            Some((AffectChannel::Pain, 0.5))
+        );
+        // Off its feet for less than the grace: the attempt carries on to the cap.
+        let (report, _, _) = one_adaptive_attempt(
+            &c,
+            None,
+            BalanceRewardPolicy::Contribution,
+            feet_up_between(1.0, 1.9),
+        );
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        assert!(!report.attempts[0].adaptive.expect("stats").lost_stance);
+        // The next attempt starts again from the reset keyframe.
+        let mut c2 = c.clone();
+        c2.reset_keyframe = "stand".to_string();
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, t| Scripted {
+                down: t < 1.0,
+                ..upright_step()
+            }),
+        );
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c2,
+            &mut mock,
+            &[1, 2],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert!(report
+            .attempts
+            .iter()
+            .all(|a| a.outcome == BalanceAttemptOutcome::LostStance));
+        assert_eq!(mock.resets.len(), 2);
+        assert!(mock.resets.iter().all(|r| r.as_deref() == Some("stand")));
+        assert!(
+            report.attempts[1].adaptive.is_some(),
+            "assist state carries on"
+        );
+    }
+
+    #[test]
+    fn adaptive_success_needs_the_standing_fraction() {
+        let c = stance_adaptive();
+        // Two 0.9 s lifts, each shorter than the stance grace, in 240 counted bursts: 15% off.
+        let two_lifts: Script = Box::new(|_, t| Scripted {
+            down: !((1.0..1.9).contains(&t) || (5.0..5.9).contains(&t)),
+            ..upright_step()
+        });
+        let (report, _, _) = one_adaptive_attempt(&c, None, BalanceRewardPolicy::Affect, two_lifts);
+        let stats = report.attempts[0].adaptive.expect("stats");
+        assert!(
+            stats.standing_fraction > 0.8 && stats.standing_fraction < 0.9,
+            "{stats:?}"
+        );
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        // The same attempt with the bar raised past what it stood is capped, not a success.
+        let mut strict = c.clone();
+        strict.standing_fraction_for_success = 0.95;
+        let two_lifts: Script = Box::new(|_, t| Scripted {
+            down: !((1.0..1.9).contains(&t) || (5.0..5.9).contains(&t)),
+            ..upright_step()
+        });
+        let (report, _, _) =
+            one_adaptive_attempt(&strict, None, BalanceRewardPolicy::Affect, two_lifts);
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Truncated);
+        assert!(!report.attempts[0].adaptive.expect("stats").lost_stance);
+    }
+
+    #[test]
+    fn contribution_reward_pays_no_pleasure_when_not_standing() {
+        let c = adaptive_criterion(0.05);
+        let standing = |need: f64| BalanceSample {
+            support_need: Some(need),
+            support_level: Some(0.0),
+            ..sample(1, 1, 2.0)
+        };
+        let lifted = |need: f64| BalanceSample {
+            contacts: vec![true, false],
+            ..standing(need)
+        };
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&standing(0.8), None, &c);
+        assert!(pleasure_of(&r.on_sample(&standing(0.2), None, &c)).is_some());
+        // The same recovery with a foot up pays nothing.
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&lifted(0.8), None, &c);
+        assert!(pleasure_of(&r.on_sample(&lifted(0.2), None, &c)).is_none());
+        // And the cap pays nothing on a non-standing burst.
+        let mut r = BalanceContributionReward::new();
+        let out = r.on_sample(&lifted(0.2), Some(&BalanceAttemptOutcome::Success), &c);
+        assert!(pleasure_of(&out).is_none());
+        let mut r = BalanceContributionReward::new();
+        let out = r.on_sample(&standing(0.2), Some(&BalanceAttemptOutcome::Success), &c);
+        assert!(pleasure_of(&out).is_some());
+        // A lost stance is Pain 0.5 and nothing else.
+        let mut r = BalanceContributionReward::new();
+        let out = r.on_sample(&lifted(0.2), Some(&BalanceAttemptOutcome::LostStance), &c);
+        assert_eq!(pain_of(&out), Some(0.5));
+        assert!(pleasure_of(&out).is_none());
+    }
+
+    #[test]
+    fn adaptive_attempt_stats_reach_the_progress_event_when_the_attempt_finishes() {
+        let c = quick_adaptive();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut sink = |_: &[RewardSignal]| -> Result<(), TrainerError> { Ok(()) };
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-adaptive".to_string());
+        let mut run = BalancePhaseRun {
+            phase: "train",
+            seeds: &[1],
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: Some(&mut sink),
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Contribution,
+            data: None,
+            apply_event: None,
+        };
+        run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("phase");
+        let stands: Vec<AttemptStand> = events
+            .events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                RunEventKind::Progress { stand, .. } => stand.clone(),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(stands.len(), 1);
+        let stats = stands[0].adaptive.expect("adaptive numbers in the stand");
+        assert_eq!(stats.standing_fraction, 1.0);
+        assert_eq!(stats.feet_down_fraction, 1.0);
+    }
+
+    fn contribution_sample(need: f64, level: f64) -> BalanceSample {
+        BalanceSample {
+            support_need: Some(need),
+            support_level: Some(level),
+            ..sample(1, 1, 2.0)
+        }
+    }
+
+    fn pleasure_of(signals: &[RewardSignal]) -> Option<f64> {
+        signals
+            .iter()
+            .find(|s| s.channel == AffectChannel::Pleasure)
+            .map(|s| s.magnitude)
+    }
+
+    fn pain_of(signals: &[RewardSignal]) -> Option<f64> {
+        signals
+            .iter()
+            .find(|s| s.channel == AffectChannel::Pain)
+            .map(|s| s.magnitude)
+    }
+
+    #[test]
+    fn contribution_reward_pays_for_what_the_robot_does_itself() {
+        let c = adaptive_criterion(0.05);
+        let mut r = BalanceContributionReward::new();
+        assert_eq!(
+            BalanceContributionReward::policy_id(),
+            "reward.balance-contribution.v2"
+        );
+        // Upright and held pays nothing, even at a steady need.
+        assert!(r
+            .on_sample(&contribution_sample(0.3, 0.9), None, &c)
+            .is_empty());
+        assert!(r
+            .on_sample(&contribution_sample(0.3, 0.9), None, &c)
+            .is_empty());
+        // Recovery: need drops 0.1 -> min(1, 4 * 0.1) * (1 - 0.5).
+        let signals = r.on_sample(&contribution_sample(0.2, 0.5), None, &c);
+        assert!(
+            (pleasure_of(&signals).expect("pleasure") - 0.4 * 0.5).abs() < 1e-12,
+            "{signals:?}"
+        );
+        assert!(pain_of(&signals).is_none());
+        // Recovery while held at a = 1 pays nothing.
+        assert!(r
+            .on_sample(&contribution_sample(0.0, 1.0), None, &c)
+            .is_empty());
+        // A big drop saturates at 1 * (1 - a).
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&contribution_sample(1.0, 0.25), None, &c);
+        let signals = r.on_sample(&contribution_sample(0.0, 0.25), None, &c);
+        assert!((pleasure_of(&signals).expect("pleasure") - 0.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn contribution_reward_pain_on_catch_fall_and_death() {
+        let mut c = adaptive_criterion(0.05);
+        c.catch_threshold = 0.1;
+        let mut r = BalanceContributionReward::new();
+        let rising = |rise: f64| BalanceSample {
+            assist_rise: Some(rise),
+            actuators: BTreeMap::new(),
+            ..contribution_sample(0.5, 0.5)
+        };
+        // A rise of exactly the threshold or more pays the full 0.5; a smaller one a share.
+        assert!((pain_of(&r.on_sample(&rising(0.1), None, &c)).expect("pain") - 0.5).abs() < 1e-12);
+        assert!((pain_of(&r.on_sample(&rising(0.4), None, &c)).expect("pain") - 0.5).abs() < 1e-12);
+        assert!(
+            (pain_of(&r.on_sample(&rising(0.05), None, &c)).expect("pain") - 0.25).abs() < 1e-12
+        );
+        assert!(r.on_sample(&rising(0.0), None, &c).is_empty());
+        for outcome in [BalanceAttemptOutcome::Death, BalanceAttemptOutcome::Fell] {
+            let signals = r.on_sample(&rising(0.4), Some(&outcome), &c);
+            assert_eq!(signals.len(), 1);
+            assert_eq!(
+                (signals[0].channel, signals[0].magnitude),
+                (AffectChannel::Pain, 1.0)
+            );
+        }
+        // Settling bursts emit nothing, even a death.
+        let settling = BalanceSample {
+            settling: true,
+            ..rising(0.4)
+        };
+        assert!(r
+            .on_sample(&settling, Some(&BalanceAttemptOutcome::Death), &c)
+            .is_empty());
+    }
+
+    #[test]
+    fn contribution_reward_success_pays_one_minus_a_slow_and_works_for_the_ladder() {
+        let c = adaptive_criterion(0.05);
+        let mut r = BalanceContributionReward::new();
+        let done = BalanceSample {
+            assist_slow: Some(0.3),
+            ..contribution_sample(0.2, 0.1)
+        };
+        let signals = r.on_sample(&done, Some(&BalanceAttemptOutcome::Success), &c);
+        assert!(
+            (pleasure_of(&signals).expect("pleasure") - 0.7).abs() < 1e-12,
+            "{signals:?}"
+        );
+        // Ladder: no assist_slow, the constant level stands in for a and a_slow.
+        let mut ladder = BalanceContributionReward::new();
+        let held = contribution_sample(0.2, 0.25);
+        let signals = ladder.on_sample(&held, Some(&BalanceAttemptOutcome::Success), &c);
+        assert!((pleasure_of(&signals).expect("pleasure") - 0.75).abs() < 1e-12);
+        // Fully held at the cap: nothing to pay.
+        let mut full = BalanceContributionReward::new();
+        assert!(full
+            .on_sample(
+                &contribution_sample(0.2, 1.0),
+                Some(&BalanceAttemptOutcome::Success),
+                &c
+            )
+            .is_empty());
+    }
+
+    #[test]
+    fn contribution_reward_runs_with_the_ladder_schedule() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.1;
+        c.attempt_cap_s = 1.0;
+        c.support_start = 0.5;
+        c.support_min = 0.0;
+        assert_eq!(c.support_mode, AssistMode::Ladder);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Contribution,
+            &mut delivered,
+        );
+        assert!(report.attempts[0].adaptive.is_none());
+        assert_eq!(delivered.len(), 1, "{delivered:?}");
+        assert_eq!(delivered[0].channel, AffectChannel::Pleasure);
+        assert!((delivered[0].magnitude - 0.5).abs() < 1e-12);
+        assert_eq!(
+            BalanceRewardPolicy::from_mode("contribution"),
+            Some(BalanceRewardPolicy::Contribution)
+        );
+        assert_eq!(
+            BalanceRewardPolicy::Contribution.policy_id(),
+            BalanceContributionReward::policy_id()
+        );
+    }
+
+    #[test]
+    fn adaptive_fields_validate_and_older_criteria_load_unchanged() {
+        let c = adaptive_criterion(0.05);
+        assert!(c.validate().is_ok());
+        assert_eq!(
+            (
+                c.fade_tau_s,
+                c.catch_tau_s,
+                c.hold_after_catch_s,
+                c.cone_min_deg,
+                c.catch_threshold
+            ),
+            (20.0, 0.2, 1.0, 2.0, 0.05)
+        );
+        let bad = |edit: &dyn Fn(&mut BalanceFeetCriterion)| {
+            let mut c = adaptive_criterion(0.05);
+            edit(&mut c);
+            c.validate().is_err()
+        };
+        assert!(bad(&|c| c.fade_tau_s = 0.0));
+        assert!(bad(&|c| c.fade_tau_s = f64::NAN));
+        assert!(bad(&|c| c.catch_tau_s = 0.0));
+        assert!(bad(&|c| c.catch_tau_s = 20.0), "must be < fade_tau_s");
+        assert!(bad(&|c| c.hold_after_catch_s = -0.1));
+        assert!(bad(&|c| c.cone_min_deg = -1.0));
+        assert!(bad(&|c| c.cone_min_deg = 15.0), "must be < max_tilt_deg");
+        assert!(bad(&|c| c.catch_threshold = 1.1));
+        assert!(bad(&|c| c.catch_threshold = -0.1));
+        assert!(bad(&|c| c.lean_grace_s = 0.0));
+        assert!(bad(&|c| c.lean_grace_s = f64::NAN));
+        assert!(bad(&|c| c.stance_grace_s = 0.0));
+        assert!(bad(&|c| c.stance_grace_s = -1.0));
+        assert!(bad(&|c| c.standing_fraction_for_success = 0.0));
+        assert!(bad(&|c| c.standing_fraction_for_success = 1.01));
+        assert!(!bad(&|c| c.standing_fraction_for_success = 1.0));
+        let mut ok = adaptive_criterion(0.05);
+        ok.cone_min_deg = 0.0;
+        ok.hold_after_catch_s = 0.0;
+        ok.catch_threshold = 0.0;
+        assert!(ok.validate().is_ok());
+        let parsed: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "t", "contact_bodies": ["a"],
+            "max_tilt_deg": 10.0, "hold_s": 1.0, "attempt_cap_s": 2.0
+        }))
+        .expect("older criterion");
+        assert_eq!(parsed.support_mode, AssistMode::Ladder);
+        assert_eq!(
+            (parsed.fade_tau_s, parsed.catch_tau_s, parsed.cone_min_deg),
+            (20.0, 0.2, 2.0)
+        );
+        assert_eq!(
+            (
+                parsed.lean_grace_s,
+                parsed.stance_grace_s,
+                parsed.standing_fraction_for_success
+            ),
+            (2.0, 1.0, 0.8),
+            "older documents get the new defaults"
+        );
+        let adaptive: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "t", "contact_bodies": ["a"],
+            "max_tilt_deg": 10.0, "hold_s": 1.0, "attempt_cap_s": 2.0,
+            "support_mode": "adaptive"
+        }))
+        .expect("adaptive criterion");
+        assert!(adaptive.is_adaptive());
+        // An older attempt record (no adaptive numbers) loads and stays out of the JSON.
+        let old =
+            serde_json::to_value(record(BalanceAttemptOutcome::Success, 0.5, 1.0)).expect("json");
+        assert!(old.get("adaptive").is_none(), "{old}");
+        let back: BalanceAttemptRecord = serde_json::from_value(old).expect("old record");
+        assert!(back.adaptive.is_none());
+        // Adaptive stats saved before the stance numbers existed still load.
+        let stats: AdaptiveAttemptStats = serde_json::from_value(serde_json::json!({
+            "mean_a": 0.5, "min_a": 0.4, "end_cone_deg": 6.0,
+            "catches": 1, "catches_per_min": 2.0
+        }))
+        .expect("older adaptive stats");
+        assert_eq!(
+            (stats.recenters, stats.lost_stance, stats.standing_fraction),
+            (0, false, 0.0)
+        );
+        let outcome: BalanceAttemptOutcome =
+            serde_json::from_value(serde_json::json!("lost_stance")).expect("outcome");
+        assert_eq!(outcome, BalanceAttemptOutcome::LostStance);
+    }
+
+    #[test]
+    fn update_body_spring_request_carries_the_deadband_only_when_given() {
+        assert!(update_body_spring_request("torso", 0.4, None, None)
+            .get("deadband_rad")
+            .is_none());
+        let with = update_body_spring_request("torso", 0.4, Some(0.1), None);
+        assert_eq!(with["deadband_rad"], 0.1);
+        assert_eq!(with["level"], 0.4);
+    }
+
+    #[test]
+    fn assist_timeline_is_capped() {
+        let c = adaptive_criterion(0.5);
+        let mut run = AdaptiveRun::new(AdaptiveAssist::start(&c));
+        for _ in 0..8000 {
+            run.advance(0.5, &c);
+        }
+        assert_eq!(run.timeline.len(), ASSIST_TIMELINE_MAX_POINTS);
+    }
+
+    // ---- deviation against assistance ----
+
+    #[test]
+    fn goal_deviation_cases() {
+        let mut c = criterion();
+        c.max_tilt_deg = 20.0;
+        c.min_height_fraction = 0.5;
+        c.only_contacts_touch = true;
+        // tilt only: scaled and clamped
+        assert!((goal_deviation(&sample(1, 1, 5.0), &c, None) - 0.25).abs() < 1e-12);
+        assert_eq!(goal_deviation(&sample(1, 1, 0.0), &c, None), 0.0);
+        assert_eq!(goal_deviation(&sample(1, 1, 45.0), &c, None), 1.0);
+        // a contact body off the floor, tilt small
+        let mut foot_up = sample(1, 1, 1.0);
+        foot_up.contacts = vec![true, false];
+        assert_eq!(goal_deviation(&foot_up, &c, None), 1.0);
+        // another body touching
+        let mut other = sample(1, 1, 1.0);
+        other.other_contact_touching = true;
+        assert_eq!(goal_deviation(&other, &c, None), 1.0);
+        c.only_contacts_touch = false;
+        assert!(goal_deviation(&other, &c, None) < 0.1);
+        // torso too low
+        let mut low = sample(1, 1, 1.0);
+        low.torso_height_m = Some(0.2);
+        assert_eq!(goal_deviation(&low, &c, Some(0.6)), 1.0);
+        low.torso_height_m = Some(0.5);
+        assert!(goal_deviation(&low, &c, Some(0.6)) < 0.1);
+    }
+
+    fn dev_point(t_s: f64, d: f64, a: f64) -> DeviationAssistPoint {
+        DeviationAssistPoint {
+            t_s,
+            deviation_mean: d,
+            assistance_mean: a,
+        }
+    }
+
+    #[test]
+    fn deviation_timeline_averages_each_second() {
+        let mut run = DeviationAssistRun::default();
+        // 0.25 s bursts: four per second.
+        for _ in 0..4 {
+            run.add(0.2, 0.4, 1, 0.25);
+        }
+        for d in [0.0, 1.0, 0.0, 1.0] {
+            run.add(d, 0.8, 1, 0.25);
+        }
+        let out = run.finish().expect("block");
+        assert_eq!(out.n, 2);
+        assert!((out.timeline[0].deviation_mean - 0.2).abs() < 1e-12);
+        assert!((out.timeline[0].assistance_mean - 0.4).abs() < 1e-12);
+        assert_eq!(out.timeline[0].t_s, 1.0);
+        assert!((out.timeline[1].deviation_mean - 0.5).abs() < 1e-12);
+        assert!((out.timeline[1].assistance_mean - 0.8).abs() < 1e-12);
+        assert_eq!(out.timeline[1].t_s, 2.0);
+    }
+
+    #[test]
+    fn deviation_timeline_decimates_at_the_cap_instead_of_stopping() {
+        let mut run = DeviationAssistRun::default();
+        for i in 0..(ASSIST_TIMELINE_MAX_POINTS + 10) {
+            run.add((i % 10) as f64 / 10.0, 0.5, 1, 1.0);
+        }
+        let out = run.finish().expect("block");
+        assert!(out.n <= ASSIST_TIMELINE_MAX_POINTS);
+        assert!(out.n > ASSIST_TIMELINE_MAX_POINTS / 2);
+        assert!(out.timeline.windows(2).all(|w| w[1].t_s > w[0].t_s));
+        assert!(out.timeline.last().expect("last").t_s >= ASSIST_TIMELINE_MAX_POINTS as f64);
+    }
+
+    #[test]
+    fn deviation_assist_fit_on_a_known_dataset() {
+        // assist = 0.5 * dev + 0.1 exactly
+        let pts: Vec<_> = (0..5)
+            .map(|i| dev_point(i as f64 + 1.0, i as f64 * 0.2, 0.5 * (i as f64 * 0.2) + 0.1))
+            .collect();
+        let out = DeviationAssist::from_timeline(pts).expect("block");
+        assert!((out.r.expect("r") - 1.0).abs() < 1e-9);
+        assert!((out.slope.expect("slope") - 0.5).abs() < 1e-9);
+        assert!((out.intercept.expect("intercept") - 0.1).abs() < 1e-9);
+        assert_eq!(out.n, 5);
+        // 20% of 5 points = 1 point each end
+        assert!((out.early.dev - 0.0).abs() < 1e-12 && (out.early.assist - 0.1).abs() < 1e-12);
+        assert!((out.late.dev - 0.8).abs() < 1e-12 && (out.late.assist - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn deviation_assist_r_is_null_without_variance_or_enough_points() {
+        let flat: Vec<_> = (0..5)
+            .map(|i| dev_point(i as f64, 0.3, 0.1 * i as f64))
+            .collect();
+        let out = DeviationAssist::from_timeline(flat).expect("block");
+        assert!(out.r.is_none() && out.slope.is_none() && out.intercept.is_none());
+        let flat_y: Vec<_> = (0..5)
+            .map(|i| dev_point(i as f64, 0.1 * i as f64, 0.4))
+            .collect();
+        let out = DeviationAssist::from_timeline(flat_y).expect("block");
+        assert!(out.r.is_none());
+        assert_eq!(out.slope, Some(0.0));
+        let two = vec![dev_point(1.0, 0.1, 0.2), dev_point(2.0, 0.3, 0.6)];
+        assert!(DeviationAssist::from_timeline(two)
+            .expect("block")
+            .r
+            .is_none());
+        assert!(DeviationAssist::from_timeline(Vec::new()).is_none());
+    }
+
+    #[test]
+    fn ladder_and_adaptive_train_phases_both_report_deviation_assist() {
+        // ladder, with probes: the probes stay out of the timeline
+        let mut plasticity = MockPlasticity::default();
+        let (ladder, _, _) = probe_train_run(1, &[1, 2], &mut plasticity);
+        assert!(ladder.attempts.iter().any(|a| a.probe));
+        let block = ladder.deviation_assist.expect("ladder block");
+        assert!(block.n >= 1);
+        let scored_s: f64 = ladder
+            .attempts
+            .iter()
+            .filter(|a| !a.probe)
+            .map(|a| f64::from(a.bursts) * 0.05)
+            .sum();
+        assert!(block.timeline.last().expect("last").t_s <= scored_s + 1e-6);
+        // tilt 2 of max 15, fixed level: a constant deviation
+        assert!((block.timeline[0].deviation_mean - 2.0 / 15.0).abs() < 1e-9);
+        // adaptive: the applied level starts at the ceiling and falls
+        let c = quick_adaptive();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1, 2],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let block = report.deviation_assist.expect("adaptive block");
+        assert!(block.n >= 5);
+        assert!(block.early.assist > block.late.assist);
+        // the test phase has none
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let test = run_phase(&c, &mut mock, "test", &[1]).expect("test phase");
+        assert!(test.deviation_assist.is_none());
+    }
+
+    // ---- run data sink and scheduled events ----
+
+    use crate::run_data::RecordingRunDataSink;
+
+    fn rid() -> RunId {
+        RunId("balance-hooks".to_string())
+    }
+
+    fn event(at_s: f64, label: &str) -> ScheduledEvent {
+        ScheduledEvent {
+            at_s,
+            label: label.to_string(),
+            action: ScheduledAction::SetMappingPsc {
+                src: "area_a".to_string(),
+                dst: "area_b".to_string(),
+                psc_multiplier: 0.5,
+            },
+        }
+    }
+
+    fn run_with_hooks<'a>(
+        c: &'a BalanceFeetCriterion,
+        mock: &mut MockController,
+        phase: &'a str,
+        seeds: &'a [u64],
+        run_id: &'a RunId,
+        data: Option<&'a mut dyn RunDataSink>,
+        apply_event: Option<ApplyEvent<'a>>,
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        let mut events = CollectingEventSink::default();
+        let mut run = BalancePhaseRun {
+            phase,
+            seeds,
+            criterion: c,
+            run_id,
+            support_mode: None,
+            deliver_reward: None,
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+            data,
+            apply_event,
+        };
+        run_balance_phase(
+            &mut run,
+            mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+    }
+
+    /// Events of one attempt as `(sim_time_s, kind, label)`, in arrival order.
+    fn attempt_events(tape: &RecordingRunDataSink, index: u64) -> Vec<(f64, String, String)> {
+        tape.events
+            .iter()
+            .filter(|e| e.at.episode == Some(index) && e.at.sim_time_s.is_some())
+            .map(|e| {
+                (
+                    e.at.sim_time_s.unwrap_or(0.0),
+                    e.kind.clone(),
+                    e.label.clone(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn steps_table_carries_every_counted_burst_actuator_columns_and_the_attempt_events() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.2;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        c.perturb_interval_s = 0.2;
+        c.record_actuators = true;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        let report = run_with_hooks(
+            &c,
+            &mut mock,
+            "train",
+            &[1, 2],
+            &rid(),
+            Some(&mut tape),
+            None,
+        )
+        .expect("phase");
+        assert_eq!(report.attempts.len(), 2);
+        assert!(tape.errors.is_empty(), "{:?}", tape.errors);
+        let col = |name: &str| tape.column_index("steps", name).expect(name);
+        // One contact column per contact body (named from the criterion) and one per actuator.
+        for body in &c.contact_bodies {
+            assert!(tape.column_index("steps", &contact_column(body)).is_some());
+        }
+        let actuator = col("actuator_joint_a");
+        let (attempt, settling, time) = (col("attempt"), col("settling"), col("sim_time"));
+        let rows = tape.rows_of("steps");
+        for index in 0..2u64 {
+            let kinds: Vec<String> = attempt_events(&tape, index)
+                .into_iter()
+                .map(|e| e.1)
+                .collect();
+            assert_eq!(
+                kinds.first().map(String::as_str),
+                Some("attempt_start"),
+                "{kinds:?}"
+            );
+            assert_eq!(
+                kinds.last().map(String::as_str),
+                Some("attempt_end"),
+                "{kinds:?}"
+            );
+            for kind in ["settle_end", "perturb_start", "perturb_end"] {
+                assert!(kinds.iter().any(|k| k == kind), "{kind} in {kinds:?}");
+            }
+            let end = attempt_events(&tape, index)
+                .into_iter()
+                .find(|e| e.1 == "attempt_end")
+                .expect("end");
+            assert_eq!(end.2, "success");
+            let mine: Vec<&Vec<RunDataValue>> = rows
+                .iter()
+                .filter(|r| r[attempt] == RunDataValue::Int(index as i64))
+                .collect();
+            // Settling bursts are recorded (flagged); scored bursts match the record.
+            let scored = mine
+                .iter()
+                .filter(|r| r[settling] == RunDataValue::Bool(false))
+                .count();
+            assert_eq!(scored as u32, report.attempts[index as usize].bursts);
+            assert!(mine.iter().any(|r| r[settling] == RunDataValue::Bool(true)));
+            let times: Vec<f64> = mine
+                .iter()
+                .map(|r| match r[time] {
+                    RunDataValue::Float(t) => t,
+                    ref other => panic!("{other:?}"),
+                })
+                .collect();
+            assert!(times.windows(2).all(|w| w[1] > w[0]), "{times:?}");
+        }
+        assert!(rows
+            .iter()
+            .all(|r| matches!(r[actuator], RunDataValue::Float(_))));
+        // The attempts table has one row per attempt.
+        assert_eq!(tape.rows_of("attempts").len(), 2);
+        let kinds = tape.event_kinds();
+        assert_eq!(kinds.first(), Some(&"phase_start"));
+        assert_eq!(kinds.last(), Some(&"phase_end"));
+    }
+
+    #[test]
+    fn no_sink_leaves_the_run_unchanged_and_actuators_unrequested() {
+        let c = criterion_for(2, 0.05);
+        let mut with = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut without = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        let a =
+            run_with_hooks(&c, &mut with, "train", &[3], &rid(), Some(&mut tape), None).expect("a");
+        let b = run_with_hooks(&c, &mut without, "train", &[3], &rid(), None, None).expect("b");
+        assert_eq!(a.attempts[0].bursts, b.attempts[0].bursts);
+        assert_eq!(with.calls, without.calls);
+        assert!(without.measure_requests.iter().all(|r| !r.actuators));
+        assert!(tape
+            .table("steps")
+            .expect("steps")
+            .columns
+            .iter()
+            .all(|spec| !spec.name.starts_with("actuator_")));
+    }
+
+    #[test]
+    fn scheduled_events_fire_once_per_attempt_in_time_order_after_settle() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.2;
+        c.hold_s = 0.6;
+        c.attempt_cap_s = 2.0;
+        c.scheduled_events = vec![event(0.3, "late"), event(0.1, "early")];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        let mut applied: Vec<String> = Vec::new();
+        let mut apply = |action: &ScheduledAction| -> Result<(), TrainerError> {
+            if let ScheduledAction::SetMappingPsc { src, .. } = action {
+                applied.push(src.clone());
+            }
+            Ok(())
+        };
+        run_with_hooks(
+            &c,
+            &mut mock,
+            "train",
+            &[1, 2],
+            &rid(),
+            Some(&mut tape),
+            Some(&mut apply),
+        )
+        .expect("phase");
+        assert_eq!(applied.len(), 4);
+        for index in 0..2u64 {
+            let events = attempt_events(&tape, index);
+            let fired: Vec<(f64, String)> = events
+                .iter()
+                .filter(|m| m.1 == "scheduled_event")
+                .map(|m| (m.0, m.2.clone()))
+                .collect();
+            assert_eq!(fired.len(), 2, "{fired:?}");
+            assert_eq!(fired[0].1, "early");
+            assert_eq!(fired[1].1, "late");
+            let settle_end = events
+                .iter()
+                .find(|m| m.1 == "settle_end")
+                .expect("settle_end")
+                .0;
+            assert!(
+                fired[0].0 >= settle_end + 0.1 - 1e-6,
+                "{fired:?} {settle_end}"
+            );
+            assert!(
+                fired[1].0 >= settle_end + 0.3 - 1e-6,
+                "{fired:?} {settle_end}"
+            );
+        }
+    }
+
+    #[test]
+    fn scheduled_events_need_a_callback_and_a_test_phase_refuses_them() {
+        let mut c = criterion_for(2, 0.05);
+        c.scheduled_events = vec![event(0.1, "evt")];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let error = run_with_hooks(&c, &mut mock, "train", &[1], &rid(), None, None).unwrap_err();
+        assert!(error.to_string().contains("apply_event"), "{error}");
+        let mut apply = |_: &ScheduledAction| -> Result<(), TrainerError> { Ok(()) };
+        let error = run_with_hooks(&c, &mut mock, "test", &[1], &rid(), None, Some(&mut apply))
+            .unwrap_err();
+        assert!(error.to_string().contains("scheduled events"), "{error}");
+        assert_eq!(mock.count("reset_episode"), 0);
+    }
+
+    #[test]
+    fn a_failing_event_callback_fails_the_run() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.scheduled_events = vec![event(0.0, "evt")];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut apply = |_: &ScheduledAction| -> Result<(), TrainerError> {
+            Err(TrainerError::Runtime("mapping not found".to_string()))
+        };
+        let error = run_with_hooks(&c, &mut mock, "train", &[1], &rid(), None, Some(&mut apply))
+            .unwrap_err();
+        assert!(error.to_string().contains("mapping not found"), "{error}");
+    }
+
+    #[test]
+    fn scheduled_event_validation_names_the_problem() {
+        let mut c = criterion_for(2, 0.05);
+        for bad in [-0.1, f64::NAN, f64::INFINITY] {
+            c.scheduled_events = vec![event(bad, "evt")];
+            assert!(
+                c.validate().unwrap_err().to_string().contains("at_s"),
+                "{bad}"
+            );
+        }
+        c.scheduled_events = vec![event(1.0, "  ")];
+        assert!(c.validate().unwrap_err().to_string().contains("label"));
+        let mut bad = event(1.0, "evt");
+        bad.action = ScheduledAction::SetMappingPsc {
+            src: "area_a".to_string(),
+            dst: String::new(),
+            psc_multiplier: 1.0,
+        };
+        c.scheduled_events = vec![bad];
+        assert!(c.validate().unwrap_err().to_string().contains("dst"));
+        let mut bad = event(1.0, "evt");
+        bad.action = ScheduledAction::SetAreaParameter {
+            area: "area_a".to_string(),
+            key: "".to_string(),
+            value: serde_json::json!(0.5),
+        };
+        c.scheduled_events = vec![bad];
+        assert!(c.validate().unwrap_err().to_string().contains("key"));
+        c.scheduled_events = vec![event(0.0, "ok")];
+        assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn scheduled_events_and_record_actuators_parse_from_json() {
+        let json = serde_json::json!({
+            "torso_body": "torso",
+            "contact_bodies": ["contact_a"],
+            "max_tilt_deg": 15.0,
+            "hold_s": 1.0,
+            "attempt_cap_s": 3.0,
+            "recordActuators": true,
+            "scheduledEvents": [
+                {"at_s": 2.0, "label": "cut", "action":
+                    {"type": "set_mapping_psc", "src": "area_a", "dst": "area_b", "psc_multiplier": 0.0}},
+                {"at_s": 4.0, "label": "tune", "action":
+                    {"type": "set_area_parameter", "area": "area_a", "key": "gain", "value": 0.3}}
+            ]
+        });
+        let c: BalanceFeetCriterion = serde_json::from_value(json).expect("parse");
+        assert!(c.record_actuators);
+        assert_eq!(c.scheduled_events.len(), 2);
+        assert!(c.validate().is_ok());
+        let plain: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "torso", "contact_bodies": ["contact_a"],
+            "max_tilt_deg": 15.0, "hold_s": 1.0, "attempt_cap_s": 3.0
+        }))
+        .expect("parse");
+        assert!(plain.scheduled_events.is_empty() && !plain.record_actuators);
+    }
+
+    #[test]
+    fn measure_request_sends_actuators_only_when_asked() {
+        let mut c = criterion_for(2, 0.05);
+        assert!(measure_request_body(&measure_request(&c))
+            .get("actuators")
+            .is_none());
+        c.record_actuators = true;
+        let body = measure_request_body(&measure_request(&c));
+        assert_eq!(body["actuators"], serde_json::json!(true));
+        let parsed: Measurement = serde_json::from_value(serde_json::json!({
+            "sim_time_s": 0.1, "physics_steps": 5, "actuators": {"joint_a": 0.25}
+        }))
+        .expect("parse");
+        assert_eq!(parsed.actuators["joint_a"], 0.25);
     }
 }

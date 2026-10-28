@@ -922,6 +922,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_cortical_area_neurons),
         )
         .route(
+            "/connectome/cortical_area/:cortical_id/neuron_state",
+            get(connectome::get_cortical_area_neuron_state),
+        )
+        .route(
             "/connectome/:cortical_area_id/synapses/incoming",
             get(connectome::get_area_synapses_incoming),
         )

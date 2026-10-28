@@ -4,13 +4,13 @@
 //! @cursor:critical-path — per-cortical, opt-in homeostatic `leak_coefficient` (see `neural/docs/rate_modulated_leak.md`).
 
 use ahash::AHashMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 
 /// @cursor:critical-path — not invoked in hot LIF; runs only when registered areas are non-empty.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RateModulatedLeakConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -133,6 +133,17 @@ impl RateModulatedLeakRegistry {
 
     pub fn remove(&mut self, cortical_idx: u32) {
         self.areas.remove(&cortical_idx);
+    }
+
+    /// Firing-rate EMA per global neuron index for one area, or `None` when not registered.
+    pub fn rate_ema_by_neuron(&self, cortical_idx: u32) -> Option<AHashMap<usize, f32>> {
+        self.areas.get(&cortical_idx).map(|st| {
+            st.neuron_idx
+                .iter()
+                .copied()
+                .zip(st.r_ema.iter().copied())
+                .collect()
+        })
     }
 
     /// Drop every registration.
@@ -873,5 +884,22 @@ mod tests {
         reg.reseed_leak(99, 0.5); // unknown area: no-op
         reg.clear();
         assert!(reg.is_empty());
+    }
+
+    #[test]
+    fn rate_ema_by_neuron_maps_registered_area_only() {
+        let mut reg = RateModulatedLeakRegistry::default();
+        assert!(reg.rate_ema_by_neuron(7).is_none());
+        reg.sync_cortical(
+            7,
+            &json!({ "enabled": true, "target_firing_per_burst": 0.2 }),
+            0.3,
+            vec![4, 5],
+        );
+        let m = reg.rate_ema_by_neuron(7).expect("registered area");
+        assert_eq!(m.len(), 2);
+        assert_eq!(m.get(&4), Some(&0.0));
+        reg.remove(7);
+        assert!(reg.rate_ema_by_neuron(7).is_none());
     }
 }

@@ -98,6 +98,8 @@ pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
 pub mod modulator_engine;
+/// Bulk read-only per-neuron runtime state for one cortical area.
+pub mod neuron_state;
 pub mod npu;
 pub mod output_rate_gate;
 pub mod parameter_update_queue;
@@ -130,6 +132,7 @@ pub use fire_structures::*;
 pub use fq_sampler::*;
 pub use neural_dynamics::*;
 // Neuron models now in feagi-neural::models
+pub use neuron_state::{NeuronStateColumns, NeuronStateField};
 pub use npu::*;
 pub use parameter_update_queue::{
     increment_from_parameter_update, is_firing_threshold_increment_param,

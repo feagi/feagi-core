@@ -660,6 +660,15 @@ where
         dispatch!(self, has_rate_modulated_leak(cortical_idx))
     }
 
+    /// Bulk read of per-neuron runtime state for one cortical area.
+    pub fn read_neuron_state_columns(
+        &self,
+        cortical_idx: u32,
+        fields: &[crate::neuron_state::NeuronStateField],
+    ) -> crate::neuron_state::NeuronStateColumns {
+        dispatch!(self, read_neuron_state_columns(cortical_idx, fields))
+    }
+
     /// Whether the modulator engine treats a cortical area as a homeostatic leak area.
     pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
         dispatch!(self, is_homeostatic_leak_area(cortical_idx))

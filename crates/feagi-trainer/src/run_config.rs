@@ -612,6 +612,29 @@ impl RunConfig {
         events: &mut dyn crate::control::RunEventSink,
         cancel: &crate::control::CancelToken,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
+        self.execute_remote_with_data(
+            manifest, samples, connection, identity, events, cancel, None, 0,
+        )
+    }
+
+    /// Same as [`Self::execute_remote_with_events`], and also writes the run's tables and
+    /// events to `data` when one is given. `repeat` is the zero-based index of this pass over
+    /// the samples; it fills the `repeat` column of the `samples` table.
+    ///
+    /// # Errors
+    /// Same as [`Self::execute_remote_with_events`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute_remote_with_data(
+        &self,
+        manifest: &DatasetManifest,
+        samples: &PlannedSamples,
+        connection: &RemoteConnection,
+        identity: &AgentIdentity,
+        events: &mut dyn crate::control::RunEventSink,
+        cancel: &crate::control::CancelToken,
+        data: Option<&mut dyn crate::run_data::RunDataSink>,
+        repeat: u64,
+    ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
         use crate::adapters::{ImageFolderSegmentationAdapter, TimeSeriesPackageAdapter};
         use crate::binding::{
             ClassDecoder, ImageFrameEncoder, MiscClassDecoder, MiscStreamEncoder, NoAffectReward,
@@ -674,6 +697,8 @@ impl RunConfig {
                     &self.executor,
                     events,
                     cancel,
+                    data,
+                    repeat,
                 )
             }
             TimeSeriesPackageAdapter::PLUGIN_ID => {
@@ -695,6 +720,7 @@ impl RunConfig {
                         &self.executor,
                         events,
                         cancel,
+                        data,
                     )
                 } else {
                     let mut encoder = PopulationEncoder::new();
@@ -712,6 +738,8 @@ impl RunConfig {
                         &self.executor,
                         events,
                         cancel,
+                        data,
+                        repeat,
                     )
                 }
             }
@@ -733,6 +761,8 @@ impl RunConfig {
                     &self.executor,
                     events,
                     cancel,
+                    data,
+                    repeat,
                 )
             }
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
@@ -758,6 +788,8 @@ impl RunConfig {
                     &self.executor,
                     events,
                     cancel,
+                    data,
+                    repeat,
                 )
             }
             other => {

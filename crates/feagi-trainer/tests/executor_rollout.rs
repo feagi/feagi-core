@@ -229,6 +229,8 @@ fn full_pipeline_produces_summary_and_scorecard() {
             ticks_per_sample: 3,
             silence_bursts: 0,
         },
+        None,
+        0,
     )
     .expect("rollout");
 
