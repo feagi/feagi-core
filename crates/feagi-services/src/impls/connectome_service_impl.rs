@@ -8385,7 +8385,9 @@ mod tests {
         use crate::connectome::{load_connectome, save_connectome};
         use crate::traits::ConnectomeService;
         use feagi_npu_burst_engine::backend::CPUBackend;
-        use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
+        use feagi_npu_burst_engine::fire_structures::{
+            FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE,
+        };
         use feagi_npu_burst_engine::npu::MemoryReplayFrame;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
         use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
@@ -8664,18 +8666,20 @@ mod tests {
                 npu.rebuild_synapse_index();
                 npu.configure_fire_ledger_window(mem_idx, 1)?;
                 npu.configure_fire_ledger_window(assoc_mem_idx, 1)?;
+                // Synthesis only links memory neurons that fired by episodic encode, so the
+                // learning fires use the encode kind; recall below stays STDP-eligible.
                 for _ in 0..2 {
                     npu.inject_memory_neuron_to_fcl_with_kind(
                         first_ltm_id,
                         mem_idx,
                         2.0,
-                        FIRE_KIND_STDP_ELIGIBLE,
+                        FIRE_KIND_EPISODIC_MEMORY,
                     );
                     npu.inject_memory_neuron_to_fcl_with_kind(
                         second_ltm_id,
                         assoc_mem_idx,
                         2.0,
-                        FIRE_KIND_STDP_ELIGIBLE,
+                        FIRE_KIND_EPISODIC_MEMORY,
                     );
                     npu.process_burst()?;
                 }
