@@ -1,7 +1,7 @@
+use core::hash::Hash;
 use feagi_basis::feagi_id::feagi_id;
 use crate::identifiers::faux_identifer::{FauxIdentifier, HasFauxIdentifier};
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
-//region Cortical ID
 
 #[macro_export]
 macro_rules! match_bytes_by_cortical_type {
@@ -24,6 +24,9 @@ macro_rules! match_bytes_by_cortical_type {
         }
     };
 }
+
+/// Cortical ID of some sort
+pub trait CorticalIDIdentifier: Hash {}
 
 /// Whether `bytes` name a known area kind in their first byte.
 ///
@@ -77,8 +80,21 @@ impl CorticalID {
     }
 }
 
-//endregion
 
-impl HasFauxIdentifier for CorticalID {}
+feagi_id! {
+    /// A faux identifier unique to a processing context for a cortical area
+    pub FauxCorticalID: 8,
+    base64 = Base64EncodedFauxCorticalID,
+}
 
-pub type FauxCorticalID = FauxIdentifier<CorticalID>;
+impl FauxIdentifier<8> for FauxCorticalID {
+    type RealID = CorticalID;
+}
+
+impl FauxIdentifier<12> for Base64EncodedFauxCorticalID {
+    type RealID = Base64EncodedCorticalID;
+}
+
+impl HasFauxIdentifier<8> for CorticalID { type FauxID = FauxCorticalID; }
+
+impl HasFauxIdentifier<12> for Base64EncodedCorticalID { type FauxID = Base64EncodedFauxCorticalID; }

@@ -1,10 +1,12 @@
+use core::hash::Hash;
+use feagi_basis::feagi_id::feagi_id::FeagiID;
 use crate::basis::cortical_area::cortical_id::{CorticalID, FauxCorticalID};
-use feagi_basis::feagi_id_prev::identifier::Identifier;
+
 
 /// Defines what type of identifier is used for Graph Elements
 pub trait GraphElementIdentifiers {
-    type CorticalIdentifier: Identifier;
-    type MappingIdentifier;
+    type CorticalIdentifier: Hash;
+    type MappingIdentifier: Hash;
     type MappingEntryIdentifier;
 }
 
