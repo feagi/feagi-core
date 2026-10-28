@@ -1,5 +1,5 @@
 use crate::node::feagi_node_flags::FeagiNodeFlags;
-use crate::node::feagi_node_id::FeagiNodeID;
+use crate::node::feagi_node_id::{Base64EncodedFeagiNodeID, FeagiNodeID};
 use crate::transport::zenoh::zenoh_configuration::{ZenohConfiguration, ZenohConfigurationBackend};
 use crate::transport::zenoh::zenoh_liveliness_path::{FeagiNodeLivelinessPath, FeagiNodeLivelinessPathConfigurables};
 use crate::transport::zenoh::zenoh_std::configuration_backend::ZenohStdConfigurationBackend;
@@ -143,7 +143,7 @@ pub enum FeagiBuildZenohWorkerError {
     FailedToOpenSession(zenoh::Error),
     #[error("Failed to check whether the node ID is taken: {0}")]
     FailedToCheckNodeID(zenoh::Error),
-    #[error("Another node already has the node ID {0}")]
+    #[error("Another node already has the node ID {}", Base64EncodedFeagiNodeID::from(.0))]
     NodeIDTaken(FeagiNodeID),
     #[error("Failed to declare the liveliness token: {0}")]
     FailedToDeclareLivelinessToken(zenoh::Error),

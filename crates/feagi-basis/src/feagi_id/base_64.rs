@@ -5,9 +5,17 @@ use thiserror::Error;
 // TODO use more optimized base64 encoding / decoding engines via cfg flags
 
 /// The padded URL-safe base64 form of a [`HasBase64`] ID.
-pub trait FeagiIDBase64<'a, const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>:
-FeagiID<BASE_64_BYTE_COUNT> + core::str::FromStr + TryFrom<&'a str>
-+ TryFrom<&'a heapless::String<BASE_64_BYTE_COUNT>> + core::convert::AsRef<str> + core::fmt::Display
+///
+/// # Safety
+///
+/// The ID bytes of an implementor must always be the canonical padded URL-safe base64 encoding
+/// of exactly `ID_BYTE_COUNT` bytes, and those bytes must pass the
+/// [`FeagiIDBase64::Original`]'s `try_from_id_bytes`. The only ways to build one must be
+/// [`FeagiIDBase64::from_original`] and `try_from_id_bytes`, and the original itself must have no
+/// constructor that skips its own check. Only the `feagi_id!` macro implements this.
+pub unsafe trait FeagiIDBase64<const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>:
+FeagiID<BASE_64_BYTE_COUNT, DeserializationError = FeagiIDBase64Error<<Self::Original as FeagiID<ID_BYTE_COUNT>>::DeserializationError>>
++ core::str::FromStr + for<'a> TryFrom<&'a str> + core::convert::AsRef<str> + core::fmt::Display
 + crate::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement
 + crate::feagi_message::feagi_message_path::configurables::FeagiMessagePathStaticElement
 {
@@ -16,18 +24,18 @@ FeagiID<BASE_64_BYTE_COUNT> + core::str::FromStr + TryFrom<&'a str>
     ///
     /// Padded URL-safe base64 uses 4 characters for every 3 source bytes, rounded up.
     const BASE64_LEN_MATCHES_SOURCE: () = assert!(
-        BASE_64_BYTE_COUNT == (ID_BYTE_COUNT + 2) / 3 * 4,
+        BASE_64_BYTE_COUNT == ID_BYTE_COUNT.div_ceil(3) * 4,
         "BASE_64_BYTE_COUNT must be the padded URL-safe base64 length of ID_BYTE_COUNT"
     );
 
-    type Original: HasBase64<ID_BYTE_COUNT, BASE_64_BYTE_COUNT, Base64Type<'a>=Self>;
+    type Original: HasBase64<ID_BYTE_COUNT, BASE_64_BYTE_COUNT, Base64Type=Self>;
 
     /// Decode this base64 ID back into the original ID
     fn to_original(&self) -> Self::Original {
         let _: () = Self::BASE64_LEN_MATCHES_SOURCE;
         let mut decoded = [0u8; ID_BYTE_COUNT];
-        // SAFETY: a FeagiIDBase64 only holds the canonical encoding of a valid Original, so the
-        // text decodes to exactly ID_BYTE_COUNT bytes and those bytes pass the Original's check.
+        // SAFETY: the trait contract says the text is the canonical encoding of a valid Original,
+        // so it decodes to exactly ID_BYTE_COUNT bytes and those bytes pass the Original's check.
         unsafe {
             base64::prelude::BASE64_URL_SAFE
                 .decode_slice_unchecked(self.get_id_bytes(), &mut decoded)
@@ -41,8 +49,8 @@ FeagiID<BASE_64_BYTE_COUNT> + core::str::FromStr + TryFrom<&'a str>
 
     /// Borrow the padded URL-safe base64 text.
     fn as_str(&self) -> &str {
-        // SAFETY: the ID bytes of a FeagiIDBase64 are base64 text, and that alphabet is ASCII
-        // (`A-Z`, `a-z`, `0-9`, `-`, `_`, `=`).
+        // SAFETY: the trait contract says the ID bytes are base64 text, and that alphabet is
+        // ASCII (`A-Z`, `a-z`, `0-9`, `-`, `_`, `=`).
         unsafe { core::str::from_utf8_unchecked(self.get_id_bytes()) }
     }
 
@@ -95,6 +103,36 @@ FeagiID<BASE_64_BYTE_COUNT> + core::str::FromStr + TryFrom<&'a str>
 
         Ok(Self::Original::try_from_id_bytes(decoded)?)
     }
+}
+
+/// Deserialize a [`FeagiIDBase64`] from its padded URL-safe base64 text. Used by the code
+/// `feagi_id!` generates
+#[doc(hidden)]
+pub fn deserialize_base_64<'de, D, B, const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>(
+    deserializer: D,
+) -> Result<B, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    B: FeagiIDBase64<ID_BYTE_COUNT, BASE_64_BYTE_COUNT>,
+{
+    struct Base64Visitor<B, const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>(core::marker::PhantomData<B>);
+
+    impl<'de, B: FeagiIDBase64<ID_BYTE_COUNT, BASE_64_BYTE_COUNT>, const ID_BYTE_COUNT: usize, const BASE_64_BYTE_COUNT: usize>
+        serde::de::Visitor<'de> for Base64Visitor<B, ID_BYTE_COUNT, BASE_64_BYTE_COUNT>
+    {
+        type Value = B;
+
+        fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            formatter.write_str("a padded URL-safe base64 ID")
+        }
+
+        // Borrowed and owned strings both forward here by default
+        fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+            B::try_from_str(value).map_err(E::custom)
+        }
+    }
+
+    deserializer.deserialize_str(Base64Visitor::<B, ID_BYTE_COUNT, BASE_64_BYTE_COUNT>(core::marker::PhantomData))
 }
 
 /// Failure to parse a [`FeagiIDBase64`] from text.

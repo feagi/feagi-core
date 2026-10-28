@@ -1,4 +1,4 @@
-use feagi_basis::impl_byte_array_id;
+use feagi_basis::feagi_id::feagi_id;
 use crate::identifiers::faux_identifer::{FauxIdentifier, HasFauxIdentifier};
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
 //region Cortical ID
@@ -25,42 +25,57 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-/// Accept a cortical ID whose first byte names a known area kind.
+/// Whether `bytes` name a known area kind in their first byte.
 ///
-/// Custom, memory, core, brain-input, and brain-output prefixes pass through.
-/// Any other prefix returns [`GenomeIdentifierError::CannotParseFromBytes`].
-fn try_cortical_id_from_bytes(bytes: [u8; 8]) -> Result<CorticalID, GenomeIdentifierError> {
+/// Custom, memory, core, brain-input, and brain-output prefixes pass. Const so
+/// [`CorticalID::from_id_bytes_const`] can check at compile time
+const fn is_valid_cortical_id_bytes(bytes: &[u8; 8]) -> bool {
     match_bytes_by_cortical_type!(bytes,
-        custom => {
-            Ok(CorticalID(bytes))
-        },
-        memory => {
-            Ok(CorticalID(bytes))
-        },
-        core => {
-            Ok(CorticalID(bytes))
-        },
+        custom => { true },
+        memory => { true },
+        core => { true },
         brain_input => {
             // TODO more checks
-            Ok(CorticalID(bytes))
+            true
         },
         brain_output => {
             // TODO more checks
-            Ok(CorticalID(bytes))
+            true
         },
-        invalid => {
-            Err(GenomeIdentifierError::CannotParseFromBytes("CorticalID"))
-        },
+        invalid => { false },
     )
 }
 
-impl_byte_array_id!(
+/// Accept a cortical ID whose first byte names a known area kind.
+///
+/// Any other prefix returns [`GenomeIdentifierError::CannotParseFromBytes`].
+fn try_cortical_id_from_bytes(bytes: [u8; 8]) -> Result<CorticalID, GenomeIdentifierError> {
+    if is_valid_cortical_id_bytes(&bytes) {
+        Ok(CorticalID(bytes))
+    } else {
+        Err(GenomeIdentifierError::CannotParseFromBytes("CorticalID"))
+    }
+}
+
+feagi_id! {
     /// A unique identifier for a cortical area in a genome
-    pub CorticalID,
-    8,
-    GenomeIdentifierError,
-    try_cortical_id_from_bytes
-);
+    pub CorticalID: 8,
+    try_from = (GenomeIdentifierError, try_cortical_id_from_bytes),
+    base64 = Base64EncodedCorticalID,
+}
+
+impl CorticalID {
+    /// Wraps `bytes` as a cortical ID, running the same check as `try_from_id_bytes`.
+    ///
+    /// # Panics
+    ///
+    /// If `bytes` are not a valid cortical ID. Call it in a const block (`const { ... }`) to
+    /// turn that into a compile error
+    pub const fn from_id_bytes_const(bytes: [u8; 8]) -> Self {
+        assert!(is_valid_cortical_id_bytes(&bytes), "bytes are not a valid CorticalID");
+        Self(bytes)
+    }
+}
 
 //endregion
 

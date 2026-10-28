@@ -142,6 +142,9 @@ pub mod parameters {
     /// Something that can be serialized to become part of the message path dynamically as
     /// a parameter.
     pub trait FeagiMessagePathParameterElement: core::str::FromStr + core::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned {
+        /// How this parameter is described in documentation (open-api)
+        const KIND: crate::feagi_message::feagi_message_description::FeagiFieldKind;
+
         /// Writes this parameter as its path segment. What is written must parse back into the
         /// same value through `FromStr`
         fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result;
@@ -149,9 +152,12 @@ pub mod parameters {
 
     /// Primitives are written as they display, which `FromStr` parses back
     macro_rules! impl_parameter_element_by_display {
-        ($($element_type:ty),*) => {
+        ($kind:ident: $($element_type:ty),*) => {
             $(
                 impl FeagiMessagePathParameterElement for $element_type {
+                    const KIND: crate::feagi_message::feagi_message_description::FeagiFieldKind =
+                        crate::feagi_message::feagi_message_description::FeagiFieldKind::$kind;
+
                     fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
                         write!(out, "{self}")
                     }
@@ -160,10 +166,16 @@ pub mod parameters {
         };
     }
 
-    impl_parameter_element_by_display!(bool, char, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64);
+    impl_parameter_element_by_display!(Boolean: bool);
+    impl_parameter_element_by_display!(String: char);
+    impl_parameter_element_by_display!(Integer: u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+    impl_parameter_element_by_display!(Number: f32, f64);
 
     #[cfg(feature = "alloc")]
     impl FeagiMessagePathParameterElement for String {
+        const KIND: crate::feagi_message::feagi_message_description::FeagiFieldKind =
+            crate::feagi_message::feagi_message_description::FeagiFieldKind::String;
+
         fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
             out.write_str(self.as_str())
         }

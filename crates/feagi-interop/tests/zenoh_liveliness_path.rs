@@ -3,18 +3,18 @@
 use feagi_basis::feagi_message::feagi_message_description::FeagiMessagePathElementDescription;
 use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
-use feagi_interop::node::feagi_node_id::FeagiNodeID;
+use feagi_interop::node::feagi_node_id::{Base64EncodedFeagiNodeID, FeagiNodeID};
 use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
 use feagi_interop::transport::zenoh::zenoh_liveliness_path::{
     FeagiNodeLivelinessPath, FeagiNodeLivelinessPathConfigurables, LIVELINESS_KEY_LEN, LIVELINESS_WILDCARD_KEY_LEN,
 };
 
 fn node_id() -> FeagiNodeID {
-    FeagiNodeID::from_bytes_const([0, 1, 2, 3, 4, 5, 6, 7])
+    FeagiNodeID::from_id_bytes([0, 1, 2, 3, 4, 5, 6, 7])
 }
 
 fn other_node_id() -> FeagiNodeID {
-    FeagiNodeID::from_bytes_const([7, 6, 5, 4, 3, 2, 1, 0])
+    FeagiNodeID::from_id_bytes([7, 6, 5, 4, 3, 2, 1, 0])
 }
 
 fn flags() -> FeagiNodeFlags {
@@ -30,7 +30,7 @@ fn flags() -> FeagiNodeFlags {
 fn key_is_root_node_id_and_flags() {
     let configurables = FeagiNodeLivelinessPathConfigurables::new(node_id());
     let key = FeagiNodeLivelinessPath::key(&configurables, flags());
-    let expected = format!("feagi/{}/{}", node_id(), flags());
+    let expected = format!("feagi/{}/{}", Base64EncodedFeagiNodeID::from(node_id()), flags());
     assert_eq!(key.as_str(), expected);
     assert_eq!(key.len(), LIVELINESS_KEY_LEN);
 }
@@ -53,7 +53,7 @@ fn parse_rejects_the_key_of_another_node() {
 #[test]
 fn parse_rejects_malformed_keys() {
     let configurables = FeagiNodeLivelinessPathConfigurables::new(node_id());
-    let id = node_id().to_string();
+    let id = Base64EncodedFeagiNodeID::from(node_id()).to_string();
     let flags = flags().to_string();
     for key in [
         format!("other/{id}/{flags}"),
@@ -70,7 +70,7 @@ fn parse_rejects_malformed_keys() {
 fn wildcard_key_replaces_the_flags() {
     let configurables = FeagiNodeLivelinessPathConfigurables::new(node_id());
     let key = FeagiNodeLivelinessPath::wildcard_key(&configurables);
-    assert_eq!(key.as_str(), format!("feagi/{}/*", node_id()));
+    assert_eq!(key.as_str(), format!("feagi/{}/*", Base64EncodedFeagiNodeID::from(node_id())));
     assert_eq!(key.len(), LIVELINESS_WILDCARD_KEY_LEN);
 }
 

@@ -128,6 +128,9 @@ impl TryFrom<&str> for FeagiNodeFlags {
 }
 
 impl feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement for FeagiNodeFlags {
+    const KIND: feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind =
+        feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind::String;
+
     fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
         out.write_str(self.to_base64().as_str())
     }

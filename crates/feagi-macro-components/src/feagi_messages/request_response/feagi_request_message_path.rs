@@ -1,4 +1,4 @@
-use crate::common::{basis_path, field_kind_tokens, lit_str_to_ident};
+use crate::common::{basis_path, lit_str_to_ident};
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::feagi_messages::message_path_element::MessagePathElement;
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
@@ -138,7 +138,7 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(slot);
                     slotted_values.push(quote!(full.#tuple_index));
                     write_segments.push(quote!(#parameter_element::write_path_segment(&parameters.#field, out)?;));
-                    let (kind, _) = field_kind_tokens(parameter_type);
+                    let kind = quote!(<#parameter_type as #parameter_element>::KIND);
                     let description = match descriptions.try_get_description(&field) {
                         Some(text) => quote!(::core::option::Option::Some(#text)),
                         None => quote!(::core::option::Option::None),

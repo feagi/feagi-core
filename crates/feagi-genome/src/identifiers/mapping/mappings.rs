@@ -1,24 +1,21 @@
 use crate::basis::cortical_area::cortical_id::{CorticalID, FauxCorticalID};
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
-use feagi_basis::{impl_byte_array_id, impl_byte_array_id_random};
+use feagi_basis::feagi_id::feagi_id;
 
-impl_byte_array_id!(
+feagi_id! {
     /// Specifies a unique synapse mapping rule that describes the pattern of how synapses are
     /// connected between cortical areas in a mapping entry
-    pub ConnectivityRuleID,
-    8
-);
+    pub ConnectivityRuleID: 8,
+    random,
+    base64 = Base64EncodedConnectivityRuleID,
+}
 
-impl_byte_array_id_random!(ConnectivityRuleID, 8);
-
-
-impl_byte_array_id!(
+feagi_id! {
     /// Defines a specific mapping entry within the mapping between 2 cortical areas
-    pub MappingEntryID,
-    8
-);
-
-impl_byte_array_id_random!(MappingEntryID, 8);
+    pub MappingEntryID: 8,
+    random,
+    base64 = Base64EncodedMappingEntryID,
+}
 
 //region Mapping ID
 

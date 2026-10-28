@@ -36,13 +36,13 @@ impl CoreCorticalClass {
 
     pub fn to_cortical_id(&self) -> CorticalID {
         match self {
-            Self::Death => CorticalID::from_bytes_const(*b"___death"),
-            Self::Power => CorticalID::from_bytes_const(*b"___power"),
-            Self::Fatigue => CorticalID::from_bytes_const(*b"___fatig"),
-            Self::Pain => CorticalID::from_bytes_const(*b"___pain_"),
-            Self::Pleasure => CorticalID::from_bytes_const(*b"___pleas"),
-            Self::Fear => CorticalID::from_bytes_const(*b"___fear_"),
-            Self::Hope => CorticalID::from_bytes_const(*b"___hope_"),
+            Self::Death => const { CorticalID::from_id_bytes_const(*b"___death") },
+            Self::Power => const { CorticalID::from_id_bytes_const(*b"___power") },
+            Self::Fatigue => const { CorticalID::from_id_bytes_const(*b"___fatig") },
+            Self::Pain => const { CorticalID::from_id_bytes_const(*b"___pain_") },
+            Self::Pleasure => const { CorticalID::from_id_bytes_const(*b"___pleas") },
+            Self::Fear => const { CorticalID::from_id_bytes_const(*b"___fear_") },
+            Self::Hope => const { CorticalID::from_id_bytes_const(*b"___hope_") },
         }
     }
 }

@@ -130,6 +130,8 @@ fn field_kind_name(field_type: &Type) -> &'static str {
                 "f32" | "f64" => "Number",
                 "String" | "str" | "char" => "String",
                 "Vec" => "Array",
+                // FeagiID base64 forms serialize as their text
+                name if name.starts_with("Base64") => "String",
                 _ => "Object",
             }
         }

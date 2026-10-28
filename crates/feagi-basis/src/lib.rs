@@ -15,6 +15,9 @@ extern crate core;
 pub mod __private {
     pub use heapless;
     pub use serde;
+    pub use uuid;
+    #[cfg(feature = "std")]
+    pub use rand;
 }
 
 /// Used by generated code. Emits the first block when this crate is built with its `alloc`
@@ -36,6 +39,28 @@ macro_rules! __feagi_if_alloc {
 macro_rules! __feagi_if_alloc {
     ({ $($alloc:tt)* } else { $($no_alloc:tt)* }) => {
         $($no_alloc)*
+    };
+}
+
+/// Used by generated code. Emits the first block when this crate is built with its `std`
+/// feature, otherwise the block after `else`
+#[doc(hidden)]
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! __feagi_if_std {
+    ({ $($std:tt)* } else { $($no_std:tt)* }) => {
+        $($std)*
+    };
+}
+
+/// Used by generated code. Emits the first block when this crate is built with its `std`
+/// feature, otherwise the block after `else`
+#[doc(hidden)]
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! __feagi_if_std {
+    ({ $($std:tt)* } else { $($no_std:tt)* }) => {
+        $($no_std)*
     };
 }
 
@@ -61,7 +86,6 @@ pub mod feagi_message;
 pub mod misc;
 pub mod neurons;
 pub mod voxels;
-pub mod feagi_id_prev;
 pub mod feagi_id;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;

@@ -20,7 +20,7 @@ default = [
 std = [
     "alloc",
     "rand",
-    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std",
+    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std", "uuid/v7",
 ]
 
 alloc = [

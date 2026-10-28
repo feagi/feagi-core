@@ -1,15 +1,13 @@
-use feagi_basis::{impl_byte_array_id, impl_byte_array_id_random};
+use feagi_basis::feagi_id::feagi_id;
 
 pub const NUMBER_OF_BYTES_NODE_ID: usize = 8;
 
 /// Length of the padded URL-safe base64 text of [FeagiNodeID] (8 bytes -> 12 characters)
-#[allow(clippy::manual_div_ceil)]
-pub const NUMBER_OF_BASE_64_BYTES_NODE_ID: usize = (NUMBER_OF_BYTES_NODE_ID + 2) / 3 * 4;
+pub const NUMBER_OF_BASE_64_BYTES_NODE_ID: usize = NUMBER_OF_BYTES_NODE_ID.div_ceil(3) * 4;
 
-impl_byte_array_id!(
+feagi_id! {
     /// Unique session tracker of a node tracked by FEAGI (generally for Zenoh)
-    pub FeagiNodeID,
-    NUMBER_OF_BYTES_NODE_ID
-);
-
-impl_byte_array_id_random!(FeagiNodeID, NUMBER_OF_BYTES_NODE_ID);
+    pub FeagiNodeID: NUMBER_OF_BYTES_NODE_ID,
+    random,
+    base64 = Base64EncodedFeagiNodeID,
+}
