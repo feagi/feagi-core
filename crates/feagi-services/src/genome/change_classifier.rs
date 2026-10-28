@@ -149,6 +149,7 @@ impl CorticalChangeClassifier {
             "snooze_period",
             // Excitability
             "neuron_excitability",
+            "excitability",
             // Degeneration
             "degeneration",
             "neuron_degeneracy_coefficient",
@@ -184,6 +185,7 @@ impl CorticalChangeClassifier {
             "neuron_psp_uniform_distribution",
             // Plasticity
             "plasticity_constant",
+            "neuron_plasticity_constant",
             // Burst engine
             "burst_engine_active",
             // Opt-in LIF homeostatic leak (JSON object; no synapse rebuild)

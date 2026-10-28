@@ -285,6 +285,43 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
         }
 
         validate_memory_mp_encoding(&area.properties, &cortical_id_display, result);
+        validate_neuron_fractions(&area.properties, &cortical_id_display, result);
+    }
+}
+
+/// Leak and leak variability are fractions (0 to 1), not percents. Shared with the schema
+/// bounds in `feagi-services` so load-time and update-time validation cannot drift.
+pub const LEAK_FRACTION_MIN: f64 = 0.0;
+pub const LEAK_FRACTION_MAX: f64 = 1.0;
+/// The consecutive-fire limit is stored as a `u16` count (0 means unlimited).
+pub const CONSECUTIVE_FIRE_COUNT_MAX: f64 = u16::MAX as f64;
+
+/// Reject out-of-range leak, leak variability and consecutive-fire limit values at load.
+fn validate_neuron_fractions(
+    properties: &std::collections::HashMap<String, Value>,
+    cortical_id_display: &str,
+    result: &mut ValidationResult,
+) {
+    for key in ["leak_coefficient", "leak_variability"] {
+        if let Some(n) = properties.get(key).and_then(|v| v.as_f64()) {
+            if !n.is_finite() || !(LEAK_FRACTION_MIN..=LEAK_FRACTION_MAX).contains(&n) {
+                result.add_error(format!(
+                    "Cortical area '{cortical_id_display}': {key} must be >= {LEAK_FRACTION_MIN} and <= {LEAK_FRACTION_MAX} (fraction, not percent); got {n}"
+                ));
+            }
+        }
+    }
+    for key in ["consecutive_fire_cnt_max", "consecutive_fire_limit"] {
+        if let Some(n) = properties.get(key).and_then(|v| v.as_f64()) {
+            if !n.is_finite()
+                || n.fract() != 0.0
+                || !(0.0..=CONSECUTIVE_FIRE_COUNT_MAX).contains(&n)
+            {
+                result.add_error(format!(
+                    "Cortical area '{cortical_id_display}': {key} must be an integer >= 0 and <= {CONSECUTIVE_FIRE_COUNT_MAX}; got {n}"
+                ));
+            }
+        }
     }
 }
 
@@ -913,6 +950,23 @@ mod tests {
             genome.physiology.quantization_precision, "int8",
             "Invalid should default to int8"
         );
+    }
+
+    #[test]
+    fn test_validate_rejects_out_of_range_leak_and_fire_count() {
+        let mut result = ValidationResult::new();
+        let props = std::collections::HashMap::from([
+            ("leak_coefficient".to_string(), serde_json::json!(25.0)),
+            ("leak_variability".to_string(), serde_json::json!(0.5)),
+            (
+                "consecutive_fire_cnt_max".to_string(),
+                serde_json::json!(1.5),
+            ),
+        ]);
+        validate_neuron_fractions(&props, "area", &mut result);
+        assert_eq!(result.errors.len(), 2, "{:?}", result.errors);
+        assert!(result.errors[0].contains("leak_coefficient"));
+        assert!(result.errors[1].contains("consecutive_fire_cnt_max"));
     }
 
     #[test]

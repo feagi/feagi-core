@@ -455,6 +455,43 @@ pub struct GenomeServiceImpl {
     burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
 }
 
+/// Reject out-of-range values of bounded numeric parameters. Shared by the update path and the
+/// fast parameter path so neither can accept what the schema forbids.
+fn validate_bounded_parameters(changes: &HashMap<String, Value>) -> ServiceResult<()> {
+    // Bounded numeric parameters. `neuron_excitability`, leak and leak variability are
+    // fractions in 0..=1 (Brain Visualizer shows them as percent but sends the fraction);
+    // the consecutive-fire limit is an integer count. Reject out-of-range values here: the
+    // NPU clamps and the fast-update path used to drop them while still returning success.
+    // Bounds come from the parameter schema so schema and validation cannot drift.
+    for key in [
+        "neuron_excitability",
+        "excitability",
+        "neuron_leak_coefficient",
+        "leak_coefficient",
+        "leak",
+        "neuron_leak_variability",
+        "leak_variability",
+        "neuron_consecutive_fire_count",
+        "consecutive_fire_cnt_max",
+        "consecutive_fire_count",
+    ] {
+        if let Some(value) = changes.get(key) {
+            crate::genome::area_parameter_schema::validate_hard_bounds(key, value).map_err(
+                |e| {
+                    let note = if key.contains("excitab") || key.contains("leak") {
+                        " (fraction, not percent)"
+                    } else {
+                        ""
+                    };
+                    ServiceError::InvalidInput(format!("{e}{note}"))
+                },
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
 impl GenomeServiceImpl {
     pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self {
@@ -1391,23 +1428,7 @@ impl GenomeService for GenomeServiceImpl {
             }
         }
 
-        // `neuron_excitability` is a firing probability in 0..=1 (Brain Visualizer shows it as a
-        // percentage but sends the fraction). The NPU clamps and the fast-update path used to
-        // drop out-of-range values while still returning success, so reject them here.
-        for key in ["neuron_excitability", "excitability"] {
-            if let Some(value) = changes.get(key) {
-                let excitability = value.as_f64().ok_or_else(|| {
-                    ServiceError::InvalidInput(format!(
-                        "{key} must be a number in 0..=1 (fraction, not percent); got {value}"
-                    ))
-                })?;
-                if !(0.0..=1.0).contains(&excitability) || !excitability.is_finite() {
-                    return Err(ServiceError::InvalidInput(format!(
-                        "{key} must be in 0..=1 (fraction of bursts a neuron may fire, not percent); got {excitability}"
-                    )));
-                }
-            }
-        }
+        validate_bounded_parameters(&changes)?;
 
         // Reject a malformed homeostat config before anything is applied; null clears it.
         // An object update merges into the stored one (given keys override, absent keys are
@@ -2193,6 +2214,7 @@ impl GenomeServiceImpl {
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", cortical_id);
+        validate_bounded_parameters(&changes)?;
 
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
@@ -6215,6 +6237,108 @@ mod tests {
             .drain_all()
             .iter()
             .any(|u| u.parameter_name == "neuron_excitability"));
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rejects_out_of_range_leak_and_fire_count() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cleak001").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            10,
+            "leak-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        for (key, bad) in [
+            ("neuron_leak_coefficient", serde_json::json!(50)),
+            ("leak_coefficient", serde_json::json!(-0.1)),
+            ("neuron_leak_variability", serde_json::json!(1.5)),
+            ("neuron_consecutive_fire_count", serde_json::json!(2.5)),
+            ("neuron_consecutive_fire_count", serde_json::json!(70000)),
+        ] {
+            let err = svc
+                .update_cortical_area(
+                    &area_id.as_base_64(),
+                    HashMap::from([(key.to_string(), bad.clone())]),
+                )
+                .await
+                .expect_err("out-of-range value must be rejected");
+            let msg = format!("{err:?}");
+            assert!(msg.contains(key), "message must name {key}: {msg}");
+            assert!(
+                msg.contains("<=") || msg.contains("whole number"),
+                "message must state the range: {msg}"
+            );
+        }
+        assert!(queue.drain_all().is_empty(), "rejected updates queue nothing");
+
+        for (key, ok) in [
+            ("neuron_leak_coefficient", serde_json::json!(0.25)),
+            ("neuron_consecutive_fire_count", serde_json::json!(3)),
+        ] {
+            svc.update_cortical_area(&area_id.as_base_64(), HashMap::from([(key.to_string(), ok)]))
+                .await
+                .unwrap_or_else(|e| panic!("{key} in range must be accepted: {e:?}"));
+        }
+    }
+
+    #[tokio::test]
+    async fn fast_update_path_rejects_out_of_range_values() {
+        use super::GenomeServiceImpl;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cfast001").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            10,
+            "fast-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, ParameterUpdateQueue::new());
+        for (key, bad) in [
+            ("neuron_excitability", serde_json::json!(25)),
+            ("neuron_leak_coefficient", serde_json::json!(30)),
+        ] {
+            let err = svc
+                .update_parameters_only(
+                    &area_id.as_base_64(),
+                    HashMap::from([(key.to_string(), bad)]),
+                )
+                .await
+                .expect_err("fast path must reject out-of-range values");
+            let msg = format!("{err:?}");
+            assert!(msg.contains(key) && msg.contains("<= 1"), "{msg}");
+        }
     }
 
     #[tokio::test]

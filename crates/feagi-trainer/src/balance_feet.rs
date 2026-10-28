@@ -1936,6 +1936,15 @@ pub fn sample_is_upright(sample: &BalanceSample, criterion: &BalanceFeetCriterio
     !non_upright_reasons(sample, criterion, reset).any()
 }
 
+/// Torso height as a fraction of its reset height (1 = at the reset pose). Uses the sample's own
+/// reset height, falling back to the sample's height; `None` when the height is unknown or the
+/// reset height is not positive.
+pub fn sample_height_fraction(sample: &BalanceSample) -> Option<f64> {
+    let height = sample.torso_height_m?;
+    let reset = sample.reset_height_m.or(sample.torso_height_m)?;
+    (reset > 0.0).then(|| height / reset)
+}
+
 /// Fold one controller sample into the attempt.
 ///
 /// `seq` is the controller's physics-step counter. With N steps per burst
@@ -3897,6 +3906,10 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
         ColumnSpec::with_unit("sim_time", "s", "Simulated time."),
         ColumnSpec::with_unit("tilt", "deg", "Torso tilt from world up."),
         ColumnSpec::with_unit("height", "m", "Torso height above world z."),
+        ColumnSpec::unitless(
+            "height_fraction",
+            "Torso height divided by its height on the attempt's first sample (1 = at the reset pose).",
+        ),
     ];
     columns.extend(criterion.contact_bodies.iter().map(|body| {
         ColumnSpec::unitless(&contact_column(body), "The contact body touches the world.")
@@ -4032,6 +4045,7 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::Float(sim_time_s),
             RunDataValue::Float(sample.tilt_deg),
             RunDataValue::opt_float(sample.torso_height_m),
+            RunDataValue::opt_float(sample_height_fraction(sample)),
         ];
         row.extend((0..criterion.contact_bodies.len()).map(|i| {
             sample
@@ -4865,6 +4879,26 @@ mod tests {
             assist_rise: None,
             actuators: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn height_fraction_is_height_over_reset_height() {
+        let mut s = sample(1, 1, 0.0);
+        assert_eq!(sample_height_fraction(&s), None);
+        s.torso_height_m = Some(0.4);
+        assert_eq!(sample_height_fraction(&s), Some(1.0));
+        s.reset_height_m = Some(0.8);
+        assert_eq!(sample_height_fraction(&s), Some(0.5));
+        s.reset_height_m = Some(0.0);
+        assert_eq!(sample_height_fraction(&s), None);
+    }
+
+    #[test]
+    fn steps_table_declares_height_fraction_after_height() {
+        let spec = steps_table_spec(&fall_criterion(), &[]);
+        let names: Vec<&str> = spec.columns.iter().map(|c| c.name.as_str()).collect();
+        let h = names.iter().position(|n| *n == "height").unwrap();
+        assert_eq!(names[h + 1], "height_fraction");
     }
 
     fn fall_criterion() -> BalanceFeetCriterion {

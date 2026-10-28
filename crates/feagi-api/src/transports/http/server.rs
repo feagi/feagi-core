@@ -578,6 +578,10 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_cortical_name_location),
         )
         .route(
+            "/cortical_area/parameter_schema",
+            get(cortical_area::get_cortical_area_parameter_schema),
+        )
+        .route(
             "/cortical_area/cortical_area_properties",
             axum::routing::post(cortical_area::post_cortical_area_properties),
         )

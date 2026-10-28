@@ -804,6 +804,76 @@ pub async fn post_cortical_name_location(
     }
 }
 
+/// Query for [`get_cortical_area_parameter_schema`].
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct CorticalAreaParameterSchemaQuery {
+    /// Cortical area ID (base64). Omit for every parameter with the area groups each applies to.
+    pub cortical_id: Option<String>,
+}
+
+/// Response of `GET /v1/cortical_area/parameter_schema`.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CorticalAreaParameterSchemaResponse {
+    /// Echo of the requested area, when one was given.
+    pub cortical_id: Option<String>,
+    /// Group of that area (IPU, OPU, CORE, CUSTOM, MEMORY); parameters are filtered to it.
+    pub area_group: Option<String>,
+    /// Editor sections in display order.
+    pub categories: Vec<String>,
+    /// One entry per parameter `update_cortical_area` accepts: key, aliases, label, description,
+    /// type (number|integer|boolean|enum|object|array|string), unit, min/max (enforced),
+    /// suggested_min/suggested_max (advisory), enum_values, default, fields (objects), category,
+    /// applies_to, live_updatable, update_class, nullable and current_value (area given).
+    #[schema(value_type = Vec<Object>)]
+    pub parameters: Vec<feagi_services::genome::area_parameter_schema::AreaParameterSchemaEntry>,
+}
+
+/// Schema of every parameter `update_cortical_area` accepts, derived from core's own change
+/// classifier and validation bounds. With `cortical_id`, filtered to that area's group and
+/// carrying each parameter's current value.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/parameter_schema",
+    tag = "cortical_area",
+    params(CorticalAreaParameterSchemaQuery),
+    responses(
+        (status = 200, description = "Parameter schema", body = CorticalAreaParameterSchemaResponse),
+        (status = 404, description = "Cortical area not found")
+    )
+)]
+pub async fn get_cortical_area_parameter_schema(
+    State(state): State<ApiState>,
+    Query(query): Query<CorticalAreaParameterSchemaQuery>,
+) -> ApiResult<Json<CorticalAreaParameterSchemaResponse>> {
+    use feagi_services::genome::area_parameter_schema as schema;
+    let connectome_service = state.connectome_service.as_ref();
+    let (group, props) = match query.cortical_id.as_deref() {
+        Some(id) => {
+            let info = connectome_service
+                .get_cortical_area(id)
+                .await
+                .map_err(|e| ApiError::not_found("cortical_area", &format!("{id}: {e}")))?;
+            let mut props = connectome_service
+                .get_cortical_area_properties(id)
+                .await
+                .map_err(|e| ApiError::internal(format!("Failed to read properties: {e}")))?;
+            // Stored properties omit values an area leaves at its defaults; the area info has them.
+            if let Ok(effective) = serde_json::to_value(&info) {
+                schema::merge_effective_values(&mut props, &effective);
+            }
+            (Some(info.cortical_group.to_uppercase()), Some(props))
+        }
+        None => (None, None),
+    };
+    Ok(Json(CorticalAreaParameterSchemaResponse {
+        cortical_id: query.cortical_id,
+        parameters: schema::build_area_parameter_schema(group.as_deref(), props.as_ref()),
+        area_group: group,
+        categories: schema::CATEGORIES.iter().map(|c| c.to_string()).collect(),
+    }))
+}
+
 /// Get detailed properties of a single cortical area by ID. Request: {cortical_id: string}.
 #[utoipa::path(
     post,

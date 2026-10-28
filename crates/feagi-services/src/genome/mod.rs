@@ -11,6 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+pub mod area_parameter_schema;
 pub mod change_classifier;
 pub mod parameter_updater;
 
