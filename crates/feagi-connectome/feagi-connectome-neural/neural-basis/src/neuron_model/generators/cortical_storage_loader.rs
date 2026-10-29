@@ -2,7 +2,7 @@ use crate::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
 use crate::neuron_model::data::data_containers::CorticalModelFullStorageData;
 use crate::neuron_model::generators::cortical_generator_definition::CorticalGeneratorDefinition;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStoreBackend;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
@@ -26,31 +26,31 @@ where
 }
 
 /// A Cortical Generator that reads from storage the data
-pub struct CorticalStorageLoader<FIQ, NM, PDS>
+pub struct CorticalStorageLoader<FIQ, NM, SB>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    PDS: QuantContiguousStore<Elem = NM::NeuronDataInternal>,
+    SB: QuantContiguousStoreBackend,
 {
-    loaded_data: CorticalModelFullStorageData<FIQ, NM, PDS>,
+    loaded_data: CorticalModelFullStorageData<FIQ, NM, SB>,
 }
 
-impl<FIQ, NM, PDS> CorticalStorageLoader<FIQ, NM, PDS>
+impl<FIQ, NM, SB> CorticalStorageLoader<FIQ, NM, SB>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    PDS: QuantContiguousStore<Elem = NM::NeuronDataInternal>,
+    SB: QuantContiguousStoreBackend,
 {
-    pub fn new(data: CorticalModelFullStorageData<FIQ, NM, PDS>) -> Self {
+    pub fn new(data: CorticalModelFullStorageData<FIQ, NM, SB>) -> Self {
         Self { loaded_data: data}
     }
 }
 
-impl<FIQ, NM, PDS> CorticalGeneratorDefinition<FIQ, NM> for CorticalStorageLoader<FIQ, NM, PDS>
+impl<FIQ, NM, SB> CorticalGeneratorDefinition<FIQ, NM> for CorticalStorageLoader<FIQ, NM, SB>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    PDS: QuantContiguousStore<Elem = NM::NeuronDataInternal>,
+    SB: QuantContiguousStoreBackend,
 {
     fn get_neuron_layout(&self) -> &LayoutDataOf<NM, FIQ> {
         &self.loaded_data.layout
@@ -85,10 +85,10 @@ where
     }
 }
 
-unsafe impl<FIQ, NM, PDS> Send for CorticalStorageLoader<FIQ, NM, PDS>
+unsafe impl<FIQ, NM, SB> Send for CorticalStorageLoader<FIQ, NM, SB>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    PDS: QuantContiguousStore<Elem = NM::NeuronDataInternal>,
+    SB: QuantContiguousStoreBackend,
 {
 }

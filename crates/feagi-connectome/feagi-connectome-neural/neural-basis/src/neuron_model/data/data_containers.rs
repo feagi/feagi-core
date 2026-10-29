@@ -1,8 +1,8 @@
 use crate::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use core::fmt::{Debug, Formatter};
+use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantIndexedBackend};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use feagi_basis::prelude::QuantIndexed;
 use serde::{Deserialize, Serialize};
 
 // TODO Move away from pub properties and instead use getters and setters with proper checks!
@@ -10,12 +10,21 @@ use serde::{Deserialize, Serialize};
 
 //region Cortical Model
 
-/// The full data of a given cortical model to be stored (everything except scratch data)
-pub struct CorticalModelFullStorageData<FIQ, NM, PDS>
+/// The full data of a given cortical model to be stored (everything except scratch data), with
+/// the neuron data held in a store of the backend `SB`. Serializable when the store of `SB` is
+/// (an array backend for example is only up to 32 elements)
+// NOTE: Debug, Clone and PartialEq are implemented below instead of derived, as the derives cannot
+// bound the store of `SB`, which is only known to be a `QuantContiguousStore`
+#[derive(Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "SB::Store<NM::NeuronDataInternal>: Serialize",
+    deserialize = "SB::Store<NM::NeuronDataInternal>: Deserialize<'de>",
+))] // Every other field is serializable through the bounds of NeuronModel and NeuronLayout
+pub struct CorticalModelFullStorageData<FIQ, NM, SB>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    PDS: QuantContiguousStore<Elem=NM::NeuronDataInternal>
+    SB: QuantContiguousStoreBackend
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
     pub layout: LayoutDataOf<NM, FIQ>,
@@ -30,7 +39,67 @@ where
     pub is_psp_uniform: bool,
     pub is_psp_using_membrane_potential: bool,
     /// The stored neuron data of all neurons
-    pub neuron_internal: QuantIndexed<CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, PDS>,
+    pub neuron_internal: QuantIndexedBackend<CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, SB, NM::NeuronDataInternal>,
+}
+
+impl<FIQ, NM, SB> Debug for CorticalModelFullStorageData<FIQ, NM, SB>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+    SB: QuantContiguousStoreBackend
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CorticalModelFullStorageData")
+            .field("layout", &self.layout)
+            .field("cortical_properties", &self.cortical_properties)
+            .field("cortical_internal", &self.cortical_internal)
+            .field("neuron_variance_properties", &self.neuron_variance_properties)
+            .field("cortical_level_psp", &self.cortical_level_psp)
+            .field("is_psp_uniform", &self.is_psp_uniform)
+            .field("is_psp_using_membrane_potential", &self.is_psp_using_membrane_potential)
+            .field("neuron_internal", &self.neuron_internal.store().store_as_slice())
+            .finish()
+    }
+}
+
+impl<FIQ, NM, SB> Clone for CorticalModelFullStorageData<FIQ, NM, SB>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+    SB: QuantContiguousStoreBackend,
+    SB::Store<NM::NeuronDataInternal>: Clone
+{
+    fn clone(&self) -> Self {
+        Self {
+            layout: self.layout.clone(),
+            cortical_properties: self.cortical_properties.clone(),
+            cortical_internal: self.cortical_internal.clone(),
+            neuron_variance_properties: self.neuron_variance_properties.clone(),
+            cortical_level_psp: self.cortical_level_psp.clone(),
+            is_psp_uniform: self.is_psp_uniform,
+            is_psp_using_membrane_potential: self.is_psp_using_membrane_potential,
+            neuron_internal: self.neuron_internal.clone(),
+        }
+    }
+}
+
+/// Neuron data is compared by its elements, regardless of the capacity of its store
+impl<FIQ, NM, SB> PartialEq for CorticalModelFullStorageData<FIQ, NM, SB>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+    SB: QuantContiguousStoreBackend
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.layout == other.layout
+            && self.cortical_properties == other.cortical_properties
+            && self.cortical_internal == other.cortical_internal
+            && self.neuron_variance_properties == other.neuron_variance_properties
+            && self.cortical_level_psp == other.cortical_level_psp
+            && self.is_psp_uniform == other.is_psp_uniform
+            && self.is_psp_using_membrane_potential == other.is_psp_using_membrane_potential
+            && self.neuron_internal.store().store_as_slice() == other.neuron_internal.store().store_as_slice()
+    }
 }
 
 

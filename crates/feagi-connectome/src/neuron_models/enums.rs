@@ -11,6 +11,3 @@ use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization
 
 
 
-pub enum NeuronModelStorageDataEnum<FIQ, PDS> {
-    CorePower(CorticalModelFullStorageData<FIQ, CorePower>)
-}

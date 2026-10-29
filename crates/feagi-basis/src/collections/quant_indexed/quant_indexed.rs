@@ -135,6 +135,50 @@ impl<D, const N: usize> QuantContiguousStoreMut for ::heapless::Vec<D, N> {
 
 //endregion
 
+//region Backing Store Backends
+
+// NOTE: Borrowed stores (slices) have no backend, as a backend must build its store for any element
+// type, which a borrow of some lifetime cannot do without restricting every element type
+
+/// Which kind of contiguous store (Vec, array, heapless) backs a [`QuantIndexed`], for any element
+/// type. Lets a type pick the kind of store while the element type is decided elsewhere, such as
+/// per quantization level. Implemented by a zero sized marker per kind
+pub trait QuantContiguousStoreBackend {
+    /// The store of this kind holding elements of type `D`
+    type Store<D>: QuantContiguousStore<Elem = D>;
+}
+
+/// A [`QuantIndexed`] backed by a store of the backend `B`
+pub type QuantIndexedBackend<QI, B, D> = QuantIndexed<QI, <B as QuantContiguousStoreBackend>::Store<D>>;
+
+/// Backs a [`QuantIndexed`] with a [`Vec`]
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuantContiguousStoreBackendVec;
+
+#[cfg(feature = "alloc")]
+impl QuantContiguousStoreBackend for QuantContiguousStoreBackendVec {
+    type Store<D> = Vec<D>;
+}
+
+/// Backs a [`QuantIndexed`] with an array of `N` elements
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuantContiguousStoreBackendArray<const N: usize>;
+
+impl<const N: usize> QuantContiguousStoreBackend for QuantContiguousStoreBackendArray<N> {
+    type Store<D> = [D; N];
+}
+
+/// Backs a [`QuantIndexed`] with a [`heapless::Vec`] of up to `N` elements
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuantContiguousStoreBackendHeapless<const N: usize>;
+
+impl<const N: usize> QuantContiguousStoreBackend for QuantContiguousStoreBackendHeapless<N> {
+    type Store<D> = ::heapless::Vec<D, N>;
+}
+
+//endregion
+
 //region Store-agnostic behaviour
 
 impl<QI, S> QuantIndexed<QI, S> {

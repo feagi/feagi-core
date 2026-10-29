@@ -6,9 +6,10 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 use half::{bf16, f16};
-use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStoreBackend;
 use feagi_connectome_neural::neural_basis::neuron_model::data::data_containers::{CorticalModelFullStorageData, CorticalModelGenomePropertiesData, CorticalModelNPUInterfaceData};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use serde::{Deserialize, Serialize};
 
 define_cortical_dynamics_quantization_template! {
     /// Quantization For the Core Power type
@@ -41,17 +42,22 @@ cortical_dynamics_quantization_core_power_template!(expand_cortical_dynamics_qua
 pub type CorePowerFullStorageData<
     FIQ: FeagiIndexQuantization,
     NM: NeuronModelCorePower,
-    PDS: QuantContiguousStore<Elem=NM::NeuronDataInternal>
-> = CorticalModelFullStorageData<FIQ, NM, PDS>;
+    SB: QuantContiguousStoreBackend
+> = CorticalModelFullStorageData<FIQ, NM, SB>;
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat16, SB>: Serialize, CorePowerFullStorageData<FIQ, NeuronModelCorePowerBFloat16, SB>: Serialize, CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat32, SB>: Serialize, CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat64, SB>: Serialize",
+    deserialize = "CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat16, SB>: Deserialize<'de>, CorePowerFullStorageData<FIQ, NeuronModelCorePowerBFloat16, SB>: Deserialize<'de>, CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat32, SB>: Deserialize<'de>, CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat64, SB>: Deserialize<'de>",
+))] // Serializable when the store of SB is, for every level
 pub enum CorePowerFullStorageDataQuantEnum<
     FIQ: FeagiIndexQuantization,
-    PDS: QuantContiguousStore,
+    SB: QuantContiguousStoreBackend,
 > {
-    Float16(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat16, PDS>),
-    BFloat16(CorePowerFullStorageData<FIQ, NeuronModelCorePowerBFloat16, PDS>),
-    Float32(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat32, PDS>),
-    Float64(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat64, PDS>),
+    Float16(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat16, SB>),
+    BFloat16(CorePowerFullStorageData<FIQ, NeuronModelCorePowerBFloat16, SB>),
+    Float32(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat32, SB>),
+    Float64(CorePowerFullStorageData<FIQ, NeuronModelCorePowerFloat64, SB>),
 }
 
 pub type CorePowerGenomePropertiesData<
@@ -59,6 +65,8 @@ pub type CorePowerGenomePropertiesData<
     NM: NeuronModelCorePower
 > = CorticalModelGenomePropertiesData<FIQ, NM>;
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")] // Every level is serializable through the bounds of NeuronModel and NeuronLayout
 pub enum CorePowerGenomePropertiesDataEnum<
     FIQ: FeagiIndexQuantization,
 > {
@@ -75,6 +83,8 @@ pub type CorePowerNPUInterfaceData<
     NM: NeuronModelCorePower
 > = CorticalModelNPUInterfaceData<FIQ, NM>;
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "")] // Every level is serializable through the bounds of NeuronModel and NeuronLayout
 pub enum CorePowerNPUInterfaceDataEnum<
     FIQ: FeagiIndexQuantization,
 > {
