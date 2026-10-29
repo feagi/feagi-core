@@ -1,7 +1,8 @@
-use crate::cortical_area::CorticalDynamicsModel;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_connectome_neural::neural_basis::cortical_area::cortical_dynamics_quantization::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDynamicsQuantization, CorticalFunctionSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification};
-use feagi_connectome_neural::neural_basis::cortical_area::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefault;
+use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefault;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
+    CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalFunctionSpecification,
+    NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronModel,
+};
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 
@@ -9,7 +10,7 @@ define_cortical_dynamics_quantization_template! {
     /// Quantization For the Feagi Advanced type
     FeagiAdvanced
 
-    NeuronLayout: NeuronLayoutVoxelDefault<FIQ>
+    NeuronLayout: NeuronLayoutVoxelDefault
 
     Quantizables: {
         /// For handling timing

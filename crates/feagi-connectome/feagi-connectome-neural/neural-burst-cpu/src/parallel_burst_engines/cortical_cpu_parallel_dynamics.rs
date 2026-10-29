@@ -1,45 +1,41 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::BurstIndex;
-use neural_basis::cortical_area::cortical_burst_engine_dynamics::CorticalBurstEngineDynamics;
-use neural_basis::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use neural_basis::cortical_area::data::neuron_layout::NeuronLayout;
-use neural_basis::cortical_area::data::per_cortical_data::CorticalAreaUbiquitousFlags;
-use neural_basis::cortical_area::data::per_neuron_data::{InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
+use neural_basis::neuron_model::neuron_model::NeuralBurstEngineDynamics;
+use neural_basis::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use crate::shared_structs::{CorticalAreaUbiquitousFlags, InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
 
-pub trait CorticalCPUParallelDynamics<FIQ, NL, CDQ>: CorticalBurstEngineDynamics<FIQ, NL, CDQ>
+pub trait CorticalCPUParallelDynamics<FIQ, NM>: NeuralBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NL: NeuronLayout<FIQ>,
-    CDQ: CorticalDynamicsQuantization,
+    NM: NeuronModel,
 {
     /// called per area. Called before neuron call
     fn process_model_cortical_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NL,
+        layout_context: &LayoutDataOf<NM, FIQ>,
         cortical_data: (
-            &CDQ::CorticalDataProperties,
-            &mut CDQ::CorticalDataInternal,
-            &mut CDQ::CorticalDataScratch
+            &NM::CorticalDataProperties,
+            &mut NM::CorticalDataInternal,
+            &mut NM::CorticalDataScratch
         )
     ) -> (); // TODO return type?
 
     /// called per neuron, outputs the firing potential (to processing buffer) to be further post processed (or ignored) and if we are firing
     fn process_model_neuron_dynamics(
         // Inputs as the incoming potential, but is output as the firing potential
-        processing_buffer: &mut CorticalAreaNeuronPotential<CDQ::MembranePotentialQuant>,
+        processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NL,
+        layout_context: &LayoutDataOf<NM, FIQ>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
-            &CDQ::CorticalDataProperties,
-            &CDQ::CorticalDataInternal,
-            &CDQ::CorticalDataScratch
+            &NM::CorticalDataProperties,
+            &NM::CorticalDataInternal,
+            &NM::CorticalDataScratch
         ),
         neuron_data: (
-            &mut CDQ::NeuronDataInternal,
-            &mut CDQ::NeuronDataScratch
+            &mut NM::NeuronDataInternal,
+            &mut NM::NeuronDataScratch
         ),
     ) -> bool; // true if firing
 
@@ -48,22 +44,22 @@ where
     /// upon it. DO NOT override this implementation!
     fn process_neuron_dynamics_for_psp(
         // Inputs as the incoming potential, but is output as the firing potential
-        processing_buffer: &mut CorticalAreaNeuronPotential<CDQ::MembranePotentialQuant>,
+        processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NL,
+        layout_context: &LayoutDataOf<NM, FIQ>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
-            &CDQ::CorticalDataProperties,
-            &CDQ::CorticalDataInternal,
-            &CDQ::CorticalDataScratch
+            &NM::CorticalDataProperties,
+            &NM::CorticalDataInternal,
+            &NM::CorticalDataScratch
         ),
         neuron_data: (
-            &mut CDQ::NeuronDataInternal,
-            &mut CDQ::NeuronDataScratch
+            &mut NM::NeuronDataInternal,
+            &mut NM::NeuronDataScratch
         ),
         cortical_flags: &CorticalAreaUbiquitousFlags,
-        cortical_level_psp: &CorticalAreaNeuronPotential<CDQ::MembranePotentialQuant>,
-        neuron_inversed_outgoing_connection_count: &InverseOutgoingConnectionCount<CDQ::MembranePotentialQuant>,
+        cortical_level_psp: &CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        neuron_inversed_outgoing_connection_count: &InverseOutgoingConnectionCount<NM::MembranePotentialQuant>,
         neuron_flags: &mut PerNeuronUbiquitousFlags
     ) {
 

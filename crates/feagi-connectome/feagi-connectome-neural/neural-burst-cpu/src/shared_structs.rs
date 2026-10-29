@@ -1,10 +1,26 @@
-//! These structs exist on all neurons globally
-
-// TODO these may be cpu specific, may not belong here
-
 use core::cmp::min;
 use feagi_basis::prelude::*;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_basis::feagi_basis_proc_common::bit_struct_builder;
+use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+
+bit_struct_builder! {
+    u8,
+    pub CorticalAreaUbiquitousFlags,
+    #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
+    /// Cortical Area Level Boolean Flags. Has genome properties, but also scratch data used during
+    /// processing. Used during neuron dynamics, neuron post processing, intra-neuron-synapse phase.
+    /// Only modified by configuration / genome logic
+    {
+        is_psp_uniform, // Cortical property, read during neuron processing phase,
+        is_psp_using_membrane_potential, // Cortical property, read during neuron processing phase
+        has_neuron_postprocessors, // set by calculation, read during neuron postprocessing
+        has_neuron_spike_trains, // set by calculation, read during intra-neuron-synapse phase
+        is_visualizer_active, // Cortical property or config set, read during intra-neuron-synapse phase
+    }
+}
+
+
+
 
 create_wrapped_quantized_decimal!(
     /// When psp uniformity is DISABLED, we divide the membrane potential by the number of outgoing
@@ -90,19 +106,19 @@ impl PerNeuronUbiquitousFlags {
         self.turn_off_bit(Self::MASK_IS_FIRING_RESULT);
         out
     }
-    
+
     #[inline(always)]
     fn is_bit(&self, bit: u8) -> bool {
         debug_assert!(bit < 8);
         (self.0 & bit) != 0
     }
-    
+
     #[inline(always)]
     fn turn_off_bit(&mut self, bit: u8) {
         debug_assert!(bit < 8);
         self.0 &= !bit;
     }
-    
+
     #[inline(always)]
     fn turn_on_bit(&mut self, bit: u8) {
         debug_assert!(bit < 8);

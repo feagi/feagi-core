@@ -16,10 +16,10 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///     /// Quantization for the Feagi Advanced model
 ///     FeagiAdvanced
 ///
-///     // Optional, the NeuronLayout the model is restricted to, using the index quantization
-///     // generic `FIQ`. Either a single layout as here, or a bounded generic, such as
-///     // `NeuronLayout: NL: VoxelNeuronLayout<FIQ>`. Defaults to any, `NL: NeuronLayout<FIQ>`
-///     NeuronLayout: NeuronLayoutVoxelDefault<FIQ>
+///     // Optional, the NeuronLayout the model is restricted to. Either a single layout as here,
+///     // or a bounded generic, such as `NeuronLayout: NL: VoxelNeuronLayout`. Defaults to any,
+///     // `NL: NeuronLayout`
+///     NeuronLayout: NeuronLayoutVoxelDefault
 ///
 ///     // Optional, each one of QDECIMAL, QUINT or QSINT
 ///     Quantizables: {
@@ -39,7 +39,7 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///     // CorticalDataScratch, CorticalFunctionContext, NeuronDataInternal, NeuronDataScratch
 ///     DataSpecifications: {
 ///         CorticalDataProperties: {
-///             /// Becomes `RefractoryPeriod<CDQ::RefractoryPeriod>`
+///             /// Becomes `RefractoryPeriod<NM::RefractoryPeriod>`
 ///             refractory_period: RefractoryPeriod,
 ///             /// Kept as written
 ///             some_count: u32,
@@ -59,21 +59,19 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 
 /// Expands a cortical dynamics quantization template, as given by its template macro. Generates:
 /// - A wrapper struct per quantizable, through `feagi_basis`'s `create_wrapped_quantized_*!`
-/// - The model struct `CorticalDynamicsModel{Model}<FIQ, CDQ>` for a single layout, or
-///   `CorticalDynamicsModel{Model}<FIQ, NL, CDQ>` for a generic one, implementing
-///   `CorticalDynamicsModel`
-/// - The model's `CorticalDynamicsQuantization{Model}` trait, holding the model using the
-///   quantization, `type Model`, and an associated type per quantizable
-/// - One `CorticalDynamicsQuantization{Model}{Level}` marker struct per quantization level
-/// - A `{DataType}{Model}<CDQ>` struct for every data type, such as
+/// - The model's `NeuronModel{Model}` trait, a sub trait of `NeuronModel` fixing (or, for a
+///   generic layout, restricting) its `Layout`, holding an associated type per quantizable
+/// - One `NeuronModel{Model}{Level}` marker struct per quantization level, implementing
+///   `NeuronModel` and the model trait. For a generic layout, it is generic over the layout,
+///   `NeuronModel{Model}{Level}<NL>`
+/// - A `{DataType}{Model}<NM>` struct for every data type, such as
 ///   `CorticalDataProperties{Model}`, with its fields public, a `PhantomData` of the
 ///   quantization, a `new` constructor, and its specification trait implemented. Data types not
 ///   given hold only the `PhantomData`
 ///
-/// Must be in scope where this is expanded: `CorticalDynamicsModel`, `CorticalDynamicsQuantization`,
-/// `MembranePotentialQuantization`, `FeagiIndexQuantization`, the six data specification traits
-/// (such as `CorticalDataPropertiesSpecification`), any types the data fields name, and any traits
-/// or types the `NeuronLayout` names (`NeuronLayout` when it is left as default). The crate must
+/// Must be in scope where this is expanded: `NeuronModel`, `MembranePotentialQuantization`, the six
+/// data specification traits (such as `CorticalDataPropertiesSpecification`), any types the data
+/// fields name, and any traits or types the `NeuronLayout` names (`NeuronLayout` when it is left as default). The crate must
 /// depend on `serde` and `half`, which the wrapper structs use
 #[proc_macro]
 pub fn expand_cortical_dynamics_quantization(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

@@ -17,17 +17,14 @@ mod kw {
 /// Name of the quantization level entry that sets `MembranePotentialQuantization::MembranePotentialQuant`
 const MEMBRANE_POTENTIAL_QUANT: &str = "MembranePotentialQuant";
 
-/// Name of the index quantization generic, which a template's `NeuronLayout` entry may use
-const FEAGI_INDEX_QUANTIZATION_GENERIC: &str = "FIQ";
-
-/// Name of the quantization generic of the generated model and data structs
-const CORTICAL_DYNAMICS_QUANTIZATION_GENERIC: &str = "CDQ";
+/// Name of the neuron model generic of the generated data structs
+const NEURON_MODEL_GENERIC: &str = "NM";
 
 /// Name of the marker field every generated data struct holds
 const PHANTOM_FIELD: &str = "_p";
 
-/// The data types of `CorticalDynamicsModel` in trait order, with the specification trait each of
-/// their structs implements
+/// The data types of `NeuronModel` in trait order, with the specification trait each of their
+/// structs implements
 pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
     ("CorticalDataProperties", "CorticalDataPropertiesSpecification"),
     ("CorticalDataInternal", "CorticalDataInternalSpecification"),
@@ -44,7 +41,7 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
 /// /// Optional model description
 /// ModelName
 ///
-/// NeuronLayout: NeuronLayoutVoxelDefault<FIQ>
+/// NeuronLayout: NeuronLayoutVoxelDefault
 ///
 /// Quantizables: {
 ///     /// Optional description
@@ -67,11 +64,11 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
 /// }
 /// ```
 /// The optional `NeuronLayout` entry sets the `NeuronLayout` the model is implemented for (see
-/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout<FIQ>`. The optional
+/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout`. The optional
 /// `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
 /// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
-/// model's data structs, one per data type of `CorticalDynamicsModel` (see
+/// model's data structs, one per data type of `NeuronModel` (see
 /// [`MODEL_DATA_STRUCTS`]). A field typed by a quantizable is its wrapper at the level's
 /// quantization, and `MembranePotentialQuant` the level's membrane potential type. Any other type
 /// is kept as written. Entries keep their template order, except data structs, which keep trait
@@ -85,14 +82,14 @@ pub struct CorticalDynamicsQuantizationTemplate {
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
 }
 
-/// The `NeuronLayout` a model is implemented for, which decides the generics of its model struct
-/// `CorticalDynamicsModel{Model}`. Both forms may use the index quantization generic `FIQ`
+/// The `NeuronLayout` a model is implemented for, which decides the generics of its quantization
+/// level structs `NeuronModel{Model}{Level}`
 pub enum ModelLayoutTemplate {
-    /// `NeuronLayout: NeuronLayoutVoxelDefault<FIQ>`, a single layout. The model struct is
-    /// `CorticalDynamicsModel{Model}<FIQ, CDQ>`
+    /// `NeuronLayout: NeuronLayoutVoxelDefault`, a single layout, which the model trait
+    /// `NeuronModel{Model}` fixes. The level structs are `NeuronModel{Model}{Level}`
     Fixed(Type),
-    /// `NeuronLayout: NL: VoxelNeuronLayout<FIQ>`, any layout within the bounds. The model struct
-    /// is `CorticalDynamicsModel{Model}<FIQ, NL, CDQ>`
+    /// `NeuronLayout: NL: VoxelNeuronLayout`, any layout within the bounds, which the model trait
+    /// `NeuronModel{Model}` restricts to. The level structs are `NeuronModel{Model}{Level}<NL>`
     Generic {
         name: Ident,
         bounds: Punctuated<TypeParamBound, Token![+]>,
@@ -100,11 +97,11 @@ pub enum ModelLayoutTemplate {
 }
 
 impl Default for ModelLayoutTemplate {
-    /// Any layout, `NL: NeuronLayout<FIQ>`
+    /// Any layout, `NL: NeuronLayout`
     fn default() -> Self {
         Self::Generic {
             name: format_ident!("NL"),
-            bounds: syn::parse_quote!(NeuronLayout<FIQ>),
+            bounds: syn::parse_quote!(NeuronLayout),
         }
     }
 }
@@ -114,8 +111,8 @@ impl Parse for ModelLayoutTemplate {
         // `Name: Bounds` is a generic, while anything else (`Name<..>`, `path::Name`) is a type
         if input.peek(syn::Ident) && input.peek2(Token![:]) && !input.peek2(Token![::]) {
             let name = input.parse::<Ident>()?;
-            if name == FEAGI_INDEX_QUANTIZATION_GENERIC || name == CORTICAL_DYNAMICS_QUANTIZATION_GENERIC {
-                return Err(syn::Error::new(name.span(), format!("`{name}` is already a generic of the model, the layout generic needs another name")));
+            if name == NEURON_MODEL_GENERIC {
+                return Err(syn::Error::new(name.span(), format!("`{name}` is already the generic of the model data structs, the layout generic needs another name")));
             }
             input.parse::<Token![:]>()?;
             let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(input)?;
@@ -215,15 +212,11 @@ pub struct DataFieldTemplate {
 
 impl CorticalDynamicsQuantizationTemplate {
     pub fn model_trait_name(&self) -> Ident {
-        format_ident!("CorticalDynamicsQuantization{}", self.model_name)
-    }
-
-    pub fn model_struct_name(&self) -> Ident {
-        format_ident!("CorticalDynamicsModel{}", self.model_name)
+        format_ident!("NeuronModel{}", self.model_name)
     }
 
     pub fn quantization_level_struct_name(&self, level: &Ident) -> Ident {
-        format_ident!("CorticalDynamicsQuantization{}{}", self.model_name, level)
+        format_ident!("NeuronModel{}{}", self.model_name, level)
     }
 
     /// `data_struct` is one of [`MODEL_DATA_STRUCTS`]
@@ -236,18 +229,18 @@ impl CorticalDynamicsQuantizationTemplate {
     }
 
     /// The type a data field is generated with. A quantizable is its wrapper at the level's
-    /// quantization, `Name<CDQ::Name>`, and `MembranePotentialQuant` is
-    /// `CDQ::MembranePotentialQuant`. Anything else is kept as written
+    /// quantization, `Name<NM::Name>`, and `MembranePotentialQuant` is
+    /// `NM::MembranePotentialQuant`. Anything else is kept as written
     fn resolve_field_type(&self, field_type: &Type) -> proc_macro2::TokenStream {
-        let cdq = format_ident!("{}", CORTICAL_DYNAMICS_QUANTIZATION_GENERIC);
+        let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
         if let Type::Path(path) = field_type {
             if path.qself.is_none() {
                 if let Some(name) = path.path.get_ident() {
                     if self.quantizables.contains_key(name) {
-                        return quote!(#name<#cdq::#name>);
+                        return quote!(#name<#nm::#name>);
                     }
                     if name == MEMBRANE_POTENTIAL_QUANT {
-                        return quote!(#cdq::#name);
+                        return quote!(#nm::#name);
                     }
                 }
             }
@@ -276,12 +269,11 @@ impl CorticalDynamicsQuantizationTemplate {
         }
     }
 
-    /// Generate the model's quantizable wrappers, model struct, quantization trait, a marker struct
-    /// implementing it per quantization level, and every data struct of the model
+    /// Generate the model's quantizable wrappers, model trait, a marker struct implementing it per
+    /// quantization level, and every data struct of the model
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
-        let model_struct = self.model_struct_name();
 
         let wrappers = self.quantizables.iter().map(|(name, quantizable)| {
             let attributes = &quantizable.attributes;
@@ -303,57 +295,29 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
-        // The model struct, and the model using this quantization, declared on the model trait as
-        // its layout restriction can only be expressed there
-        let (model_struct_definition, model_declaration, model_definition) = match &self.layout {
+        // The layout restriction of the model trait, and the generics of the level structs with
+        // the layout they set. A fixed layout is set by every level, a generic one is a generic
+        // of every level
+        let (layout_restriction, level_generics, level_struct_body, layout_definition) = match &self.layout {
             ModelLayoutTemplate::Fixed(layout) => (
-                quote! {
-                    pub struct #model_struct<FIQ, CDQ>(::core::marker::PhantomData<(FIQ, CDQ)>)
-                    where
-                        FIQ: FeagiIndexQuantization,
-                        CDQ: #model_trait;
-
-                    impl<FIQ, CDQ> CorticalDynamicsModel<FIQ, #layout, CDQ> for #model_struct<FIQ, CDQ>
-                    where
-                        FIQ: FeagiIndexQuantization,
-                        CDQ: #model_trait,
-                    {
-                    }
-                },
-                quote! {
-                    type Model<FIQ: FeagiIndexQuantization>: CorticalDynamicsModel<FIQ, #layout, Self>;
-                },
-                quote! {
-                    type Model<FIQ: FeagiIndexQuantization> = #model_struct<FIQ, Self>;
-                },
+                quote!(Layout = #layout),
+                quote!(),
+                quote!(;),
+                quote!(#layout),
             ),
             ModelLayoutTemplate::Generic { name, bounds } => (
-                quote! {
-                    pub struct #model_struct<FIQ, #name, CDQ>(::core::marker::PhantomData<(FIQ, #name, CDQ)>)
-                    where
-                        FIQ: FeagiIndexQuantization,
-                        #name: #bounds,
-                        CDQ: #model_trait;
-
-                    impl<FIQ, #name, CDQ> CorticalDynamicsModel<FIQ, #name, CDQ> for #model_struct<FIQ, #name, CDQ>
-                    where
-                        FIQ: FeagiIndexQuantization,
-                        #name: #bounds,
-                        CDQ: #model_trait,
-                    {
-                    }
-                },
-                quote! {
-                    type Model<FIQ: FeagiIndexQuantization, #name: #bounds>: CorticalDynamicsModel<FIQ, #name, Self>;
-                },
-                quote! {
-                    type Model<FIQ: FeagiIndexQuantization, #name: #bounds> = #model_struct<FIQ, #name, Self>;
-                },
+                quote!(Layout: #bounds),
+                quote!(<#name: #bounds>),
+                quote!((::core::marker::PhantomData<#name>);),
+                quote!(#name),
             ),
         };
+        let level_generic_names = match &self.layout {
+            ModelLayoutTemplate::Fixed(_) => quote!(),
+            ModelLayoutTemplate::Generic { name, .. } => quote!(<#name>),
+        };
 
-        // Every data type of `CorticalDynamicsQuantization` is set to the model's data struct of
-        // that type
+        // Every data type of `NeuronModel` is set to the model's data struct of that type
         let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| format_ident!("{}", name)).collect();
         let model_data_structs: Vec<Ident> = model_data_names.iter().map(|name| self.data_struct_name(name)).collect();
 
@@ -364,26 +328,30 @@ impl CorticalDynamicsQuantizationTemplate {
             let quantizable_types = level.quantizables.values();
             let model_data_names = &model_data_names;
             let model_data_structs = &model_data_structs;
-            let model_definition = &model_definition;
+            let level_generics = &level_generics;
+            let level_generic_names = &level_generic_names;
+            let level_struct_body = &level_struct_body;
+            let layout_definition = &layout_definition;
             quote! {
                 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-                pub struct #struct_name;
+                pub struct #struct_name #level_generics #level_struct_body
 
-                impl MembranePotentialQuantization for #struct_name {
+                impl #level_generics MembranePotentialQuantization for #struct_name #level_generic_names {
                     type MembranePotentialQuant = #membrane_potential_quant;
                 }
 
-                impl CorticalDynamicsQuantization for #struct_name {
+                impl #level_generics NeuronModel for #struct_name #level_generic_names {
+                    type Layout = #layout_definition;
                     #( type #model_data_names = #model_data_structs<Self>; )*
                 }
 
-                impl #model_trait for #struct_name {
-                    #model_definition
+                impl #level_generics #model_trait for #struct_name #level_generic_names {
                     #( type #quantizable_names = #quantizable_types; )*
                 }
             }
         });
 
+        let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
         let no_fields = IndexMap::new();
         let data_structs = MODEL_DATA_STRUCTS.iter().map(|(data_struct, specification)| {
             let data_struct = format_ident!("{}", data_struct);
@@ -395,16 +363,16 @@ impl CorticalDynamicsQuantizationTemplate {
             let field_types: Vec<proc_macro2::TokenStream> = fields.values().map(|field| self.resolve_field_type(&field.field_type)).collect();
             quote! {
                 #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
-                pub struct #struct_name<CDQ: #model_trait> {
+                pub struct #struct_name<#nm: #model_trait> {
                     #(
                         #( #field_attributes )*
                         pub #field_names: #field_types,
                     )*
                     #[serde(skip)]
-                    _p: ::core::marker::PhantomData<CDQ>,
+                    _p: ::core::marker::PhantomData<#nm>,
                 }
 
-                impl<CDQ: #model_trait> #struct_name<CDQ> {
+                impl<#nm: #model_trait> #struct_name<#nm> {
                     pub fn new(#( #field_names: #field_types ),*) -> Self {
                         Self {
                             #( #field_names, )*
@@ -413,19 +381,15 @@ impl CorticalDynamicsQuantizationTemplate {
                     }
                 }
 
-                impl<CDQ: #model_trait> #specification<CDQ> for #struct_name<CDQ> {}
+                impl<#nm: #model_trait> #specification<#nm> for #struct_name<#nm> {}
             }
         });
 
         quote! {
             #( #wrappers )*
 
-            #model_struct_definition
-
             #( #model_attributes )*
-            pub trait #model_trait: CorticalDynamicsQuantization {
-                /// What model uses this quantization
-                #model_declaration
+            pub trait #model_trait: NeuronModel<#layout_restriction> {
                 #( #associated_types )*
             }
 
