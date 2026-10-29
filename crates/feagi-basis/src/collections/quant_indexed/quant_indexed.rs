@@ -1,31 +1,30 @@
-use super::ParDataError;
+use super::QuantIndexedError;
 use crate::quantization::prelude::*;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParData<QI, S> {
+pub struct QuantIndexed<QI, S> {
     pub(crate) data: S,
     pub(crate) _marker: PhantomData<QI>,
 }
 
 #[cfg(feature = "alloc")]
-pub type ParDataVector<QI, D> = ParData<QI, Vec<D>>;
+pub type QuantIndexedVector<QI, D> = QuantIndexed<QI, Vec<D>>;
 
-pub type ParDataArray<QI, D, const N: usize> = ParData<QI, [D; N]>;
+pub type QuantIndexedArray<QI, D, const N: usize> = QuantIndexed<QI, [D; N]>;
 
-pub type ParDataSlice<'a, QI, D> = ParData<QI, &'a [D]>;
+pub type QuantIndexedSlice<'a, QI, D> = QuantIndexed<QI, &'a [D]>;
 
-pub type ParDataSliceMut<'a, QI, D> = ParData<QI, &'a mut [D]>;
+pub type QuantIndexedSliceMut<'a, QI, D> = QuantIndexed<QI, &'a mut [D]>;
 
-#[cfg(feature = "heapless")]
-pub type ParDataHeaplessVec<QI, D, const N: usize> = ParData<QI, ::heapless::Vec<D, N>>;
+pub type QuantIndexedHeaplessVec<QI, D, const N: usize> = QuantIndexed<QI, ::heapless::Vec<D, N>>;
 
 //region Backing Stores
 
 /// Links a contiguous backing store to the element type it holds.
-pub trait ParDataStore {
+pub trait QuantContiguousStore {
     /// The element type
     type Elem;
 
@@ -38,13 +37,13 @@ pub trait ParDataStore {
 }
 
 /// A `ParDataStore` whose elements can also be mutated in place.
-pub trait ParDataStoreMut: ParDataStore {
+pub trait QuantContiguousStoreMut: QuantContiguousStore {
     /// Mutably borrows the whole store as a regular slice.
     fn store_as_mut_slice(&mut self) -> &mut [Self::Elem];
 }
 
 /// A `ParDataStoreMut` that can be resized.
-pub trait ParDataStoreResizable: ParDataStoreMut {
+pub trait QuantContiguousStoreResizable: QuantContiguousStoreMut {
     fn new_from_element_default(number_elements: usize) -> Self
     where
         Self::Elem: Default;
@@ -55,7 +54,7 @@ pub trait ParDataStoreResizable: ParDataStoreMut {
 }
 
 #[cfg(feature = "alloc")]
-impl<D> ParDataStore for Vec<D> {
+impl<D> QuantContiguousStore for Vec<D> {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
         self
@@ -63,14 +62,14 @@ impl<D> ParDataStore for Vec<D> {
 }
 
 #[cfg(feature = "alloc")]
-impl<D> ParDataStoreMut for Vec<D> {
+impl<D> QuantContiguousStoreMut for Vec<D> {
     fn store_as_mut_slice(&mut self) -> &mut [D] {
         self
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<D> ParDataStoreResizable for Vec<D> {
+impl<D> QuantContiguousStoreResizable for Vec<D> {
     fn new_from_element_default(number_elements: usize) -> Self
     where
         Self::Elem: Default,
@@ -88,49 +87,47 @@ impl<D> ParDataStoreResizable for Vec<D> {
     }
 }
 
-impl<D, const N: usize> ParDataStore for [D; N] {
+impl<D, const N: usize> QuantContiguousStore for [D; N] {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
         self
     }
 }
 
-impl<D, const N: usize> ParDataStoreMut for [D; N] {
+impl<D, const N: usize> QuantContiguousStoreMut for [D; N] {
     fn store_as_mut_slice(&mut self) -> &mut [D] {
         self
     }
 }
 
-impl<'a, D> ParDataStore for &'a [D] {
+impl<'a, D> QuantContiguousStore for &'a [D] {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
         self
     }
 }
 
-impl<'a, D> ParDataStore for &'a mut [D] {
+impl<'a, D> QuantContiguousStore for &'a mut [D] {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
         self
     }
 }
 
-impl<'a, D> ParDataStoreMut for &'a mut [D] {
+impl<'a, D> QuantContiguousStoreMut for &'a mut [D] {
     fn store_as_mut_slice(&mut self) -> &mut [D] {
         self
     }
 }
 
-#[cfg(feature = "heapless")]
-impl<D, const N: usize> ParDataStore for ::heapless::Vec<D, N> {
+impl<D, const N: usize> QuantContiguousStore for ::heapless::Vec<D, N> {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
         self
     }
 }
 
-#[cfg(feature = "heapless")]
-impl<D, const N: usize> ParDataStoreMut for ::heapless::Vec<D, N> {
+impl<D, const N: usize> QuantContiguousStoreMut for ::heapless::Vec<D, N> {
     fn store_as_mut_slice(&mut self) -> &mut [D] {
         self
     }
@@ -140,7 +137,7 @@ impl<D, const N: usize> ParDataStoreMut for ::heapless::Vec<D, N> {
 
 //region Store-agnostic behaviour
 
-impl<QI, S> ParData<QI, S> {
+impl<QI, S> QuantIndexed<QI, S> {
     /// Wraps a backing store, tagging it with the index type `QI`.
     pub const fn from_store(data: S) -> Self {
         Self { data, _marker: PhantomData } // TODO verify that the length doesnt exceed QI abilities
@@ -162,14 +159,14 @@ impl<QI, S> ParData<QI, S> {
     }
 }
 
-impl<QI, S: Default> Default for ParData<QI, S> {
+impl<QI, S: Default> Default for QuantIndexed<QI, S> {
     fn default() -> Self {
         Self::from_store(S::default())
     }
 }
 
 /// Shared behaviour
-impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
+impl<QI: QuantizedUnsignedIntegerTrait, S: QuantContiguousStore> QuantIndexed<QI, S> {
     /// Number of elements
     pub fn len(&self) -> usize {
         self.data.store_as_slice().len()
@@ -210,33 +207,33 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
         self.data.store_as_slice().par_iter()
     }
 
-    /// Borrows the whole collection as a [`ParDataSlice`] view.
-    pub fn as_data_slice(&self) -> ParDataSlice<'_, QI, S::Elem> {
-        ParData::from_store(self.data.store_as_slice())
+    /// Borrows the whole collection as a [`QuantIndexedSlice`] view.
+    pub fn as_data_slice(&self) -> QuantIndexedSlice<'_, QI, S::Elem> {
+        QuantIndexed::from_store(self.data.store_as_slice())
     }
 
-    /// Borrows a half-open element sub-range as a [`ParDataSlice`] view.
-    pub fn subslice(&self, range: Range<QI>) -> Result<ParDataSlice<'_, QI, S::Elem>, ParDataError> {
+    /// Borrows a half-open element sub-range as a [`QuantIndexedSlice`] view.
+    pub fn subslice(&self, range: Range<QI>) -> Result<QuantIndexedSlice<'_, QI, S::Elem>, QuantIndexedError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         match self.data.store_as_slice().get(start..end) {
-            Some(slice) => Ok(ParData::from_store(slice)),
-            None => Err(ParDataError::ParDataInvalidRange { start, end }),
+            Some(slice) => Ok(QuantIndexed::from_store(slice)),
+            None => Err(QuantIndexedError::QuantIndexedInvalidRange { start, end }),
         }
     }
 
     /// Copies the internal elements to a new owned vector structure.
     #[cfg(feature = "alloc")]
-    pub fn clone_to_vector(&self) -> ParDataVector<QI, S::Elem>
+    pub fn clone_to_vector(&self) -> QuantIndexedVector<QI, S::Elem>
     where
         S::Elem: Clone,
     {
-        ParData::from_store(self.data.store_as_slice().to_vec())
+        QuantIndexed::from_store(self.data.store_as_slice().to_vec())
     }
 }
 
 /// mutable
-impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
+impl<QI: QuantizedUnsignedIntegerTrait, S: QuantContiguousStoreMut> QuantIndexed<QI, S> {
     /// Mutably borrows the element at `index`, or `None` if out of bounds.
     pub fn get_mut(&mut self, index: QI) -> Option<&mut S::Elem> {
         self.data.store_as_mut_slice().get_mut(index.quant_to_usize())
@@ -280,21 +277,21 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
         &mut *self.as_mut_ptr_par().add(index.quant_to_usize())
     }
 
-    /// Mutably borrows a half-open element sub-range as a [`ParDataSliceMut`] view.
-    pub fn subslice_mut(&mut self, range: Range<QI>) -> Result<ParDataSliceMut<'_, QI, S::Elem>, ParDataError> {
+    /// Mutably borrows a half-open element sub-range as a [`QuantIndexedSliceMut`] view.
+    pub fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantIndexedSliceMut<'_, QI, S::Elem>, QuantIndexedError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         match self.data.store_as_mut_slice().get_mut(start..end) {
-            Some(slice) => Ok(ParData::from_store(slice)),
-            None => Err(ParDataError::ParDataInvalidRange { start, end }),
+            Some(slice) => Ok(QuantIndexed::from_store(slice)),
+            None => Err(QuantIndexedError::QuantIndexedInvalidRange { start, end }),
         }
     }
 }
 
-impl<QI, S> Index<QI> for ParData<QI, S>
+impl<QI, S> Index<QI> for QuantIndexed<QI, S>
 where
     QI: QuantizedUnsignedIntegerTrait,
-    S: ParDataStore,
+    S: QuantContiguousStore,
 {
     type Output = S::Elem;
     fn index(&self, index: QI) -> &Self::Output {
@@ -302,10 +299,10 @@ where
     }
 }
 
-impl<QI, S> IndexMut<QI> for ParData<QI, S>
+impl<QI, S> IndexMut<QI> for QuantIndexed<QI, S>
 where
     QI: QuantizedUnsignedIntegerTrait,
-    S: ParDataStoreMut,
+    S: QuantContiguousStoreMut,
 {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data.store_as_mut_slice()[index.quant_to_usize()]
@@ -317,7 +314,7 @@ where
 //region Vector
 
 #[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D> ParData<QI, Vec<D>> {
+impl<QI: QuantizedUnsignedIntegerTrait, D> QuantIndexed<QI, Vec<D>> {
     /// Builds a vector of `number_elements` entries, every one initialised to
     /// `initial_value`.
     pub fn new_uniform(number_elements: QI, initial_value: D) -> Self
@@ -352,15 +349,15 @@ impl<QI: QuantizedUnsignedIntegerTrait, D> ParData<QI, Vec<D>> {
 }
 
 #[cfg(feature = "alloc")]
-impl<QI, D> From<Vec<D>> for ParData<QI, Vec<D>> {
+impl<QI, D> From<Vec<D>> for QuantIndexed<QI, Vec<D>> {
     fn from(value: Vec<D>) -> Self {
         Self::from_store(value)
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<QI, D> From<ParData<QI, Vec<D>>> for Vec<D> {
-    fn from(value: ParData<QI, Vec<D>>) -> Self {
+impl<QI, D> From<QuantIndexed<QI, Vec<D>>> for Vec<D> {
+    fn from(value: QuantIndexed<QI, Vec<D>>) -> Self {
         value.data
     }
 }
@@ -369,7 +366,7 @@ impl<QI, D> From<ParData<QI, Vec<D>>> for Vec<D> {
 
 //region Slice
 
-impl<'a, QI, D> ParData<QI, &'a [D]> {
+impl<'a, QI, D> QuantIndexed<QI, &'a [D]> {
     /// Wraps an existing shared slice.
     pub const fn new(data: &'a [D]) -> Self {
         Self::from_store(data)
@@ -386,7 +383,7 @@ impl<'a, QI, D> ParData<QI, &'a [D]> {
     }
 }
 
-impl<'a, QI, D> From<&'a [D]> for ParData<QI, &'a [D]> {
+impl<'a, QI, D> From<&'a [D]> for QuantIndexed<QI, &'a [D]> {
     fn from(value: &'a [D]) -> Self {
         Self::from_store(value)
     }
@@ -396,7 +393,7 @@ impl<'a, QI, D> From<&'a [D]> for ParData<QI, &'a [D]> {
 
 //region Mut Slice
 
-impl<'a, QI, D> ParData<QI, &'a mut [D]> {
+impl<'a, QI, D> QuantIndexed<QI, &'a mut [D]> {
     /// Wraps an existing mutable slice.
     pub const fn new(data: &'a mut [D]) -> Self {
         Self::from_store(data)
@@ -413,12 +410,12 @@ impl<'a, QI, D> ParData<QI, &'a mut [D]> {
     }
 
     /// Creates a shorter-lived, exclusive re-borrow of this view.
-    pub fn reborrow(&mut self) -> ParData<QI, &mut [D]> {
-        ParData::from_store(&mut *self.data)
+    pub fn reborrow(&mut self) -> QuantIndexed<QI, &mut [D]> {
+        QuantIndexed::from_store(&mut *self.data)
     }
 }
 
-impl<'a, QI, D> From<&'a mut [D]> for ParData<QI, &'a mut [D]> {
+impl<'a, QI, D> From<&'a mut [D]> for QuantIndexed<QI, &'a mut [D]> {
     fn from(value: &'a mut [D]) -> Self {
         Self::from_store(value)
     }
@@ -428,7 +425,7 @@ impl<'a, QI, D> From<&'a mut [D]> for ParData<QI, &'a mut [D]> {
 
 //region Array
 
-impl<QI, D, const N: usize> ParData<QI, [D; N]> {
+impl<QI, D, const N: usize> QuantIndexed<QI, [D; N]> {
     /// Builds an array of `N` entries, every one initialised to `initial_value`.
     pub fn new_uniform(initial_value: D) -> Self
     where
@@ -448,7 +445,7 @@ impl<QI, D, const N: usize> ParData<QI, [D; N]> {
     }
 }
 
-impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, [D; N]> {
+impl<QI, D, const N: usize> From<[D; N]> for QuantIndexed<QI, [D; N]> {
     fn from(value: [D; N]) -> Self {
         Self::from_store(value)
     }
@@ -458,8 +455,7 @@ impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, [D; N]> {
 
 //region Heapless Vector
 
-#[cfg(feature = "heapless")]
-impl<QI, D, const N: usize> ParData<QI, ::heapless::Vec<D, N>> {
+impl<QI, D, const N: usize> QuantIndexed<QI, ::heapless::Vec<D, N>> {
     /// Builds a vector of `N` entries, every one initialised to `initial_value`.
     pub fn new_uniform(initial_value: D) -> Self
     where
@@ -484,8 +480,7 @@ impl<QI, D, const N: usize> ParData<QI, ::heapless::Vec<D, N>> {
     }
 }
 
-#[cfg(feature = "heapless")]
-impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, ::heapless::Vec<D, N>> {
+impl<QI, D, const N: usize> From<[D; N]> for QuantIndexed<QI, ::heapless::Vec<D, N>> {
     fn from(value: [D; N]) -> Self {
         Self::from_store(::heapless::Vec::from_array(value))
     }

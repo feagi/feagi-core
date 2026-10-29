@@ -1,7 +1,7 @@
-use crate::collections::par_data::par_data::ParDataStore;
-use crate::collections::par_data::spatial::SpatialParDataOwning;
+use crate::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use crate::collections::quant_indexed::spatial::SpatialQuantIndexedOwning;
 use crate::collections::spatial_helpers::axis_order::AxisOrderIncrementing;
-use crate::prelude::{ParData, QuantizedDecimalUnwrappedTrait, QuantizedUnsignedIntegerUnwrappedTrait, SpatialCoordinate, SpatialDimensions};
+use crate::prelude::{QuantIndexed, QuantizedDecimalUnwrappedTrait, QuantizedUnsignedIntegerUnwrappedTrait, SpatialCoordinate, SpatialDimensions};
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer};
 use serde::de::DeserializeOwned;
 
@@ -28,16 +28,16 @@ create_wrapped_quantized_unsigned_integer!(
 //region Linear Collections
 
 /// Membrane potentials of the neurons in one cortical area, in the backing store `Store`.
-pub type CorticalAreaNeuronData<QI, Store> = ParData<CorticalAreaNeuronLocalIndex<QI>, Store>;
+pub type CorticalAreaNeuronData<QI, Store> = QuantIndexed<CorticalAreaNeuronLocalIndex<QI>, Store>;
 
 #[cfg(feature = "alloc")]
-pub type CorticalAreaNeuronDataVector<QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, Vec<CorticalAreaNeuronPotential<QP>>>;
+pub type CorticalAreaNeuronDataVector<QI, QP> = QuantIndexed<CorticalAreaNeuronLocalIndex<QI>, Vec<CorticalAreaNeuronPotential<QP>>>;
 
-pub type CorticalAreaNeuronDataArray<QI, QP, const N: usize> = ParData<CorticalAreaNeuronLocalIndex<QI>, [CorticalAreaNeuronPotential<QP>; N]>;
+pub type CorticalAreaNeuronDataArray<QI, QP, const N: usize> = QuantIndexed<CorticalAreaNeuronLocalIndex<QI>, [CorticalAreaNeuronPotential<QP>; N]>;
 
-pub type CorticalAreaNeuronDataSlice<'a, QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, &'a [CorticalAreaNeuronPotential<QP>]>;
+pub type CorticalAreaNeuronDataSlice<'a, QI, QP> = QuantIndexed<CorticalAreaNeuronLocalIndex<QI>, &'a [CorticalAreaNeuronPotential<QP>]>;
 
-pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, &'a mut [CorticalAreaNeuronPotential<QP>]>;
+pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> = QuantIndexed<CorticalAreaNeuronLocalIndex<QI>, &'a mut [CorticalAreaNeuronPotential<QP>]>;
 
 //endregion
 
@@ -54,8 +54,8 @@ pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrapped
 pub type DimensionalCorticalAreaPotentials<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,
-    S: ParDataStore + DeserializeOwned + 'static,
-> = SpatialParDataOwning<
+    S: QuantContiguousStore + DeserializeOwned + 'static,
+> = SpatialQuantIndexedOwning<
     QI,
     DimensionalCorticalAreaNeuronCoordinates<QI>,
     DimensionalCorticalAreaDimensions<QI>,

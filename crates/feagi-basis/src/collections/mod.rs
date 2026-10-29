@@ -4,7 +4,7 @@ pub mod prelude {
     pub use super::create_wrapped_unsigned_integer_spatial_coordinate;
     pub use super::create_wrapped_unsigned_integer_spatial_data;
     pub use super::create_wrapped_unsigned_integer_spatial_dimensions;
-    pub use super::par_data::par_data::ParData;
+    pub use super::quant_indexed::quant_indexed::QuantIndexed;
     pub use super::spatial_helpers::{SpatialCoordinate, SpatialDimensions};
     pub use super::CollectionsError;
 }
@@ -15,7 +15,7 @@ pub use crate::{
 };
 
 pub mod bit_packed_bool;
-pub mod par_data;
+pub mod quant_indexed;
 pub mod spatial_context;
 pub mod spatial_helpers;
 

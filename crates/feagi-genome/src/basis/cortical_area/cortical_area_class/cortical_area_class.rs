@@ -1,5 +1,5 @@
 use feagi_connectome::cortical_area::{CorticalDynamicsModel, CorticalDynamicsQuantization};
-use neural_basis::cortical_area::data::::NeuronLayout;
+use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use crate::basis::cortical_area::cortical_area_class::cortical_area_class_enum::CorticalAreaClassEnum;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 

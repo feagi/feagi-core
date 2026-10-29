@@ -4,6 +4,7 @@ pub mod shared_structs;
 pub use requester::FeagiRequester;
 pub use responder::FeagiResponder;
 pub use channel_backend::FeagiRequestResponseChannelBackend;
+#[cfg(feature = "alloc")]
 pub use implementations::dynamic;
 
 mod channel_backend;

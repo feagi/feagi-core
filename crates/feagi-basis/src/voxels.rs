@@ -1,5 +1,5 @@
-use crate::collections::par_data::par_data::ParDataStore;
-use crate::collections::par_data::spatial::SpatialParDataOwning;
+use crate::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use crate::collections::quant_indexed::spatial::SpatialQuantIndexedOwning;
 use crate::collections::spatial_helpers::axis_order::AxisOrderIncrementing;
 use crate::prelude::{QuantizedDecimalUnwrappedTrait, QuantizedUnsignedIntegerUnwrappedTrait, SpatialCoordinate, SpatialDimensions};
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer};
@@ -48,8 +48,8 @@ pub type CorticalAreaVoxelDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait>
 pub type CorticalAreaVoxels<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,
-    S: ParDataStore + DeserializeOwned + 'static,
-> = SpatialParDataOwning<
+    S: QuantContiguousStore + DeserializeOwned + 'static,
+> = SpatialQuantIndexedOwning<
     CorticalAreaVoxelLinearIndex<QI>,
     CorticalAreaVoxelCoordinates<QI>,
     CorticalAreaVoxelDimensions<QI>,

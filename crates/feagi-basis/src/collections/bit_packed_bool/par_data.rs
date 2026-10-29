@@ -1,6 +1,6 @@
 use super::BitBatchParDataError;
 use crate::collections::bit_packed_bool::bit_batch_word::BitBatchWord;
-use crate::collections::par_data::par_data::{ParDataStore, ParDataStoreMut};
+use crate::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreMut};
 use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
@@ -61,7 +61,7 @@ impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
     QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
-    S: ParDataStore,
+    S: QuantContiguousStore,
     S::Elem: BitBatchWord,
 {
     /// How many bools that are valid (IE not extra from padding) are included?
@@ -204,7 +204,7 @@ impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
     QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
-    S: ParDataStoreMut,
+    S: QuantContiguousStoreMut,
     S::Elem: BitBatchWord,
 {
     /// Tries to get a mutable word at a given index if it exists. Otherwise, returns none.
@@ -278,7 +278,7 @@ where
 impl<QWord, QBit, S> Index<QWord> for BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    S: ParDataStore,
+    S: QuantContiguousStore,
 {
     type Output = S::Elem;
 
@@ -290,7 +290,7 @@ where
 impl<QWord, QBit, S> Index<Range<QWord>> for BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    S: ParDataStore,
+    S: QuantContiguousStore,
 {
     type Output = [S::Elem];
 
@@ -302,7 +302,7 @@ where
 impl<QWord, QBit, S> IndexMut<QWord> for BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    S: ParDataStoreMut,
+    S: QuantContiguousStoreMut,
 {
     fn index_mut(&mut self, index: QWord) -> &mut Self::Output {
         &mut self.words.store_as_mut_slice()[index.quant_to_usize()]
@@ -312,7 +312,7 @@ where
 impl<QWord, QBit, S> IndexMut<Range<QWord>> for BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    S: ParDataStoreMut,
+    S: QuantContiguousStoreMut,
 {
     fn index_mut(&mut self, range: Range<QWord>) -> &mut Self::Output {
         &mut self.words.store_as_mut_slice()[range.start.quant_to_usize()..range.end.quant_to_usize()]

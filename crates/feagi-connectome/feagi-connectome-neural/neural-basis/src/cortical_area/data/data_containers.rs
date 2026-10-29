@@ -2,9 +2,9 @@ use crate::cortical_area::cortical_dynamics_model::CorticalDynamicsModel;
 use crate::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
 use crate::cortical_area::data::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_basis::collections::par_data::par_data::ParDataStore;
-use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use feagi_basis::prelude::ParData;
+use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStore;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
+use feagi_basis::prelude::QuantIndexed;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
@@ -20,19 +20,22 @@ where
     NL: NeuronLayout<FIQ>,
     CDQ: CorticalDynamicsQuantization,
     CDM: CorticalDynamicsModel<FIQ, NL, CDQ>,
-    PDS: ParDataStore<Elem=CDQ::NeuronDataInternal>
+    PDS: QuantContiguousStore<Elem=CDQ::NeuronDataInternal>
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
     pub layout: NL,
     /// Cortical level properties of this model at the given model quantization
     pub cortical_properties: CDQ::CorticalDataProperties,
+    /// Stateful data that must be kept but not exposed to the genome developer for editing.
+    /// May update every burst
+    pub cortical_internal: CDQ::CorticalDataInternal,
     /// Not direct properties, but rather parameters used by functions to set per neuron variance
     pub neuron_variance_properties: CDQ::CorticalFunctionContext,
     pub cortical_level_psp: CorticalAreaNeuronPotential<CDQ::MembranePotentialQuant>,
     pub is_psp_uniform: bool,
     pub is_psp_using_membrane_potential: bool,
     /// The stored neuron data of all neurons
-    pub neuron_internal: ParData<FIQ, PDS>,
+    pub neuron_internal: QuantIndexed<CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, PDS>,
     _p: PhantomData<(FIQ, CDM)>
 }
 

@@ -1,4 +1,4 @@
-use crate::cortical_classes::core_power::data::{CorticalDynamicsModelCorePower, CorticalDynamicsQuantizationCorePower};
+use crate::cortical_models::core_power::data::{CorticalDynamicsModelCorePower, CorticalDynamicsQuantizationCorePower};
 use feagi_connectome_neural::neural_basis::cortical_area::cortical_burst_engine_dynamics::CorticalBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::cortical_area::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefault;
 use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

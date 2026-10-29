@@ -1,13 +1,13 @@
 use crate::collections::bit_packed_bool::BitBatchParDataError;
 use crate::collections::generic_collections::feagi_index_organizer_error::GenericCollectionError;
-use crate::collections::par_data::ParDataError;
+use crate::collections::quant_indexed::QuantIndexedError;
 use crate::collections::spatial_helpers::SpatialHelperError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CollectionsError {
     #[error(transparent)]
-    ParDataError(#[from] ParDataError),
+    ParDataError(#[from] QuantIndexedError),
     #[error(transparent)]
     BitBatchParDataError(#[from] BitBatchParDataError),
     #[error(transparent)]

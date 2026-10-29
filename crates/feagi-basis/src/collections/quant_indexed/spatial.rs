@@ -1,4 +1,4 @@
-use crate::collections::par_data::par_data::{ParDataStore, ParDataStoreMut, ParDataStoreResizable};
+use crate::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreMut, QuantContiguousStoreResizable};
 use crate::collections::prelude::SpatialDimensions;
 use crate::collections::spatial_context::spatial_context_error::SpatialContextError;
 use crate::collections::spatial_helpers::axis_order::{AxisOrder, AxisOrderArray};
@@ -10,13 +10,13 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-pub trait SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, const NUM_DIMS: usize>: Sized
+pub trait SpatialQuantIndexedTrait<QLinear, QCoord, QDims, AxisOrderType, S, const NUM_DIMS: usize>: Sized
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS> + 'static,
-    S: ParDataStore,
+    S: QuantContiguousStore,
 {
     fn data_as_slice(&self) -> &[S::Elem];
 
@@ -46,20 +46,20 @@ where
 
     fn data_as_slice_mut(&mut self) -> &mut [S::Elem]
     where
-        S: ParDataStoreMut;
+        S: QuantContiguousStoreMut;
 
     //region Impls
 
     fn get_linear_mut(&mut self, linear_index: &QLinear) -> Option<&mut S::Elem>
     where
-        S: ParDataStoreMut,
+        S: QuantContiguousStoreMut,
     {
         self.data_as_slice_mut().get_mut(linear_index.quant_to_usize())
     }
 
     fn get_mut(&mut self, coordinate: &SpatialCoordinate<QCoord, NUM_DIMS>) -> Option<&mut S::Elem>
     where
-        S: ParDataStoreMut,
+        S: QuantContiguousStoreMut,
     {
         let linear: QLinear = self.get_spatial_context().coordinate_to_linear(&coordinate);
         self.get_linear_mut(&linear)
@@ -72,26 +72,26 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "QDims: ::serde::de::DeserializeOwned"))]
-pub struct SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize>
+pub struct SpatialQuantIndexedOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS>,
-    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
+    S: QuantContiguousStore<Elem = D> + DeserializeOwned + 'static,
 {
     context: SpatialHelper<QDims, AxisOrderType, NUM_DIMS>,
     data: S,
     _p: core::marker::PhantomData<(QLinear, QCoord)>,
 }
 
-impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
+impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialQuantIndexedOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS>,
-    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
+    S: QuantContiguousStore<Elem = D> + DeserializeOwned + 'static,
 {
     pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, SpatialHelperError> {
         if dimensions.spatial_element_count() != data.len() {
@@ -107,7 +107,7 @@ where
 
     pub fn new_with_element_default(dimensions: SpatialDimensions<QDims, NUM_DIMS>) -> Self
     where
-        S: ParDataStoreResizable,
+        S: QuantContiguousStoreResizable,
         S::Elem: Default,
     {
         let data = S::new_from_element_default(dimensions.spatial_element_count());
@@ -121,7 +121,7 @@ where
 
     pub fn new_with_element_clone(dimensions: SpatialDimensions<QDims, NUM_DIMS>, source_element: S::Elem) -> Self
     where
-        S: ParDataStoreResizable,
+        S: QuantContiguousStoreResizable,
         S::Elem: Clone,
     {
         let data = S::new_from_element_clonable(dimensions.spatial_element_count(), source_element);
@@ -134,14 +134,14 @@ where
     }
 }
 
-impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, NUM_DIMS>
-    for SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
+impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialQuantIndexedTrait<QLinear, QCoord, QDims, AxisOrderType, S, NUM_DIMS>
+    for SpatialQuantIndexedOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS> + 'static,
-    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
+    S: QuantContiguousStore<Elem = D> + DeserializeOwned + 'static,
 {
     fn data_as_slice(&self) -> &[S::Elem] {
         self.data.store_as_slice()
@@ -153,7 +153,7 @@ where
 
     fn data_as_slice_mut(&mut self) -> &mut [S::Elem]
     where
-        S: ParDataStoreMut,
+        S: QuantContiguousStoreMut,
     {
         self.data.store_as_mut_slice()
     }
