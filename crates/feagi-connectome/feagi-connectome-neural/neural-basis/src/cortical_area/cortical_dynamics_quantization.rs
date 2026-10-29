@@ -1,3 +1,6 @@
+use core::fmt::Debug;
+use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 
 /// Describes the quantization level of a specific CorticalDynamicsModel data points
@@ -44,36 +47,42 @@ pub trait CorticalDynamicsQuantization: MembranePotentialQuantization {
 
 /// The cortical level data that should be exposed to genome developers. Not mutable during
 /// cortical processing
-pub trait CorticalDataPropertiesSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait CorticalDataPropertiesSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// The cortical level data that is for mutable internal processing, will not be
 /// exposed to genome developers but is saved in the connectome
-pub trait CorticalDataInternalSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait CorticalDataInternalSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// The cortical level data that is used for runtime processing, is not exposed to
 /// genome developers nor is it saved (starts clean with every init)
-pub trait CorticalDataScratchSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait CorticalDataScratchSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// Not actual cortical data, but rather represents various "values" that are actually the result
 /// of running functions on the neuron data
-pub trait CorticalFunctionSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait CorticalFunctionSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// The per neuron level data that should be saved to the connectome
-pub trait NeuronDataInternalSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait NeuronDataInternalSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// The per neuron level data that should not be saved to the connectome
 /// (starts clean with every init)
-pub trait NeuronDataScratchSpecification<CDQ: CorticalDynamicsQuantization> {
+pub trait NeuronDataScratchSpecification<CDQ: CorticalDynamicsQuantization>:
+Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 

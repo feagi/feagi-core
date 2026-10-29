@@ -1,4 +1,4 @@
-use crate::cortical_models::core_power::data::{CorticalDynamicsModelCorePower, CorticalDynamicsQuantizationCorePower};
+use crate::cortical_classes::core_power::data::{CorticalDynamicsModelCorePower, CorticalDynamicsQuantizationCorePower};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::BurstIndex;
 use feagi_connectome_neural::neural_basis::cortical_area::cortical_burst_engine_dynamics::CorticalBurstEngineDynamics;
