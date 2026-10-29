@@ -1,6 +1,6 @@
 
 
-pub mod cortical_models;
+pub mod neuron_models;
 
 pub use feagi_connectome_neural::neural_basis::quantization_levels;
 

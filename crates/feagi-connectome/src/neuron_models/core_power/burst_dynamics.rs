@@ -1,10 +1,8 @@
-use crate::cortical_models::core_power::data::NeuronModelCorePower;
+use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-#[cfg(feature = "burst-engine-cpu")]
-use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
-#[cfg(feature = "burst-engine-cpu")]
 use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefaultData;
+use crate::neuron_models::core_power::data::NeuronModelCorePower;
 
 pub struct CorePowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelCorePower>(
     core::marker::PhantomData<(FIQ, NM)>,
@@ -38,6 +36,8 @@ where
 {
 }
 //endregion
+
+
 
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::CorticalCPUParallelDynamics<FIQ, NM>
