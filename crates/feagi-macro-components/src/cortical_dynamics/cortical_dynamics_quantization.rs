@@ -1,4 +1,4 @@
-use crate::common::parse_optional_comma;
+use crate::common::{basis_path, parse_optional_comma};
 use heck::ToSnakeCase;
 use indexmap::IndexMap;
 use proc_macro2::Ident;
@@ -8,24 +8,33 @@ use syn::punctuated::Punctuated;
 use syn::{braced, Attribute, Token, Type, TypeParamBound};
 
 mod kw {
-    syn::custom_keyword!(implementations);
-    syn::custom_keyword!(layout);
+    syn::custom_keyword!(NeuronLayout);
+    syn::custom_keyword!(Quantizables);
+    syn::custom_keyword!(QuantizationLevels);
+    syn::custom_keyword!(DataSpecifications);
 }
 
-/// Name of the implementation entry that sets `MembranePotentialQuantization::MembranePotentialQuant`
+/// Name of the quantization level entry that sets `MembranePotentialQuantization::MembranePotentialQuant`
 const MEMBRANE_POTENTIAL_QUANT: &str = "MembranePotentialQuant";
 
-/// Name of the index quantization generic, which a template's `layout` entry may use
+/// Name of the index quantization generic, which a template's `NeuronLayout` entry may use
 const FEAGI_INDEX_QUANTIZATION_GENERIC: &str = "FIQ";
 
-/// The data types of `CorticalDynamicsModel`, in trait order. Each can be given a struct
-pub const MODEL_DATA_STRUCTS: [&str; 6] = [
-    "CorticalDataProperties",
-    "CorticalDataInternal",
-    "CorticalDataScratch",
-    "CorticalFunctionContext",
-    "NeuronDataInternal",
-    "NeuronDataScratch",
+/// Name of the quantization generic of the generated model and data structs
+const CORTICAL_DYNAMICS_QUANTIZATION_GENERIC: &str = "CDQ";
+
+/// Name of the marker field every generated data struct holds
+const PHANTOM_FIELD: &str = "_p";
+
+/// The data types of `CorticalDynamicsModel` in trait order, with the specification trait each of
+/// their structs implements
+pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
+    ("CorticalDataProperties", "CorticalDataPropertiesSpecification"),
+    ("CorticalDataInternal", "CorticalDataInternalSpecification"),
+    ("CorticalDataScratch", "CorticalDataScratchSpecification"),
+    ("CorticalFunctionContext", "CorticalFunctionSpecification"),
+    ("NeuronDataInternal", "NeuronDataInternalSpecification"),
+    ("NeuronDataScratch", "NeuronDataScratchSpecification"),
 ];
 
 //region Cortical Dynamics Quantization Template
@@ -33,53 +42,57 @@ pub const MODEL_DATA_STRUCTS: [&str; 6] = [
 /// The quantization types of one cortical dynamics model. Formatted as the following:
 /// ```text
 /// /// Optional model description
-/// ModelName: {
+/// ModelName
+///
+/// NeuronLayout: NeuronLayoutVoxelDefault<FIQ>
+///
+/// Quantizables: {
 ///     /// Optional description
-///     T1: SomeTrait + OtherTrait,
+///     RefractoryPeriod: QDECIMAL,
 /// }
 ///
-/// layout: NeuronLayoutVoxelDefault<FIQ>
-///
-/// implementations: {
-///     Float16: {
-///         MembranePotentialQuant: f16,
-///         T1: f32,
+/// QuantizationLevels: {
+///     Float32: {
+///         MembranePotentialQuant: f32,
+///         RefractoryPeriod: f32,
 ///     }
 /// }
 ///
-/// CorticalDataProperties: {
-///     /// Optional description
-///     field_name: T1,
-/// }
-///
-/// NeuronDataInternal: {
-///     field_name: T1,
+/// DataSpecifications: {
+///     CorticalDataProperties: {
+///         /// Optional description
+///         refractory_period: RefractoryPeriod,
+///         some_count: u32,
+///     }
 /// }
 /// ```
-/// The optional `layout` entry sets the `NeuronLayout` the model is implemented for (see
-/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout<FIQ>`. Every implementation
-/// must set `MembranePotentialQuant` and each associated type of the model once. After the
-/// implementations come optional, in any order, the data structs of the model, one per data type
-/// of `CorticalDynamicsModel` (see [`MODEL_DATA_STRUCTS`]). Every field must be typed by one of
-/// the model's associated types. Entries keep their template order, except data structs, which
-/// keep trait order
+/// The optional `NeuronLayout` entry sets the `NeuronLayout` the model is implemented for (see
+/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout<FIQ>`. The optional
+/// `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
+/// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
+/// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
+/// model's data structs, one per data type of `CorticalDynamicsModel` (see
+/// [`MODEL_DATA_STRUCTS`]). A field typed by a quantizable is its wrapper at the level's
+/// quantization, and `MembranePotentialQuant` the level's membrane potential type. Any other type
+/// is kept as written. Entries keep their template order, except data structs, which keep trait
+/// order
 pub struct CorticalDynamicsQuantizationTemplate {
     pub model_attributes: Vec<Attribute>,
     pub model_name: Ident,
-    pub associated_types: IndexMap<Ident, AssociatedTypeTemplate>,
     pub layout: ModelLayoutTemplate,
-    pub implementations: IndexMap<Ident, QuantizationImplementationTemplate>,
-    pub data_structs: IndexMap<Ident, IndexMap<Ident, ModelDataFieldTemplate>>,
+    pub quantizables: IndexMap<Ident, QuantizableTemplate>,
+    pub quantization_levels: IndexMap<Ident, QuantizationLevelTemplate>,
+    pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
 }
 
 /// The `NeuronLayout` a model is implemented for, which decides the generics of its model struct
 /// `CorticalDynamicsModel{Model}`. Both forms may use the index quantization generic `FIQ`
 pub enum ModelLayoutTemplate {
-    /// `layout: NeuronLayoutVoxelDefault<FIQ>`, a single layout. The model struct is
+    /// `NeuronLayout: NeuronLayoutVoxelDefault<FIQ>`, a single layout. The model struct is
     /// `CorticalDynamicsModel{Model}<FIQ, CDQ>`
     Fixed(Type),
-    /// `layout: NL: VoxelNeuronLayout<FIQ>`, any layout within the bounds. The model struct is
-    /// `CorticalDynamicsModel{Model}<FIQ, NL, CDQ>`
+    /// `NeuronLayout: NL: VoxelNeuronLayout<FIQ>`, any layout within the bounds. The model struct
+    /// is `CorticalDynamicsModel{Model}<FIQ, NL, CDQ>`
     Generic {
         name: Ident,
         bounds: Punctuated<TypeParamBound, Token![+]>,
@@ -101,8 +114,8 @@ impl Parse for ModelLayoutTemplate {
         // `Name: Bounds` is a generic, while anything else (`Name<..>`, `path::Name`) is a type
         if input.peek(syn::Ident) && input.peek2(Token![:]) && !input.peek2(Token![::]) {
             let name = input.parse::<Ident>()?;
-            if name == FEAGI_INDEX_QUANTIZATION_GENERIC {
-                return Err(syn::Error::new(name.span(), format!("`{FEAGI_INDEX_QUANTIZATION_GENERIC}` is the index quantization generic, the layout generic needs another name")));
+            if name == FEAGI_INDEX_QUANTIZATION_GENERIC || name == CORTICAL_DYNAMICS_QUANTIZATION_GENERIC {
+                return Err(syn::Error::new(name.span(), format!("`{name}` is already a generic of the model, the layout generic needs another name")));
             }
             input.parse::<Token![:]>()?;
             let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(input)?;
@@ -122,22 +135,82 @@ impl ToTokens for ModelLayoutTemplate {
     }
 }
 
-/// An associated type of the model trait, with its bounds
-pub struct AssociatedTypeTemplate {
-    pub attributes: Vec<Attribute>,
-    pub bounds: Punctuated<TypeParamBound, Token![+]>,
+/// The kind of a quantizable, deciding its wrapper and the bound of its associated type
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum QuantizableKind {
+    /// `QDECIMAL`, wrapped by `create_wrapped_quantized_decimal!`
+    Decimal,
+    /// `QUINT`, wrapped by `create_wrapped_quantized_unsigned_integer!`
+    UnsignedInteger,
+    /// `QSINT`, wrapped by `create_wrapped_quantized_signed_integer!`
+    SignedInteger,
 }
 
-/// One quantization of the model, with the concrete type of each associated type
-pub struct QuantizationImplementationTemplate {
+impl QuantizableKind {
+    const KEYWORDS: [(&'static str, QuantizableKind); 3] = [
+        ("QDECIMAL", QuantizableKind::Decimal),
+        ("QUINT", QuantizableKind::UnsignedInteger),
+        ("QSINT", QuantizableKind::SignedInteger),
+    ];
+
+    pub fn keyword(self) -> &'static str {
+        Self::KEYWORDS.iter().find(|(_, kind)| *kind == self).map(|(keyword, _)| *keyword).unwrap_or_default()
+    }
+
+    /// The bound of the quantizable's associated type, the unwrapped quantization trait of its kind
+    pub fn unwrapped_trait(self) -> proc_macro2::TokenStream {
+        let basis = basis_path();
+        match self {
+            Self::Decimal => quote!(#basis::quantization::quantizable::QuantizedDecimalUnwrappedTrait),
+            Self::UnsignedInteger => quote!(#basis::quantization::quantizable::QuantizedUnsignedIntegerUnwrappedTrait),
+            Self::SignedInteger => quote!(#basis::quantization::quantizable::QuantizedSignedIntegerUnwrappedTrait),
+        }
+    }
+
+    /// The `feagi_basis` macro creating the quantizable's wrapper struct
+    pub fn wrapper_macro(self) -> proc_macro2::TokenStream {
+        let basis = basis_path();
+        match self {
+            Self::Decimal => quote!(#basis::create_wrapped_quantized_decimal),
+            Self::UnsignedInteger => quote!(#basis::create_wrapped_quantized_unsigned_integer),
+            Self::SignedInteger => quote!(#basis::create_wrapped_quantized_signed_integer),
+        }
+    }
+}
+
+impl Parse for QuantizableKind {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let keyword = input.parse::<Ident>()?;
+        Self::KEYWORDS.iter().find(|(name, _)| keyword == name).map(|(_, kind)| *kind).ok_or_else(|| {
+            let expected: Vec<&str> = Self::KEYWORDS.iter().map(|(name, _)| *name).collect();
+            syn::Error::new(keyword.span(), format!("`{keyword}` is not a quantizable kind, expected one of: {}", expected.join(", ")))
+        })
+    }
+}
+
+impl ToTokens for QuantizableKind {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        format_ident!("{}", self.keyword()).to_tokens(tokens);
+    }
+}
+
+/// A quantizable of the model, which is both a wrapper struct and an associated type of the model
+/// trait
+pub struct QuantizableTemplate {
+    pub attributes: Vec<Attribute>,
+    pub kind: QuantizableKind,
+}
+
+/// One quantization level of the model, with the concrete type of each quantizable
+pub struct QuantizationLevelTemplate {
     pub membrane_potential_quant: Type,
-    pub associated_types: IndexMap<Ident, Type>,
+    pub quantizables: IndexMap<Ident, Type>,
 }
 
-/// A field of a model data struct, typed by an associated type of the model
-pub struct ModelDataFieldTemplate {
+/// A field of a model data struct
+pub struct DataFieldTemplate {
     pub attributes: Vec<Attribute>,
-    pub associated_type: Ident,
+    pub field_type: Type,
 }
 
 impl CorticalDynamicsQuantizationTemplate {
@@ -149,8 +222,8 @@ impl CorticalDynamicsQuantizationTemplate {
         format_ident!("CorticalDynamicsModel{}", self.model_name)
     }
 
-    pub fn implementation_struct_name(&self, implementation: &Ident) -> Ident {
-        format_ident!("CorticalDynamicsQuantization{}{}", self.model_name, implementation)
+    pub fn quantization_level_struct_name(&self, level: &Ident) -> Ident {
+        format_ident!("CorticalDynamicsQuantization{}{}", self.model_name, level)
     }
 
     /// `data_struct` is one of [`MODEL_DATA_STRUCTS`]
@@ -160,6 +233,26 @@ impl CorticalDynamicsQuantizationTemplate {
 
     pub fn template_macro_name(&self) -> Ident {
         format_ident!("cortical_dynamics_quantization_{}_template", self.model_name.to_string().to_snake_case())
+    }
+
+    /// The type a data field is generated with. A quantizable is its wrapper at the level's
+    /// quantization, `Name<CDQ::Name>`, and `MembranePotentialQuant` is
+    /// `CDQ::MembranePotentialQuant`. Anything else is kept as written
+    fn resolve_field_type(&self, field_type: &Type) -> proc_macro2::TokenStream {
+        let cdq = format_ident!("{}", CORTICAL_DYNAMICS_QUANTIZATION_GENERIC);
+        if let Type::Path(path) = field_type {
+            if path.qself.is_none() {
+                if let Some(name) = path.path.get_ident() {
+                    if self.quantizables.contains_key(name) {
+                        return quote!(#name<#cdq::#name>);
+                    }
+                    if name == MEMBRANE_POTENTIAL_QUANT {
+                        return quote!(#cdq::#name);
+                    }
+                }
+            }
+        }
+        field_type.to_token_stream()
     }
 
     /// Generate the template macro, which holds this template once validated. Its single input is
@@ -183,26 +276,50 @@ impl CorticalDynamicsQuantizationTemplate {
         }
     }
 
-    /// Generate the model's quantization trait, a marker struct implementing it per
-    /// implementation, and the model's data structs
+    /// Generate the model's quantizable wrappers, model struct, quantization trait, a marker struct
+    /// implementing it per quantization level, and every data struct of the model
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
         let model_struct = self.model_struct_name();
 
-        let associated_types = self.associated_types.iter().map(|(name, associated)| {
-            let attributes = &associated.attributes;
-            let bounds = &associated.bounds;
+        let wrappers = self.quantizables.iter().map(|(name, quantizable)| {
+            let attributes = &quantizable.attributes;
+            let wrapper_macro = quantizable.kind.wrapper_macro();
             quote! {
-                #( #attributes )*
-                type #name: #bounds;
+                #wrapper_macro!(
+                    #( #attributes )*
+                    pub #name
+                );
             }
         });
 
-        // The model using this quantization, declared on the model trait as its layout restriction
-        // can only be expressed there
-        let (model_declaration, model_definition) = match &self.layout {
+        let associated_types = self.quantizables.iter().map(|(name, quantizable)| {
+            let attributes = &quantizable.attributes;
+            let bound = quantizable.kind.unwrapped_trait();
+            quote! {
+                #( #attributes )*
+                type #name: #bound;
+            }
+        });
+
+        // The model struct, and the model using this quantization, declared on the model trait as
+        // its layout restriction can only be expressed there
+        let (model_struct_definition, model_declaration, model_definition) = match &self.layout {
             ModelLayoutTemplate::Fixed(layout) => (
+                quote! {
+                    pub struct #model_struct<FIQ, CDQ>(::core::marker::PhantomData<(FIQ, CDQ)>)
+                    where
+                        FIQ: FeagiIndexQuantization,
+                        CDQ: #model_trait;
+
+                    impl<FIQ, CDQ> CorticalDynamicsModel<FIQ, #layout, CDQ> for #model_struct<FIQ, CDQ>
+                    where
+                        FIQ: FeagiIndexQuantization,
+                        CDQ: #model_trait,
+                    {
+                    }
+                },
                 quote! {
                     type Model<FIQ: FeagiIndexQuantization>: CorticalDynamicsModel<FIQ, #layout, Self>;
                 },
@@ -211,6 +328,21 @@ impl CorticalDynamicsQuantizationTemplate {
                 },
             ),
             ModelLayoutTemplate::Generic { name, bounds } => (
+                quote! {
+                    pub struct #model_struct<FIQ, #name, CDQ>(::core::marker::PhantomData<(FIQ, #name, CDQ)>)
+                    where
+                        FIQ: FeagiIndexQuantization,
+                        #name: #bounds,
+                        CDQ: #model_trait;
+
+                    impl<FIQ, #name, CDQ> CorticalDynamicsModel<FIQ, #name, CDQ> for #model_struct<FIQ, #name, CDQ>
+                    where
+                        FIQ: FeagiIndexQuantization,
+                        #name: #bounds,
+                        CDQ: #model_trait,
+                    {
+                    }
+                },
                 quote! {
                     type Model<FIQ: FeagiIndexQuantization, #name: #bounds>: CorticalDynamicsModel<FIQ, #name, Self>;
                 },
@@ -221,25 +353,21 @@ impl CorticalDynamicsQuantizationTemplate {
         };
 
         // Every data type of `CorticalDynamicsQuantization` is set to the model's data struct of
-        // that type, whether generated from the template or written by hand
-        let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|name| format_ident!("{}", name)).collect();
+        // that type
+        let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| format_ident!("{}", name)).collect();
         let model_data_structs: Vec<Ident> = model_data_names.iter().map(|name| self.data_struct_name(name)).collect();
 
-        let implementations = self.implementations.iter().map(|(name, implementation)| {
-            let struct_name = self.implementation_struct_name(name);
-            let membrane_potential_quant = &implementation.membrane_potential_quant;
-            let associated_names = implementation.associated_types.keys();
-            let associated_types = implementation.associated_types.values();
+        let quantization_levels = self.quantization_levels.iter().map(|(name, level)| {
+            let struct_name = self.quantization_level_struct_name(name);
+            let membrane_potential_quant = &level.membrane_potential_quant;
+            let quantizable_names = level.quantizables.keys();
+            let quantizable_types = level.quantizables.values();
             let model_data_names = &model_data_names;
             let model_data_structs = &model_data_structs;
             let model_definition = &model_definition;
             quote! {
                 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
                 pub struct #struct_name;
-
-                unsafe impl ::core::marker::Sync for #struct_name {}
-
-                unsafe impl ::core::marker::Send for #struct_name {}
 
                 impl MembranePotentialQuantization for #struct_name {
                     type MembranePotentialQuant = #membrane_potential_quant;
@@ -251,35 +379,49 @@ impl CorticalDynamicsQuantizationTemplate {
 
                 impl #model_trait for #struct_name {
                     #model_definition
-                    #( type #associated_names = #associated_types; )*
+                    #( type #quantizable_names = #quantizable_types; )*
                 }
             }
         });
 
-        let data_structs = self.data_structs.iter().map(|(data_struct, fields)| {
-            let struct_name = self.data_struct_name(data_struct);
-            // A struct without fields holds the quantization as a marker, as it must use `CDQ`
-            if fields.is_empty() {
-                return quote! {
-                    pub struct #struct_name<CDQ: #model_trait>(::core::marker::PhantomData<CDQ>);
-                };
-            }
-            let fields = fields.iter().map(|(name, field)| {
-                let attributes = &field.attributes;
-                let associated_type = &field.associated_type;
-                quote! {
-                    #( #attributes )*
-                    pub #name: CDQ::#associated_type,
-                }
-            });
+        let no_fields = IndexMap::new();
+        let data_structs = MODEL_DATA_STRUCTS.iter().map(|(data_struct, specification)| {
+            let data_struct = format_ident!("{}", data_struct);
+            let specification = format_ident!("{}", specification);
+            let struct_name = self.data_struct_name(&data_struct);
+            let fields = self.data_specifications.get(&data_struct).unwrap_or(&no_fields);
+            let field_attributes: Vec<&Vec<Attribute>> = fields.values().map(|field| &field.attributes).collect();
+            let field_names: Vec<&Ident> = fields.keys().collect();
+            let field_types: Vec<proc_macro2::TokenStream> = fields.values().map(|field| self.resolve_field_type(&field.field_type)).collect();
             quote! {
+                #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
                 pub struct #struct_name<CDQ: #model_trait> {
-                    #( #fields )*
+                    #(
+                        #( #field_attributes )*
+                        pub #field_names: #field_types,
+                    )*
+                    #[serde(skip)]
+                    _p: ::core::marker::PhantomData<CDQ>,
                 }
+
+                impl<CDQ: #model_trait> #struct_name<CDQ> {
+                    pub fn new(#( #field_names: #field_types ),*) -> Self {
+                        Self {
+                            #( #field_names, )*
+                            _p: ::core::marker::PhantomData,
+                        }
+                    }
+                }
+
+                impl<CDQ: #model_trait> #specification<CDQ> for #struct_name<CDQ> {}
             }
         });
 
         quote! {
+            #( #wrappers )*
+
+            #model_struct_definition
+
             #( #model_attributes )*
             pub trait #model_trait: CorticalDynamicsQuantization {
                 /// What model uses this quantization
@@ -287,7 +429,7 @@ impl CorticalDynamicsQuantizationTemplate {
                 #( #associated_types )*
             }
 
-            #( #implementations )*
+            #( #quantization_levels )*
 
             #( #data_structs )*
         }
@@ -298,12 +440,10 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let model_attributes = input.call(Attribute::parse_outer)?;
         let model_name = input.parse::<Ident>()?;
-        input.parse::<Token![:]>()?;
-        let associated_types = parse_associated_types(input)?;
         parse_optional_comma(input)?;
 
-        let layout = if input.peek(kw::layout) {
-            input.parse::<kw::layout>()?;
+        let layout = if input.peek(kw::NeuronLayout) {
+            input.parse::<kw::NeuronLayout>()?;
             input.parse::<Token![:]>()?;
             let layout = input.parse::<ModelLayoutTemplate>()?;
             parse_optional_comma(input)?;
@@ -312,77 +452,82 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             ModelLayoutTemplate::default()
         };
 
-        input.parse::<kw::implementations>()?;
+        let quantizables = if input.peek(kw::Quantizables) {
+            input.parse::<kw::Quantizables>()?;
+            input.parse::<Token![:]>()?;
+            let quantizables = parse_quantizables(input)?;
+            parse_optional_comma(input)?;
+            quantizables
+        } else {
+            IndexMap::new()
+        };
+
+        input.parse::<kw::QuantizationLevels>()?;
         input.parse::<Token![:]>()?;
-        let implementations = parse_implementations(input, &associated_types)?;
+        let quantization_levels = parse_quantization_levels(input, &quantizables)?;
         parse_optional_comma(input)?;
 
-        let mut data_structs = IndexMap::new();
-        while !input.is_empty() {
-            let data_struct = input.parse::<Ident>()?;
-            if !MODEL_DATA_STRUCTS.iter().any(|name| data_struct == name) {
-                return Err(syn::Error::new(
-                    data_struct.span(),
-                    format!("`{data_struct}` is not a data type of the model, expected one of: {}", MODEL_DATA_STRUCTS.join(", ")),
-                ));
-            }
-            if data_structs.contains_key(&data_struct) {
-                return Err(syn::Error::new(data_struct.span(), format!("`{data_struct}` is defined more than once")));
-            }
+        let data_specifications = if input.peek(kw::DataSpecifications) {
+            input.parse::<kw::DataSpecifications>()?;
             input.parse::<Token![:]>()?;
-            let fields = parse_data_struct_fields(input, &associated_types)?;
-            data_structs.insert(data_struct, fields);
+            let data_specifications = parse_data_specifications(input)?;
             parse_optional_comma(input)?;
+            data_specifications
+        } else {
+            IndexMap::new()
+        };
+
+        if !input.is_empty() {
+            return Err(input.error("unexpected input after the template, `DataSpecifications` is the last section"));
         }
-        data_structs.sort_by_cached_key(|data_struct, _| MODEL_DATA_STRUCTS.iter().position(|name| data_struct == name));
 
         Ok(Self {
             model_attributes,
             model_name,
-            associated_types,
             layout,
-            implementations,
-            data_structs,
+            quantizables,
+            quantization_levels,
+            data_specifications,
         })
     }
 }
 
-/// Writes the template back out in the format it is parsed from, with implementations setting
-/// `MembranePotentialQuant` first and then the associated types in model order
+/// Writes the template back out in the format it is parsed from, with quantization levels setting
+/// `MembranePotentialQuant` first and then the quantizables in model order
 impl ToTokens for CorticalDynamicsQuantizationTemplate {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let model_attributes = &self.model_attributes;
         let model_name = &self.model_name;
         let layout = &self.layout;
 
-        let associated_types = self.associated_types.iter().map(|(name, associated)| {
-            let attributes = &associated.attributes;
-            let bounds = &associated.bounds;
+        let quantizables = self.quantizables.iter().map(|(name, quantizable)| {
+            let attributes = &quantizable.attributes;
+            let kind = &quantizable.kind;
             quote! {
                 #( #attributes )*
-                #name: #bounds,
+                #name: #kind,
             }
         });
 
-        let implementations = self.implementations.iter().map(|(name, implementation)| {
-            let membrane_potential_quant = &implementation.membrane_potential_quant;
-            let associated_names = implementation.associated_types.keys();
-            let associated_types = implementation.associated_types.values();
+        let quantization_levels = self.quantization_levels.iter().map(|(name, level)| {
+            let membrane_potential_quant = &level.membrane_potential_quant;
+            let quantizable_names = level.quantizables.keys();
+            let quantizable_types = level.quantizables.values();
             quote! {
                 #name: {
                     MembranePotentialQuant: #membrane_potential_quant,
-                    #( #associated_names: #associated_types, )*
+                    #( #quantizable_names: #quantizable_types, )*
                 }
             }
         });
 
-        let data_structs = self.data_structs.iter().map(|(data_struct, fields)| {
+        let data_specifications = self.data_specifications.iter().map(|(data_struct, fields)| {
             let fields = fields.iter().map(|(name, field)| {
                 let attributes = &field.attributes;
-                let associated_type = &field.associated_type;
+                let field_type = &field.field_type;
                 quote! {
                     #( #attributes )*
-                    #name: #associated_type,
+                    #name: #field_type,
                 }
             });
             quote! {
@@ -394,75 +539,79 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
 
         tokens.extend(quote! {
             #( #model_attributes )*
-            #model_name: {
-                #( #associated_types )*
+            #model_name
+
+            NeuronLayout: #layout,
+
+            Quantizables: {
+                #( #quantizables )*
             }
 
-            layout: #layout,
-
-            implementations: {
-                #( #implementations )*
+            QuantizationLevels: {
+                #( #quantization_levels )*
             }
 
-            #( #data_structs )*
+            DataSpecifications: {
+                #( #data_specifications )*
+            }
         });
     }
 }
 
-/// `{ #[attr] T1: Bound + Bound, ... }`
-fn parse_associated_types(input: ParseStream) -> syn::Result<IndexMap<Ident, AssociatedTypeTemplate>> {
+/// `{ #[attr] Name: QDECIMAL, ... }`
+fn parse_quantizables(input: ParseStream) -> syn::Result<IndexMap<Ident, QuantizableTemplate>> {
     let field_input;
     braced!(field_input in input);
-    let mut associated_types = IndexMap::new();
+    let mut quantizables = IndexMap::new();
     while !field_input.is_empty() {
         let attributes = field_input.call(Attribute::parse_outer)?;
         let name = field_input.parse::<Ident>()?;
         if name == MEMBRANE_POTENTIAL_QUANT {
-            return Err(syn::Error::new(name.span(), format!("`{MEMBRANE_POTENTIAL_QUANT}` is set by every implementation, it cannot be an associated type")));
+            return Err(syn::Error::new(name.span(), format!("`{MEMBRANE_POTENTIAL_QUANT}` is set by every quantization level, it cannot be a quantizable")));
         }
         field_input.parse::<Token![:]>()?;
-        let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(&field_input)?;
-        if associated_types.contains_key(&name) {
-            return Err(syn::Error::new(name.span(), format!("associated type `{name}` is defined more than once")));
+        let kind = field_input.parse::<QuantizableKind>()?;
+        if quantizables.contains_key(&name) {
+            return Err(syn::Error::new(name.span(), format!("quantizable `{name}` is defined more than once")));
         }
-        associated_types.insert(name, AssociatedTypeTemplate { attributes, bounds });
+        quantizables.insert(name, QuantizableTemplate { attributes, kind });
         if field_input.is_empty() {
             break;
         }
         field_input.parse::<Token![,]>()?;
     }
-    Ok(associated_types)
+    Ok(quantizables)
 }
 
-/// `{ Name: { MembranePotentialQuant: Type, T1: Type, ... } ... }`, the comma between
-/// implementations being optional
-fn parse_implementations(
+/// `{ Name: { MembranePotentialQuant: Type, T1: Type, ... } ... }`, the comma between levels
+/// being optional
+fn parse_quantization_levels(
     input: ParseStream,
-    associated_types: &IndexMap<Ident, AssociatedTypeTemplate>,
-) -> syn::Result<IndexMap<Ident, QuantizationImplementationTemplate>> {
-    let implementations_input;
-    braced!(implementations_input in input);
-    let mut implementations = IndexMap::new();
-    while !implementations_input.is_empty() {
-        let implementation_name = implementations_input.parse::<Ident>()?;
-        implementations_input.parse::<Token![:]>()?;
-        let implementation = parse_implementation(&implementations_input, &implementation_name, associated_types)?;
-        if implementations.contains_key(&implementation_name) {
-            return Err(syn::Error::new(implementation_name.span(), format!("implementation `{implementation_name}` is defined more than once")));
+    quantizables: &IndexMap<Ident, QuantizableTemplate>,
+) -> syn::Result<IndexMap<Ident, QuantizationLevelTemplate>> {
+    let levels_input;
+    braced!(levels_input in input);
+    let mut levels = IndexMap::new();
+    while !levels_input.is_empty() {
+        let level_name = levels_input.parse::<Ident>()?;
+        levels_input.parse::<Token![:]>()?;
+        let level = parse_quantization_level(&levels_input, &level_name, quantizables)?;
+        if levels.contains_key(&level_name) {
+            return Err(syn::Error::new(level_name.span(), format!("quantization level `{level_name}` is defined more than once")));
         }
-        implementations.insert(implementation_name, implementation);
-        parse_optional_comma(&implementations_input)?;
+        levels.insert(level_name, level);
+        parse_optional_comma(&levels_input)?;
     }
-    Ok(implementations)
+    Ok(levels)
 }
 
 /// `{ MembranePotentialQuant: Type, T1: Type, ... }`, in any order. Concrete types come out in
-/// the model's associated type order
-fn parse_implementation(
+/// the model's quantizable order
+fn parse_quantization_level(
     input: ParseStream,
-    implementation_name: &Ident,
-    associated_types: &IndexMap<Ident, AssociatedTypeTemplate>,
-) -> syn::Result<QuantizationImplementationTemplate> {
+    level_name: &Ident,
+    quantizables: &IndexMap<Ident, QuantizableTemplate>,
+) -> syn::Result<QuantizationLevelTemplate> {
     let field_input;
     let brace = braced!(field_input in input);
     let mut membrane_potential_quant = None;
@@ -476,8 +625,8 @@ fn parse_implementation(
                 return Err(syn::Error::new(name.span(), format!("`{MEMBRANE_POTENTIAL_QUANT}` is set more than once")));
             }
             membrane_potential_quant = Some(concrete_type);
-        } else if !associated_types.contains_key(&name) {
-            return Err(syn::Error::new(name.span(), format!("`{name}` is not an associated type of the model")));
+        } else if !quantizables.contains_key(&name) {
+            return Err(syn::Error::new(name.span(), format!("`{name}` is not a quantizable of the model")));
         } else if given_types.contains_key(&name) {
             return Err(syn::Error::new(name.span(), format!("`{name}` is set more than once")));
         } else {
@@ -490,41 +639,67 @@ fn parse_implementation(
     }
 
     let missing_error = |missing: &str| {
-        syn::Error::new(brace.span.join(), format!("implementation `{implementation_name}` does not set `{missing}`"))
+        syn::Error::new(brace.span.join(), format!("quantization level `{level_name}` does not set `{missing}`"))
     };
     let membrane_potential_quant = membrane_potential_quant.ok_or_else(|| missing_error(MEMBRANE_POTENTIAL_QUANT))?;
     let mut ordered_types = IndexMap::new();
-    for name in associated_types.keys() {
+    for name in quantizables.keys() {
         let concrete_type = given_types.swap_remove(name).ok_or_else(|| missing_error(&name.to_string()))?;
         ordered_types.insert(name.clone(), concrete_type);
     }
 
-    Ok(QuantizationImplementationTemplate {
+    Ok(QuantizationLevelTemplate {
         membrane_potential_quant,
-        associated_types: ordered_types,
+        quantizables: ordered_types,
     })
 }
 
-/// `{ #[attr] field_name: T1, ... }`
-fn parse_data_struct_fields(
-    input: ParseStream,
-    associated_types: &IndexMap<Ident, AssociatedTypeTemplate>,
-) -> syn::Result<IndexMap<Ident, ModelDataFieldTemplate>> {
+/// `{ CorticalDataProperties: { ... } NeuronDataInternal: { ... } ... }`, in any order, the colon
+/// after each data type and the comma between them being optional. Comes out in trait order
+fn parse_data_specifications(input: ParseStream) -> syn::Result<IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>> {
+    let specifications_input;
+    braced!(specifications_input in input);
+    let mut data_specifications = IndexMap::new();
+    while !specifications_input.is_empty() {
+        let data_struct = specifications_input.parse::<Ident>()?;
+        if !MODEL_DATA_STRUCTS.iter().any(|(name, _)| data_struct == name) {
+            let expected: Vec<&str> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| *name).collect();
+            return Err(syn::Error::new(
+                data_struct.span(),
+                format!("`{data_struct}` is not a data type of the model, expected one of: {}", expected.join(", ")),
+            ));
+        }
+        if data_specifications.contains_key(&data_struct) {
+            return Err(syn::Error::new(data_struct.span(), format!("`{data_struct}` is defined more than once")));
+        }
+        if specifications_input.peek(Token![:]) {
+            specifications_input.parse::<Token![:]>()?;
+        }
+        let fields = parse_data_fields(&specifications_input)?;
+        data_specifications.insert(data_struct, fields);
+        parse_optional_comma(&specifications_input)?;
+    }
+    data_specifications.sort_by_cached_key(|data_struct, _| MODEL_DATA_STRUCTS.iter().position(|(name, _)| data_struct == name));
+    Ok(data_specifications)
+}
+
+/// `{ #[attr] field_name: Type, ... }`
+fn parse_data_fields(input: ParseStream) -> syn::Result<IndexMap<Ident, DataFieldTemplate>> {
     let field_input;
     braced!(field_input in input);
     let mut fields = IndexMap::new();
     while !field_input.is_empty() {
         let attributes = field_input.call(Attribute::parse_outer)?;
         let name = field_input.parse::<Ident>()?;
-        field_input.parse::<Token![:]>()?;
-        let associated_type = field_input.parse::<Ident>()?;
-        if !associated_types.contains_key(&associated_type) {
-            return Err(syn::Error::new(associated_type.span(), format!("`{associated_type}` is not an associated type of the model")));
+        if name == PHANTOM_FIELD {
+            return Err(syn::Error::new(name.span(), format!("`{PHANTOM_FIELD}` is the marker field of every data struct, the field needs another name")));
         }
+        field_input.parse::<Token![:]>()?;
+        let field_type = field_input.parse::<Type>()?;
         if fields.contains_key(&name) {
             return Err(syn::Error::new(name.span(), format!("field `{name}` is defined more than once")));
         }
-        fields.insert(name, ModelDataFieldTemplate { attributes, associated_type });
+        fields.insert(name, DataFieldTemplate { attributes, field_type });
         if field_input.is_empty() {
             break;
         }
@@ -534,6 +709,3 @@ fn parse_data_struct_fields(
 }
 
 //endregion
-
-//region Generated Code Paths
-

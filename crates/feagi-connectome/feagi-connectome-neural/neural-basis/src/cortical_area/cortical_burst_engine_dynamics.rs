@@ -1,6 +1,6 @@
-use crate::cortical_area::neuron_layout::NeuronLayout;
 use crate::cortical_area::cortical_dynamics_model::CorticalDynamicsModel;
 use crate::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use crate::cortical_area::data::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// This marker trait is used to implement per cortical area model dynamics per burst engine

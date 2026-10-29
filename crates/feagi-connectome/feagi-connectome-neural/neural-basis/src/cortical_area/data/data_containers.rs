@@ -1,12 +1,12 @@
-use std::marker::PhantomData;
-use serde::{Deserialize, Serialize};
+use crate::cortical_area::cortical_dynamics_model::CorticalDynamicsModel;
+use crate::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use crate::cortical_area::data::neuron_layout::NeuronLayout;
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::collections::par_data::par_data::ParDataStore;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_basis::prelude::ParData;
-use crate::cortical_area::cortical_dynamics_model::CorticalDynamicsModel;
-use crate::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use crate::cortical_area::neuron_layout::NeuronLayout;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 
 // TODO Move away from pub properties and instead use getters and setters with proper checks!
 // We dont want to be able to set the layout to something that wont agree with the neuron count!
@@ -14,13 +14,13 @@ use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization
 //region Cortical Model
 
 /// The full data of a given cortical model to be stored (everything except scratch data)
-pub struct CorticalModelFullStorageData<FIQ, NL, CDM, CDQ, Par>
+pub struct CorticalModelFullStorageData<FIQ, NL, CDM, CDQ, PDS>
 where
     FIQ: FeagiIndexQuantization,
     NL: NeuronLayout<FIQ>,
     CDQ: CorticalDynamicsQuantization,
     CDM: CorticalDynamicsModel<FIQ, NL, CDQ>,
-    Par: ParDataStore<Elem=CDQ::NeuronDataInternal>
+    PDS: ParDataStore<Elem=CDQ::NeuronDataInternal>
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
     pub layout: NL,
@@ -32,7 +32,7 @@ where
     pub is_psp_uniform: bool,
     pub is_psp_using_membrane_potential: bool,
     /// The stored neuron data of all neurons
-    pub neuron_internal: ParData<FIQ, Par>,
+    pub neuron_internal: ParData<FIQ, PDS>,
     _p: PhantomData<(FIQ, CDM)>
 }
 

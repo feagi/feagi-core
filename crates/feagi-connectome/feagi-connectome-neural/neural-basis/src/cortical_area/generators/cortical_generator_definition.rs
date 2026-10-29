@@ -1,9 +1,9 @@
-use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use crate::cortical_area::neuron_layout::NeuronLayout;
 use crate::cortical_area::cortical_dynamics_model::CorticalDynamicsModel;
 use crate::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use crate::cortical_area::data::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
 
 /// Defines generating a new cortical area, to be taken in by any burst engine type. This struct
@@ -14,7 +14,7 @@ where
     NL: NeuronLayout<FIQ>,
     CDQ: CorticalDynamicsQuantization
 {
-    /// What cortical model this will write tto
+    /// What cortical model this will write to
     type CorticalModel: CorticalDynamicsModel<FIQ, NL, CDQ>;
 
     /// Get the neuron layout that will be used

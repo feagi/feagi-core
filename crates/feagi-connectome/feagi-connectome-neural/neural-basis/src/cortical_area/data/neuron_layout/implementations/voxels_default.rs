@@ -1,11 +1,11 @@
-use serde::Serialize;
-use feagi_basis::collections::spatial_helpers::axis_order::{AxisOrderIncrementing};
+use crate::cortical_area::data::neuron_layout::neuron_layout::VoxelNeuronLayout;
+use crate::cortical_area::data::neuron_layout::NeuronLayout;
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_basis::collections::spatial_helpers::axis_order::AxisOrderIncrementing;
 use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHelper;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use crate::cortical_area::neuron_layout::neuron_layout::VoxelNeuronLayout;
-use crate::cortical_area::neuron_layout::NeuronLayout;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use serde::Serialize;
 
 /// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion
 #[derive(Clone, Serialize)]

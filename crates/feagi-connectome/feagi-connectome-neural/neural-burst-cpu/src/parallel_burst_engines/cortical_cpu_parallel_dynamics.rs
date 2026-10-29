@@ -1,10 +1,10 @@
-use feagi_basis::BurstIndex;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use neural_basis::cortical_area::neuron_layout::NeuronLayout;
+use feagi_basis::BurstIndex;
 use neural_basis::cortical_area::cortical_burst_engine_dynamics::CorticalBurstEngineDynamics;
 use neural_basis::cortical_area::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use neural_basis::cortical_area::per_cortical_data::CorticalAreaUbiquitousFlags;
-use neural_basis::cortical_area::per_neuron_data::{InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
+use neural_basis::cortical_area::data::neuron_layout::NeuronLayout;
+use neural_basis::cortical_area::data::per_cortical_data::CorticalAreaUbiquitousFlags;
+use neural_basis::cortical_area::data::per_neuron_data::{InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 

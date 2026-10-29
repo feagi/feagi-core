@@ -1,7 +1,7 @@
 use feagi_connectome::cortical_area::{CorticalDynamicsModel, CorticalDynamicsQuantization};
-use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use neural_basis::cortical_area::data::::NeuronLayout;
 use crate::basis::cortical_area::cortical_area_class::cortical_area_class_enum::CorticalAreaClassEnum;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Describes a specific cortical area class. A cortical area class could use various models
 /// (and their quantizations) but it must stick to a certain neuron layout
