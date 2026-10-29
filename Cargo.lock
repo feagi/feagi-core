@@ -700,12 +700,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-brain-basis"
+name = "feagi-connectome"
 version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
- "feagi-brain-basis-proc",
+ "feagi-connectome-neural",
+ "feagi-connectome-proc",
  "half",
  "heapless 0.9.3",
  "paste",
@@ -717,7 +718,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-brain-basis-proc"
+name = "feagi-connectome-neural"
+version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+ "neural-basis",
+ "neural-burst-cpu",
+ "neural-burst-esp32",
+ "rayon",
+]
+
+[[package]]
+name = "feagi-connectome-proc"
 version = "0.1.1"
 dependencies = [
  "feagi-macro-components",
@@ -728,23 +740,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-brain-processing"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "feagi-brain-basis",
- "feagi-npu-burst-basis",
- "feagi-npu-burst-esp32",
- "feagi-npu-burst-rayon",
-]
-
-[[package]]
 name = "feagi-core"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-brain-basis",
- "feagi-brain-processing",
  "feagi-genome",
  "feagi-interop",
  "feagi-migrator",
@@ -761,7 +760,7 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
- "feagi-brain-basis",
+ "feagi-connectome",
  "half",
  "heapless 0.9.3",
  "paste",
@@ -806,44 +805,6 @@ name = "feagi-migrator"
 version = "0.1.1"
 dependencies = [
  "migrator-legacy-v5",
-]
-
-[[package]]
-name = "feagi-npu-burst-basis"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "feagi-brain-basis",
- "heapless 0.9.3",
- "paste",
- "serde",
-]
-
-[[package]]
-name = "feagi-npu-burst-esp32"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "feagi-brain-basis",
- "feagi-npu-burst-basis",
- "heapless 0.9.3",
- "paste",
- "serde",
-]
-
-[[package]]
-name = "feagi-npu-burst-rayon"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "feagi-brain-basis",
- "feagi-npu-burst-basis",
- "half",
- "heapless 0.9.3",
- "paste",
- "rayon",
- "serde",
 ]
 
 [[package]]
@@ -1687,6 +1648,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 dependencies = [
  "getrandom 0.2.17",
+]
+
+[[package]]
+name = "neural-basis"
+version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "neural-burst-cpu"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "neural-basis",
+ "paste",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "neural-burst-esp32"
+version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+ "heapless 0.9.3",
+ "neural-basis",
+ "paste",
+ "serde",
 ]
 
 [[package]]

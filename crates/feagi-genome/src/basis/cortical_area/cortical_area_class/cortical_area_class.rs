@@ -1,15 +1,15 @@
-use feagi_brain_basis::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
-use feagi_brain_basis::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
-use feagi_brain_basis::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::cortical_area::{CorticalDynamicsModel, CorticalDynamicsQuantization};
+use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_area_class::cortical_area_class_enum::CorticalAreaClassEnum;
 
-/// Describes a specific cortical area class
-pub trait CorticalAreaClass<FIQ, NDM, CDM, CDQ>: // TODO NeuronDynamicsModel Rename Quantization
+/// Describes a specific cortical area class. A cortical area class could use various models
+/// (and their quantizations) but it must stick to a certain neuron layout
+pub trait CorticalAreaClass<FIQ, CDM, CDQ>: // TODO NeuronDynamicsModel Rename Quantization
 where
     FIQ: FeagiIndexQuantization,
     CDQ: CorticalDynamicsQuantization,
-    CDM: CorticalDynamicsModel<CDQ>, // Likely further restricted per class
+    CDM: CorticalDynamicsModel<FIQ, Self::NeuronLayout, CDQ>, // Likely further restricted per class
 
 {
     /// This class as an enum
@@ -17,16 +17,6 @@ where
     
     /// What type of neuron layout this class uses
     type NeuronLayout: NeuronLayout<FIQ>;
-
-    
-    
-    
-    
-    // /// The implementation of the dynamics, and the data it requires
-    //type CorticalAreaDynamics: CorticalAreaDynamics<FIQ, NL, CAQ>;
-
-    //type CorticalAreaModelWriter; // TODO
-
 
 }
 

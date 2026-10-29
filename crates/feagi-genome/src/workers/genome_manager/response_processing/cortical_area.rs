@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use feagi_basis::feagi_id::feagi_id::HasBase64;
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
-use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::feagi_graph::FeagiGraph;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
 use crate::workers::genome_manager::requests::categories::prelude::*;
@@ -33,14 +35,11 @@ pub(crate) async fn cortical_area_response(
                     }))
                 }
                 CorticalAreaRequests::ReadCorticalAreaIdList(_m) => {
-            
-                    let cortical_ids = graph.get_all_cortical_areas();
-                    
-
-                   // CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
-                    //    cortical_ids,
-                    //}))
-                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    let map = graph.get_cortical_area_map();
+                    let ids_64 = map.keys().map(|id| id.to_base_64()).collect();
+                    CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
+                        cortical_ids: ids_64,
+                    }))
                 }
                 CorticalAreaRequests::ReadCorticalAreaNameList(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)

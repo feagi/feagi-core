@@ -3,7 +3,7 @@ use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use crate::graphs::implementations::designer_graph::DesignerGraph;
 use crate::workers::genome_manager::requests::category_structs::GenomeManagerResponders;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;

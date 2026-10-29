@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::identifiers::brain_regions::BrainRegionID;
 use crate::basis::cortical_area::cortical_id::CorticalID;
 use crate::basis::genome_object_metadata::GenomeObjectMetadata;

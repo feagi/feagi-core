@@ -9,10 +9,14 @@ use syn::{braced, Attribute, Token, Type, TypeParamBound};
 
 mod kw {
     syn::custom_keyword!(implementations);
+    syn::custom_keyword!(layout);
 }
 
 /// Name of the implementation entry that sets `MembranePotentialQuantization::MembranePotentialQuant`
 const MEMBRANE_POTENTIAL_QUANT: &str = "MembranePotentialQuant";
+
+/// Name of the index quantization generic, which a template's `layout` entry may use
+const FEAGI_INDEX_QUANTIZATION_GENERIC: &str = "FIQ";
 
 /// The data types of `CorticalDynamicsModel`, in trait order. Each can be given a struct
 pub const MODEL_DATA_STRUCTS: [&str; 6] = [
@@ -34,6 +38,8 @@ pub const MODEL_DATA_STRUCTS: [&str; 6] = [
 ///     T1: SomeTrait + OtherTrait,
 /// }
 ///
+/// layout: NeuronLayoutVoxelDefault<FIQ>
+///
 /// implementations: {
 ///     Float16: {
 ///         MembranePotentialQuant: f16,
@@ -50,17 +56,70 @@ pub const MODEL_DATA_STRUCTS: [&str; 6] = [
 ///     field_name: T1,
 /// }
 /// ```
-/// Every implementation must set `MembranePotentialQuant` and each associated type of the model
-/// once. After the implementations come optional, in any order, the data structs of the model,
-/// one per data type of `CorticalDynamicsModel` (see [`MODEL_DATA_STRUCTS`]). Every field must be
-/// typed by one of the model's associated types. Entries keep their template order, except data
-/// structs, which keep trait order
+/// The optional `layout` entry sets the `NeuronLayout` the model is implemented for (see
+/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout<FIQ>`. Every implementation
+/// must set `MembranePotentialQuant` and each associated type of the model once. After the
+/// implementations come optional, in any order, the data structs of the model, one per data type
+/// of `CorticalDynamicsModel` (see [`MODEL_DATA_STRUCTS`]). Every field must be typed by one of
+/// the model's associated types. Entries keep their template order, except data structs, which
+/// keep trait order
 pub struct CorticalDynamicsQuantizationTemplate {
     pub model_attributes: Vec<Attribute>,
     pub model_name: Ident,
     pub associated_types: IndexMap<Ident, AssociatedTypeTemplate>,
+    pub layout: ModelLayoutTemplate,
     pub implementations: IndexMap<Ident, QuantizationImplementationTemplate>,
     pub data_structs: IndexMap<Ident, IndexMap<Ident, ModelDataFieldTemplate>>,
+}
+
+/// The `NeuronLayout` a model is implemented for, which decides the generics of its model struct
+/// `CorticalDynamicsModel{Model}`. Both forms may use the index quantization generic `FIQ`
+pub enum ModelLayoutTemplate {
+    /// `layout: NeuronLayoutVoxelDefault<FIQ>`, a single layout. The model struct is
+    /// `CorticalDynamicsModel{Model}<FIQ, CDQ>`
+    Fixed(Type),
+    /// `layout: NL: VoxelNeuronLayout<FIQ>`, any layout within the bounds. The model struct is
+    /// `CorticalDynamicsModel{Model}<FIQ, NL, CDQ>`
+    Generic {
+        name: Ident,
+        bounds: Punctuated<TypeParamBound, Token![+]>,
+    },
+}
+
+impl Default for ModelLayoutTemplate {
+    /// Any layout, `NL: NeuronLayout<FIQ>`
+    fn default() -> Self {
+        Self::Generic {
+            name: format_ident!("NL"),
+            bounds: syn::parse_quote!(NeuronLayout<FIQ>),
+        }
+    }
+}
+
+impl Parse for ModelLayoutTemplate {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // `Name: Bounds` is a generic, while anything else (`Name<..>`, `path::Name`) is a type
+        if input.peek(syn::Ident) && input.peek2(Token![:]) && !input.peek2(Token![::]) {
+            let name = input.parse::<Ident>()?;
+            if name == FEAGI_INDEX_QUANTIZATION_GENERIC {
+                return Err(syn::Error::new(name.span(), format!("`{FEAGI_INDEX_QUANTIZATION_GENERIC}` is the index quantization generic, the layout generic needs another name")));
+            }
+            input.parse::<Token![:]>()?;
+            let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(input)?;
+            Ok(Self::Generic { name, bounds })
+        } else {
+            Ok(Self::Fixed(input.parse::<Type>()?))
+        }
+    }
+}
+
+impl ToTokens for ModelLayoutTemplate {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            Self::Fixed(layout) => layout.to_tokens(tokens),
+            Self::Generic { name, bounds } => tokens.extend(quote! { #name: #bounds }),
+        }
+    }
 }
 
 /// An associated type of the model trait, with its bounds
@@ -140,11 +199,40 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
+        // The model using this quantization, declared on the model trait as its layout restriction
+        // can only be expressed there
+        let (model_declaration, model_definition) = match &self.layout {
+            ModelLayoutTemplate::Fixed(layout) => (
+                quote! {
+                    type Model<FIQ: FeagiIndexQuantization>: CorticalDynamicsModel<FIQ, #layout, Self>;
+                },
+                quote! {
+                    type Model<FIQ: FeagiIndexQuantization> = #model_struct<FIQ, Self>;
+                },
+            ),
+            ModelLayoutTemplate::Generic { name, bounds } => (
+                quote! {
+                    type Model<FIQ: FeagiIndexQuantization, #name: #bounds>: CorticalDynamicsModel<FIQ, #name, Self>;
+                },
+                quote! {
+                    type Model<FIQ: FeagiIndexQuantization, #name: #bounds> = #model_struct<FIQ, #name, Self>;
+                },
+            ),
+        };
+
+        // Every data type of `CorticalDynamicsQuantization` is set to the model's data struct of
+        // that type, whether generated from the template or written by hand
+        let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|name| format_ident!("{}", name)).collect();
+        let model_data_structs: Vec<Ident> = model_data_names.iter().map(|name| self.data_struct_name(name)).collect();
+
         let implementations = self.implementations.iter().map(|(name, implementation)| {
             let struct_name = self.implementation_struct_name(name);
             let membrane_potential_quant = &implementation.membrane_potential_quant;
             let associated_names = implementation.associated_types.keys();
             let associated_types = implementation.associated_types.values();
+            let model_data_names = &model_data_names;
+            let model_data_structs = &model_data_structs;
+            let model_definition = &model_definition;
             quote! {
                 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
                 pub struct #struct_name;
@@ -158,10 +246,11 @@ impl CorticalDynamicsQuantizationTemplate {
                 }
 
                 impl CorticalDynamicsQuantization for #struct_name {
-                    type Model = #model_struct<Self>;
+                    #( type #model_data_names = #model_data_structs<Self>; )*
                 }
 
                 impl #model_trait for #struct_name {
+                    #model_definition
                     #( type #associated_names = #associated_types; )*
                 }
             }
@@ -193,6 +282,8 @@ impl CorticalDynamicsQuantizationTemplate {
         quote! {
             #( #model_attributes )*
             pub trait #model_trait: CorticalDynamicsQuantization {
+                /// What model uses this quantization
+                #model_declaration
                 #( #associated_types )*
             }
 
@@ -210,6 +301,16 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
         input.parse::<Token![:]>()?;
         let associated_types = parse_associated_types(input)?;
         parse_optional_comma(input)?;
+
+        let layout = if input.peek(kw::layout) {
+            input.parse::<kw::layout>()?;
+            input.parse::<Token![:]>()?;
+            let layout = input.parse::<ModelLayoutTemplate>()?;
+            parse_optional_comma(input)?;
+            layout
+        } else {
+            ModelLayoutTemplate::default()
+        };
 
         input.parse::<kw::implementations>()?;
         input.parse::<Token![:]>()?;
@@ -239,6 +340,7 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             model_attributes,
             model_name,
             associated_types,
+            layout,
             implementations,
             data_structs,
         })
@@ -251,6 +353,7 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let model_attributes = &self.model_attributes;
         let model_name = &self.model_name;
+        let layout = &self.layout;
 
         let associated_types = self.associated_types.iter().map(|(name, associated)| {
             let attributes = &associated.attributes;
@@ -294,6 +397,8 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
             #model_name: {
                 #( #associated_types )*
             }
+
+            layout: #layout,
 
             implementations: {
                 #( #implementations )*

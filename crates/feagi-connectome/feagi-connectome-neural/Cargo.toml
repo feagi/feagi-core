@@ -1,0 +1,53 @@
+[package]
+name = "feagi-connectome-neural"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+
+[features]
+
+std = [
+    "alloc",
+    "feagi-basis/std", "neural-basis/std",
+    "neural-burst-cpu?/std",
+]
+
+alloc = [
+    "feagi-basis/alloc", "neural-basis/alloc",
+    "neural-burst-cpu?/alloc", "neural-burst-esp32?/alloc",
+]
+
+burst-engine-cpu = [
+    "std",
+    "dep:neural-burst-cpu"
+]
+
+burst-engine-esp32 = [
+    "dep:neural-burst-esp32"
+]
+
+rayon = [
+    "std", "dep:rayon",
+    "burst-engine-cpu"
+]
+
+
+[dependencies]
+# Child Crates
+neural-basis = {path = "neural-basis" }
+neural-burst-cpu = {path = "neural-burst-cpu", optional = true }
+neural-burst-esp32 = {path = "neural-burst-esp32", optional = true }
+
+# Workspace Crates
+feagi-basis = {path = "../../feagi-basis", default-features = false }
+
+# External Crates
+rayon = {workspace = true, default-features = false, optional = true}
+
+[lints]
+workspace = true

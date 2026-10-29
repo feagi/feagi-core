@@ -6,7 +6,6 @@
 
 
 pub mod runtimes;
-pub mod wokr;
 pub extern crate feagi_basis;
 
 /*

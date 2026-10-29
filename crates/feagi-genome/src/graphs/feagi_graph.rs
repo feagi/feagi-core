@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_area_container::{CorticalAreaContainer};
-use crate::basis::cortical_area::cortical_id::CorticalID;
 use crate::graphs::components::element_identifiers::{GraphElementIdentifiers};
 use crate::graphs::components::graph_caching::GraphCaching;
 use crate::graphs::components::npu_context::GraphNPUContext;

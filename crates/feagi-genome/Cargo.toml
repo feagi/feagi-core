@@ -14,21 +14,21 @@ description = "Various structures used to describe the structure and state of th
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std", "uuid/v7", "uuid/js",  # js for WASM support
-    "feagi-basis/std", "feagi-brain-basis/std"
+    "serde/std", "serde_json/std", "base64/std", "thiserror/std", "half/std", "uuid/std", "uuid/v7", "uuid/js",  # js for WASM support
+    "feagi-basis/std", "feagi-connectome/std"
 ]
 
 alloc = [
-    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
-    "feagi-basis/alloc", "feagi-brain-basis/alloc"
+    "serde/alloc", "serde_json/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc", "feagi-connectome/alloc"
 ]
 
 
 
 [dependencies]
 # Workspace Crates
-feagi-brain-basis = { path = "../feagi-brain-basis" }
 feagi-basis = { path = "../feagi-basis", default-features = false }
+feagi-connectome = {path = "../feagi-connectome", default-features = false}
 
 # External Crates
 paste = { workspace = true }

@@ -1,0 +1,41 @@
+[package]
+name = "neural-basis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Shared logic / traits for burst engines"
+
+[features]
+
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+# ========================= Standard Toggleable Features ========================= #
+
+std = [
+    "alloc",
+    "serde/std", "half/std", 'thiserror/std',
+    "feagi-basis/std"
+]
+
+alloc = [
+    "serde/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc",
+
+]
+
+[dependencies]
+
+# Workspace Crates
+feagi-basis = {path = "../../../feagi-basis", default-features = false }
+
+# External Crates
+paste = { workspace = true}
+serde = {workspace = true}
+heapless = {workspace = true, default-features = false}
+half = {workspace = true, default-features = false, features = ["serde"]}
+thiserror = {workspace = true, default-features = false}

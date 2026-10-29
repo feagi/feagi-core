@@ -1,0 +1,52 @@
+[package]
+name = "feagi-connectome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Base structs and traits to describe neural processing"
+
+[features]
+
+std = [
+    "alloc",
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std",
+    "feagi-basis/std", "feagi-connectome-neural/std"
+]
+
+alloc = [
+    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc", "feagi-connectome-neural/alloc"
+]
+
+burst-engine-cpu = [
+    "std",
+    "feagi-connectome-neural/burst-engine-cpu"
+]
+
+
+[dependencies]
+# Child Crates
+feagi-connectome-neural = { path = "feagi-connectome-neural" }
+feagi-connectome-proc = {path = "feagi-connectome-proc"}
+
+# Workspace Crates
+feagi-basis = { path = "../feagi-basis", default-features = false }
+
+# External Crates
+paste = { workspace = true }
+thiserror = { workspace = true, default-features = false }
+half = { workspace = true, features = ["serde"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }
+base64 = { workspace = true, default-features = false }
+heapless = { workspace = true, default-features = false, features = ["serde"] }
+uuid = { workspace = true, features = ["serde"] }
+rand = {workspace = true}
+rayon = {workspace = true, optional = true}
+
+[lints]
+workspace = true

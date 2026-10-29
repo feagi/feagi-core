@@ -1,0 +1,47 @@
+[package]
+name = "neural-burst-cpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Rayon burst engine logic for multithread / core CPU neuron processing"
+
+[features]
+
+# // TODO do we even need these features? Wouldnt std and alloc always be on here???
+
+std = [
+    "alloc",
+    "serde/std", "half/std", "ahash/std",
+    "feagi-basis/std", "neural-basis/std",
+]
+
+alloc = [
+    
+    "serde/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc", "neural-basis/alloc",
+]
+
+rayon = [
+    "std",
+    "dep:rayon"
+]
+
+[dependencies]
+# Sibling Crates
+neural-basis = {path = "../neural-basis" }
+
+# Root Crates
+feagi-basis = {path = "../../../feagi-basis", default-features = false }
+
+# External Crates
+paste = { workspace = true}
+serde = {workspace = true} # Required by FeagiError
+heapless = {workspace = true, default-features = false, features = ["serde"]}
+half = {workspace = true, default-features = false, features = ["serde"]}
+ahash = { workspace = true, default-features = false, features = ["serde"]}
+rayon = { workspace = true, default-features = false, optional = true}

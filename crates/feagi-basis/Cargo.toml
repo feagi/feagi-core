@@ -20,11 +20,11 @@ default = [
 std = [
     "alloc",
     "rand",
-    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std", "uuid/v7",
+    "thiserror/std", "serde/std", "serde_json?/std", "ahash/std", "thingbuf/std", "half/std", "uuid/std", "uuid/v7",
 ]
 
 alloc = [
-    "serde/alloc", "serde_json/alloc", "serde_arrays/alloc", "thingbuf/alloc", "half/alloc", "heapless/alloc"
+    "serde/alloc", "serde_json?/alloc", "serde_arrays/alloc", "thingbuf/alloc", "half/alloc", "heapless/alloc"
 ]
 
 # Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
@@ -45,7 +45,7 @@ thiserror = { workspace = true }
 base64 = { workspace = true }
 paste = { workspace = true }
 delegate = { workspace = true }
-ahash = { workspace = true, features = ["serde"] }
+ahash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_arrays = { workspace = true }
 heapless = { workspace = true }

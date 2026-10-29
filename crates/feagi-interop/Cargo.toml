@@ -18,13 +18,14 @@ std = [
     "alloc",
     "zenoh",
     "thiserror/std", "thingbuf/std", "base64/std", "serde/std",
-    "serde_json/std", "picoserve/std",
+    "serde_json/std", "picoserve?/std", "serde-json-core?/std",
     "feagi-basis/std"
 ]
 
 alloc = [
     "thingbuf/alloc", "base64/alloc", "serde/alloc",
-    "serde_json/alloc", "picoserve/alloc",
+    "heapless/alloc",
+    "serde_json/alloc", "picoserve?/alloc",
     "feagi-basis/alloc"
 ]
 

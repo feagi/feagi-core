@@ -1,3 +1,0 @@
-pub mod cortical_mapping_entry_input_type;
-pub mod cortical_mapping_entry_output_type;
-pub mod synapse_model;

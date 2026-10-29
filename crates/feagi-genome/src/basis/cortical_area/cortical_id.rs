@@ -25,8 +25,8 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-/// Cortical ID of some sort
-pub trait CorticalIDIdentifier: Hash {}
+/// Cortical ID of some sort (faux or real)
+pub trait CorticalIDIdentifier: Copy + Eq + core::hash::Hash + core::fmt::Debug {}
 
 /// Whether `bytes` name a known area kind in their first byte.
 ///
@@ -98,3 +98,10 @@ impl FauxIdentifier<12> for Base64EncodedFauxCorticalID {
 impl HasFauxIdentifier<8> for CorticalID { type FauxID = FauxCorticalID; }
 
 impl HasFauxIdentifier<12> for Base64EncodedCorticalID { type FauxID = Base64EncodedFauxCorticalID; }
+
+
+
+impl CorticalIDIdentifier for CorticalID {}
+
+impl CorticalIDIdentifier for FauxCorticalID {}
+
