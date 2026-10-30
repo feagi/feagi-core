@@ -3,11 +3,8 @@ use crate::parallelism::feagi_channel::base_channels::base_channels::{FeagiChann
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::feagi_request_response_error::FeagiRequestResponseError;
-use crate::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, ReplyStatus};
 
-#[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 
 /// Sends requests to a responder and awaits the matching response
 pub struct FeagiRequester<Request, Response, Backend>
@@ -109,6 +106,11 @@ where
         }
     }
 }
+
+#[cfg(feature = "alloc")]
+use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
+#[cfg(feature = "alloc")]
+use crate::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
 #[cfg(feature = "alloc")]
 impl<Request: Recyclable, Response: Recyclable> Clone for FeagiRequester<Request, Response, FeagiRequestResponseChannelsAllocBackend>{

@@ -138,3 +138,31 @@ where
     pub is_psp_using_membrane_potential: bool,
 }
 
+/// Every piece of data needed to spawn a new cortical area, at the given model quantization. Built
+/// from a set of model defaults and the given cortical properties
+#[derive(Debug, Clone, PartialEq)]
+pub struct CorticalModelSpawnData<FIQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+{
+    /// Details on how neurons are laid out (length, dimensions, etc)
+    pub layout: NeuronLayoutOf<NM, FIQ>,
+    /// Cortical level properties of this model at the given model quantization
+    pub cortical_properties: NM::CorticalDataProperties,
+    /// Stateful data that must be kept but not exposed to the genome developer for editing.
+    /// May update every burst
+    pub cortical_internal: NM::CorticalDataInternal,
+    /// Runtime cortical level data, not saved
+    pub cortical_scratch: NM::CorticalDataScratch,
+    /// Not direct properties, but rather parameters used by functions to set per neuron variance
+    pub neuron_variance_properties: NM::CorticalFunctionContext,
+    /// The data every neuron starts with that is saved
+    pub neuron_internal: NM::NeuronDataInternal,
+    /// The data every neuron starts with that is not saved
+    pub neuron_scratch: NM::NeuronDataScratch,
+    pub cortical_level_psp: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+    pub is_psp_uniform: bool,
+    pub is_psp_using_membrane_potential: bool,
+}
+

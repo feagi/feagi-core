@@ -44,6 +44,17 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
     ("NeuronDataScratch", "NeuronDataScratchSpecification"),
 ];
 
+/// The data types the model's defaults trait holds a const of, with the name of the const and the
+/// field of `CorticalModelSpawnData` it fills. The cortical properties are instead given to the
+/// trait's `assemble`
+pub const MODEL_DEFAULTS: [(&str, &str, &str); 5] = [
+    ("CorticalDataInternal", "CORTICAL_INTERNAL", "cortical_internal"),
+    ("CorticalDataScratch", "CORTICAL_SCRATCH", "cortical_scratch"),
+    ("CorticalFunctionContext", "CORTICAL_FUNCTION_CONTEXT", "neuron_variance_properties"),
+    ("NeuronDataInternal", "NEURON_INTERNAL", "neuron_internal"),
+    ("NeuronDataScratch", "NEURON_SCRATCH", "neuron_scratch"),
+];
+
 /// A cortical model data container, of which every model gets a type alias and an enum over its
 /// quantization levels
 pub struct ModelDataContainer {
@@ -274,6 +285,10 @@ impl CorticalDynamicsQuantizationTemplate {
         format_ident!("{}{}", data_struct, self.model_name)
     }
 
+    pub fn defaults_trait_name(&self) -> Ident {
+        format_ident!("{}Defaults", self.model_name)
+    }
+
     pub fn template_macro_name(&self) -> Ident {
         format_ident!("cortical_dynamics_quantization_{}_template", self.model_name.to_string().to_snake_case())
     }
@@ -283,19 +298,41 @@ impl CorticalDynamicsQuantizationTemplate {
     /// `NM::MembranePotentialQuant`. Anything else is kept as written
     fn resolve_field_type(&self, field_type: &Type) -> proc_macro2::TokenStream {
         let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
-        if let Type::Path(path) = field_type {
-            if path.qself.is_none() {
-                if let Some(name) = path.path.get_ident() {
-                    if self.quantizables.contains_key(name) {
-                        return quote!(#name<#nm::#name>);
-                    }
-                    if name == MEMBRANE_POTENTIAL_QUANT {
-                        return quote!(#nm::#name);
-                    }
-                }
+        if let Some(name) = bare_ident(field_type) {
+            if self.quantizables.contains_key(name) {
+                return quote!(#name<#nm::#name>);
+            }
+            if name == MEMBRANE_POTENTIAL_QUANT {
+                return quote!(#nm::#name);
             }
         }
         field_type.to_token_stream()
+    }
+
+    /// The expression converting data field `self.name` to the quantization of another model level
+    /// in `requantize`. Decimals, `MembranePotentialQuant` included, error if they become infinite
+    /// or NaN, integers are clamped, and anything else is cloned
+    fn requantize_field(&self, name: &Ident, field_type: &Type) -> proc_macro2::TokenStream {
+        let basis = basis_path();
+        let kind = bare_ident(field_type).and_then(|type_name| {
+            if type_name == MEMBRANE_POTENTIAL_QUANT {
+                Some(QuantizableKind::Decimal)
+            } else {
+                self.quantizables.get(type_name).map(|quantizable| quantizable.kind)
+            }
+        });
+        match kind {
+            Some(QuantizableKind::Decimal) => {
+                quote!(#basis::quantization::quantizable::QuantizedDecimalTrait::try_to_quantization(self.#name)?)
+            }
+            Some(QuantizableKind::UnsignedInteger) => {
+                quote!(#basis::quantization::quantizable::QuantizedUnsignedIntegerTrait::to_quantization_clamped(self.#name))
+            }
+            Some(QuantizableKind::SignedInteger) => {
+                quote!(#basis::quantization::quantizable::QuantizedSignedIntegerTrait::to_quantization_clamped(self.#name))
+            }
+            None => quote!(::core::clone::Clone::clone(&self.#name)),
+        }
     }
 
     /// Generate the template macro, which holds this template once validated. Its single input is
@@ -320,8 +357,9 @@ impl CorticalDynamicsQuantizationTemplate {
     }
 
     /// Generate the model's quantizable wrappers, model trait, a marker struct implementing it per
-    /// quantization level, every data struct of the model, and an alias and quantization level
-    /// enum of every data container (see [`MODEL_DATA_CONTAINERS`])
+    /// quantization level, every data struct of the model, an alias and quantization level enum of
+    /// every data container (see [`MODEL_DATA_CONTAINERS`]), and the model's defaults trait (see
+    /// [`MODEL_DEFAULTS`])
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
@@ -404,6 +442,8 @@ impl CorticalDynamicsQuantizationTemplate {
         });
 
         let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
+        let basis = basis_path();
+        let quantization_error = quote!(#basis::quantization::quantizable::DataValueQuantizationError);
         let no_fields = IndexMap::new();
         let data_structs = MODEL_DATA_STRUCTS.iter().map(|(data_struct, specification)| {
             let data_struct = format_ident!("{}", data_struct);
@@ -413,6 +453,8 @@ impl CorticalDynamicsQuantizationTemplate {
             let field_attributes: Vec<&Vec<Attribute>> = fields.values().map(|field| &field.attributes).collect();
             let field_names: Vec<&Ident> = fields.keys().collect();
             let field_types: Vec<proc_macro2::TokenStream> = fields.values().map(|field| self.resolve_field_type(&field.field_type)).collect();
+            let field_conversions = fields.iter().map(|(name, field)| self.requantize_field(name, &field.field_type));
+            let quantization_error = &quantization_error;
             quote! {
                 #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
                 pub struct #struct_name<#nm: #model_trait> {
@@ -425,11 +467,17 @@ impl CorticalDynamicsQuantizationTemplate {
                 }
 
                 impl<#nm: #model_trait> #struct_name<#nm> {
-                    pub fn new(#( #field_names: #field_types ),*) -> Self {
+                    pub const fn new(#( #field_names: #field_types ),*) -> Self {
                         Self {
                             #( #field_names, )*
                             _p: ::core::marker::PhantomData,
                         }
+                    }
+
+                    /// Converts to the quantization of `To`. Returns an error if a decimal becomes
+                    /// infinite or NaN
+                    pub fn requantize<To: #model_trait>(&self) -> ::core::result::Result<#struct_name<To>, #quantization_error> {
+                        ::core::result::Result::Ok(#struct_name::new(#( #field_conversions ),*))
                     }
                 }
 
@@ -441,7 +489,6 @@ impl CorticalDynamicsQuantizationTemplate {
         // quantization level. A generic layout is a generic of the enum as well
         let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
         let sb = format_ident!("{}", STORE_BACKEND_GENERIC);
-        let basis = basis_path();
         let enum_layout_generic = match &self.layout {
             ModelLayoutTemplate::Fixed(_) => quote!(),
             ModelLayoutTemplate::Generic { name, bounds } => quote!(, #name: #bounds),
@@ -504,11 +551,45 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
+        // The defaults trait holds a const per data type except the cortical properties, at the
+        // quantization of its reference model level, and assembles them at any level
+        let defaults_trait = self.defaults_trait_name();
+        let defaults_doc = format!(
+            "Defaults of the `{}` model, defined at the quantization of [`CorticalUniversalDefaults::Reference`]. Meant to be implemented on a zero sized struct, so several sets of defaults can exist. Holds every data type except the cortical properties, which are given to [`Self::assemble`]",
+            self.model_name
+        );
+        let default_consts: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(_, name, _)| format_ident!("{}", name)).collect();
+        let default_structs: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(data_struct, _, _)| self.data_struct_name(&format_ident!("{}", data_struct))).collect();
+        let default_fields: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(_, _, field)| format_ident!("{}", field)).collect();
+        let defaults = quote! {
+            #[doc = #defaults_doc]
+            pub trait #defaults_trait: CorticalUniversalDefaults<Reference: #model_trait> {
+                #( const #default_consts: #default_structs<Self::Reference>; )*
+
+                /// Assembles the data to spawn a cortical area of quantization `NM` from the given
+                /// cortical properties and layout, and these defaults requantized to `NM`. Returns an
+                /// error if a decimal default becomes infinite or NaN at `NM`
+                fn assemble<#fiq: FeagiIndexQuantization, #nm: #model_trait>(
+                    cortical_properties: #nm::CorticalDataProperties,
+                    layout: NeuronLayoutOf<#nm, #fiq>,
+                ) -> ::core::result::Result<CorticalModelSpawnData<#fiq, #nm>, #quantization_error> {
+                    ::core::result::Result::Ok(CorticalModelSpawnData {
+                        layout,
+                        cortical_properties,
+                        #( #default_fields: Self::#default_consts.requantize()?, )*
+                        cortical_level_psp: #basis::quantization::quantizable::QuantizedDecimalTrait::try_to_quantization(Self::CORTICAL_LEVEL_PSP)?,
+                        is_psp_uniform: Self::IS_PSP_UNIFORM,
+                        is_psp_using_membrane_potential: Self::IS_PSP_USING_MEMBRANE_POTENTIAL,
+                    })
+                }
+            }
+        };
+
         quote! {
             #( #wrappers )*
 
             #( #model_attributes )*
-            pub trait #model_trait: NeuronModel<#layout_restriction> {
+            pub trait #model_trait: NeuronModel<#layout_restriction, #( #model_data_names = #model_data_structs<Self>, )*> {
                 #( #associated_types )*
             }
 
@@ -517,6 +598,8 @@ impl CorticalDynamicsQuantizationTemplate {
             #( #data_structs )*
 
             #( #data_containers )*
+
+            #defaults
         }
     }
 }
@@ -640,6 +723,14 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
                 #( #data_specifications )*
             }
         });
+    }
+}
+
+/// The name of a type that is a single identifier, such as a quantizable or `MembranePotentialQuant`
+fn bare_ident(field_type: &Type) -> Option<&Ident> {
+    match field_type {
+        Type::Path(path) if path.qself.is_none() => path.path.get_ident(),
+        _ => None,
     }
 }
 
