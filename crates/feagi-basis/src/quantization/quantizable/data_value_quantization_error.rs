@@ -10,4 +10,6 @@ pub enum DataValueQuantizationError {
     HardwareNoLikeQuant,
     #[error("Attempted to store a percentage value that was not in range")]
     PercentageOutOfRange,
+    #[error("Decimal value is infinite or NaN at the target quantization")]
+    NonFiniteDecimal,
 }

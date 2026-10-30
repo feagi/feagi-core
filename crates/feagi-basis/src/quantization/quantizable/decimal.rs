@@ -5,6 +5,7 @@
 
 use crate::quantization::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
 use crate::quantization::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
+use crate::quantization::quantizable::data_value_quantization_error::DataValueQuantizationError;
 use crate::quantization::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::quantization::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
@@ -105,6 +106,23 @@ pub trait QuantizedDecimalTrait:
     /// Converts to a decimal of another quantization.
     fn to_quantization<ToQuant: QuantizedDecimalTrait>(self) -> ToQuant {
         ToQuant::from_quantization(self)
+    }
+
+    /// Tries to create from a decimal of another quantization, returns an error if the result is
+    /// infinite or NaN (such as from overflowing a smaller quantization)
+    fn try_from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError> {
+        let converted = Self::from_quantization(value);
+        // Widening to f64 keeps infinities and NaN, so this works for every quantization
+        if !converted.quant_to_f64().is_finite() {
+            return Err(DataValueQuantizationError::NonFiniteDecimal);
+        }
+        Ok(converted)
+    }
+
+    /// Tries to convert to a decimal of another quantization, returns an error if the result is
+    /// infinite or NaN (such as from overflowing a smaller quantization)
+    fn try_to_quantization<ToQuant: QuantizedDecimalTrait>(self) -> Result<ToQuant, DataValueQuantizationError> {
+        ToQuant::try_from_quantization(self)
     }
 
     fn scale_by_unsigned_percentage<OTHER: QuantizedDecimalTrait>(self, p: PercentageUnsigned<OTHER>) -> Self {
