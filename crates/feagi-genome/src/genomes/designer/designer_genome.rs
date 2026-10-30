@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_area_container::{CorticalAreaCachingEnabled, CorticalAreaContainer};
 use crate::basis::cortical_area::cortical_id::CorticalID;
+use crate::genomes::designer::designer_cortical_container::DesignerCorticalAreaContainer;
 use crate::identifiers::brain_regions::BrainRegionID;
 
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
@@ -11,7 +11,7 @@ pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     genome_name: String,
     root_brain_region: (BrainRegionID, ()),
     brain_regions: HashMap<BrainRegionID, ()>,
-    cortical_areas: HashMap<CorticalID, CorticalAreaContainer<FIQ, CorticalAreaCachingEnabled>>,
+    cortical_areas: HashMap<CorticalID, DesignerCorticalAreaContainer<FIQ>>,
 
     // TODO NPU
 

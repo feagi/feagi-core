@@ -1,20 +1,16 @@
 use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use core::fmt::{Debug, Formatter};
-use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantIndexedBackend};
+use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantContiguousStoreBackendVec, QuantIndexedBackend};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use serde::{Deserialize, Serialize};
 use crate::neuron_model::data::neuron_layout::NeuronLayout;
 // TODO Move away from pub properties and instead use getters and setters with proper checks!
 // We dont want to be able to set the layout to something that wont agree with the neuron count!
 
-//region Cortical Model
 
 /// The full data of a given cortical model to be stored (everything except scratch data), with
 /// the neuron data held in a store of the backend `SB`. Serializable when the store of `SB` is
-/// (an array backend for example is only up to 32 elements)
-// NOTE: Debug, Clone and PartialEq are implemented below instead of derived, as the derives cannot
-// bound the store of `SB`, which is only known to be a `QuantContiguousStore`
 #[derive(Serialize, Deserialize)]
 #[serde(bound(
     serialize = "SB::Store<NM::NeuronDataInternal>: Serialize",
@@ -103,7 +99,6 @@ where
 }
 
 
-
 /// Cortical level data (properties and neuron variance) as would be edited by a genome developer
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(bound = "")] // Every field is serializable through the bounds of NeuronModel and NeuronLayout
@@ -143,4 +138,3 @@ where
     pub is_psp_using_membrane_potential: bool,
 }
 
-//endregion

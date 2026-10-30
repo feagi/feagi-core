@@ -1,7 +1,7 @@
+use crate::basis::cortical_area::cortical_id::{CorticalID, FauxCorticalID};
+use crate::genomes::genome_object_metadata::GenomeObjectMetadata;
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_id::{CorticalID, FauxCorticalID};
-use crate::basis::genome_object_metadata::GenomeObjectMetadata;
 
 //region Adding
 

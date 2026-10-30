@@ -4,13 +4,11 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
-use crate::graphs::feagi_graph::FeagiGraph;
-use crate::graphs::implementations::designer_graph::DesignerGraph;
 use crate::workers::genome_manager::requests::categories::prelude::*;
 
 pub(crate) async fn cortical_area_response(
     responder: &FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    graph: &mut DesignerGraph<FeagiIndexQuantizationStandard>) -> bool {
+    graph: () /* &mut DesignerGraph<FeagiIndexQuantizationStandard> */) -> bool {
     
     responder.try_process_next(
         async | request: CorticalAreaRequests | {
@@ -35,11 +33,14 @@ pub(crate) async fn cortical_area_response(
                     }))
                 }
                 CorticalAreaRequests::ReadCorticalAreaIdList(_m) => {
-                    let map = graph.get_cortical_area_map();
-                    let ids_64 = map.keys().map(|id| id.to_base_64()).collect();
-                    CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
-                        cortical_ids: ids_64,
-                    }))
+
+                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    
+                    //let map = graph.get_cortical_area_map();
+                    //let ids_64 = map.keys().map(|id| id.to_base_64()).collect();
+                    //CorticalAreaResponses::ReadCorticalAreaIdList(Ok(ReadCorticalAreaIdListFeagiRequestMessageResponse {
+                    //    cortical_ids: ids_64,
+                    //}))
                 }
                 CorticalAreaRequests::ReadCorticalAreaNameList(m) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
