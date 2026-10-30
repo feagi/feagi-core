@@ -97,6 +97,11 @@ async fn dispatch(
             .await
             .map(drop),
         Op::DeleteBrainRegion { region_id } => connectome.delete_brain_region(&region_id).await,
+        Op::DeleteBrainRegionRaiseMembers { region_id } => {
+            connectome
+                .delete_brain_region_raise_members(&region_id)
+                .await
+        }
         Op::CreateMorphology {
             morphology_id,
             morphology,

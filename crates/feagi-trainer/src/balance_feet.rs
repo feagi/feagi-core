@@ -1228,6 +1228,19 @@ pub struct BalanceAttemptRecord {
     /// `collapsed_at_bursts` times `burst_period_s`: seconds from the end of settling.
     #[serde(default)]
     pub collapsed_at_s: Option<f64>,
+    /// RMS of the torso's horizontal angular velocity, `hypot(wx, wy)`, rad/s, over the counted
+    /// upright bursts after settling. Lower is steadier. Absent when no such burst was measured.
+    #[serde(default)]
+    pub wobble_rad_s: Option<f64>,
+    /// RMS deviation of the torso tilt vector from its mean over the same bursts, degrees.
+    /// Lower is steadier. Absent when no such burst was measured.
+    #[serde(default)]
+    pub tilt_sway_deg: Option<f64>,
+    /// RMS horizontal deviation of the subtree CoM from its mean over the same bursts, as a
+    /// fraction of the reset torso height. Lower is steadier. Absent when no burst was measured
+    /// or the reset height is unknown.
+    #[serde(default)]
+    pub com_sway_fraction: Option<f64>,
     /// Adaptive-assist numbers. Absent for a ladder attempt and for probes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive: Option<AdaptiveAttemptStats>,
@@ -1581,16 +1594,16 @@ pub struct BodyMeasure {
     pub tilt_rad: f64,
     /// Tilt vector, rad.
     #[serde(default)]
-    pub tilt_vec: [f64; 2],
+    pub tilt_vec: Option<[f64; 2]>,
     /// Angular velocity, rad/s.
     #[serde(default)]
-    pub ang_vel: [f64; 3],
+    pub ang_vel: Option<[f64; 3]>,
     /// Body CoM, m.
     #[serde(default)]
-    pub com: [f64; 3],
+    pub com: Option<[f64; 3]>,
     /// Subtree CoM, m.
     #[serde(default)]
-    pub subtree_com: [f64; 3],
+    pub subtree_com: Option<[f64; 3]>,
 }
 
 /// One contact set in a `measure` reply.
@@ -1758,6 +1771,113 @@ pub struct BalanceSample {
     /// `record_actuators`.
     #[serde(default)]
     pub actuators: BTreeMap<String, f64>,
+    /// Stability readings of the torso at this burst. Absent when not measured.
+    #[serde(default)]
+    pub stability: Option<StabilitySample>,
+}
+
+/// Torso motion readings for the stability metrics of one burst.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct StabilitySample {
+    /// Horizontal angular velocity `hypot(wx, wy)`, rad/s. Absent when not reported.
+    pub horizontal_ang_vel_rad_s: Option<f64>,
+    /// Tilt vector, rad. Absent when not reported.
+    pub tilt_vec_rad: Option<[f64; 2]>,
+    /// Subtree CoM horizontal position (x, y), m. Absent when not reported.
+    pub com_xy_m: Option<[f64; 2]>,
+}
+
+impl StabilitySample {
+    /// Readings from a measured body; each one is present only if the reply carried it.
+    pub fn from_body(body: &BodyMeasure) -> Self {
+        Self {
+            horizontal_ang_vel_rad_s: body.ang_vel.map(|w| w[0].hypot(w[1])),
+            tilt_vec_rad: body.tilt_vec,
+            com_xy_m: body.subtree_com.map(|c| [c[0], c[1]]),
+        }
+    }
+}
+
+/// Running stability statistics of one attempt, weighted by elapsed bursts. Means and variances
+/// use the weighted Welford update, so long attempts stay numerically stable. Each metric keeps
+/// its own weight: it counts only bursts that carried its reading.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct StabilityAccum {
+    wobble_weight: f64,
+    wobble_sq_sum: f64,
+    tilt_weight: f64,
+    tilt_mean: [f64; 2],
+    tilt_m2: [f64; 2],
+    com_weight: f64,
+    com_mean: [f64; 2],
+    com_m2: [f64; 2],
+}
+
+/// Weighted Welford step for a 2-vector.
+fn welford2(weight: &mut f64, mean: &mut [f64; 2], m2: &mut [f64; 2], x: [f64; 2], w: f64) {
+    *weight += w;
+    for i in 0..2 {
+        let d = x[i] - mean[i];
+        mean[i] += d * w / *weight;
+        m2[i] += w * d * (x[i] - mean[i]);
+    }
+}
+
+impl StabilityAccum {
+    /// Add one reading standing for `bursts` elapsed bursts. Missing or non-finite parts and
+    /// zero weight leave that metric unchanged.
+    pub fn add(self, reading: Option<&StabilitySample>, bursts: u32) -> Self {
+        let Some(r) = reading.filter(|_| bursts > 0) else {
+            return self;
+        };
+        let w = f64::from(bursts);
+        let mut next = self;
+        if let Some(v) = r.horizontal_ang_vel_rad_s.filter(|v| v.is_finite()) {
+            next.wobble_weight += w;
+            next.wobble_sq_sum += w * v * v;
+        }
+        if let Some(t) = r.tilt_vec_rad.filter(|t| t.iter().all(|v| v.is_finite())) {
+            welford2(
+                &mut next.tilt_weight,
+                &mut next.tilt_mean,
+                &mut next.tilt_m2,
+                t,
+                w,
+            );
+        }
+        if let Some(c) = r.com_xy_m.filter(|c| c.iter().all(|v| v.is_finite())) {
+            welford2(
+                &mut next.com_weight,
+                &mut next.com_mean,
+                &mut next.com_m2,
+                c,
+                w,
+            );
+        }
+        next
+    }
+
+    /// RMS horizontal angular velocity, rad/s.
+    pub fn wobble_rad_s(&self) -> Option<f64> {
+        (self.wobble_weight > 0.0).then(|| (self.wobble_sq_sum / self.wobble_weight).sqrt())
+    }
+
+    /// RMS deviation of the tilt vector from its mean, degrees.
+    pub fn tilt_sway_deg(&self) -> Option<f64> {
+        (self.tilt_weight > 0.0).then(|| {
+            ((self.tilt_m2[0] + self.tilt_m2[1]).max(0.0) / self.tilt_weight)
+                .sqrt()
+                .to_degrees()
+        })
+    }
+
+    /// RMS horizontal CoM deviation from its mean over `reset_height_m`. Absent without a
+    /// positive reset height.
+    pub fn com_sway_fraction(&self, reset_height_m: Option<f64>) -> Option<f64> {
+        let reset = reset_height_m.filter(|h| h.is_finite() && *h > 0.0)?;
+        (self.com_weight > 0.0)
+            .then(|| ((self.com_m2[0] + self.com_m2[1]).max(0.0) / self.com_weight).sqrt() / reset)
+    }
 }
 
 impl BalanceSample {
@@ -1836,6 +1956,8 @@ pub struct OpenBalanceAttempt {
     pub off_stance_bursts: u32,
     /// Non-settling bursts elapsed when the collapse was first confirmed, if it was.
     pub collapsed_at_bursts: Option<u32>,
+    /// Stability statistics over the counted, non-settling, upright bursts so far.
+    pub stability: StabilityAccum,
 }
 
 impl OpenBalanceAttempt {
@@ -1875,6 +1997,7 @@ impl OpenBalanceAttempt {
             support_use: SupportUseCounts::default(),
             off_stance_bursts: 0,
             collapsed_at_bursts: None,
+            stability: StabilityAccum::default(),
         }
     }
 }
@@ -2026,6 +2149,11 @@ pub fn observe_balance_sample(
             support_use_flags(sample, criterion, reset_height_m, level),
             1,
         );
+        let stability = if !sample.settling && upright {
+            open.stability.add(sample.stability.as_ref(), 1)
+        } else {
+            open.stability
+        };
         let collapsed_at_bursts = if sample.settling {
             open.collapsed_at_bursts
         } else {
@@ -2049,6 +2177,9 @@ pub fn observe_balance_sample(
             over_assist_fraction: support_use.over_assist_fraction(),
             collapsed_at_bursts,
             collapsed_at_s: collapsed_at_bursts.map(|b| f64::from(b) * criterion.burst_period_s),
+            wobble_rad_s: stability.wobble_rad_s(),
+            tilt_sway_deg: stability.tilt_sway_deg(),
+            com_sway_fraction: stability.com_sway_fraction(reset_height_m),
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -2127,6 +2258,11 @@ pub fn observe_balance_sample(
         support_use_flags(sample, criterion, reset_height_m, level),
         new_bursts,
     );
+    let stability = if upright {
+        open.stability.add(sample.stability.as_ref(), new_bursts)
+    } else {
+        open.stability
+    };
     let finish = |outcome| {
         BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
@@ -2141,6 +2277,9 @@ pub fn observe_balance_sample(
             over_assist_fraction: support_use.over_assist_fraction(),
             collapsed_at_bursts,
             collapsed_at_s: collapsed_at_bursts.map(|b| f64::from(b) * criterion.burst_period_s),
+            wobble_rad_s: stability.wobble_rad_s(),
+            tilt_sway_deg: stability.tilt_sway_deg(),
+            com_sway_fraction: stability.com_sway_fraction(reset_height_m),
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -2194,6 +2333,7 @@ pub fn observe_balance_sample(
         support_use,
         off_stance_bursts,
         collapsed_at_bursts,
+        stability,
     }))
 }
 
@@ -2235,8 +2375,20 @@ fn balance_time_fields(
         over_assist_fraction: 0.0,
         collapsed_at_bursts: None,
         collapsed_at_s: None,
+        wobble_rad_s: None,
+        tilt_sway_deg: None,
+        com_sway_fraction: None,
         adaptive: None,
     }
+}
+
+/// Mean of the `Some` values; `None` when there are none.
+fn mean_of_some(values: impl Iterator<Item = Option<f64>>) -> Option<f64> {
+    let (sum, n) = values
+        .flatten()
+        .filter(|v| v.is_finite())
+        .fold((0.0, 0u32), |(s, n), v| (s + v, n + 1));
+    (n > 0).then(|| sum / f64::from(n))
 }
 
 fn upright_fraction(upright_bursts: u32, bursts: u32) -> f64 {
@@ -2608,6 +2760,16 @@ pub struct BalancePhaseReport {
     /// Mean of per-attempt upright fractions.
     #[serde(default)]
     pub mean_upright_fraction: f64,
+    /// Mean of per-attempt `wobble_rad_s` over attempts that have one, rad/s. Lower is steadier.
+    #[serde(default)]
+    pub mean_wobble_rad_s: Option<f64>,
+    /// Mean of per-attempt `tilt_sway_deg` over attempts that have one, degrees. Lower is steadier.
+    #[serde(default)]
+    pub mean_tilt_sway_deg: Option<f64>,
+    /// Mean of per-attempt `com_sway_fraction` over attempts that have one (fraction of reset
+    /// height). Lower is steadier.
+    #[serde(default)]
+    pub mean_com_sway_fraction: Option<f64>,
     /// Success rate per support level, keyed by the level formatted `{:.2}`.
     #[serde(default)]
     pub success_rate_by_support: BTreeMap<String, f64>,
@@ -2878,6 +3040,9 @@ impl BalancePhaseReport {
         };
         let mean_upright_fraction =
             attempts.iter().map(|a| a.upright_fraction).sum::<f64>() / count;
+        let mean_wobble_rad_s = mean_of_some(attempts.iter().map(|a| a.wobble_rad_s));
+        let mean_tilt_sway_deg = mean_of_some(attempts.iter().map(|a| a.tilt_sway_deg));
+        let mean_com_sway_fraction = mean_of_some(attempts.iter().map(|a| a.com_sway_fraction));
         let adaptive = phase_is_adaptive(&attempts);
         let mut tally: BTreeMap<String, (u32, u32)> = BTreeMap::new();
         for (i, attempt) in attempts.iter().enumerate() {
@@ -2913,6 +3078,9 @@ impl BalancePhaseReport {
             lowest_support_with_success,
             success_rate_at_min_support,
             mean_upright_fraction,
+            mean_wobble_rad_s,
+            mean_tilt_sway_deg,
+            mean_com_sway_fraction,
             success_rate_by_support,
             spring_gains: None,
             graduated,
@@ -3053,6 +3221,15 @@ pub fn balance_phase_metrics(phase: &BalancePhaseReport) -> BTreeMap<String, f64
         "mean_upright_fraction".to_string(),
         phase.mean_upright_fraction,
     );
+    for (name, value) in [
+        ("mean_wobble_rad_s", phase.mean_wobble_rad_s),
+        ("mean_tilt_sway_deg", phase.mean_tilt_sway_deg),
+        ("mean_com_sway_fraction", phase.mean_com_sway_fraction),
+    ] {
+        if let Some(value) = value {
+            metrics.insert(name.to_string(), value);
+        }
+    }
     metrics.insert(
         "graduated".to_string(),
         if phase.graduated { 1.0 } else { 0.0 },
@@ -3957,6 +4134,11 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
             "height_fraction",
             "Torso height divided by its height on the attempt's first sample (1 = at the reset pose).",
         ),
+        ColumnSpec::with_unit(
+            "ang_vel_xy",
+            "rad/s",
+            "Torso horizontal angular velocity hypot(wx, wy); empty when the controller did not report it.",
+        ),
     ];
     columns.extend(criterion.contact_bodies.iter().map(|body| {
         ColumnSpec::unitless(&contact_column(body), "The contact body touches the world.")
@@ -4032,6 +4214,20 @@ fn attempts_table_spec() -> TableSpec {
                 "s",
                 "Time from the end of settling to the burst that confirmed the collapse; empty when the attempt never collapsed.",
             ),
+            ColumnSpec::with_unit(
+                "wobble",
+                "rad/s",
+                "Root-mean-square horizontal angular velocity of the torso over the upright bursts after settling. How fast the body sways; lower is steadier. Empty when no upright burst was measured.",
+            ),
+            ColumnSpec::with_unit(
+                "tilt_sway",
+                "deg",
+                "Root-mean-square deviation of the torso tilt from its own mean over the upright bursts after settling. How far the body swings around its average lean; lower is steadier. Empty when no upright burst was measured.",
+            ),
+            ColumnSpec::unitless(
+                "com_sway_fraction",
+                "Root-mean-square horizontal deviation of the centre of mass from its mean over the upright bursts after settling, as a fraction of the reset torso height. Lower is steadier. Empty when no upright burst was measured or the reset height is unknown.",
+            ),
         ],
     }
 }
@@ -4055,6 +4251,9 @@ fn attempt_row(phase: &str, index: usize, record: &BalanceAttemptRecord) -> Vec<
         RunDataValue::Float(record.over_assist_fraction),
         RunDataValue::Bool(record.collapsed_at_bursts.is_some()),
         RunDataValue::opt_float(record.collapsed_at_s),
+        RunDataValue::opt_float(record.wobble_rad_s),
+        RunDataValue::opt_float(record.tilt_sway_deg),
+        RunDataValue::opt_float(record.com_sway_fraction),
     ]
 }
 
@@ -4104,6 +4303,12 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::Float(sample.tilt_deg),
             RunDataValue::opt_float(sample.torso_height_m),
             RunDataValue::opt_float(sample_height_fraction(sample)),
+            RunDataValue::opt_float(
+                sample
+                    .stability
+                    .as_ref()
+                    .and_then(|st| st.horizontal_ang_vel_rad_s),
+            ),
         ];
         row.extend((0..criterion.contact_bodies.len()).map(|i| {
             sample
@@ -4177,7 +4382,14 @@ fn run_balance_attempt(
                                 .to_string(),
                         )
                     })?;
-                    torso_now.subtree_com[2] - floor
+                    let com = torso_now.subtree_com.ok_or_else(|| {
+                        TrainerError::Runtime(
+                            "cannot size the support spring: the measure reply has no \
+                             subtree_com; set support_com_height_m"
+                                .to_string(),
+                        )
+                    })?;
+                    com[2] - floor
                 }
             };
             let sizing = sizing_inputs(&session.info, &torso, h0)?;
@@ -4374,7 +4586,8 @@ fn run_balance_attempt(
             perturbing,
             support_need: Some(support_need(
                 body.tilt_rad,
-                body.ang_vel,
+                // Absent ang_vel means no lookahead term, as when it defaulted to zeros.
+                body.ang_vel.unwrap_or([0.0; 3]),
                 criterion.max_tilt_deg,
                 criterion.need_lookahead_s,
             )),
@@ -4383,11 +4596,12 @@ fn run_balance_attempt(
             support_force_n: wrench.map(|w| w.wrench_norm_force),
             other_contact_touching: other.is_some_and(|set| set.touching),
             other_contact_bodies: other.map(|set| set.bodies.clone()).unwrap_or_default(),
-            torso_height_m: Some(body.com[2]),
+            torso_height_m: body.com.map(|c| c[2]),
             reset_height_m: open.reset_height_m,
             assist_slow: None,
             assist_rise: None,
             actuators: reading.actuators.clone(),
+            stability: Some(StabilitySample::from_body(body)),
         };
         let step = observe_balance_sample(&open, &sample, criterion, seed)?;
         let (counted, outcome) = match &step {
@@ -4424,8 +4638,12 @@ fn run_balance_attempt(
                 .max(1);
                 let mut rise = 0.0;
                 if matches!(step, BalanceAttemptStep::Continue(_)) && reading.terminal.is_none() {
-                    let predicted =
-                        predicted_tilt_deg(body.tilt_rad, body.ang_vel, criterion.need_lookahead_s);
+                    let predicted = predicted_tilt_deg(
+                        body.tilt_rad,
+                        // Absent ang_vel means no lookahead term, as before.
+                        body.ang_vel.unwrap_or([0.0; 3]),
+                        criterion.need_lookahead_s,
+                    );
                     if recentering {
                         if predicted <= criterion.cone_min_deg {
                             recentering = false;
@@ -4936,6 +5154,7 @@ mod tests {
             assist_slow: None,
             assist_rise: None,
             actuators: BTreeMap::new(),
+            stability: None,
         }
     }
 
@@ -4957,6 +5176,13 @@ mod tests {
         let names: Vec<&str> = spec.columns.iter().map(|c| c.name.as_str()).collect();
         let h = names.iter().position(|n| *n == "height").unwrap();
         assert_eq!(names[h + 1], "height_fraction");
+        assert_eq!(names[h + 2], "ang_vel_xy");
+        let col = spec
+            .columns
+            .iter()
+            .find(|c| c.name == "ang_vel_xy")
+            .unwrap();
+        assert_eq!(col.unit.as_deref(), Some("rad/s"));
     }
 
     fn fall_criterion() -> BalanceFeetCriterion {
@@ -5104,8 +5330,148 @@ mod tests {
             over_assist_fraction: 0.0,
             collapsed_at_bursts: None,
             collapsed_at_s: None,
+            wobble_rad_s: None,
+            tilt_sway_deg: None,
+            com_sway_fraction: None,
             adaptive: None,
         }
+    }
+
+    fn with_stability(
+        mut s: BalanceSample,
+        w: f64,
+        tilt: [f64; 2],
+        com: [f64; 2],
+    ) -> BalanceSample {
+        s.stability = Some(StabilitySample {
+            horizontal_ang_vel_rad_s: Some(w),
+            tilt_vec_rad: Some(tilt),
+            com_xy_m: Some(com),
+        });
+        s
+    }
+
+    /// Feed `samples` (seq 1..) into a fresh attempt with a hold long enough not to finish, then
+    /// return the open attempt.
+    fn stability_run(samples: Vec<BalanceSample>) -> OpenBalanceAttempt {
+        let mut c = criterion();
+        c.hold_s = 1.0e6;
+        c.attempt_cap_s = 1.0e6;
+        let mut open = OpenBalanceAttempt::fresh();
+        for s in &samples {
+            open = fed(&open, s, &c);
+        }
+        open
+    }
+
+    #[test]
+    fn steady_stream_has_no_wobble_or_sway() {
+        let samples = (1..=6)
+            .map(|i| with_stability(sample(i, 1, 2.0), 0.0, [0.02, -0.01], [0.3, 0.1]))
+            .collect();
+        let acc = stability_run(samples).stability;
+        assert!(acc.wobble_rad_s().expect("wobble").abs() < 1e-12);
+        assert!(acc.tilt_sway_deg().expect("tilt").abs() < 1e-9);
+        assert!(acc.com_sway_fraction(Some(0.8)).expect("com").abs() < 1e-9);
+    }
+
+    #[test]
+    fn oscillating_stream_gives_expected_rms() {
+        // Horizontal speed alternates 3 and 4 rad/s: RMS = sqrt((9 + 16) / 2).
+        // Tilt x alternates +-0.01 rad (mean 0), y fixed: sway = 0.01 rad in degrees.
+        // CoM x alternates 0.1 and 0.3 m (mean 0.2): deviation 0.1 m over reset 0.5 m = 0.2.
+        let samples = (1..=8)
+            .map(|i| {
+                let odd = i % 2 == 1;
+                with_stability(
+                    sample(i, 1, 2.0),
+                    if odd { 3.0 } else { 4.0 },
+                    [if odd { 0.01 } else { -0.01 }, 0.05],
+                    [if odd { 0.1 } else { 0.3 }, 0.0],
+                )
+            })
+            .collect();
+        let acc = stability_run(samples).stability;
+        assert!((acc.wobble_rad_s().expect("wobble") - (12.5_f64).sqrt()).abs() < 1e-6);
+        assert!((acc.tilt_sway_deg().expect("tilt") - 0.01_f64.to_degrees()).abs() < 1e-6);
+        assert!((acc.com_sway_fraction(Some(0.5)).expect("com") - 0.2).abs() < 1e-6);
+        assert_eq!(acc.com_sway_fraction(None), None);
+        assert_eq!(acc.com_sway_fraction(Some(0.0)), None);
+    }
+
+    #[test]
+    fn missing_ang_vel_leaves_wobble_absent_but_tilt_sway_present() {
+        let samples = (1..=4)
+            .map(|i| {
+                let mut s =
+                    with_stability(sample(i, 1, 2.0), 1.0, [0.01 * i as f64, 0.0], [0.0, 0.0]);
+                if let Some(st) = s.stability.as_mut() {
+                    st.horizontal_ang_vel_rad_s = None;
+                }
+                s
+            })
+            .collect();
+        let acc = stability_run(samples).stability;
+        assert_eq!(acc.wobble_rad_s(), None);
+        assert!(acc.tilt_sway_deg().expect("tilt sway") > 0.0);
+    }
+
+    #[test]
+    fn measure_without_motion_fields_deserializes_to_none() {
+        let body: BodyMeasure = serde_json::from_str(r#"{"tilt_rad": 0.1}"#).expect("body");
+        assert_eq!(body.ang_vel, None);
+        assert_eq!(body.tilt_vec, None);
+        assert_eq!(body.subtree_com, None);
+        assert_eq!(body.com, None);
+        let s = StabilitySample::from_body(&body);
+        assert_eq!(s.horizontal_ang_vel_rad_s, None);
+        assert_eq!(s.tilt_vec_rad, None);
+        assert_eq!(s.com_xy_m, None);
+    }
+
+    #[test]
+    fn settling_and_non_upright_bursts_are_excluded() {
+        let mut c = criterion();
+        c.hold_s = 1.0e6;
+        let mut open = OpenBalanceAttempt::fresh();
+        let mut settling = with_stability(sample(1, 1, 2.0), 99.0, [0.5, 0.5], [9.0, 9.0]);
+        settling.settling = true;
+        open = fed(&open, &settling, &c);
+        assert_eq!(open.stability.wobble_rad_s(), None);
+        let tilted = with_stability(
+            sample(2, 1, c.max_tilt_deg + 10.0),
+            99.0,
+            [0.5, 0.5],
+            [9.0, 9.0],
+        );
+        open = fed(&open, &tilted, &c);
+        assert_eq!(open.stability.wobble_rad_s(), None);
+        let good = with_stability(sample(3, 1, 2.0), 2.0, [0.0, 0.0], [0.0, 0.0]);
+        open = fed(&open, &good, &c);
+        assert!((open.stability.wobble_rad_s().expect("wobble") - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn finished_record_carries_stability_and_phase_mean() {
+        let mut c = criterion();
+        c.hold_s = 1.0e6;
+        c.attempt_cap_s = c.burst_period_s * 3.0;
+        let mut open = OpenBalanceAttempt::fresh();
+        let mut record = None;
+        for i in 1..=3 {
+            let s = with_stability(sample(i, 1, 2.0), 2.0, [0.0, 0.0], [0.0, 0.0]);
+            match observe_balance_sample(&open, &s, &c, 1).expect("observe") {
+                BalanceAttemptStep::Continue(next) => open = next,
+                BalanceAttemptStep::Finished(r) => record = Some(r),
+            }
+        }
+        let record = record.expect("attempt reaches the cap");
+        assert!((record.wobble_rad_s.expect("wobble") - 2.0).abs() < 1e-12);
+        assert_eq!(record.com_sway_fraction, None);
+        let none = self::record(BalanceAttemptOutcome::Success, 0.0, 1.0);
+        let report = BalancePhaseReport::from_attempts(vec![record, none]).expect("report");
+        assert_eq!(report.mean_wobble_rad_s, Some(2.0));
+        assert_eq!(report.mean_com_sway_fraction, None);
     }
 
     fn fed(
@@ -5972,10 +6338,10 @@ mod tests {
                 request.bodies[0].clone(),
                 BodyMeasure {
                     tilt_rad: scripted.tilt_deg.to_radians(),
-                    tilt_vec: [0.0, 0.0],
-                    ang_vel: [0.0; 3],
-                    com: [0.0, 0.0, torso_z],
-                    subtree_com: [0.0, 0.0, 0.150],
+                    tilt_vec: Some([0.0, 0.0]),
+                    ang_vel: Some([0.0; 3]),
+                    com: Some([0.0, 0.0, torso_z]),
+                    subtree_com: Some([0.0, 0.0, 0.150]),
                 },
             );
             let mut springs = BTreeMap::new();

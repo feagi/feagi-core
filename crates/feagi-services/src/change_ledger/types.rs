@@ -92,6 +92,9 @@ pub enum GenomeChangeOperation {
     DeleteBrainRegion {
         region_id: String,
     },
+    DeleteBrainRegionRaiseMembers {
+        region_id: String,
+    },
     CreateMorphology {
         morphology_id: String,
         morphology: Box<feagi_evolutionary::Morphology>,
@@ -162,7 +165,9 @@ impl GenomeChangeOperation {
             Self::CreateBrainRegion { params } => {
                 vec![ChangeTarget::new(K::BrainRegion, params.region_id.clone())]
             }
-            Self::UpdateBrainRegion { region_id, .. } | Self::DeleteBrainRegion { region_id } => {
+            Self::UpdateBrainRegion { region_id, .. }
+            | Self::DeleteBrainRegion { region_id }
+            | Self::DeleteBrainRegionRaiseMembers { region_id } => {
                 vec![ChangeTarget::new(K::BrainRegion, region_id.clone())]
             }
             Self::CreateMorphology { morphology_id, .. }

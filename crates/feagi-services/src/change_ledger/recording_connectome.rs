@@ -135,6 +135,21 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(())
     }
 
+    async fn delete_brain_region_raise_members(&self, region_id: &str) -> ServiceResult<()> {
+        let before = region_snapshot(self.inner.as_ref(), region_id).await;
+        self.inner
+            .delete_brain_region_raise_members(region_id)
+            .await?;
+        self.record(
+            GenomeChangeOperation::DeleteBrainRegionRaiseMembers {
+                region_id: region_id.to_string(),
+            },
+            before,
+            None,
+        );
+        Ok(())
+    }
+
     async fn update_brain_region(
         &self,
         region_id: &str,

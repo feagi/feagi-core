@@ -191,7 +191,7 @@ pub trait ConnectomeService: Send + Sync {
         params: CreateBrainRegionParams,
     ) -> ServiceResult<BrainRegionInfo>;
 
-    /// Delete a brain region
+    /// Delete a brain region together with all descendant regions and every cortical area inside them
     ///
     /// # Arguments
     /// * `region_id` - Brain region identifier
@@ -200,6 +200,20 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotFound` - Brain region not found
     ///
     async fn delete_brain_region(&self, region_id: &str) -> ServiceResult<()>;
+
+    /// Delete only a brain region record and raise its members to its parent
+    ///
+    /// The region's direct cortical areas and direct child regions move to the deleted
+    /// region's parent. No cortical area or child region is deleted.
+    ///
+    /// # Arguments
+    /// * `region_id` - Brain region identifier
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Brain region not found
+    /// * `ServiceError::InvalidInput` - Region is the root region
+    ///
+    async fn delete_brain_region_raise_members(&self, region_id: &str) -> ServiceResult<()>;
 
     /// Update a brain region
     ///

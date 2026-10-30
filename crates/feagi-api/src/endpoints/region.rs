@@ -417,6 +417,10 @@ pub async fn put_region(
 }
 
 /// DELETE /v1/region/region
+///
+/// Deletes only the region record. Its direct cortical areas and direct child regions move
+/// to the deleted region's parent; no cortical area or child region is deleted. The root
+/// region cannot be deleted. Body: `{"region_id": "..."}` (or `"id"`).
 #[utoipa::path(delete, path = "/v1/region/region", tag = "region")]
 pub async fn delete_region(
     State(state): State<ApiState>,
@@ -433,7 +437,7 @@ pub async fn delete_region(
         .to_string();
 
     connectome_service
-        .delete_brain_region(&region_id)
+        .delete_brain_region_raise_members(&region_id)
         .await
         .map_err(ApiError::from)?;
 
@@ -579,12 +583,36 @@ pub async fn put_relocate_members(
 }
 
 /// DELETE /v1/region/region_and_members
+///
+/// Deletes the region, all of its descendant regions, and every cortical area inside them.
+/// The root region cannot be deleted. Body: `{"region_id": "..."}` (or `"id"`).
 #[utoipa::path(delete, path = "/v1/region/region_and_members", tag = "region")]
 pub async fn delete_region_and_members(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let connectome_service = state.connectome_service.as_ref();
+    let region_id = req
+        .get("region_id")
+        .or_else(|| req.get("id"))
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("region_id required"))?
+        .to_string();
+
+    connectome_service
+        .delete_brain_region(&region_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            "Brain region and its members deleted".to_string(),
+        ),
+        ("region_id".to_string(), region_id),
+    ])))
 }
 
 /// GET /v1/region/regions

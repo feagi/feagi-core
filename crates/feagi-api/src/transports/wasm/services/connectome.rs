@@ -387,6 +387,12 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn delete_brain_region_raise_members(&self, _region_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn update_brain_region(
         &self,
         _region_id: &str,
