@@ -5,6 +5,8 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
 };
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
+use feagi_connectome_neural::neural_basis::neuron_model::data::data_containers::{CorticalModelFullStorageData, CorticalModelGenomePropertiesData, CorticalModelNPUInterfaceData};
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 define_cortical_dynamics_quantization_template! {
     /// Quantization For the Feagi Advanced type

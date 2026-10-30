@@ -68,9 +68,17 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 ///   `CorticalDataProperties{Model}`, with its fields public, a `PhantomData` of the
 ///   quantization, a `new` constructor, and its specification trait implemented. Data types not
 ///   given hold only the `PhantomData`
+/// - For each data container, a `{Model}{Container}<FIQ, NM>` alias and a
+///   `{Model}{Container}Enum<FIQ>` enum with a variant per quantization level:
+///   `{Model}FullStorageData<FIQ, NM, SB>` and `{Model}FullStorageDataQuantEnum<FIQ, SB>`,
+///   `{Model}GenomePropertiesData` and `{Model}GenomePropertiesDataEnum`, and
+///   `{Model}NPUInterfaceData` and `{Model}NPUInterfaceDataEnum`. For a generic layout, the enums
+///   are generic over the layout as well
 ///
 /// Must be in scope where this is expanded: `NeuronModel`, `MembranePotentialQuantization`, the six
-/// data specification traits (such as `CorticalDataPropertiesSpecification`), any types the data
+/// data specification traits (such as `CorticalDataPropertiesSpecification`), `FeagiIndexQuantization`,
+/// the data containers `CorticalModelFullStorageData`, `CorticalModelGenomePropertiesData` and
+/// `CorticalModelNPUInterfaceData`, any types the data
 /// fields name, and any traits or types the `NeuronLayout` names (`NeuronLayoutType` when it is left as default). The crate must
 /// depend on `serde` and `half`, which the wrapper structs use
 #[proc_macro]

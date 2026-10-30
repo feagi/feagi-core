@@ -20,6 +20,16 @@ const MEMBRANE_POTENTIAL_QUANT: &str = "MembranePotentialQuant";
 /// Name of the neuron model generic of the generated data structs
 const NEURON_MODEL_GENERIC: &str = "NM";
 
+/// Name of the `FeagiIndexQuantization` generic of the generated data container aliases and enums
+const FEAGI_INDEX_QUANTIZATION_GENERIC: &str = "FIQ";
+
+/// Name of the `QuantContiguousStoreBackend` generic of the generated data container aliases and
+/// enums that hold neuron data
+const STORE_BACKEND_GENERIC: &str = "SB";
+
+/// Generic names the generated items use, which the layout generic cannot take
+const RESERVED_GENERICS: [&str; 3] = [NEURON_MODEL_GENERIC, FEAGI_INDEX_QUANTIZATION_GENERIC, STORE_BACKEND_GENERIC];
+
 /// Name of the marker field every generated data struct holds
 const PHANTOM_FIELD: &str = "_p";
 
@@ -32,6 +42,46 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
     ("CorticalFunctionContext", "CorticalFunctionSpecification"),
     ("NeuronDataInternal", "NeuronDataInternalSpecification"),
     ("NeuronDataScratch", "NeuronDataScratchSpecification"),
+];
+
+/// A cortical model data container, of which every model gets a type alias and an enum over its
+/// quantization levels
+pub struct ModelDataContainer {
+    /// The generic container struct, generic over `FIQ`, `NM` and, if `has_store_backend`, `SB`
+    pub container: &'static str,
+    /// The alias is named `{Model}{name}`
+    pub name: &'static str,
+    /// The enum is named `{Model}{name}{enum_suffix}`
+    pub enum_suffix: &'static str,
+    /// If the container holds neuron data in a store of a `QuantContiguousStoreBackend`
+    pub has_store_backend: bool,
+    /// What the container holds, completing "... of the `{Model}` model"
+    pub description: &'static str,
+}
+
+/// The data containers every model gets a type alias and quantization level enum of
+pub const MODEL_DATA_CONTAINERS: [ModelDataContainer; 3] = [
+    ModelDataContainer {
+        container: "CorticalModelFullStorageData",
+        name: "FullStorageData",
+        enum_suffix: "QuantEnum",
+        has_store_backend: true,
+        description: "The full cortical area data to be stored (everything except scratch data)",
+    },
+    ModelDataContainer {
+        container: "CorticalModelGenomePropertiesData",
+        name: "GenomePropertiesData",
+        enum_suffix: "Enum",
+        has_store_backend: false,
+        description: "The cortical level data as edited by a genome developer",
+    },
+    ModelDataContainer {
+        container: "CorticalModelNPUInterfaceData",
+        name: "NPUInterfaceData",
+        enum_suffix: "Enum",
+        has_store_backend: false,
+        description: "The cortical level data needed to load a cortical area into the NPU",
+    },
 ];
 
 //region Cortical Dynamics Quantization Template
@@ -111,8 +161,8 @@ impl Parse for ModelLayoutTemplate {
         // `Name: Bounds` is a generic, while anything else (`Name<..>`, `path::Name`) is a type
         if input.peek(syn::Ident) && input.peek2(Token![:]) && !input.peek2(Token![::]) {
             let name = input.parse::<Ident>()?;
-            if name == NEURON_MODEL_GENERIC {
-                return Err(syn::Error::new(name.span(), format!("`{name}` is already the generic of the model data structs, the layout generic needs another name")));
+            if RESERVED_GENERICS.iter().any(|reserved| name == reserved) {
+                return Err(syn::Error::new(name.span(), format!("`{name}` is already a generic of the generated model items, the layout generic needs another name")));
             }
             input.parse::<Token![:]>()?;
             let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(input)?;
@@ -270,7 +320,8 @@ impl CorticalDynamicsQuantizationTemplate {
     }
 
     /// Generate the model's quantizable wrappers, model trait, a marker struct implementing it per
-    /// quantization level, and every data struct of the model
+    /// quantization level, every data struct of the model, and an alias and quantization level
+    /// enum of every data container (see [`MODEL_DATA_CONTAINERS`])
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
@@ -386,6 +437,73 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
+        // Every data container gets an alias for this model, and an enum of it with a variant per
+        // quantization level. A generic layout is a generic of the enum as well
+        let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
+        let sb = format_ident!("{}", STORE_BACKEND_GENERIC);
+        let basis = basis_path();
+        let enum_layout_generic = match &self.layout {
+            ModelLayoutTemplate::Fixed(_) => quote!(),
+            ModelLayoutTemplate::Generic { name, bounds } => quote!(, #name: #bounds),
+        };
+        let level_names: Vec<&Ident> = self.quantization_levels.keys().collect();
+        let level_types: Vec<proc_macro2::TokenStream> = level_names
+            .iter()
+            .map(|level| {
+                let struct_name = self.quantization_level_struct_name(level);
+                quote!(#struct_name #level_generic_names)
+            })
+            .collect();
+        let level_docs: Vec<String> = level_names.iter().map(|level| format!("At the `{level}` quantization level")).collect();
+        let data_containers = MODEL_DATA_CONTAINERS.iter().map(|container| {
+            let container_type = format_ident!("{}", container.container);
+            let alias_name = format_ident!("{}{}", self.model_name, container.name);
+            let enum_name = format_ident!("{}{}{}", self.model_name, container.name, container.enum_suffix);
+            let alias_doc = format!("{} of the `{}` model, at the quantization level `{}`", container.description, self.model_name, NEURON_MODEL_GENERIC);
+            let enum_doc = format!("{} of the `{}` model, enumed for its quantization levels", container.description, self.model_name);
+
+            // A container holding neuron data is only serializable when the store of `SB` is, so
+            // its enum is bound by that per level. Every other field is serializable through the
+            // bounds of `NeuronModel` and `NeuronLayout`
+            let (store_generic, store_generic_bound, serde_bound) = if container.has_store_backend {
+                let serialize = level_types
+                    .iter()
+                    .map(|level| quote!(#container_type<#fiq, #level, #sb>: ::serde::Serialize).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let deserialize = level_types
+                    .iter()
+                    .map(|level| quote!(#container_type<#fiq, #level, #sb>: ::serde::Deserialize<'de>).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                (
+                    quote!(, #sb),
+                    quote!(, #sb: #basis::collections::quant_indexed::quant_indexed::QuantContiguousStoreBackend),
+                    quote!(#[serde(bound(serialize = #serialize, deserialize = #deserialize))]),
+                )
+            } else {
+                (quote!(), quote!(), quote!(#[serde(bound = "")]))
+            };
+
+            let level_names = &level_names;
+            let level_types = &level_types;
+            let level_docs = &level_docs;
+            quote! {
+                #[doc = #alias_doc]
+                pub type #alias_name<#fiq, #nm #store_generic> = #container_type<#fiq, #nm #store_generic>;
+
+                #[doc = #enum_doc]
+                #[derive(::serde::Serialize, ::serde::Deserialize)]
+                #serde_bound
+                pub enum #enum_name<#fiq: FeagiIndexQuantization #store_generic_bound #enum_layout_generic> {
+                    #(
+                        #[doc = #level_docs]
+                        #level_names(#container_type<#fiq, #level_types #store_generic>),
+                    )*
+                }
+            }
+        });
+
         quote! {
             #( #wrappers )*
 
@@ -397,6 +515,8 @@ impl CorticalDynamicsQuantizationTemplate {
             #( #quantization_levels )*
 
             #( #data_structs )*
+
+            #( #data_containers )*
         }
     }
 }
