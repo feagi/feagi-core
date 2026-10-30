@@ -5,7 +5,7 @@
 use crate::cortical_area_types::interconnect::InterConnectCorticalAreaEModelEnum;
 use crate::cortical_area_types::super_type_core::enums::{CoreCorticalAreaSuperTypeEnum, CoreSuperTypeCorticalGenomicDataEnum};
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::invalid_cortical_enum_error::CorticalMatchSelectionError;
+use crate::basis::invalid_cortical_enum_error::CorticalTypeMatchSelectionError;
 //region Data
 
 /// The Genomic Data For a given Cortical Area
@@ -24,14 +24,14 @@ impl<FIQ: FeagiIndexQuantization> From<CoreSuperTypeCorticalGenomicDataEnum<FIQ>
 
 impl<FIQ: FeagiIndexQuantization> TryFrom<CorticalGenomicDataEnum<FIQ>> for CoreSuperTypeCorticalGenomicDataEnum<FIQ>
 {
-    type Error = CorticalMatchSelectionError;
+    type Error = CorticalTypeMatchSelectionError;
 
     fn try_from(value: CorticalGenomicDataEnum<FIQ>) -> Result<Self, Self::Error> {
         match value {
             CorticalGenomicDataEnum::Core(t) => {
                 Ok(t)
             }
-            _ => {Err(CorticalMatchSelectionError::IncorrectCorticalSuperType {tried: "", actual: ""})}
+            _ => {Err(CorticalTypeMatchSelectionError::IncorrectCorticalSuperType {tried: "", actual: ""})}
         }
     }
 }
@@ -46,14 +46,14 @@ impl<FIQ: FeagiIndexQuantization> From<InterConnectCorticalAreaEModelEnum<FIQ>> 
 
 impl<FIQ: FeagiIndexQuantization> TryFrom<CorticalGenomicDataEnum<FIQ>> for InterConnectCorticalAreaEModelEnum<FIQ>
 {
-    type Error = CorticalMatchSelectionError;
+    type Error = CorticalTypeMatchSelectionError;
 
     fn try_from(value: CorticalGenomicDataEnum<FIQ>) -> Result<Self, Self::Error> {
         match value {
             CorticalGenomicDataEnum::Interconnect(t) => {
                 Ok(t)
             }
-            _ => {Err(CorticalMatchSelectionError::IncorrectCorticalSuperType {tried: "", actual: ""})}
+            _ => {Err(CorticalTypeMatchSelectionError::IncorrectCorticalSuperType {tried: "", actual: ""})}
         }
     }
 }

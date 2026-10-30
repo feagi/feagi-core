@@ -1,8 +1,9 @@
 use crate::basis::cortical_area::cortical_area_type::CorticalAreaType;
-use crate::basis::invalid_cortical_enum_error::CorticalMatchSelectionError;
+use crate::basis::invalid_cortical_enum_error::CorticalTypeMatchSelectionError;
 use crate::cortical_area_types::enums::CorticalAreaTypeEnum;
 use feagi_connectome::cortical_area::neuron_layout::implementations::voxels::NeuronLayoutVoxelDefaultType;
 use feagi_connectome::neuron_models::feagi_advanced::data::{FeagiAdvancedGenomePropertiesDataEnum, NeuronModelFeagiAdvanced};
+use feagi_connectome::neuron_models::invalid_neuron_enum_error::NeuronModelMatchSelectionError;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub struct InterconnectCorticalClass<NM: NeuronModelFeagiAdvanced>(core::marker::PhantomData<NM>);
@@ -31,7 +32,7 @@ impl<FIQ: FeagiIndexQuantization> From<FeagiAdvancedGenomePropertiesDataEnum<FIQ
 
 impl<FIQ: FeagiIndexQuantization> TryFrom<InterConnectCorticalAreaEModelEnum<FIQ>> for FeagiAdvancedGenomePropertiesDataEnum<FIQ>
 {
-    type Error = CorticalMatchSelectionError;
+    type Error = CorticalTypeMatchSelectionError;
 
     fn try_from(value: InterConnectCorticalAreaEModelEnum<FIQ>) -> Result<Self, Self::Error> {
         #[allow(unreachable_patterns)] // Only one variant exists for now
@@ -39,7 +40,7 @@ impl<FIQ: FeagiIndexQuantization> TryFrom<InterConnectCorticalAreaEModelEnum<FIQ
             InterConnectCorticalAreaEModelEnum::FeagiAdvanced(t) => {
                 Ok(t)
             }
-            _ => {Err(CorticalMatchSelectionError::IncorrectCorticalModel {tried: "", actual: ""})}
+            _ => {Err(NeuronModelMatchSelectionError::IncorrectNeuronModel {tried: "", actual: ""}.into())}
         }
     }
 }

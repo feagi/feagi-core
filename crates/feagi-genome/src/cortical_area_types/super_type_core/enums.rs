@@ -1,7 +1,7 @@
 use super::power::PowerTypeCorticalGenomicDataEnum;
 use crate::basis::cortical_area::cortical_id::CorticalID;
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
-use crate::basis::invalid_cortical_enum_error::CorticalMatchSelectionError;
+use crate::basis::invalid_cortical_enum_error::CorticalTypeMatchSelectionError;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 //region Data
@@ -20,7 +20,7 @@ impl<FIQ: FeagiIndexQuantization> From<PowerTypeCorticalGenomicDataEnum<FIQ>> fo
 
 impl<FIQ: FeagiIndexQuantization> TryFrom<CoreSuperTypeCorticalGenomicDataEnum<FIQ>> for PowerTypeCorticalGenomicDataEnum<FIQ>
 {
-    type Error = CorticalMatchSelectionError;
+    type Error = CorticalTypeMatchSelectionError;
 
     fn try_from(value: CoreSuperTypeCorticalGenomicDataEnum<FIQ>) -> Result<Self, Self::Error> {
         #[allow(unreachable_patterns)] // Only one variant exists for now
@@ -28,7 +28,7 @@ impl<FIQ: FeagiIndexQuantization> TryFrom<CoreSuperTypeCorticalGenomicDataEnum<F
             CoreSuperTypeCorticalGenomicDataEnum::Power(t) => {
                 Ok(t)
             }
-            _ => {Err(CorticalMatchSelectionError::IncorrectCorticalType {tried: "", actual: ""})}
+            _ => {Err(CorticalTypeMatchSelectionError::IncorrectCorticalType {tried: "", actual: ""})}
         }
     }
 }

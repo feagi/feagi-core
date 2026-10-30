@@ -81,7 +81,6 @@ where
             internal.clone(),
             scratch
         )
-
     }
 }
 
@@ -91,4 +90,5 @@ where
     NM: NeuronModel,
     SB: QuantContiguousStoreBackend,
 {
+
 }
