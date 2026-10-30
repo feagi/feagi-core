@@ -1,16 +1,42 @@
 use super::power::PowerTypeCorticalGenomicDataEnum;
 use crate::basis::cortical_area::cortical_id::CorticalID;
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
+use crate::basis::invalid_cortical_enum_error::CorticalMatchSelectionError;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
+//region Data
 
 /// The Genomic Data for a given Core Subtype Cortical Area
 pub enum CoreSuperTypeCorticalGenomicDataEnum<FIQ: FeagiIndexQuantization> {
     Power(PowerTypeCorticalGenomicDataEnum<FIQ>) // TODO rename in macro to PowerModelCorticalGenomicDataEnum
 }
 
+impl<FIQ: FeagiIndexQuantization> From<PowerTypeCorticalGenomicDataEnum<FIQ>> for CoreSuperTypeCorticalGenomicDataEnum<FIQ>
+{
+    fn from(value: PowerTypeCorticalGenomicDataEnum<FIQ>) -> Self {
+        CoreSuperTypeCorticalGenomicDataEnum::Power(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<CoreSuperTypeCorticalGenomicDataEnum<FIQ>> for PowerTypeCorticalGenomicDataEnum<FIQ>
+{
+    type Error = CorticalMatchSelectionError;
+
+    fn try_from(value: CoreSuperTypeCorticalGenomicDataEnum<FIQ>) -> Result<Self, Self::Error> {
+        #[allow(unreachable_patterns)] // Only one variant exists for now
+        match value {
+            CoreSuperTypeCorticalGenomicDataEnum::Power(t) => {
+                Ok(t)
+            }
+            _ => {Err(CorticalMatchSelectionError::IncorrectCorticalType {tried: "", actual: ""})}
+        }
+    }
+}
+
+//endregion
 
 
+//region Type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CoreCorticalAreaSuperTypeEnum {
     ///// Termination/death signal processing
@@ -70,4 +96,6 @@ impl core::fmt::Display for CoreCorticalAreaSuperTypeEnum {
         write!(f, "CoreCorticalType({})", ch)
     }
 }
+
+//endregion
 
