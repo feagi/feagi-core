@@ -1,10 +1,14 @@
 use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use core::fmt::{Debug, Formatter};
-use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantContiguousStoreBackendVec, QuantIndexedBackend};
+use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantIndexedBackend};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use serde::{Deserialize, Serialize};
 use crate::neuron_model::data::neuron_layout::NeuronLayout;
+
+#[cfg(feature = "alloc")]
+use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStoreBackendVec;
+
 // TODO Move away from pub properties and instead use getters and setters with proper checks!
 // We dont want to be able to set the layout to something that wont agree with the neuron count!
 
@@ -138,9 +142,9 @@ where
     pub is_psp_using_membrane_potential: bool,
 }
 
-/// Every piece of data needed to spawn a new cortical area, at the given model quantization. Built
-/// from a set of model defaults and the given cortical properties
-#[derive(Debug, Clone, PartialEq)]
+/// Every piece of data needed to spawn a new cortical area, at the given model quantization via 
+/// the defaults spawner. Built from a set of model defaults and the given cortical properties
+#[derive(Debug, Clone, PartialEq)] // No need to serialize this, this is transient
 pub struct CorticalModelSpawnData<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,

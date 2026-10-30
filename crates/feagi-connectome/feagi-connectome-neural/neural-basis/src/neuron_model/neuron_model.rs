@@ -2,6 +2,7 @@ use crate::neuron_model::data::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use core::fmt::Debug;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 // NOTE: How this works is a sub trait is made FIRST per neuron model, then there are
@@ -54,20 +55,9 @@ pub trait NeuronLayoutType: Clone + Copy + Debug + PartialEq + Sync + Send + Ser
     type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
 
-/// The [`NeuronLayout`] of neuron model `NM` at [`FeagiIndexQuantization`] `FIQ`
-pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutType as NeuronLayoutType>::Layout<FIQ>;
 
-/// This marker trait is used to implement per neuron model dynamics per burst engine
-/// backend. Each burst engine has an extension of this trait, then a concrete implementation
-/// per neuron model to handle its math in the way that burst engine does so. Since
-/// Burst Engines differ so wildly in implementation, there are no functions on this trait.
-/// For a general reference for how a specific neuron model operates its math, see the CPU
-/// implementation
-pub trait NeuralBurstEngineDynamics<FIQ, NM>
-where
-    FIQ: FeagiIndexQuantization,
-    NM: NeuronModel,
-{}
+
+
 
 
 
@@ -102,6 +92,7 @@ Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
+
 /// The per neuron level data that should be saved to the connectome
 pub trait NeuronDataInternalSpecification<NM: NeuronModel>:
 Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
@@ -119,3 +110,46 @@ Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
 
 //endregion
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+/// The [`NeuronLayout`] of neuron model `NM` at [`FeagiIndexQuantization`] `FIQ`
+pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutType as NeuronLayoutType>::Layout<FIQ>;
+
+
+
+/// This marker trait is used to implement per neuron model dynamics per burst engine
+/// backend. Each burst engine has an extension of this trait, then a concrete implementation
+/// per neuron model to handle its math in the way that burst engine does so. Since
+/// Burst Engines differ so wildly in implementation, there are no functions on this trait.
+/// For a general reference for how a specific neuron model operates its math, see the CPU
+/// implementation
+pub trait NeuralBurstEngineDynamics<FIQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+{}
+
+
+
+/// Defaults of the cortical level data every neuron model has, defined at the quantization of
+/// [`Self::Reference`]. Meant to be implemented on a zero sized struct, which then implements the
+/// defaults trait of its model as well (such as `FeagiAdvancedDefaults`), which assembles them
+pub trait CorticalUniversalDefaults {
+    /// The neuron model (and so quantization level) the defaults are defined at
+    type Reference: NeuronModel;
+
+    const CORTICAL_LEVEL_PSP: CorticalAreaNeuronPotential<<Self::Reference as MembranePotentialQuantization>::MembranePotentialQuant>;
+    const IS_PSP_UNIFORM: bool;
+    const IS_PSP_USING_MEMBRANE_POTENTIAL: bool;
+}

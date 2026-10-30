@@ -1,15 +1,10 @@
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use crate::neuron_model::data::neuron_layout::NeuronLayout;
 use crate::neuron_model::generators::cortical_generator_definition::CorticalGeneratorDefinition;
 use crate::neuron_model::generators::cortical_storage_loader::CorticalScratchGenerator;
-use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronLayoutType, NeuronModel};
+use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 
 // TODO some pass in trait to run the neuron scratch data generator per neuron (or maybe leave it as some combo overlay generator?
-
-
-
 
 
 /// A Cortical Area Generator that simply uses default values, for the cortical area level properties
@@ -38,8 +33,13 @@ where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
+    
+    pub fn new_from_default(default: CorticalDef) {
+        
+    }
+    
     /// Create new from the fields directly
-    pub fn new_individual(
+    pub fn new_manual(
         neuron_layout: NeuronLayoutOf<NM, FIQ>,
         default_cortical_data_properties: NM::CorticalDataProperties,
         default_cortical_data_internal: NM::CorticalDataInternal,
@@ -59,6 +59,7 @@ where
             _p: core::marker::PhantomData,
         }
     }
+    
 }
 
 impl<FIQ, NM> CorticalGeneratorDefinition<FIQ, NM> for CorticalDefaultGenerator<FIQ, NM>
@@ -81,14 +82,3 @@ where
     }
 }
 
-/// Defaults of the cortical level data every neuron model has, defined at the quantization of
-/// [`Self::Reference`]. Meant to be implemented on a zero sized struct, which then implements the
-/// defaults trait of its model as well (such as `FeagiAdvancedDefaults`), which assembles them
-pub trait CorticalUniversalDefaults {
-    /// The neuron model (and so quantization level) the defaults are defined at
-    type Reference: NeuronModel;
-
-    const CORTICAL_LEVEL_PSP: CorticalAreaNeuronPotential<<Self::Reference as MembranePotentialQuantization>::MembranePotentialQuant>;
-    const IS_PSP_UNIFORM: bool;
-    const IS_PSP_USING_MEMBRANE_POTENTIAL: bool;
-}

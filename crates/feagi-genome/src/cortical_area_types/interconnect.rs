@@ -15,8 +15,12 @@ impl<NM: NeuronModelFeagiAdvanced> CorticalAreaType<NM> for InterconnectCortical
     type NeuronLayout = NeuronLayoutVoxelDefaultType;
 
     type CorticalIDGenerator = ();
-    type CorticalAreaGenerator = ();
+    
+    type CorticalAreaGenerator<FIQ: FeagiIndexQuantization> = ();
 }
+
+// TODO this should be macro generated
+//region Conversions
 
 /// The Genomic Data for a given Neuron Model of a InterConnect Cortical Area
 pub enum InterConnectCorticalAreaEModelEnum<FIQ: FeagiIndexQuantization> {
@@ -44,3 +48,7 @@ impl<FIQ: FeagiIndexQuantization> TryFrom<InterConnectCorticalAreaEModelEnum<FIQ
         }
     }
 }
+
+//endregion
+
+

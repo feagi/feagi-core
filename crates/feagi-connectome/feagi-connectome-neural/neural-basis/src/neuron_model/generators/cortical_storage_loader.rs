@@ -3,7 +3,7 @@ use crate::neuron_model::data::data_containers::CorticalModelFullStorageData;
 use crate::neuron_model::generators::cortical_generator_definition::CorticalGeneratorDefinition;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::collections::quant_indexed::quant_indexed::QuantContiguousStoreBackend;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
 
@@ -54,6 +54,18 @@ where
 {
     fn get_neuron_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
         &self.loaded_data.layout
+    }
+
+    fn get_cortical_level_psp(&self) -> CorticalAreaNeuronPotential<NM::MembranePotentialQuant> {
+        todo!()
+    }
+
+    fn get_is_psp_uniform(&self) -> bool {
+        todo!()
+    }
+
+    fn get_is_psp_using_membrane_potential(&self) -> bool {
+        todo!()
     }
 
     fn get_cortical_level_data<LSG: CorticalScratchGenerator<FIQ, NM>>(&self)
