@@ -10,10 +10,10 @@ use serde::Serialize;
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
 /// as the data its dynamics use
 pub trait NeuronModel: MembranePotentialQuantization {
-    // This trait is to be expanded on per model, which may restrict `Layout` on its sub trait
+    // This trait is to be expanded on per model, which may restrict `LayoutType` on its sub trait
 
-    /// How the neurons of this model are laid out
-    type Layout: NeuronLayout;
+    /// How the neurons of this model are laid out, for any [`FeagiIndexQuantization`]
+    type LayoutType: NeuronLayoutType;
 
     //region Cortical level Data
 
@@ -46,6 +46,17 @@ pub trait NeuronModel: MembranePotentialQuantization {
 
 }
 
+/// Selects a [`NeuronLayout`] independently of [`FeagiIndexQuantization`], so a model sub trait
+/// can restrict its layout without an `FIQ` in scope (which stable Rust cannot express on a
+/// generic associated type directly)
+pub trait NeuronLayoutType: Clone + Copy + Debug + PartialEq + Sync + Send + Serialize + DeserializeOwned + 'static {
+    /// The layout at a given [`FeagiIndexQuantization`]
+    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
+}
+
+/// The [`NeuronLayout`] of neuron model `NM` at [`FeagiIndexQuantization`] `FIQ`
+pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutType as NeuronLayoutType>::Layout<FIQ>;
+
 /// This marker trait is used to implement per neuron model dynamics per burst engine
 /// backend. Each burst engine has an extension of this trait, then a concrete implementation
 /// per neuron model to handle its math in the way that burst engine does so. Since
@@ -58,9 +69,6 @@ where
     NM: NeuronModel,
 {}
 
-
-/// The layout data of a neuron model at the given index quantization
-pub type LayoutDataOf<NM, FIQ> = <<NM as NeuronModel>::Layout as NeuronLayout>::Data<FIQ>;
 
 
 //region Specifications

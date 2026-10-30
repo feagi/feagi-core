@@ -1,4 +1,4 @@
-use crate::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
+use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::neuron_model::data::data_containers::CorticalModelFullStorageData;
 use crate::neuron_model::generators::cortical_generator_definition::CorticalGeneratorDefinition;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
@@ -52,7 +52,7 @@ where
     NM: NeuronModel,
     SB: QuantContiguousStoreBackend,
 {
-    fn get_neuron_layout(&self) -> &LayoutDataOf<NM, FIQ> {
+    fn get_neuron_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
         &self.loaded_data.layout
     }
 

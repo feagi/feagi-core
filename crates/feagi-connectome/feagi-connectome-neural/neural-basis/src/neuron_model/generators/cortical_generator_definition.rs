@@ -1,7 +1,7 @@
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::generators::cortical_storage_loader::CorticalScratchGenerator;
-use crate::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
+use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::neuron_model::data::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
@@ -13,7 +13,7 @@ where
     NM: NeuronModel
 {
     /// Get the neuron layout that will be used
-    fn get_neuron_layout(&self) -> &LayoutDataOf<NM, FIQ>;
+    fn get_neuron_layout(&self) -> &NeuronLayoutOf<NM, FIQ>;
     
     /// Get the cortical level data needed for the cortical area
     fn get_cortical_level_data<LSG: CorticalScratchGenerator<FIQ, NM>>(&self) -> (
@@ -33,7 +33,7 @@ where
 
     /// Number of neurons needed in the cortical area
     fn get_total_number_neurons_needed(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
-        NM::Layout::get_neuron_count::<FIQ>(self.get_neuron_layout())
+        self.get_neuron_layout().get_neuron_count()
     }
 
     /// Use as an iterator to generate neuron values without needing to collect it all first

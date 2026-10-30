@@ -1,10 +1,10 @@
-use crate::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
+use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use core::fmt::{Debug, Formatter};
 use feagi_basis::collections::quant_indexed::quant_indexed::{QuantContiguousStore, QuantContiguousStoreBackend, QuantIndexedBackend};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use serde::{Deserialize, Serialize};
-
+use crate::neuron_model::data::neuron_layout::NeuronLayout;
 // TODO Move away from pub properties and instead use getters and setters with proper checks!
 // We dont want to be able to set the layout to something that wont agree with the neuron count!
 
@@ -27,7 +27,7 @@ where
     SB: QuantContiguousStoreBackend
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
-    pub layout: LayoutDataOf<NM, FIQ>,
+    pub layout: NeuronLayoutOf<NM, FIQ>,
     /// Cortical level properties of this model at the given model quantization
     pub cortical_properties: NM::CorticalDataProperties,
     /// Stateful data that must be kept but not exposed to the genome developer for editing.
@@ -113,7 +113,7 @@ where
     NM: NeuronModel,
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
-    pub layout: LayoutDataOf<NM, FIQ>,
+    pub layout: NeuronLayoutOf<NM, FIQ>,
     /// Cortical level properties of this model at the given model quantization
     pub cortical_properties: NM::CorticalDataProperties,
     /// Not direct properties, but rather parameters used by functions to set per neuron variance
@@ -132,7 +132,7 @@ where
     NM: NeuronModel,
 {
     /// Details on how neurons are laid out (length, dimensions, etc)
-    pub layout: LayoutDataOf<NM, FIQ>,
+    pub layout: NeuronLayoutOf<NM, FIQ>,
     /// Cortical level properties of this model at the given model quantization
     pub cortical_properties: NM::CorticalDataProperties,
     /// Stateful data that must be kept but not exposed to the genome developer for editing.

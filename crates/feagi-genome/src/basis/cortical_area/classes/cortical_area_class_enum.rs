@@ -1,5 +1,8 @@
-use crate::basis::cortical_area::cortical_area_class::sub_classes::core_cortical_area_type::CoreCorticalClass;
 
+
+// TODO macro for sensor motor should bea  template that can generate nested enums here
+
+use crate::basis::cortical_area::classes::sub_classes::core_cortical_area_type::CoreCorticalClass;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CorticalAreaClassEnum {

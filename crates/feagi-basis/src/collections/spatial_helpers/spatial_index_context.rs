@@ -4,7 +4,7 @@ use crate::collections::spatial_helpers::SpatialStride;
 use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use std::marker::PhantomData;
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, ::serde::Serialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Copy, ::serde::Serialize)]
 #[serde(bound(serialize = "QDims: ::serde::Serialize",))]
 pub struct SpatialHelper<QDims, AxisOrderType, const NUM_DIMS: usize>
 where

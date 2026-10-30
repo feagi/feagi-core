@@ -1,11 +1,15 @@
 // Yes, we arent using enums. This is due to typing restrictions with the rust stable toolchain
 
-pub trait AxisOrder<const NUM_DIMS: usize> {
+use core::fmt::Debug;
+use core::hash::Hash;
+
+pub trait AxisOrder<const NUM_DIMS: usize>: Clone + Sized + Hash
++ PartialEq + Copy + Debug + Send + Sync {
     const AXIS_ORDER_ARRAY: AxisOrderArray<NUM_DIMS>;
 }
 
 /// The default axis incrementing pattern, x -> y -> z ....
-#[derive(Debug, PartialEq, Hash, Clone, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Debug, PartialEq, Hash, Clone, ::serde::Serialize, ::serde::Deserialize, Copy)]
 pub struct AxisOrderIncrementing<const NUM_DIMS: usize>;
 
 impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderIncrementing<NUM_DIMS> {
@@ -21,7 +25,7 @@ impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderIncrementing<NUM_DI
 }
 
 /// Starts with the last index and goes backwards (z -> y -> x ...)
-#[derive(Debug, PartialEq, Hash, Clone, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Debug, PartialEq, Hash, Clone, ::serde::Serialize, ::serde::Deserialize, Copy)]
 pub struct AxisOrderDecrementing<const NUM_DIMS: usize>;
 
 impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderDecrementing<NUM_DIMS> {

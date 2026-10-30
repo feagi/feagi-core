@@ -1,4 +1,4 @@
-use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefault;
+use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels::NeuronLayoutVoxelDefaultType;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalFunctionSpecification,
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronModel,
@@ -15,7 +15,7 @@ define_cortical_dynamics_quantization_template! {
     /// Quantization For the Core Power type
     CorePower
 
-    NeuronLayout: NeuronLayoutVoxelDefault
+    NeuronLayout: NeuronLayoutVoxelDefaultType
 
     QuantizationLevels: {
         Float16: {

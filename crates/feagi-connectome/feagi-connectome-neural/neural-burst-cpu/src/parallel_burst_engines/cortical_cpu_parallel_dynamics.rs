@@ -1,7 +1,7 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::BurstIndex;
 use neural_basis::neuron_model::neuron_model::NeuralBurstEngineDynamics;
-use neural_basis::neuron_model::neuron_model::{LayoutDataOf, NeuronModel};
+use neural_basis::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::shared_structs::{CorticalAreaUbiquitousFlags, InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
 
@@ -13,7 +13,7 @@ where
     /// called per area. Called before neuron call
     fn process_model_cortical_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &LayoutDataOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<NM, FIQ>,
         cortical_data: (
             &NM::CorticalDataProperties,
             &mut NM::CorticalDataInternal,
@@ -26,7 +26,7 @@ where
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &LayoutDataOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<NM, FIQ>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
             &NM::CorticalDataProperties,
@@ -46,7 +46,7 @@ where
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &LayoutDataOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<NM, FIQ>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
             &NM::CorticalDataProperties,

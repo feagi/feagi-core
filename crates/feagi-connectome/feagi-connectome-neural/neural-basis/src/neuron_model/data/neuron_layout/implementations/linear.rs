@@ -1,42 +1,47 @@
 use crate::neuron_model::data::neuron_layout::NeuronLayout;
+use crate::neuron_model::neuron_model::NeuronLayoutType;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use serde::{Deserialize, Serialize};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
-/// Defines that the neurons are laid out in linear fashion
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NeuronLayoutLinear;
+/// Selects [`NeuronLayoutLinear`], for any [`FeagiIndexQuantization`]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NeuronLayoutLinearType;
 
-/// The data of [`NeuronLayoutLinear`]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct NeuronLayoutLinearData<FIQ: FeagiIndexQuantization> {
-    pub neuron_count: CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>,
+impl NeuronLayoutType for NeuronLayoutLinearType {
+    type Layout<FIQ: FeagiIndexQuantization> = NeuronLayoutLinear<FIQ>;
 }
 
-impl NeuronLayout for NeuronLayoutLinear {
-    type Data<FIQ: FeagiIndexQuantization> = NeuronLayoutLinearData<FIQ>;
-    type CorticalContext<FIQ: FeagiIndexQuantization> = CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
-    type PerNeuronContext<FIQ: FeagiIndexQuantization> = CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>;
+/// Defines that the neurons are laid out in linear fashion
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NeuronLayoutLinear<FIQ: FeagiIndexQuantization> {
+    neuron_count: CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>
+}
 
-    fn build_new<FIQ: FeagiIndexQuantization>(cortical_context: Self::CorticalContext<FIQ>) -> Self::Data<FIQ> {
-        NeuronLayoutLinearData {
-            neuron_count: cortical_context
-        }
+impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutLinear<FIQ> {
+    type CorticalContext = CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
+    type PerNeuronContext = CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>;
+
+    // yes these are trivial lol
+
+    fn new(init_data: Self::CorticalContext) -> Self {
+        Self {neuron_count: init_data}
     }
 
-    fn get_neuron_count<FIQ: FeagiIndexQuantization>(data: &Self::Data<FIQ>) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
-        data.neuron_count
+    fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
+        self.neuron_count
     }
 
-    fn get_cortical_layout_context<FIQ: FeagiIndexQuantization>(data: &Self::Data<FIQ>) -> &Self::CorticalContext<FIQ> {
-        &data.neuron_count
+    fn get_neuron_layout_context(
+        &self,
+        neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> Self::PerNeuronContext {
+        debug_assert!(neuron_index.quant_to_usize() < self.neuron_count.quant_to_usize());
+        neuron_index.clone() // lol
     }
 
-    fn get_neuron_layout_context<FIQ: FeagiIndexQuantization>(_data: &Self::Data<FIQ>, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext<FIQ> {
-        neuron_index.clone() // no further details lol
-    }
-
-    fn update_cortical_context<FIQ: FeagiIndexQuantization>(data: &mut Self::Data<FIQ>, cortical_context: Self::CorticalContext<FIQ>) {
-        data.neuron_count = cortical_context
+    fn update_cortical_context(&mut self, new_cortical_context: Self::CorticalContext) {
+        self.neuron_count = new_cortical_context;
     }
 }

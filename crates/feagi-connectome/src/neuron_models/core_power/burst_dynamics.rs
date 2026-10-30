@@ -1,7 +1,6 @@
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::NeuralBurstEngineDynamics;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels_default::NeuronLayoutVoxelDefaultData;
 use crate::neuron_models::core_power::data::NeuronModelCorePower;
 
 pub struct CorePowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelCorePower>(
@@ -48,7 +47,7 @@ where
 {
     fn process_model_cortical_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        _layout_context: &NeuronLayoutVoxelDefaultData<FIQ>,
+        _layout_context: &NeuronLayoutOf<NM, FIQ>,
         _cortical_data: (
             &NM::CorticalDataProperties,
             &mut NM::CorticalDataInternal,
@@ -61,7 +60,7 @@ where
     fn process_model_neuron_dynamics(
         _processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        _layout_context: &NeuronLayoutVoxelDefaultData<FIQ>,
+        _layout_context: &NeuronLayoutOf<NM, FIQ>,
         _neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         _cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
         _neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch),

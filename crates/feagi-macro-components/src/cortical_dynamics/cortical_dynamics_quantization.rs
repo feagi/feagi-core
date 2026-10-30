@@ -41,7 +41,7 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
 /// /// Optional model description
 /// ModelName
 ///
-/// NeuronLayout: NeuronLayoutVoxelDefault
+/// NeuronLayout: NeuronLayoutVoxelDefaultType
 ///
 /// Quantizables: {
 ///     /// Optional description
@@ -63,8 +63,8 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
 ///     }
 /// }
 /// ```
-/// The optional `NeuronLayout` entry sets the `NeuronLayout` the model is implemented for (see
-/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayout`. The optional
+/// The optional `NeuronLayout` entry sets the `NeuronLayoutType` the model is implemented for (see
+/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutType`. The optional
 /// `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
 /// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
@@ -82,14 +82,14 @@ pub struct CorticalDynamicsQuantizationTemplate {
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
 }
 
-/// The `NeuronLayout` a model is implemented for, which decides the generics of its quantization
-/// level structs `NeuronModel{Model}{Level}`
+/// The `NeuronLayoutType` a model is implemented for, which decides the generics of its
+/// quantization level structs `NeuronModel{Model}{Level}`
 pub enum ModelLayoutTemplate {
-    /// `NeuronLayout: NeuronLayoutVoxelDefault`, a single layout, which the model trait
+    /// `NeuronLayout: NeuronLayoutVoxelDefaultType`, a single layout type, which the model trait
     /// `NeuronModel{Model}` fixes. The level structs are `NeuronModel{Model}{Level}`
     Fixed(Type),
-    /// `NeuronLayout: NL: VoxelNeuronLayout`, any layout within the bounds, which the model trait
-    /// `NeuronModel{Model}` restricts to. The level structs are `NeuronModel{Model}{Level}<NL>`
+    /// `NeuronLayout: NL: NeuronLayoutType`, any layout type within the bounds, which the model
+    /// trait `NeuronModel{Model}` restricts to. The level structs are `NeuronModel{Model}{Level}<NL>`
     Generic {
         name: Ident,
         bounds: Punctuated<TypeParamBound, Token![+]>,
@@ -97,11 +97,11 @@ pub enum ModelLayoutTemplate {
 }
 
 impl Default for ModelLayoutTemplate {
-    /// Any layout, `NL: NeuronLayout`
+    /// Any layout type, `NL: NeuronLayoutType`
     fn default() -> Self {
         Self::Generic {
             name: format_ident!("NL"),
-            bounds: syn::parse_quote!(NeuronLayout),
+            bounds: syn::parse_quote!(NeuronLayoutType),
         }
     }
 }
@@ -295,18 +295,18 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
-        // The layout restriction of the model trait, and the generics of the level structs with
-        // the layout they set. A fixed layout is set by every level, a generic one is a generic
-        // of every level
+        // The layout type restriction of the model trait, and the generics of the level structs
+        // with the layout type they set. A fixed layout type is set by every level, a generic one
+        // is a generic of every level
         let (layout_restriction, level_generics, level_struct_body, layout_definition) = match &self.layout {
             ModelLayoutTemplate::Fixed(layout) => (
-                quote!(Layout = #layout),
+                quote!(LayoutType = #layout),
                 quote!(),
                 quote!(;),
                 quote!(#layout),
             ),
             ModelLayoutTemplate::Generic { name, bounds } => (
-                quote!(Layout: #bounds),
+                quote!(LayoutType: #bounds),
                 quote!(<#name: #bounds>),
                 quote!((::core::marker::PhantomData<#name>);),
                 quote!(#name),
@@ -334,6 +334,7 @@ impl CorticalDynamicsQuantizationTemplate {
             let layout_definition = &layout_definition;
             quote! {
                 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+                #[serde(bound = "")] // A generic layout type is only ever held as PhantomData
                 pub struct #struct_name #level_generics #level_struct_body
 
                 impl #level_generics MembranePotentialQuantization for #struct_name #level_generic_names {
@@ -341,7 +342,7 @@ impl CorticalDynamicsQuantizationTemplate {
                 }
 
                 impl #level_generics NeuronModel for #struct_name #level_generic_names {
-                    type Layout = #layout_definition;
+                    type LayoutType = #layout_definition;
                     #( type #model_data_names = #model_data_structs<Self>; )*
                 }
 

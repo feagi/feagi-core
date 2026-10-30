@@ -1,2 +1,2 @@
 pub mod linear;
-pub mod voxels_default;
+pub mod voxels;
