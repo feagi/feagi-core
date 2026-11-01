@@ -41,7 +41,7 @@
 use ahash::AHashMap;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Once, OnceLock};
@@ -352,17 +352,21 @@ impl SynapticPropagationEngine {
 
     /// Set degeneration coefficients for cortical areas.
     ///
-    /// Coefficients <= 0 disable degeneration for that area and are omitted.
+    /// Coefficients <= 0 disable degeneration for that area and are omitted. The Power area never
+    /// degenerates (see [`Self::set_degeneration_flag`]).
     pub fn set_degeneration_flags(&mut self, mut flags: AHashMap<CorticalID, f32>) {
-        flags.retain(|_, v| *v > 0.0);
+        let power = CoreCorticalType::Power.to_cortical_id();
+        flags.retain(|id, v| *v > 0.0 && *id != power);
         self.area_degeneration = flags;
     }
 
     /// Set degeneration coefficient for a single cortical area (in-place).
     ///
-    /// Coefficients <= 0 disable degeneration for that area.
+    /// Coefficients <= 0 disable degeneration for that area. The Power area ignores any
+    /// coefficient: it is the brain's unconditional driver, and every genome that seeds a tonic
+    /// circuit from it would otherwise lose that drive as the synapse PSP decays to zero.
     pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
-        if degeneration > 0.0 {
+        if degeneration > 0.0 && cortical_id != CoreCorticalType::Power.to_cortical_id() {
             self.area_degeneration.insert(cortical_id, degeneration);
         } else {
             self.area_degeneration.remove(&cortical_id);
@@ -980,6 +984,25 @@ mod tests {
         let targets: Vec<_> = area1_contributions.iter().map(|(n, _)| *n).collect();
         assert!(targets.contains(&NeuronId(10)));
         assert!(targets.contains(&NeuronId(11)));
+    }
+
+    #[test]
+    fn power_area_never_degenerates_but_other_areas_do() {
+        let power = CoreCorticalType::Power.to_cortical_id();
+        let death = CoreCorticalType::Death.to_cortical_id();
+        let mut engine = SynapticPropagationEngine::new();
+
+        engine.set_degeneration_flag(power, 0.01);
+        engine.set_degeneration_flag(death, 0.01);
+        assert!(!engine.area_degeneration.contains_key(&power));
+        assert_eq!(engine.area_degeneration.get(&death), Some(&0.01));
+
+        let mut flags = AHashMap::new();
+        flags.insert(power, 0.5_f32);
+        flags.insert(death, 0.25_f32);
+        engine.set_degeneration_flags(flags);
+        assert!(!engine.area_degeneration.contains_key(&power));
+        assert_eq!(engine.area_degeneration.get(&death), Some(&0.25));
     }
 
     #[test]

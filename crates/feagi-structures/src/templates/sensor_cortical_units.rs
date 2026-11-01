@@ -112,6 +112,8 @@ macro_rules! sensor_cortical_units {
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
+                    // A scalar array (forces, torques, ...): a missing frame must not drop every channel.
+                    default_sensory_hold_last_frame: true,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },

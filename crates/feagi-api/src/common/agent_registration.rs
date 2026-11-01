@@ -7,6 +7,9 @@ use crate::common::ApiState;
 use crate::v1::RegistrationAreaDiff;
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
+use feagi_services::change_ledger::{
+    current_change_context, with_change_context, ChangeContext, ChangeSource,
+};
 use feagi_services::ConnectomeService;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
@@ -57,6 +60,8 @@ fn percentage_tuple_first_depth_u32(depth_json: &Value) -> Option<u32> {
 /// For [`MotorCorticalUnit::ObjectSegmentation`], all three dims may be taken from the
 /// agent's `JSONDecoderProperties::MiscData` block so the connectome matches whatever
 /// grid size the agent registered with (e.g. Vision Lab user-chosen oseg resolution).
+/// For [`MotorCorticalUnit::MiscData`] (Miscellaneous Output), all three dims likewise come
+/// from the agent's `MiscData` block, clamped to the template min/max.
 /// Other motor units keep template `channel_dimensions_default` only.
 fn per_channel_motor_dimensions_for_registration(
     motor_unit: MotorCorticalUnit,
@@ -68,6 +73,7 @@ fn per_channel_motor_dimensions_for_registration(
     let default_d = unit_topology.channel_dimensions_default[2] as usize;
     if motor_unit != MotorCorticalUnit::CountOutput
         && motor_unit != MotorCorticalUnit::ObjectSegmentation
+        && motor_unit != MotorCorticalUnit::MiscData
         && motor_unit != MotorCorticalUnit::PoseEstimation
         && motor_unit != MotorCorticalUnit::SpatialPointer
         && motor_unit != MotorCorticalUnit::AngularPointer
@@ -104,9 +110,11 @@ fn per_channel_motor_dimensions_for_registration(
         let clamped = d32.clamp(z_min, z_max);
         return (default_w, default_h, clamped as usize);
     }
-    // ObjectSegmentation: honor MiscData dimensions declared by the agent decoder.
-    if motor_unit == MotorCorticalUnit::ObjectSegmentation {
-        if let Some(dims) = oseg_dims_from_misc_data_decoder(decoder_properties, unit_topology) {
+    // ObjectSegmentation / MiscData: honor MiscData dimensions declared by the agent decoder.
+    if motor_unit == MotorCorticalUnit::ObjectSegmentation
+        || motor_unit == MotorCorticalUnit::MiscData
+    {
+        if let Some(dims) = dims_from_misc_data_decoder(decoder_properties, unit_topology) {
             return dims;
         }
         return (default_w, default_h, default_d);
@@ -166,9 +174,9 @@ fn positional_servo_depth_from_decoder_properties(
     Some(depth.clamp(d_min, d_max) as usize)
 }
 
-/// Extracts and clamps oseg (width, height, depth) from a `{"MiscData": {…}}` decoder block.
+/// Extracts and clamps (width, height, depth) from a `{"MiscData": {…}}` decoder block.
 /// Returns `None` if the block is absent, malformed, or contains any zero dimension.
-fn oseg_dims_from_misc_data_decoder(
+fn dims_from_misc_data_decoder(
     decoder_properties: Option<&Value>,
     unit_topology: &UnitTopology,
 ) -> Option<(usize, usize, usize)> {
@@ -592,6 +600,17 @@ fn is_placeholder_cartesian_area_name(current_name: &str) -> bool {
     })
 }
 
+/// The hold choice a registered unit declares (`sensory_hold_last_frame`, next to the other
+/// per-unit flags in `io_configuration_flags` with a unit-level fallback), if any.
+fn declared_sensory_hold(unit_def: &Value) -> Option<bool> {
+    let key = feagi_structures::genomic::SENSORY_HOLD_LAST_FRAME_PROPERTY;
+    unit_def
+        .get("io_configuration_flags")
+        .and_then(|flags| flags.get(key))
+        .and_then(Value::as_bool)
+        .or_else(|| unit_def.get(key).and_then(Value::as_bool))
+}
+
 fn build_io_config_map_from_unit_def(
     unit_def: &Value,
 ) -> Result<serde_json::Map<String, serde_json::Value>, String> {
@@ -983,7 +1002,17 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
     device_registrations: &serde_json::Value,
 ) {
-    reconcile_device_registrations(state, device_registrations, RegistrationPass::Apply).await;
+    // Changes made here are machine-local: tag them so consumers that share genome
+    // edits between instances can keep them local. Inherit the caller's attribution.
+    let context = ChangeContext {
+        source: ChangeSource::DeviceRegistration,
+        ..current_change_context()
+    };
+    with_change_context(
+        context,
+        reconcile_device_registrations(state, device_registrations, RegistrationPass::Apply),
+    )
+    .await;
 }
 
 async fn reconcile_device_registrations(
@@ -1998,10 +2027,12 @@ async fn reconcile_device_registrations(
                             serde_json::json!(default_mp_charge_accumulation),
                         );
                     }
-                    // Sensor cadence hold: scalar sensors hold their last frame for one burst.
+                    // Sensor cadence hold: scalar sensors hold their last frame for one burst. A
+                    // controller may declare the choice per registered unit.
                     properties.insert(
                         feagi_structures::genomic::SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
-                        serde_json::json!(sensory_unit.get_default_sensory_hold_last_frame()),
+                        serde_json::json!(declared_sensory_hold(unit_def)
+                            .unwrap_or_else(|| sensory_unit.get_default_sensory_hold_last_frame())),
                     );
 
                     to_create.push(CreateCorticalAreaParams {
@@ -2227,6 +2258,37 @@ mod count_output_registration_tests {
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
     use feagi_structures::genomic::MotorCorticalUnit;
     use serde_json::json;
+
+    #[test]
+    fn misc_data_output_uses_registered_dimensions() {
+        let motor = MotorCorticalUnit::MiscData;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 20u32, "height": 1u32, "depth": 1u32}});
+        let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(dims, (20, 1, 1));
+    }
+
+    #[test]
+    fn misc_data_output_without_block_uses_template_default() {
+        let motor = MotorCorticalUnit::MiscData;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let expected = (
+            ut.channel_dimensions_default[0] as usize,
+            ut.channel_dimensions_default[1] as usize,
+            ut.channel_dimensions_default[2] as usize,
+        );
+        assert_eq!(
+            per_channel_motor_dimensions_for_registration(motor, ut, None),
+            expected
+        );
+        let other = json!({"Percentage": [10u32, "Linear", false, "D1"]});
+        assert_eq!(
+            per_channel_motor_dimensions_for_registration(motor, ut, Some(&other)),
+            expected
+        );
+    }
 
     #[test]
     fn count_output_uses_percentage_tuple_depth_when_present() {
@@ -3065,6 +3127,27 @@ mod servo_encoder_registration_helpers_tests {
         assert_eq!(
             primary_sensor_tag_first_channel(&unit_def).as_deref(),
             Some("jointpos")
+        );
+    }
+
+    #[test]
+    fn a_unit_may_declare_its_sensory_hold() {
+        use serde_json::json;
+        assert_eq!(super::declared_sensory_hold(&json!({})), None);
+        assert_eq!(
+            super::declared_sensory_hold(&json!({"sensory_hold_last_frame": false})),
+            Some(false)
+        );
+        assert_eq!(
+            super::declared_sensory_hold(
+                &json!({"io_configuration_flags": {"sensory_hold_last_frame": true}, "sensory_hold_last_frame": false})
+            ),
+            Some(true),
+            "the io flags win over the unit level"
+        );
+        assert_eq!(
+            super::declared_sensory_hold(&json!({"sensory_hold_last_frame": "yes"})),
+            None
         );
     }
 }

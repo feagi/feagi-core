@@ -170,6 +170,7 @@ fn member(agent_id: &str) -> ChangeContext {
     ChangeContext {
         agent_id: Some(agent_id.to_string()),
         group_id: Some(format!("{agent_id}-request")),
+        source: Default::default(),
         replay: None,
     }
 }
@@ -483,6 +484,7 @@ async fn markers_cannot_be_replayed() {
         group_id: "marker".to_string(),
         timestamp_ms: 0,
         agent_id: None,
+        source: Default::default(),
         operation: GenomeChangeOperation::ConnectomeReset,
     };
     assert!(

@@ -3173,6 +3173,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     }
                 }
                 if plasticity_flag || is_associative {
+                    // Refuse bad plasticity options now, before the genome or the connectome
+                    // stores anything; the synapse build would reject them later, after the
+                    // rule was already persisted.
+                    feagi_brain_development::ConnectomeManager::validate_plastic_rule_options(
+                        &normalized,
+                        &src_area_id,
+                        &dst_area_id,
+                    )
+                    .map_err(ServiceError::InvalidInput)?;
                     let required = [
                         "plasticity_constant",
                         "ltp_multiplier",
@@ -3232,7 +3241,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 src_area_id,
                 dst_area_id
             );
-            return Ok(0);
+            return Ok(self
+                .connectome
+                .read()
+                .count_mapping_synapses(&src_id, &dst_id));
         }
 
         // Decision point: rules that differ from the stored ones only in plasticity settings
@@ -3291,7 +3303,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     src_area_id,
                     dst_area_id
                 );
-                return Ok(0);
+                return Ok(manager.count_mapping_synapses(&src_id, &dst_id));
             }
             let previous_morphology = existing_mapping
                 .as_ref()
@@ -3916,7 +3928,13 @@ impl ConnectomeServiceImpl {
                     ServiceError::Backend(format!("Failed to apply connectome: {}", e))
                 })?;
             }
-            // The snapshot apply replaces neuron storage; rebuild the homeostat registry on it.
+            // The snapshot apply replaces neuron storage and the propagation engine, which drops
+            // every per-area flag (PSP uniformity, MP-driven PSP, baseline PSC, degeneration):
+            // push them again from the restored areas, then rebuild the homeostat registry.
+            self.connectome
+                .read()
+                .sync_cortical_area_flags_to_npu()
+                .map_err(ServiceError::from)?;
             self.connectome
                 .read()
                 .reregister_rate_modulated_leak_for_all_areas();
@@ -6840,6 +6858,111 @@ mod tests {
         Ok(())
     }
 
+    /// The update reports the synapses the mapping has, also when it rebuilds nothing, and a
+    /// rule with plasticity options the synapse build would refuse is rejected before anything
+    /// is stored.
+    #[tokio::test]
+    async fn mapping_updates_report_existing_synapses_and_reject_bad_plasticity_atomically(
+    ) -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        mgr.setup_core_morphologies_for_testing();
+        let src_id = CorticalID::try_from_bytes(b"cmcsrc01").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"cmcdst01").unwrap();
+        for (id, label) in [(src_id, "src"), (dst_id, "dst")] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        mgr.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        mgr.add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let connectome = Arc::new(RwLock::new(mgr));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        let rule = |extra: serde_json::Value| {
+            let mut rule = serde_json::json!({
+                "morphology_id": "projector",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1.0,
+                "plasticity_flag": false,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+            });
+            rule.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            rule
+        };
+        let (src, dst) = (src_id.as_base_64(), dst_id.as_base_64());
+        let stored = || -> Vec<serde_json::Value> {
+            let manager = connectome.read();
+            manager
+                .get_cortical_area(&src_id)
+                .and_then(|a| a.properties.get("cortical_mapping_dst"))
+                .and_then(|d| d.get(&dst))
+                .and_then(|r| r.as_array().cloned())
+                .unwrap_or_default()
+        };
+
+        let built = svc
+            .update_cortical_mapping(src.clone(), dst.clone(), vec![rule(serde_json::json!({}))])
+            .await?;
+        assert_eq!(built, 1, "one neuron to one neuron");
+        // The same rules again rebuild nothing, and still report the synapse that exists.
+        let again = svc
+            .update_cortical_mapping(src.clone(), dst.clone(), vec![rule(serde_json::json!({}))])
+            .await?;
+        assert_eq!(again, 1);
+        assert_eq!(
+            connectome.read().count_mapping_synapses(&src_id, &dst_id),
+            1
+        );
+
+        // eligibility_decay_bursts without rstdp is a bad request (not a 500) and stores nothing.
+        let before = stored();
+        let bad = rule(serde_json::json!({
+            "plasticity_flag": true,
+            "plasticity_mode": "stdp",
+            "eligibility_decay_bursts": 5,
+        }));
+        let error = svc
+            .update_cortical_mapping(src.clone(), dst.clone(), vec![bad])
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, crate::types::ServiceError::InvalidInput(m) if m.contains("eligibility_decay_bursts")),
+            "{error:?}"
+        );
+        assert_eq!(stored(), before, "a rejected update changes nothing");
+        Ok(())
+    }
+
     /// A rule written with the short key `psc_multiplier` and no `plasticity_flag` (what the MCP
     /// `update_cortical_mapping` documents) is stored under the canonical keys, so the genome
     /// export no longer drops it on the next save, load or restart. A rule that cannot be
@@ -7893,6 +8016,102 @@ mod tests {
             vec!["mod_a".to_string()],
             "full import must push genome modulator subscriptions into the NPU"
         );
+        Ok(())
+    }
+
+    /// A full snapshot apply resets the NPU's propagation engine. The per-area flags it holds
+    /// must come back from the restored areas, or an area with uniform PSP has its PSP divided
+    /// across its outgoing synapses after a restart.
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn import_connectome_full_restores_per_area_psp_flags_in_the_npu() -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let make = |bytes: &[u8; 8], idx: u32, uniform: bool| {
+            let id = CorticalID::try_from_bytes(bytes).unwrap();
+            let mut area = CorticalArea::new(
+                id,
+                idx,
+                "flags".to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            area.properties.insert(
+                "psp_uniform_distribution".to_string(),
+                serde_json::json!(uniform),
+            );
+            area.properties
+                .insert("mp_driven_psp".to_string(), serde_json::json!(true));
+            (id, area)
+        };
+        let (uniform_id, uniform_area) = make(b"cpspun01", 7, true);
+        let (divided_id, divided_area) = make(b"cpspdv01", 8, false);
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(uniform_id, uniform_area);
+        cortical_areas.insert(divided_id, divided_area);
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "psp-flags".to_string(),
+                genome_title: "psp-flags".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+        let connectome = Arc::new(RwLock::new(connectome_manager_for_import_tests()));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: Some(genome_json),
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await?;
+
+        let manager = connectome.read();
+        let npu = manager.get_npu().expect("npu attached").lock().unwrap();
+        assert!(
+            npu.get_psp_uniform_distribution_for_cortical(&uniform_id),
+            "an area with uniform PSP keeps it after a full import"
+        );
+        assert!(!npu.get_psp_uniform_distribution_for_cortical(&divided_id));
         Ok(())
     }
 

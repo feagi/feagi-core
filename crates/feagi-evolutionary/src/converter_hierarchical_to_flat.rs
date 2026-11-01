@@ -372,7 +372,8 @@ fn convert_properties_to_flat(
         ("longterm_mem_threshold", json!(100)),
         ("lifespan_growth_rate", json!(1)),
         ("init_lifespan", json!(9)),
-        ("neuron_excitability", json!(100.0)),
+        // A fraction in [0, 1] (the API default and the schema bound), not a percent.
+        ("neuron_excitability", json!(1.0)),
     ]
     .iter()
     .map(|(k, v)| (*k, v.clone()))
@@ -944,5 +945,56 @@ mod tests {
             true,
             "Power PSP uniformity must default to on"
         );
+    }
+
+    #[test]
+    fn test_omitted_excitability_and_psp_export_the_live_defaults() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Live defaults".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let id = CorticalID::try_from_bytes(b"cexport1").unwrap();
+        let area = CorticalArea::new(
+            id,
+            3,
+            "plain".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, 0),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        genome.cortical_areas.insert(id, area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = id.as_base_64();
+        // An area that never set these reads 1 live (`get_area_parameters`), so it exports 1.
+        assert_eq!(blueprint[&format!("_____10c-{}-nx-excite-f", b64)], 1.0);
+        assert_eq!(blueprint[&format!("_____10c-{}-nx-pstcr_-f", b64)], 1.0);
     }
 }

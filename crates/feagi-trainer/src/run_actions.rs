@@ -26,6 +26,22 @@ pub enum ScheduledAction {
         key: String,
         value: serde_json::Value,
     },
+    /// Force-fire `voxels` of an area on every FEAGI burst for `bursts` bursts, or for `seconds`
+    /// of wall-clock time converted with the burst interval. Exactly one of the two is given.
+    /// Nothing is stored, so there is nothing to restore; a hold in progress is stopped when the
+    /// next attempt starts ([`ScheduledAction::AttemptStart`]) and when the phase ends.
+    StimulateArea {
+        area: String,
+        voxels: Vec<[u32; 3]>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bursts: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        seconds: Option<f64>,
+    },
+    /// Sent by the runner (never part of a schedule) when an attempt begins, so the applier can
+    /// end anything the previous attempt left running. Not serializable.
+    #[serde(skip)]
+    AttemptStart,
 }
 
 /// An action applied `at_s` seconds after the runner's reference point (for example the end of
@@ -83,6 +99,36 @@ impl ScheduledEvent {
             ScheduledAction::SetAreaParameter { area, key, .. } => {
                 named("area", area)?;
                 named("key", key)?;
+            }
+            ScheduledAction::StimulateArea {
+                area,
+                voxels,
+                bursts,
+                seconds,
+            } => {
+                named("area", area)?;
+                if voxels.is_empty() {
+                    return Err(TrainerError::Config(format!(
+                        "scheduled event {:?}: voxels must list at least one [x, y, z]",
+                        self.label
+                    )));
+                }
+                match (bursts, seconds) {
+                    (Some(b), None) if *b >= 1 => {}
+                    (None, Some(s)) if s.is_finite() && *s > 0.0 => {}
+                    _ => {
+                        return Err(TrainerError::Config(format!(
+                            "scheduled event {:?}: give exactly one of bursts (>= 1) or seconds (finite, > 0)",
+                            self.label
+                        )));
+                    }
+                }
+            }
+            ScheduledAction::AttemptStart => {
+                return Err(TrainerError::Config(format!(
+                    "scheduled event {:?}: attempt_start is sent by the runner, not scheduled",
+                    self.label
+                )));
             }
         }
         Ok(())
@@ -173,5 +219,49 @@ mod tests {
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(psc(bad).validate().is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn stimulate_area_has_the_documented_shape_and_is_validated() {
+        let event: ScheduledEvent = serde_json::from_value(json!({
+            "at_s": 0.5,
+            "label": "drive",
+            "action": {"type": "stimulate_area", "area": "src", "voxels": [[0, 0, 0], [1, 0, 2]], "bursts": 30}
+        }))
+        .unwrap();
+        assert!(event.validate().is_ok());
+        assert_eq!(
+            serde_json::to_value(&event.action).unwrap(),
+            json!({"type": "stimulate_area", "area": "src", "voxels": [[0, 0, 0], [1, 0, 2]], "bursts": 30})
+        );
+        let with = |action: serde_json::Value| -> ScheduledEvent {
+            serde_json::from_value(json!({"at_s": 0.0, "label": "l", "action": action})).unwrap()
+        };
+        let stim = |extra: serde_json::Value| {
+            let mut action = json!({"type": "stimulate_area", "area": "a", "voxels": [[0, 0, 0]]});
+            action
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            with(action)
+        };
+        assert!(stim(json!({"seconds": 0.2})).validate().is_ok());
+        for bad in [
+            json!({}),
+            json!({"bursts": 0}),
+            json!({"bursts": 3, "seconds": 1.0}),
+            json!({"seconds": 0.0}),
+            json!({"seconds": -1.0}),
+        ] {
+            assert!(stim(bad.clone()).validate().is_err(), "{bad}");
+        }
+        let mut empty = stim(json!({"bursts": 3}));
+        if let ScheduledAction::StimulateArea { voxels, .. } = &mut empty.action {
+            voxels.clear();
+        }
+        assert!(empty.validate().is_err());
+        assert!(
+            serde_json::from_value::<ScheduledAction>(json!({"type": "attempt_start"})).is_err()
+        );
     }
 }

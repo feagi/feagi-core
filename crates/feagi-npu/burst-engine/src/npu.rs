@@ -1746,6 +1746,21 @@ impl<
             })
     }
 
+    /// Number of valid synapses from neurons of `source_area` to neurons of `target_area`.
+    pub fn count_synapses_between_areas(&self, source_area: u32, target_area: u32) -> usize {
+        let neurons = self.neuron_storage.read().unwrap();
+        let synapses = self.synapse_storage.read().unwrap();
+        let areas = neurons.cortical_areas();
+        let area_of = |neuron: u32| areas.get(neuron as usize).copied();
+        (0..synapses.count())
+            .filter(|&idx| {
+                synapses.valid_mask()[idx]
+                    && area_of(synapses.source_neurons()[idx]) == Some(source_area)
+                    && area_of(synapses.target_neurons()[idx]) == Some(target_area)
+            })
+            .count()
+    }
+
     /// Batch remove synapses between source and target neuron sets
     ///
     /// NOTE: This does NOT rebuild the synapse index. Call rebuild_synapse_index() after bulk removals.

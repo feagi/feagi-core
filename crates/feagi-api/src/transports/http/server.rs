@@ -1503,6 +1503,7 @@ async fn attribute_genome_changes(
     let context = ChangeContext {
         agent_id,
         group_id: Some(uuid::Uuid::now_v7().to_string()),
+        source: Default::default(),
         replay: None,
     };
     with_change_context(context, next.run(request)).await

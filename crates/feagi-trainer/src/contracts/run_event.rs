@@ -54,6 +54,10 @@ pub struct AttemptStand {
     /// them while the phase is still running.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive: Option<crate::balance_feet::AdaptiveAttemptStats>,
+    /// Walk numbers of the attempt (walking sessions only), so results can show them while the
+    /// phase is still running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub walk: Option<crate::balance_feet::WalkAttemptStats>,
 }
 
 /// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.

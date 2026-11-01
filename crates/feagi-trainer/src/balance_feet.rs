@@ -172,6 +172,150 @@ impl AssistMode {
     }
 }
 
+/// Smallest net horizontal displacement, as a fraction of the torso's reset height, at which a
+/// heading error is defined. Below it the direction of travel is noise.
+pub const WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS: f64 = 0.5;
+
+fn default_walk_speed_tolerance() -> f64 {
+    0.25
+}
+
+fn default_walk_heading_tolerance_deg() -> f64 {
+    30.0
+}
+
+/// The walking goal of a session: forward progress at a pace along a heading. Everything is in SI
+/// units or dimensionless; the torso and foot bodies come from the criterion.
+///
+/// Forward is the unit horizontal vector at the heading in the world frame (degrees from +X toward
+/// +Y). With `forward_heading_deg` set that is a constant of the experiment. Left unset, each
+/// attempt reads the torso's forward axis from the controller's `measure` reply (`heading`) at the
+/// reset pose, so the goal follows the model.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WalkGoal {
+    /// Target forward speed, m/s (> 0).
+    pub speed_m_s: f64,
+    /// Allowed deviation of the mean forward speed from the target, as a fraction of the target,
+    /// in [0, 1). Default 0.25. It bounds both sides: slower is a stall, faster is a run.
+    #[serde(default = "default_walk_speed_tolerance")]
+    pub speed_tolerance: f64,
+    /// Largest accepted heading error, degrees, in (0, 90]. Default 30.
+    #[serde(default = "default_walk_heading_tolerance_deg")]
+    pub heading_tolerance_deg: f64,
+    /// World-frame direction of forward at the reset pose, degrees from +X toward +Y. Unset (the
+    /// default) uses the torso's measured heading at each attempt's reset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_heading_deg: Option<f64>,
+    /// Distance rule: forward displacement, m, that completes the attempt. Absent selects the
+    /// time rule: an upright run of `hold_s` seconds.
+    #[serde(default)]
+    pub distance_m: Option<f64>,
+}
+
+impl WalkGoal {
+    /// Goal with the tolerances, heading and rule at their defaults.
+    pub fn new(speed_m_s: f64) -> Self {
+        Self {
+            speed_m_s,
+            speed_tolerance: default_walk_speed_tolerance(),
+            heading_tolerance_deg: default_walk_heading_tolerance_deg(),
+            forward_heading_deg: None,
+            distance_m: None,
+        }
+    }
+
+    /// Slowest mean forward speed that passes, m/s.
+    pub fn min_speed_m_s(&self) -> f64 {
+        self.speed_m_s * (1.0 - self.speed_tolerance)
+    }
+
+    /// Fastest mean forward speed that passes, m/s. The same tolerance as the lower bound, so a
+    /// run at twice the target is not scored as a walk.
+    pub fn max_speed_m_s(&self) -> f64 {
+        self.speed_m_s * (1.0 + self.speed_tolerance)
+    }
+
+    /// Forward unit vector in the world horizontal plane for a heading in degrees.
+    pub fn forward_xy(heading_deg: f64) -> [f64; 2] {
+        let heading = heading_deg.to_radians();
+        [heading.cos(), heading.sin()]
+    }
+
+    /// The heading this attempt scores along, degrees: the explicit `forward_heading_deg`, else
+    /// the torso's measured yaw at the reset pose. A reply without a heading is an error, never
+    /// a silent 0.
+    pub fn resolve_heading_deg(
+        &self,
+        torso: &str,
+        reading: &BodyMeasure,
+    ) -> Result<f64, TrainerError> {
+        if let Some(explicit) = self.forward_heading_deg {
+            return Ok(explicit);
+        }
+        reading
+            .heading
+            .as_ref()
+            .and_then(|heading| heading.yaw_rad)
+            .map(f64::to_degrees)
+            .ok_or_else(|| {
+                TrainerError::Runtime(format!(
+                    "the walk heading is measured from {torso}, but the controller's measure reply has no \
+                     defined heading for it (an older controller pack, or forward points along up); \
+                     set forward_heading_deg (setup walkForwardHeadingDeg) or update the controller pack"
+                ))
+            })
+    }
+
+    /// Rejects a goal that cannot produce a success.
+    pub fn validate(&self) -> Result<(), TrainerError> {
+        let fail = |text: &str| Err(TrainerError::Config(text.to_string()));
+        if !self.speed_m_s.is_finite() || self.speed_m_s <= 0.0 {
+            return fail("walk speed_m_s must be finite and > 0");
+        }
+        if !self.speed_tolerance.is_finite() || !(0.0..1.0).contains(&self.speed_tolerance) {
+            return fail("walk speed_tolerance must be a finite value in [0, 1)");
+        }
+        if !self.heading_tolerance_deg.is_finite()
+            || self.heading_tolerance_deg <= 0.0
+            || self.heading_tolerance_deg > 90.0
+        {
+            return fail("walk heading_tolerance_deg must be a finite value in (0, 90]");
+        }
+        if self.forward_heading_deg.is_some_and(|h| !h.is_finite()) {
+            return fail("walk forward_heading_deg must be finite");
+        }
+        if self.distance_m.is_some_and(|d| !d.is_finite() || d <= 0.0) {
+            return fail("walk distance_m must be finite and > 0");
+        }
+        Ok(())
+    }
+
+    /// Rejects a goal that heading cannot be judged for: the net displacement that completes the
+    /// attempt must reach `WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS` torso heights, else the heading
+    /// stays undefined and no attempt can succeed. `reset_height_m` is runtime-only.
+    pub fn check_feasible(&self, hold_s: f64, reset_height_m: f64) -> Result<(), TrainerError> {
+        let needed = WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS * reset_height_m;
+        let (reach, what) = match self.distance_m {
+            Some(distance) => (distance, "walk distance_m".to_string()),
+            None => (
+                self.min_speed_m_s() * hold_s,
+                format!(
+                    "the slowest passing speed ({:.4} m/s) times hold_s ({hold_s} s)",
+                    self.min_speed_m_s()
+                ),
+            ),
+        };
+        if reach + 1.0e-12 < needed {
+            return Err(TrainerError::Config(format!(
+                "{what} gives {reach:.4} m, below {needed:.4} m ({WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS} \
+                 torso heights of {reset_height_m:.4} m); the heading error would stay undefined and \
+                 no attempt could succeed. Raise the distance or hold_s, or the speed."
+            )));
+        }
+        Ok(())
+    }
+}
+
 /// Operator criterion for one balance-on-feet session.
 ///
 /// The controller knows no robot and no task: this struct owns every decision. All durations
@@ -331,6 +475,10 @@ pub struct BalanceFeetCriterion {
     /// Ask the controller for every actuator command each burst and put it in the sample.
     #[serde(default, alias = "recordActuators")]
     pub record_actuators: bool,
+    /// Walking goal. `None` (default) is the standing task. With a goal, a stance needs at least
+    /// one contact body down (feet lift in a gait) and success is forward progress at a pace.
+    #[serde(default)]
+    pub walk: Option<WalkGoal>,
 }
 
 /// Fading-support schedule parameters.
@@ -415,6 +563,17 @@ impl BalanceFeetCriterion {
             standing_fraction_for_success: default_standing_fraction_for_success(),
             scheduled_events: Vec::new(),
             record_actuators: false,
+            walk: None,
+        }
+    }
+
+    /// The contact bodies satisfy the stance: every one touches the world, or at least one when a
+    /// walking goal is set (feet lift in a gait). An empty reading satisfies nothing.
+    pub fn contacts_satisfied(&self, contacts: &[bool]) -> bool {
+        if self.walk.is_some() {
+            contacts.iter().any(|down| *down)
+        } else {
+            contacts.iter().all(|down| *down)
         }
     }
 
@@ -597,6 +756,9 @@ impl BalanceFeetCriterion {
                     self.hold_s, self.attempt_cap_s
                 )));
             }
+        }
+        if let Some(walk) = &self.walk {
+            walk.validate()?;
         }
         self.support_config().validate()?;
         if !non_negative(self.settle_s) {
@@ -1244,6 +1406,9 @@ pub struct BalanceAttemptRecord {
     /// Adaptive-assist numbers. Absent for a ladder attempt and for probes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive: Option<AdaptiveAttemptStats>,
+    /// Walk numbers. Absent for a standing attempt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub walk: Option<WalkAttemptStats>,
 }
 
 /// Counted support-use samples of one attempt (support > 0, non-settling only).
@@ -1312,7 +1477,7 @@ pub fn support_use_flags(
         }
         _ => false,
     };
-    let feet_off_body_up = !sample.all_contacts_down() && !torso_low;
+    let feet_off_body_up = !criterion.contacts_satisfied(&sample.contacts) && !torso_low;
     let lifted = match (sample.torso_height_m, reset) {
         (Some(now), Some(reset)) => now > reset * (1.0 + criterion.lift_tolerance),
         _ => false,
@@ -1604,6 +1769,21 @@ pub struct BodyMeasure {
     /// Subtree CoM, m.
     #[serde(default)]
     pub subtree_com: Option<[f64; 3]>,
+    /// Forward axis of the body in the world frame (newer controllers).
+    #[serde(default)]
+    pub heading: Option<BodyHeading>,
+}
+
+/// The body's forward direction in a `measure` reply.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BodyHeading {
+    /// Angle of forward about up, rad, from world +X toward +Y for z-up; `None` when forward
+    /// points along up and the horizontal direction is undefined.
+    #[serde(default)]
+    pub yaw_rad: Option<f64>,
+    /// Unit forward vector, world frame.
+    #[serde(default)]
+    pub forward: Option<[f64; 3]>,
 }
 
 /// One contact set in a `measure` reply.
@@ -1774,6 +1954,217 @@ pub struct BalanceSample {
     /// Stability readings of the torso at this burst. Absent when not measured.
     #[serde(default)]
     pub stability: Option<StabilitySample>,
+    /// Forward progress readings of the torso. Present only for a walking goal.
+    #[serde(default)]
+    pub walk: Option<WalkReading>,
+}
+
+/// Where the torso is relative to where the attempt started, along and across forward.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WalkReading {
+    /// Displacement along forward since the attempt's first scored burst, m.
+    pub forward_m: f64,
+    /// Displacement to the left of forward since the same burst, m.
+    pub lateral_m: f64,
+    /// New ground gained along forward since the previous counted burst, m: how far `forward_m`
+    /// rose above its best so far. Rocking over planted feet gains none. Filled for counted bursts.
+    #[serde(default)]
+    pub progress_m: f64,
+}
+
+/// Running walk readings of one attempt: pace window, steps and foot alternation.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WalkAccum {
+    /// Forward displacement at the latest counted burst, m.
+    pub last_forward_m: f64,
+    /// Lateral displacement at the latest counted burst, m.
+    pub last_lateral_m: f64,
+    /// `(scored bursts, forward displacement)` at recent counted bursts: the anchor of the speed
+    /// window (the latest entry at least `hold_s` old) and everything after it.
+    pub history: std::collections::VecDeque<(u32, f64)>,
+    /// Contact bodies down at the latest counted burst.
+    pub last_down: Option<Vec<bool>>,
+    /// Touchdowns so far (rising edge of any contact body).
+    pub steps: u32,
+    /// Index of the contact body of the latest lone touchdown.
+    pub last_touchdown: Option<usize>,
+    /// Lone touchdowns that followed another lone touchdown.
+    pub touchdown_pairs: u32,
+    /// Of those, the ones by a different contact body than the previous touchdown.
+    pub alternations: u32,
+}
+
+/// Walk numbers of one finished attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WalkAttemptStats {
+    /// Forward displacement from the first scored burst, m.
+    pub forward_m: f64,
+    /// Lateral displacement (left positive), m.
+    pub lateral_m: f64,
+    /// `forward_m` over the scored time, m/s.
+    pub mean_speed_m_s: f64,
+    /// Speed of the window the success rule judges, m/s: the whole attempt for the distance rule,
+    /// the last `hold_s` seconds for the time rule. Absent when no such window exists yet.
+    pub window_speed_m_s: Option<f64>,
+    /// `(mean_speed - target) / target`.
+    pub speed_error_fraction: f64,
+    /// Angle between the net horizontal displacement and forward, degrees. Absent while the
+    /// displacement is under `WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS` torso heights.
+    pub heading_error_deg: Option<f64>,
+    /// Touchdowns of any contact body.
+    pub steps: u32,
+    /// Touchdowns per second of scored time.
+    pub step_rate_hz: f64,
+    /// Share of consecutive lone touchdowns made by a different contact body. Absent with fewer
+    /// than two contact bodies or no consecutive touchdowns.
+    pub alternation_fraction: Option<f64>,
+}
+
+/// Judgement of the walking goal at one burst.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WalkVerdict {
+    /// The distance or time rule is met.
+    pub rule_met: bool,
+    /// Speed of the window the rule judges, m/s.
+    pub window_speed_m_s: Option<f64>,
+    /// Heading error, degrees, when defined.
+    pub heading_error_deg: Option<f64>,
+    /// Rule met, window speed at or above the slowest passing speed, heading inside tolerance.
+    pub success: bool,
+}
+
+/// Heading error in degrees for a displacement, or `None` while it is too short to trust.
+pub fn walk_heading_error_deg(
+    forward_m: f64,
+    lateral_m: f64,
+    reset_height_m: Option<f64>,
+) -> Option<f64> {
+    let height = reset_height_m.filter(|h| h.is_finite() && *h > 0.0)?;
+    let displacement = forward_m.hypot(lateral_m);
+    (displacement >= WALK_MIN_HEADING_DISPLACEMENT_HEIGHTS * height - 1.0e-12)
+        .then(|| lateral_m.abs().atan2(forward_m).to_degrees())
+}
+
+/// Fold one counted, scored burst into the walk accumulator. `bursts` are the scored bursts so far.
+fn walk_add(
+    acc: &WalkAccum,
+    reading: &WalkReading,
+    contacts: &[bool],
+    bursts: u32,
+    hold_bursts: u32,
+) -> WalkAccum {
+    let mut next = acc.clone();
+    next.history.push_back((bursts, reading.forward_m));
+    while next.history.len() >= 2 && next.history[1].0.saturating_add(hold_bursts) <= bursts {
+        next.history.pop_front();
+    }
+    next.last_forward_m = reading.forward_m;
+    next.last_lateral_m = reading.lateral_m;
+    if let Some(before) = &acc.last_down {
+        let landed: Vec<usize> = contacts
+            .iter()
+            .enumerate()
+            .filter(|(i, down)| **down && !before.get(*i).copied().unwrap_or(false))
+            .map(|(i, _)| i)
+            .collect();
+        next.steps = next.steps.saturating_add(landed.len() as u32);
+        if let [index] = landed[..] {
+            if let Some(previous) = acc.last_touchdown {
+                next.touchdown_pairs += 1;
+                next.alternations += u32::from(previous != index);
+            }
+            next.last_touchdown = Some(index);
+        }
+    }
+    next.last_down = Some(contacts.to_vec());
+    next
+}
+
+/// Judge the walking goal after a counted burst. `bursts` are the scored bursts so far and
+/// `holding_bursts` the current upright run, both elapsed bursts.
+fn walk_verdict(
+    goal: &WalkGoal,
+    criterion: &BalanceFeetCriterion,
+    acc: &WalkAccum,
+    bursts: u32,
+    holding_bursts: u32,
+    reset_height_m: Option<f64>,
+) -> WalkVerdict {
+    let period = criterion.burst_period_s;
+    let forward = acc.last_forward_m;
+    let (rule_met, window_speed) = match goal.distance_m {
+        Some(distance) => {
+            let elapsed = f64::from(bursts) * period;
+            (
+                forward >= distance,
+                (elapsed > 0.0).then(|| forward / elapsed),
+            )
+        }
+        None => {
+            // The last `hold_s` seconds, which an upright run of that length covers in full.
+            let hold_bursts = criterion.hold_bursts();
+            let anchor = bursts.checked_sub(hold_bursts).and_then(|target| {
+                acc.history
+                    .iter()
+                    .rev()
+                    .find(|(at, _)| *at <= target)
+                    .copied()
+                    .or(Some((0, 0.0)))
+            });
+            let speed = anchor.and_then(|(at, then)| {
+                let window_s = f64::from(bursts - at) * period;
+                (window_s > 0.0).then(|| (forward - then) / window_s)
+            });
+            (holding_bursts >= hold_bursts, speed)
+        }
+    };
+    let heading = walk_heading_error_deg(forward, acc.last_lateral_m, reset_height_m);
+    let success = rule_met
+        && window_speed.is_some_and(|v| {
+            v >= goal.min_speed_m_s() - 1.0e-12 && v <= goal.max_speed_m_s() + 1.0e-12
+        })
+        && heading.is_some_and(|h| h <= goal.heading_tolerance_deg + 1.0e-12);
+    WalkVerdict {
+        rule_met,
+        window_speed_m_s: window_speed,
+        heading_error_deg: heading,
+        success,
+    }
+}
+
+/// Walk numbers of an attempt that ended after `bursts` scored bursts.
+fn walk_stats(
+    goal: &WalkGoal,
+    criterion: &BalanceFeetCriterion,
+    acc: &WalkAccum,
+    bursts: u32,
+    holding_bursts: u32,
+    reset_height_m: Option<f64>,
+) -> WalkAttemptStats {
+    let verdict = walk_verdict(goal, criterion, acc, bursts, holding_bursts, reset_height_m);
+    let elapsed = f64::from(bursts) * criterion.burst_period_s;
+    let mean_speed = if elapsed > 0.0 {
+        acc.last_forward_m / elapsed
+    } else {
+        0.0
+    };
+    let pairs = acc.touchdown_pairs;
+    WalkAttemptStats {
+        forward_m: acc.last_forward_m,
+        lateral_m: acc.last_lateral_m,
+        mean_speed_m_s: mean_speed,
+        window_speed_m_s: verdict.window_speed_m_s,
+        speed_error_fraction: (mean_speed - goal.speed_m_s) / goal.speed_m_s,
+        heading_error_deg: verdict.heading_error_deg,
+        steps: acc.steps,
+        step_rate_hz: if elapsed > 0.0 {
+            f64::from(acc.steps) / elapsed
+        } else {
+            0.0
+        },
+        alternation_fraction: (criterion.contact_bodies.len() >= 2 && pairs > 0)
+            .then(|| f64::from(acc.alternations) / f64::from(pairs)),
+    }
 }
 
 /// Torso motion readings for the stability metrics of one burst.
@@ -1958,6 +2349,8 @@ pub struct OpenBalanceAttempt {
     pub collapsed_at_bursts: Option<u32>,
     /// Stability statistics over the counted, non-settling, upright bursts so far.
     pub stability: StabilityAccum,
+    /// Walk readings so far; untouched without a walking goal.
+    pub walk: WalkAccum,
 }
 
 impl OpenBalanceAttempt {
@@ -1998,6 +2391,7 @@ impl OpenBalanceAttempt {
             off_stance_bursts: 0,
             collapsed_at_bursts: None,
             stability: StabilityAccum::default(),
+            walk: WalkAccum::default(),
         }
     }
 }
@@ -2035,7 +2429,7 @@ pub fn non_upright_reasons(
     };
     NonUprightReasons {
         tilt: sample.tilt_deg > criterion.max_tilt_deg,
-        contact: !sample.all_contacts_down(),
+        contact: !criterion.contacts_satisfied(&sample.contacts),
         other_body_contact: criterion.only_contacts_touch && sample.other_contact_touching,
         height: too_low,
     }
@@ -2164,6 +2558,19 @@ pub fn observe_balance_sample(
             };
             collapse_confirmed_at(open.collapsed_at_bursts, off_run, bursts, criterion)
         };
+        let terminal_walk = criterion.walk.as_ref().map(|goal| {
+            let acc = match (&sample.walk, sample.settling) {
+                (Some(reading), false) => walk_add(
+                    &open.walk,
+                    reading,
+                    &sample.contacts,
+                    bursts,
+                    criterion.hold_bursts(),
+                ),
+                _ => open.walk.clone(),
+            };
+            walk_stats(goal, criterion, &acc, bursts, run, reset_height_m)
+        });
         return Ok(BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
             outcome,
@@ -2180,6 +2587,7 @@ pub fn observe_balance_sample(
             wobble_rad_s: stability.wobble_rad_s(),
             tilt_sway_deg: stability.tilt_sway_deg(),
             com_sway_fraction: stability.com_sway_fraction(reset_height_m),
+            walk: terminal_walk,
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -2263,6 +2671,31 @@ pub fn observe_balance_sample(
     } else {
         open.stability
     };
+    let walk_acc = match (&criterion.walk, &sample.walk) {
+        (Some(_), Some(reading)) => walk_add(
+            &open.walk,
+            reading,
+            &sample.contacts,
+            bursts,
+            criterion.hold_bursts(),
+        ),
+        (Some(_), None) => {
+            return Err(TrainerError::Runtime(
+                "a walking goal needs the torso position (body com) in every sample".to_string(),
+            ))
+        }
+        (None, _) => open.walk.clone(),
+    };
+    let walk_record = criterion.walk.as_ref().map(|goal| {
+        walk_stats(
+            goal,
+            criterion,
+            &walk_acc,
+            bursts,
+            holding_bursts,
+            reset_height_m,
+        )
+    });
     let finish = |outcome| {
         BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
@@ -2280,6 +2713,7 @@ pub fn observe_balance_sample(
             wobble_rad_s: stability.wobble_rad_s(),
             tilt_sway_deg: stability.tilt_sway_deg(),
             com_sway_fraction: stability.com_sway_fraction(reset_height_m),
+            walk: walk_record,
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -2290,7 +2724,29 @@ pub fn observe_balance_sample(
     // The adaptive assist does not end an attempt at `hold_s`: it ends on a fall, on a lost
     // stance, or at the cap (a success when the robot stood for most of it).
     let adaptive = criterion.is_adaptive();
-    if !adaptive && holding_bursts >= criterion.hold_bursts() {
+    if let Some(goal) = &criterion.walk {
+        let verdict = walk_verdict(
+            goal,
+            criterion,
+            &walk_acc,
+            bursts,
+            holding_bursts,
+            reset_height_m,
+        );
+        if verdict.success {
+            return Ok(finish(BalanceAttemptOutcome::Success));
+        }
+        // A run: the distance was covered, or (time rule, once a full hold_s window exists) the
+        // window was walked, faster than the ceiling. The attempt ends here, because standing
+        // still afterwards would let the mean speed fall into the band.
+        if (verdict.rule_met || goal.distance_m.is_none())
+            && verdict
+                .window_speed_m_s
+                .is_some_and(|v| v > goal.max_speed_m_s() + 1.0e-12)
+        {
+            return Ok(finish(BalanceAttemptOutcome::Truncated));
+        }
+    } else if !adaptive && holding_bursts >= criterion.hold_bursts() {
         return Ok(finish(BalanceAttemptOutcome::Success));
     }
     if fall_bursts > 0 && fall_bursts >= criterion.fall_confirm_bursts() {
@@ -2306,7 +2762,8 @@ pub fn observe_balance_sample(
         // The adaptive cap is a success only for an attempt that mostly stood.
         let stood = f64::from(upright_bursts) / f64::from(bursts.max(1))
             >= criterion.standing_fraction_for_success - 1.0e-9;
-        return Ok(finish(if adaptive && stood {
+        // A walking attempt succeeds only through the walk rule above, never by standing.
+        return Ok(finish(if adaptive && stood && criterion.walk.is_none() {
             BalanceAttemptOutcome::Success
         } else {
             BalanceAttemptOutcome::Truncated
@@ -2334,6 +2791,7 @@ pub fn observe_balance_sample(
         off_stance_bursts,
         collapsed_at_bursts,
         stability,
+        walk: walk_acc,
     }))
 }
 
@@ -2379,6 +2837,7 @@ fn balance_time_fields(
         tilt_sway_deg: None,
         com_sway_fraction: None,
         adaptive: None,
+        walk: None,
     }
 }
 
@@ -2506,6 +2965,9 @@ pub const ASSIST_FALL_GAIN: f64 = 4.0;
 pub const ASSIST_HOLD_PLEASURE: f64 = 0.2;
 /// Pleasure below this magnitude is dropped.
 pub const ASSIST_MIN_PLEASURE: f64 = 0.05;
+/// Walking contribution reward: Pleasure paid per burst for gaining ground at the target speed
+/// (scaled down for slower progress and by `1 - assist level`).
+pub const WALK_PROGRESS_PLEASURE: f64 = 0.5;
 
 /// Which affect policy scores a balance attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -2527,6 +2989,15 @@ impl BalanceRewardPolicy {
             "assist" => Some(Self::Assist),
             "contribution" => Some(Self::Contribution),
             _ => None,
+        }
+    }
+
+    /// Policy identity recorded with the run for a walking session: the contribution policy
+    /// pays walk progress, so it carries its own version.
+    pub fn policy_id_for(self, walking: bool) -> &'static str {
+        match (self, walking) {
+            (Self::Contribution, true) => "reward.balance-contribution.v5",
+            _ => self.policy_id(),
         }
     }
 
@@ -2629,7 +3100,12 @@ impl BalanceAssistReward {
 /// Death or fall -> Pain 1.0; an assist increase since the previous burst (`assist_rise`) ->
 /// Pain `min(1, rise / catch_threshold) * 0.5` (a catch, the rise above the threshold, pays the
 /// full 0.5; a smaller rise pays a share of it); need below the previous burst's ->
-/// Pleasure `min(1, ASSIST_FALL_GAIN * drop) * (1 - a)`; an attempt that ends in Success ->
+/// Pleasure `min(1 - a, ASSIST_FALL_GAIN * credit)`, where `credit` is the net need reduction
+/// since the last payment, each burst's change weighted by `(1 - a)` when it happens (falls add,
+/// rises subtract, never below 0, zeroed on bursts where the robot is not standing). A recovery
+/// too slow to cross `ASSIST_MIN_PLEASURE` in one burst therefore still pays once its net gain
+/// adds up, at any assist level including 0, and a wobble that nets to zero pays nothing; an
+/// attempt that ends in Success ->
 /// Pleasure `1 - a_slow` (`assist_slow`, else `a`); an attempt that ends in `LostStance` ->
 /// Pain 0.5. Pleasure (recovery and the cap) is paid only on bursts where the robot is standing
 /// ([`sample_is_upright`]). Being upright, or being held, pays nothing by itself.
@@ -2638,6 +3114,8 @@ impl BalanceAssistReward {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BalanceContributionReward {
     previous_need: Option<f64>,
+    /// Net need reduction (weighted by `1 - a`) not yet paid.
+    credit: f64,
 }
 
 impl BalanceContributionReward {
@@ -2648,7 +3126,7 @@ impl BalanceContributionReward {
 
     /// Stable identity recorded with the run.
     pub fn policy_id() -> &'static str {
-        "reward.balance-contribution.v2"
+        "reward.balance-contribution.v4"
     }
 
     /// Signals for one burst. `outcome` is the attempt outcome when this burst ended it.
@@ -2665,6 +3143,7 @@ impl BalanceContributionReward {
         let previous = self.previous_need.unwrap_or(need);
         self.previous_need = Some(need);
         if burst_sample.settling {
+            self.credit = 0.0;
             return Vec::new();
         }
         let signal = |channel, magnitude: f64| RewardSignal { channel, magnitude };
@@ -2672,9 +3151,11 @@ impl BalanceContributionReward {
             outcome,
             Some(BalanceAttemptOutcome::Death | BalanceAttemptOutcome::Fell)
         ) {
+            self.credit = 0.0;
             return vec![signal(AffectChannel::Pain, 1.0)];
         }
         if outcome == Some(&BalanceAttemptOutcome::LostStance) {
+            self.credit = 0.0;
             return vec![signal(AffectChannel::Pain, 0.5)];
         }
         let standing = sample_is_upright(burst_sample, criterion);
@@ -2690,8 +3171,28 @@ impl BalanceContributionReward {
             signals.push(signal(AffectChannel::Pain, share * 0.5));
         }
         let mut pleasure = 0.0_f64;
-        if need < previous {
-            pleasure = (ASSIST_FALL_GAIN * (previous - need)).min(1.0) * (1.0 - a);
+        // Net recovery since the last payment, weighted by the assist level at the time so
+        // recovery done while held is not paid later at a low level. Nothing builds while the
+        // robot is not standing.
+        if standing {
+            self.credit = (self.credit + (previous - need) * (1.0 - a)).max(0.0);
+            if ASSIST_FALL_GAIN * self.credit >= ASSIST_MIN_PLEASURE {
+                // Capped at what the robot can earn at the current assist level.
+                pleasure = (ASSIST_FALL_GAIN * self.credit).min(1.0 - a);
+                self.credit = 0.0;
+            }
+        } else {
+            self.credit = 0.0;
+        }
+        // Walking: ground gained beyond the best so far, as a share of what the target speed
+        // covers in one burst. Rocking over planted feet and backward steps gain none, and being
+        // held (a) discounts it like every other contribution.
+        if let (Some(goal), Some(walk)) = (&criterion.walk, &burst_sample.walk) {
+            let per_burst_m = goal.speed_m_s * criterion.burst_period_s;
+            if per_burst_m > 0.0 {
+                let progress = (walk.progress_m / per_burst_m).clamp(0.0, 1.0);
+                pleasure = pleasure.max(WALK_PROGRESS_PLEASURE * progress * (1.0 - a));
+            }
         }
         if outcome == Some(&BalanceAttemptOutcome::Success) {
             let slow = burst_sample.assist_slow.unwrap_or(a).clamp(0.0, 1.0);
@@ -3260,11 +3761,53 @@ pub fn balance_phase_metrics(phase: &BalancePhaseReport) -> BTreeMap<String, f64
             },
         );
     }
+    insert_walk_metrics(&mut metrics, phase);
     insert_balanced_metrics(&mut metrics, "", &phase.balanced);
     for (level, stats) in &phase.balanced_by_support {
         insert_balanced_metrics(&mut metrics, &format!("_at_support_{level}"), stats);
     }
     metrics
+}
+
+/// Mean walk numbers over the scored attempts that carry them: `mean_forward_m`,
+/// `mean_speed_m_s`, `mean_heading_error_deg` (attempts where it is defined), `mean_step_rate_hz`,
+/// `mean_alternation_fraction`. Omitted for a standing phase.
+fn insert_walk_metrics(metrics: &mut BTreeMap<String, f64>, phase: &BalancePhaseReport) {
+    let walks: Vec<WalkAttemptStats> = phase
+        .attempts
+        .iter()
+        .filter(|a| !a.probe)
+        .filter_map(|a| a.walk)
+        .collect();
+    if walks.is_empty() {
+        return;
+    }
+    for (name, value) in [
+        (
+            "mean_forward_m",
+            mean_of_some(walks.iter().map(|w| Some(w.forward_m))),
+        ),
+        (
+            "mean_speed_m_s",
+            mean_of_some(walks.iter().map(|w| Some(w.mean_speed_m_s))),
+        ),
+        (
+            "mean_heading_error_deg",
+            mean_of_some(walks.iter().map(|w| w.heading_error_deg)),
+        ),
+        (
+            "mean_step_rate_hz",
+            mean_of_some(walks.iter().map(|w| Some(w.step_rate_hz))),
+        ),
+        (
+            "mean_alternation_fraction",
+            mean_of_some(walks.iter().map(|w| w.alternation_fraction)),
+        ),
+    ] {
+        if let Some(value) = value {
+            metrics.insert(name.to_string(), value);
+        }
+    }
 }
 
 fn insert_balanced_metrics(
@@ -3644,7 +4187,7 @@ fn run_phase_attempts(
     let mut probes_frozen = true;
     let mut steps_table = StepsTable { actuators: None };
     if let Some(sink) = run.data.as_deref_mut() {
-        sink.declare_table(&attempts_table_spec());
+        sink.declare_table(&attempts_table_spec(criterion.walk.is_some()));
         sink.event(EventTime::default(), "phase_start", run.phase);
     }
     for seed in run.seeds {
@@ -3688,12 +4231,13 @@ fn run_phase_attempts(
             probe: false,
             train_attempts_before: None,
             adaptive: record.adaptive,
+            walk: record.walk,
         };
         schedule.record_attempt(record.outcome, record.balanced_s);
         if let Some(sink) = run.data.as_deref_mut() {
             sink.row(
                 ATTEMPTS_TABLE,
-                &attempt_row(run.phase, attempts.len(), &record),
+                &attempt_row(run.phase, attempts.len(), &record, criterion.walk.is_some()),
             );
         }
         attempts.push(record);
@@ -3761,11 +4305,12 @@ fn run_phase_attempts(
             probe: true,
             train_attempts_before: Some(train_done),
             adaptive: None,
+            walk: record.walk,
         };
         if let Some(sink) = run.data.as_deref_mut() {
             sink.row(
                 ATTEMPTS_TABLE,
-                &attempt_row(run.phase, attempts.len(), &record),
+                &attempt_row(run.phase, attempts.len(), &record, criterion.walk.is_some()),
             );
         }
         attempts.push(record);
@@ -4150,7 +4695,7 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
         ),
         ColumnSpec::unitless(
             "upright",
-            "Tilt inside the limit and every contact body down.",
+            "Tilt inside the limit and every contact body down (at least one when walking), the torso high enough and no other body on the world.",
         ),
         ColumnSpec::unitless("settling", "The settle window is still running."),
         ColumnSpec::unitless("perturbing", "A perturbation pulse is applied."),
@@ -4166,6 +4711,17 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
             "Adaptive assist rise over the previous burst.",
         ),
     ]);
+    if criterion.walk.is_some() {
+        columns.extend([
+            ColumnSpec::with_unit("forward", "m", "Torso displacement along forward since the first scored burst."),
+            ColumnSpec::with_unit("lateral", "m", "Torso displacement to the left of forward since the first scored burst."),
+            ColumnSpec::with_unit(
+                "progress",
+                "m",
+                "Ground gained along forward since the previous counted burst, above the best so far. Rocking over planted feet gains none.",
+            ),
+        ]);
+    }
     columns.extend(
         actuators
             .iter()
@@ -4178,11 +4734,8 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
     }
 }
 
-fn attempts_table_spec() -> TableSpec {
-    TableSpec {
-        name: ATTEMPTS_TABLE.to_string(),
-        description: "One row per finished attempt, probes included.".to_string(),
-        columns: vec![
+fn attempts_table_spec(walking: bool) -> TableSpec {
+    let mut columns = vec![
             ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
             ColumnSpec::unitless("attempt", "Attempt index within the phase."),
             ColumnSpec::unitless("probe", "The attempt is an unassisted probe."),
@@ -4228,12 +4781,45 @@ fn attempts_table_spec() -> TableSpec {
                 "com_sway_fraction",
                 "Root-mean-square horizontal deviation of the centre of mass from its mean over the upright bursts after settling, as a fraction of the reset torso height. Lower is steadier. Empty when no upright burst was measured or the reset height is unknown.",
             ),
-        ],
+    ];
+    if walking {
+        columns.extend([
+            ColumnSpec::with_unit("forward", "m", "Forward displacement from the first scored burst."),
+            ColumnSpec::with_unit("lateral", "m", "Lateral displacement from the first scored burst, left positive."),
+            ColumnSpec::with_unit("mean_speed", "m/s", "Forward displacement over the scored time."),
+            ColumnSpec::with_unit(
+                "window_speed",
+                "m/s",
+                "Forward speed of the window the success rule judged: the whole attempt for the distance rule, the qualifying upright run for the time rule. Empty when no such window existed.",
+            ),
+            ColumnSpec::unitless("speed_error", "Mean speed minus the target, as a fraction of the target."),
+            ColumnSpec::with_unit(
+                "heading_error",
+                "deg",
+                "Angle between the net horizontal displacement and forward. Empty while the displacement is under half a torso height.",
+            ),
+            ColumnSpec::unitless("steps", "Touchdowns of any contact body."),
+            ColumnSpec::with_unit("step_rate", "1/s", "Touchdowns per second of scored time."),
+            ColumnSpec::unitless(
+                "alternation",
+                "Share of consecutive lone touchdowns made by a different contact body. Empty with fewer than two contact bodies or no consecutive touchdowns.",
+            ),
+        ]);
+    }
+    TableSpec {
+        name: ATTEMPTS_TABLE.to_string(),
+        description: "One row per finished attempt, probes included.".to_string(),
+        columns,
     }
 }
 
-fn attempt_row(phase: &str, index: usize, record: &BalanceAttemptRecord) -> Vec<RunDataValue> {
-    vec![
+fn attempt_row(
+    phase: &str,
+    index: usize,
+    record: &BalanceAttemptRecord,
+    walking: bool,
+) -> Vec<RunDataValue> {
+    let mut row = vec![
         RunDataValue::text(phase),
         RunDataValue::count(index as u64),
         RunDataValue::Bool(record.probe),
@@ -4254,7 +4840,24 @@ fn attempt_row(phase: &str, index: usize, record: &BalanceAttemptRecord) -> Vec<
         RunDataValue::opt_float(record.wobble_rad_s),
         RunDataValue::opt_float(record.tilt_sway_deg),
         RunDataValue::opt_float(record.com_sway_fraction),
-    ]
+    ];
+    if walking {
+        let walk = record.walk.as_ref();
+        row.extend([
+            RunDataValue::opt_float(walk.map(|w| w.forward_m)),
+            RunDataValue::opt_float(walk.map(|w| w.lateral_m)),
+            RunDataValue::opt_float(walk.map(|w| w.mean_speed_m_s)),
+            RunDataValue::opt_float(walk.and_then(|w| w.window_speed_m_s)),
+            RunDataValue::opt_float(walk.map(|w| w.speed_error_fraction)),
+            RunDataValue::opt_float(walk.and_then(|w| w.heading_error_deg)),
+            walk.map_or(RunDataValue::Null, |w| {
+                RunDataValue::count(u64::from(w.steps))
+            }),
+            RunDataValue::opt_float(walk.map(|w| w.step_rate_hz)),
+            RunDataValue::opt_float(walk.and_then(|w| w.alternation_fraction)),
+        ]);
+    }
+    row
 }
 
 /// What one attempt writes to, and the callback it applies events through.
@@ -4333,6 +4936,14 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::opt_float(sample.assist_slow),
             RunDataValue::opt_float(sample.assist_rise),
         ]);
+        if criterion.walk.is_some() {
+            let walk = sample.walk.as_ref();
+            row.extend([
+                RunDataValue::opt_float(walk.map(|w| w.forward_m)),
+                RunDataValue::opt_float(walk.map(|w| w.lateral_m)),
+                RunDataValue::opt_float(walk.map(|w| w.progress_m)),
+            ]);
+        }
         row.extend(actuators.iter().map(|name| {
             sample
                 .actuators
@@ -4340,6 +4951,53 @@ impl AttemptHooks<'_, '_> {
                 .map_or(RunDataValue::Null, |v| RunDataValue::Float(*v))
         }));
         sink.row(STEPS_TABLE, &row);
+    }
+}
+
+/// Forward tracking of one walking attempt: the start position, the forward and left axes, and
+/// the best forward displacement so far.
+struct WalkRun {
+    forward: [f64; 2],
+    start: Option<[f64; 2]>,
+    best_forward_m: f64,
+    pending_progress_m: f64,
+}
+
+impl WalkRun {
+    fn new(heading_deg: f64) -> Self {
+        Self {
+            forward: WalkGoal::forward_xy(heading_deg),
+            start: None,
+            best_forward_m: 0.0,
+            pending_progress_m: 0.0,
+        }
+    }
+
+    /// Reading for the torso at `com`. The start is the first scored (non-settling) position.
+    fn read(&mut self, com: [f64; 3], settling: bool) -> WalkReading {
+        if settling {
+            return WalkReading {
+                forward_m: 0.0,
+                lateral_m: 0.0,
+                progress_m: 0.0,
+            };
+        }
+        let start = *self.start.get_or_insert([com[0], com[1]]);
+        let (dx, dy) = (com[0] - start[0], com[1] - start[1]);
+        let forward_m = dx * self.forward[0] + dy * self.forward[1];
+        let lateral_m = -dx * self.forward[1] + dy * self.forward[0];
+        self.pending_progress_m += (forward_m - self.best_forward_m).max(0.0);
+        self.best_forward_m = self.best_forward_m.max(forward_m);
+        WalkReading {
+            forward_m,
+            lateral_m,
+            progress_m: 0.0,
+        }
+    }
+
+    /// Ground gained since the last call, m.
+    fn take_progress(&mut self) -> f64 {
+        std::mem::take(&mut self.pending_progress_m)
     }
 }
 
@@ -4422,6 +5080,34 @@ fn run_balance_attempt(
     };
     controller.set_body_spring(&torso, &gains, settle_level, deadband_rad)?;
     let t0 = first.sim_time_s;
+    let mut walk_run = match &criterion.walk {
+        Some(goal) => {
+            let reset_height_m = first
+                .bodies
+                .get(&torso)
+                .and_then(|body| body.com)
+                .map(|com| com[2])
+                .ok_or_else(|| {
+                    TrainerError::Runtime(format!(
+                        "a walking goal needs the torso position: measure reply has no com for {torso}"
+                    ))
+                })?;
+            goal.check_feasible(criterion.hold_s, reset_height_m)?;
+            let heading_deg = goal.resolve_heading_deg(
+                &torso,
+                first.bodies.get(&torso).ok_or_else(|| {
+                    TrainerError::Runtime(format!("measure reply has no body {torso}"))
+                })?,
+            )?;
+            hooks.marker(
+                first.sim_time_s,
+                "walk_heading",
+                &format!("{heading_deg:.3} deg"),
+            );
+            Some(WalkRun::new(heading_deg))
+        }
+        None => None,
+    };
     let steps_per_burst = criterion.burst_period_s / session.info.timestep_s;
     let features = upright_goal_features();
     let mut open = OpenBalanceAttempt::for_attempt(steps_per_burst, support_level);
@@ -4451,6 +5137,13 @@ fn run_balance_attempt(
     };
     due_events.sort_by(|a, b| a.at_s.total_cmp(&b.at_s));
     let mut next_event = 0usize;
+    // Tell the applier a new attempt began, so a stimulation hold the last one left running ends
+    // before this one's settle window.
+    if !due_events.is_empty() {
+        if let Some(apply) = hooks.apply_event.as_deref_mut() {
+            apply(&crate::run_actions::ScheduledAction::AttemptStart)?;
+        }
+    }
     let mut was_perturbing = false;
     let mut last_sim_time_s: f64;
     let mut result = loop {
@@ -4496,11 +5189,14 @@ fn run_balance_attempt(
             )));
         }
         let other = reading.contacts.get(contact_count);
-        let feet_down = reading
-            .contacts
-            .iter()
-            .take(contact_count)
-            .all(|set| set.touching);
+        let feet_down = criterion.contacts_satisfied(
+            &reading
+                .contacts
+                .iter()
+                .take(contact_count)
+                .map(|set| set.touching)
+                .collect::<Vec<bool>>(),
+        );
         let mut perturbing = false;
         if reading.terminal.is_none() {
             if let Some(run) = adaptive.as_deref() {
@@ -4513,7 +5209,8 @@ fn run_balance_attempt(
                     run.assist.cone_deg(criterion)
                 };
                 // Weight support only while the feet are loaded: lifting a foot drops it to 0, and
-                // the criterion's fraction comes back once every contact body is down again.
+                // the criterion's fraction comes back once the stance holds again (every contact
+                // body down; any one when walking).
                 let gravity_want = settling || feet_down;
                 let gravity_changed = gravity_want != spring_gravity_on;
                 if (spring_level - level_now).abs() > 0.005
@@ -4570,6 +5267,17 @@ fn run_balance_attempt(
             was_perturbing = perturbing;
         }
         let wrench = reading.springs.get(&torso).copied();
+        let walk_reading = match walk_run.as_mut() {
+            Some(run) => {
+                let com = body.com.ok_or_else(|| {
+                    TrainerError::Runtime(format!(
+                        "a walking goal needs the torso position: measure reply has no com for {torso}"
+                    ))
+                })?;
+                Some(run.read(com, settling))
+            }
+            None => None,
+        };
         let mut sample = BalanceSample {
             seq: reading.physics_steps,
             seed,
@@ -4602,6 +5310,7 @@ fn run_balance_attempt(
             assist_rise: None,
             actuators: reading.actuators.clone(),
             stability: Some(StabilitySample::from_body(body)),
+            walk: walk_reading,
         };
         let step = observe_balance_sample(&open, &sample, criterion, seed)?;
         let (counted, outcome) = match &step {
@@ -4671,6 +5380,11 @@ fn run_balance_attempt(
                 sample.support_level = Some(run.assist.level());
                 sample.assist_slow = Some(run.assist.slow());
                 sample.assist_rise = Some(rise);
+            }
+        }
+        if counted && !settling {
+            if let (Some(run), Some(reading)) = (walk_run.as_mut(), sample.walk.as_mut()) {
+                reading.progress_m = run.take_progress();
             }
         }
         if counted {
@@ -5155,6 +5869,7 @@ mod tests {
             assist_rise: None,
             actuators: BTreeMap::new(),
             stability: None,
+            walk: None,
         }
     }
 
@@ -5334,6 +6049,7 @@ mod tests {
             tilt_sway_deg: None,
             com_sway_fraction: None,
             adaptive: None,
+            walk: None,
         }
     }
 
@@ -6171,6 +6887,9 @@ mod tests {
         k: u32,
         fresh: bool,
         steps: u64,
+        /// The torso CoM moves along +X at this speed, m/s, from the reset.
+        torso_speed_x: f64,
+        torso_yaw_rad: f64,
     }
 
     /// Generic test body: the free root "base" carries the whole 1 kg; "torso" is a child body
@@ -6222,6 +6941,8 @@ mod tests {
                 k: 0,
                 fresh: false,
                 steps: 0,
+                torso_speed_x: 0.0,
+                torso_yaw_rad: 0.0,
             }
         }
 
@@ -6340,8 +7061,12 @@ mod tests {
                     tilt_rad: scripted.tilt_deg.to_radians(),
                     tilt_vec: Some([0.0, 0.0]),
                     ang_vel: Some([0.0; 3]),
-                    com: Some([0.0, 0.0, torso_z]),
+                    com: Some([self.torso_speed_x * seconds, 0.0, torso_z]),
                     subtree_com: Some([0.0, 0.0, 0.150]),
+                    heading: Some(BodyHeading {
+                        yaw_rad: Some(self.torso_yaw_rad),
+                        forward: Some([self.torso_yaw_rad.cos(), self.torso_yaw_rad.sin(), 0.0]),
+                    }),
                 },
             );
             let mut springs = BTreeMap::new();
@@ -6412,6 +7137,121 @@ mod tests {
             &mut events,
             &CancelToken::new(),
         )
+    }
+
+    fn walking_criterion(distance_m: f64) -> BalanceFeetCriterion {
+        let mut c = criterion_for(2, 0.05);
+        c.walk = Some(WalkGoal {
+            distance_m: Some(distance_m),
+            ..WalkGoal::new(0.5)
+        });
+        c
+    }
+
+    fn walking_mock(speed_x: f64) -> MockController {
+        let mut controller = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        controller.torso_speed_x = speed_x;
+        controller
+    }
+
+    #[test]
+    fn the_runner_scores_a_walk_from_the_measured_torso_position() {
+        let c = walking_criterion(1.0);
+        let mut controller = walking_mock(0.5);
+        let report = run_phase(&c, &mut controller, "train", &[1]).expect("phase");
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
+        let walk = attempt.walk.expect("walk stats");
+        assert!(
+            walk.forward_m >= 1.0 && walk.mean_speed_m_s > 0.4,
+            "{walk:?}"
+        );
+        assert_eq!(report.success_rate, 1.0);
+    }
+
+    #[test]
+    fn the_walk_heading_is_measured_unless_set_and_a_missing_heading_is_an_error() {
+        let measure = |heading: Option<BodyHeading>| BodyMeasure {
+            tilt_rad: 0.0,
+            tilt_vec: None,
+            ang_vel: None,
+            com: None,
+            subtree_com: None,
+            heading,
+        };
+        let at = |yaw_rad: Option<f64>| {
+            measure(Some(BodyHeading {
+                yaw_rad,
+                forward: None,
+            }))
+        };
+        let mut goal = WalkGoal::new(0.5);
+        let measured = goal
+            .resolve_heading_deg("torso", &at(Some(std::f64::consts::FRAC_PI_2)))
+            .unwrap();
+        assert!((measured - 90.0).abs() < 1e-9);
+        // An explicit heading wins over the measured one.
+        goal.forward_heading_deg = Some(30.0);
+        assert_eq!(
+            goal.resolve_heading_deg("torso", &at(Some(1.0))).unwrap(),
+            30.0
+        );
+        // No heading in the reply, or an undefined yaw, is named, never read as 0.
+        goal.forward_heading_deg = None;
+        for reading in [measure(None), at(None)] {
+            let error = goal.resolve_heading_deg("torso", &reading).unwrap_err();
+            assert!(
+                error.to_string().contains("walkForwardHeadingDeg"),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_walk_scores_along_the_measured_torso_heading_and_an_explicit_one_overrides_it() {
+        // The mock torso moves along world +X. Facing +X it walks forward; facing +Y the same
+        // motion is sideways and fails the heading rule; an explicit 0 degrees overrides that.
+        let facing = |yaw_rad: f64, explicit: Option<f64>| {
+            let mut c = walking_criterion(1.0);
+            c.walk.as_mut().unwrap().forward_heading_deg = explicit;
+            let mut controller = walking_mock(0.5);
+            controller.torso_yaw_rad = yaw_rad;
+            let report = run_phase(&c, &mut controller, "train", &[1]).expect("phase");
+            report.attempts[0].outcome == BalanceAttemptOutcome::Success
+        };
+        assert!(facing(0.0, None));
+        assert!(!facing(std::f64::consts::FRAC_PI_2, None));
+        assert!(facing(std::f64::consts::FRAC_PI_2, Some(0.0)));
+    }
+
+    #[test]
+    fn the_speed_tolerance_bounds_both_sides_so_running_is_not_walking() {
+        let goal = WalkGoal::new(0.5);
+        assert!((goal.min_speed_m_s() - 0.375).abs() < 1e-12);
+        assert!((goal.max_speed_m_s() - 0.625).abs() < 1e-12);
+        // Same distance rule and criterion; only the mock's torso speed differs.
+        for (speed, passes) in [(0.3, false), (0.5, true), (0.8, false)] {
+            let c = walking_criterion(1.0);
+            let mut controller = walking_mock(speed);
+            let report = run_phase(&c, &mut controller, "train", &[1]).expect("phase");
+            let success = report.attempts[0].outcome == BalanceAttemptOutcome::Success;
+            assert_eq!(
+                success, passes,
+                "torso speed {speed}: {:?}",
+                report.attempts[0]
+            );
+        }
+    }
+
+    #[test]
+    fn the_runner_refuses_a_walk_that_cannot_judge_heading() {
+        // The mock torso sits 0.1 m high: half a height is 0.05 m, above this 0.01 m distance.
+        let c = walking_criterion(0.01);
+        let mut controller = walking_mock(0.8);
+        let err = run_phase(&c, &mut controller, "train", &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("walk distance_m"), "{err}");
     }
 
     // ---- gain sizing ----
@@ -8707,6 +9547,110 @@ mod tests {
         assert!(!report.attempts[0].adaptive.expect("stats").lost_stance);
     }
 
+    /// Net recovery pays at any assist level, also when no single burst clears the payment floor.
+    #[test]
+    fn contribution_reward_accumulates_a_slow_recovery_at_support_zero() {
+        let c = adaptive_criterion(0.05);
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&contribution_sample(0.60, 0.0), None, &c);
+        // Each burst drops need by 0.004: far under the 0.0125 per-burst floor.
+        let mut paid = Vec::new();
+        let mut need = 0.60;
+        for _ in 0..40 {
+            need -= 0.004;
+            if let Some(p) = pleasure_of(&r.on_sample(&contribution_sample(need, 0.0), None, &c)) {
+                paid.push(p);
+            }
+        }
+        // 0.16 of recovery in total, paid in small steps; the credit resets after each payment.
+        assert!(paid.len() >= 3, "{paid:?}");
+        let total: f64 = paid.iter().sum();
+        assert!(
+            (total - ASSIST_FALL_GAIN * 0.16).abs() < ASSIST_FALL_GAIN * 0.004 * 4.0,
+            "{total}"
+        );
+        assert!(paid.iter().all(|p| *p >= ASSIST_MIN_PLEASURE));
+    }
+
+    #[test]
+    fn contribution_reward_pays_nothing_for_a_wobble_that_nets_to_zero() {
+        let c = adaptive_criterion(0.05);
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&contribution_sample(0.40, 0.0), None, &c);
+        for i in 0..200 {
+            let need = if i % 2 == 0 { 0.396 } else { 0.40 };
+            assert!(
+                pleasure_of(&r.on_sample(&contribution_sample(need, 0.0), None, &c)).is_none(),
+                "burst {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn contribution_reward_credit_is_weighted_by_the_assist_level_when_it_is_earned() {
+        let c = adaptive_criterion(0.05);
+        // The same recovery in small steps: all at a = 0.5 pays about half of all at a = 0.
+        let total = |level: f64| -> f64 {
+            let mut r = BalanceContributionReward::new();
+            r.on_sample(&contribution_sample(0.6, level), None, &c);
+            let mut need = 0.6;
+            let mut sum = 0.0;
+            for _ in 0..50 {
+                need -= 0.004;
+                sum += pleasure_of(&r.on_sample(&contribution_sample(need, level), None, &c))
+                    .unwrap_or(0.0);
+            }
+            sum
+        };
+        let (free, held) = (total(0.0), total(0.5));
+        assert!(free > 0.5 && held > 0.0);
+        assert!((held / free - 0.5).abs() < 0.15, "{free} {held}");
+        // Recovery earned while held is not paid later at a low level.
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&contribution_sample(0.6, 0.9), None, &c);
+        let mut need = 0.6;
+        for _ in 0..10 {
+            need -= 0.004;
+            assert!(pleasure_of(&r.on_sample(&contribution_sample(need, 0.9), None, &c)).is_none());
+        }
+        let late = r.on_sample(&contribution_sample(need, 0.0), None, &c);
+        assert!(
+            pleasure_of(&late).is_none(),
+            "a held recovery is not paid at a = 0"
+        );
+    }
+
+    #[test]
+    fn contribution_reward_credit_resets_on_settle_non_standing_and_death() {
+        let c = adaptive_criterion(0.05);
+        let standing = |need: f64| contribution_sample(need, 0.0);
+        let lifted = |need: f64| BalanceSample {
+            contacts: vec![true, false],
+            ..contribution_sample(need, 0.0)
+        };
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&standing(0.6), None, &c);
+        r.on_sample(&standing(0.59), None, &c);
+        // A lifted burst throws the credit away.
+        r.on_sample(&lifted(0.58), None, &c);
+        assert!(pleasure_of(&r.on_sample(&standing(0.575), None, &c)).is_none());
+        // A fall clears it too.
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&standing(0.6), None, &c);
+        r.on_sample(&standing(0.595), None, &c);
+        r.on_sample(&standing(0.59), Some(&BalanceAttemptOutcome::Fell), &c);
+        assert!(pleasure_of(&r.on_sample(&standing(0.588), None, &c)).is_none());
+    }
+
+    #[test]
+    fn contribution_reward_one_large_drop_pays_as_before() {
+        let c = adaptive_criterion(0.05);
+        let mut r = BalanceContributionReward::new();
+        r.on_sample(&contribution_sample(0.5, 0.0), None, &c);
+        let paid = pleasure_of(&r.on_sample(&contribution_sample(0.4, 0.0), None, &c));
+        assert!((paid.unwrap() - 0.4).abs() < 1e-9, "min(1, 4 * 0.1)");
+    }
+
     #[test]
     fn contribution_reward_pays_no_pleasure_when_not_standing() {
         let c = adaptive_criterion(0.05);
@@ -8809,7 +9753,7 @@ mod tests {
         let mut r = BalanceContributionReward::new();
         assert_eq!(
             BalanceContributionReward::policy_id(),
-            "reward.balance-contribution.v2"
+            "reward.balance-contribution.v4"
         );
         // Upright and held pays nothing, even at a steady need.
         assert!(r
@@ -9510,5 +10454,560 @@ mod tests {
         }))
         .expect("parse");
         assert_eq!(parsed.actuators["joint_a"], 0.25);
+    }
+}
+
+#[cfg(test)]
+mod walk_tests {
+    use super::*;
+
+    const PERIOD: f64 = 0.05;
+    const RESET_HEIGHT: f64 = 0.4;
+
+    fn walking(goal: WalkGoal, cap_s: f64) -> BalanceFeetCriterion {
+        let mut c = BalanceFeetCriterion::new(
+            "torso",
+            vec!["foot_a".to_string(), "foot_b".to_string()],
+            30.0,
+            1.0,
+            cap_s,
+        );
+        c.burst_period_s = PERIOD;
+        c.walk = Some(goal);
+        c
+    }
+
+    fn goal(distance_m: Option<f64>) -> WalkGoal {
+        WalkGoal {
+            distance_m,
+            ..WalkGoal::new(0.5)
+        }
+    }
+
+    fn reading(forward_m: f64, lateral_m: f64) -> WalkReading {
+        WalkReading {
+            forward_m,
+            lateral_m,
+            progress_m: 0.0,
+        }
+    }
+
+    fn sample(seq: u64, contacts: [bool; 2], walk: WalkReading) -> BalanceSample {
+        BalanceSample {
+            seq,
+            seed: 1,
+            tilt_deg: 2.0,
+            contacts: contacts.to_vec(),
+            terminal: None,
+            support_level: Some(0.0),
+            settling: false,
+            perturbing: false,
+            support_need: None,
+            support_effort: None,
+            support_torque_nm: None,
+            support_force_n: None,
+            other_contact_touching: false,
+            other_contact_bodies: Vec::new(),
+            torso_height_m: Some(RESET_HEIGHT),
+            reset_height_m: Some(RESET_HEIGHT),
+            assist_slow: None,
+            assist_rise: None,
+            actuators: BTreeMap::new(),
+            stability: None,
+            walk: Some(walk),
+        }
+    }
+
+    /// Feed one burst per entry; returns the record when the attempt finishes.
+    fn run(
+        c: &BalanceFeetCriterion,
+        bursts: impl IntoIterator<Item = ([bool; 2], f64, f64)>,
+    ) -> Result<BalanceAttemptRecord, Box<OpenBalanceAttempt>> {
+        let mut open = OpenBalanceAttempt::for_attempt(1.0, 0.0);
+        for (i, (contacts, forward, lateral)) in bursts.into_iter().enumerate() {
+            let s = sample(i as u64 + 1, contacts, reading(forward, lateral));
+            match observe_balance_sample(&open, &s, c, 1).expect("observe") {
+                BalanceAttemptStep::Continue(next) => open = next,
+                BalanceAttemptStep::Finished(record) => return Ok(record),
+            }
+        }
+        Err(Box::new(open))
+    }
+
+    const BOTH: [bool; 2] = [true, true];
+
+    #[test]
+    fn forward_follows_the_heading_and_lateral_is_to_its_left() {
+        let mut goal = WalkGoal::new(0.5);
+        goal.forward_heading_deg = Some(90.0);
+        let mut run = WalkRun::new(goal.forward_heading_deg.unwrap());
+        let first = run.read([2.0, 3.0, 0.4], false);
+        assert_eq!((first.forward_m, first.lateral_m), (0.0, 0.0));
+        let moved = run.read([1.5, 4.0, 0.4], false);
+        assert!((moved.forward_m - 1.0).abs() < 1e-9, "{moved:?}");
+        assert!((moved.lateral_m - 0.5).abs() < 1e-9, "{moved:?}");
+    }
+
+    #[test]
+    fn settling_positions_never_set_the_start() {
+        let mut run = WalkRun::new(0.0);
+        run.read([5.0, 0.0, 0.4], true);
+        let first = run.read([6.0, 0.0, 0.4], false);
+        assert_eq!(first.forward_m, 0.0);
+    }
+
+    #[test]
+    fn rocking_over_planted_feet_gains_no_ground() {
+        let mut run = WalkRun::new(0.0);
+        run.read([0.0, 0.0, 0.4], false);
+        run.read([0.10, 0.0, 0.4], false);
+        run.read([0.0, 0.0, 0.4], false);
+        run.read([0.10, 0.0, 0.4], false);
+        assert!(
+            (run.take_progress() - 0.10).abs() < 1e-12,
+            "only the first 0.10 m is new"
+        );
+        run.read([0.12, 0.0, 0.4], false);
+        assert!((run.take_progress() - 0.02).abs() < 1e-12);
+        assert_eq!(run.take_progress(), 0.0);
+    }
+
+    #[test]
+    fn heading_is_undefined_until_half_a_torso_height() {
+        assert_eq!(walk_heading_error_deg(0.19, 0.0, Some(0.4)), None);
+        assert_eq!(walk_heading_error_deg(0.2, 0.0, None), None);
+        let straight = walk_heading_error_deg(0.2, 0.0, Some(0.4)).expect("defined");
+        assert!(straight.abs() < 1e-9);
+        let diagonal = walk_heading_error_deg(1.0, -1.0, Some(0.4)).expect("defined");
+        assert!((diagonal - 45.0).abs() < 1e-9);
+        let backward = walk_heading_error_deg(-1.0, 0.0, Some(0.4)).expect("defined");
+        assert!((backward - 180.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn one_foot_up_is_upright_for_a_walk_but_not_for_a_stand() {
+        let walk = walking(goal(Some(1.0)), 20.0);
+        let mut stand = walk.clone();
+        stand.walk = None;
+        let one_up = sample(1, [true, false], reading(0.0, 0.0));
+        let none_down = sample(1, [false, false], reading(0.0, 0.0));
+        assert!(sample_is_upright(&one_up, &walk));
+        assert!(!sample_is_upright(&none_down, &walk));
+        assert!(!sample_is_upright(&one_up, &stand));
+        assert!(
+            !support_use_flags(&one_up, &walk, Some(RESET_HEIGHT), 0.5)
+                .unwrap()
+                .0
+        );
+        assert!(
+            support_use_flags(&none_down, &walk, Some(RESET_HEIGHT), 0.5)
+                .unwrap()
+                .0
+        );
+    }
+
+    #[test]
+    fn distance_rule_succeeds_at_pace_and_reports_the_walk() {
+        // 1 m in 40 bursts of 0.05 s: 0.5 m/s, the target.
+        let c = walking(goal(Some(1.0)), 20.0);
+        let bursts = (1..=40).map(|i| (BOTH, f64::from(i) * 0.025, 0.0));
+        let record = run(&c, bursts).expect("finished");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Success);
+        let walk = record.walk.expect("walk stats");
+        assert!((walk.forward_m - 1.0).abs() < 1e-9);
+        assert!((walk.mean_speed_m_s - 0.5).abs() < 1e-9);
+        assert!(walk.speed_error_fraction.abs() < 1e-9);
+        assert_eq!(walk.heading_error_deg, Some(0.0));
+    }
+
+    #[test]
+    fn distance_rule_too_fast_is_not_a_walk() {
+        // 1 m in 20 bursts (1 s): 1 m/s is over the 0.625 m/s ceiling of a 0.5 m/s target.
+        let c = walking(goal(Some(1.0)), 20.0);
+        let record = run(&c, (1..=20).map(|i| (BOTH, f64::from(i) * 0.05, 0.0))).expect("finished");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(
+            record.bursts, 20,
+            "the attempt ends when the distance is covered"
+        );
+        assert!(record.walk.expect("walk stats").mean_speed_m_s > 0.625);
+    }
+
+    #[test]
+    fn distance_rule_too_slow_is_truncated_not_success() {
+        // 1 m reached after 100 bursts (5 s): 0.2 m/s is under the 0.375 m/s floor.
+        let c = walking(goal(Some(1.0)), 6.0);
+        let bursts = (1..=130).map(|i| (BOTH, (f64::from(i) * 0.01).min(1.0), 0.0));
+        let record = run(&c, bursts).expect("finished at the cap");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+        assert!(record.walk.unwrap().mean_speed_m_s < 0.375);
+    }
+
+    #[test]
+    fn heading_outside_tolerance_blocks_success() {
+        // Forward 1 m but 1 m sideways: 45 degrees against a 30 degree tolerance.
+        let c = walking(goal(Some(1.0)), 3.0);
+        let bursts = (1..=70).map(|i| {
+            (
+                BOTH,
+                (f64::from(i) * 0.05).min(1.0),
+                (f64::from(i) * 0.05).min(1.0),
+            )
+        });
+        let record = run(&c, bursts).expect("cap");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+        let heading = record.walk.unwrap().heading_error_deg.expect("defined");
+        assert!((heading - 45.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn time_rule_judges_the_last_hold_window_so_a_standing_start_can_pass() {
+        // hold_s 1.0 = 20 bursts. Stand 40 bursts, then walk 0.04 m per burst (0.8 m/s).
+        let c = walking(goal(None), 20.0);
+        let standing = (0..40).map(|_| (BOTH, 0.0, 0.0));
+        let walking_on = (1..=40).map(|i| (BOTH, f64::from(i) * 0.04, 0.0));
+        let record = run(&c, standing.chain(walking_on)).expect("finished");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Success);
+        let walk = record.walk.unwrap();
+        // It passes as soon as the last second averages the slowest passing speed (0.375 m/s),
+        // before the window is fully walking.
+        let window = walk.window_speed_m_s.unwrap();
+        assert!((0.375 - 1e-9..0.8).contains(&window), "{walk:?}");
+        assert!(
+            walk.mean_speed_m_s < window,
+            "the whole attempt averages the standing start"
+        );
+    }
+
+    #[test]
+    fn time_rule_running_ends_the_attempt_and_stopping_does_not_rescue_it() {
+        // 0.8 m/s against a 0.625 m/s ceiling: the first full 1 s window is already a run.
+        let c = walking(goal(None), 20.0);
+        let run_then_stop = (1..=30)
+            .map(|i| (BOTH, f64::from(i) * 0.04, 0.0))
+            .chain((0..60).map(|_| (BOTH, 1.2, 0.0)));
+        let record = run(&c, run_then_stop).expect("finished");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(record.bursts, 20, "ends at the first judged window");
+    }
+
+    #[test]
+    fn time_rule_standing_still_never_succeeds() {
+        let c = walking(goal(None), 5.0);
+        let record = run(&c, (0..200).map(|_| (BOTH, 0.0, 0.0))).expect("cap");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+    }
+
+    #[test]
+    fn a_fall_ends_a_walking_attempt_as_fell() {
+        let mut c = walking(goal(Some(5.0)), 20.0);
+        c.fall_confirm_s = PERIOD;
+        let mut open = OpenBalanceAttempt::for_attempt(1.0, 0.0);
+        let mut fallen = sample(1, BOTH, reading(0.1, 0.0));
+        fallen.tilt_deg = 80.0;
+        match observe_balance_sample(&open, &fallen, &c, 1).expect("observe") {
+            BalanceAttemptStep::Finished(record) => {
+                assert_eq!(record.outcome, BalanceAttemptOutcome::Fell);
+                assert!(record.walk.is_some());
+            }
+            BalanceAttemptStep::Continue(next) => open = next,
+        }
+        let _ = open;
+    }
+
+    #[test]
+    fn adaptive_walk_at_the_cap_is_truncated_even_when_it_stood() {
+        let mut c = walking(goal(Some(5.0)), 1.0);
+        c.support_mode = AssistMode::Adaptive;
+        let record = run(&c, (0..40).map(|_| (BOTH, 0.0, 0.0))).expect("cap");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Truncated);
+        let mut stand = c.clone();
+        stand.walk = None;
+        let record = run_stand(&stand);
+        assert_eq!(
+            record.outcome,
+            BalanceAttemptOutcome::Success,
+            "standing still is a stand success"
+        );
+    }
+
+    fn run_stand(c: &BalanceFeetCriterion) -> BalanceAttemptRecord {
+        let mut open = OpenBalanceAttempt::for_attempt(1.0, 0.0);
+        for i in 0..40u64 {
+            let mut s = sample(i + 1, BOTH, reading(0.0, 0.0));
+            s.walk = None;
+            match observe_balance_sample(&open, &s, c, 1).expect("observe") {
+                BalanceAttemptStep::Continue(next) => open = next,
+                BalanceAttemptStep::Finished(record) => return record,
+            }
+        }
+        panic!("no finish")
+    }
+
+    #[test]
+    fn touchdowns_and_alternation_are_counted() {
+        let c = walking(goal(Some(50.0)), 20.0);
+        // Baseline both down, then A up/down, B up/down, A up/down: three lone touchdowns,
+        // the second and third by the other foot.
+        let pattern = [
+            [true, true],
+            [false, true],
+            [true, true],
+            [true, false],
+            [true, true],
+            [false, true],
+            [true, true],
+        ];
+        let open = run(
+            &c,
+            pattern
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (*p, i as f64 * 0.01, 0.0)),
+        )
+        .expect_err("still open");
+        assert_eq!(open.walk.steps, 3);
+        assert_eq!(open.walk.touchdown_pairs, 2);
+        assert_eq!(open.walk.alternations, 2);
+    }
+
+    #[test]
+    fn hopping_on_one_foot_does_not_alternate() {
+        let c = walking(goal(Some(50.0)), 20.0);
+        let pattern = [
+            [true, true],
+            [false, true],
+            [true, true],
+            [false, true],
+            [true, true],
+        ];
+        let open = run(
+            &c,
+            pattern
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (*p, i as f64 * 0.01, 0.0)),
+        )
+        .expect_err("still open");
+        assert_eq!(open.walk.touchdown_pairs, 1);
+        assert_eq!(open.walk.alternations, 0);
+    }
+
+    #[test]
+    fn alternation_needs_two_contact_bodies() {
+        let mut c = walking(goal(Some(1.0)), 20.0);
+        c.contact_bodies = vec!["foot_a".to_string()];
+        let acc = WalkAccum {
+            steps: 4,
+            touchdown_pairs: 3,
+            alternations: 3,
+            ..WalkAccum::default()
+        };
+        let stats = walk_stats(
+            c.walk.as_ref().unwrap(),
+            &c,
+            &acc,
+            20,
+            0,
+            Some(RESET_HEIGHT),
+        );
+        assert_eq!(stats.alternation_fraction, None);
+        assert_eq!(stats.steps, 4);
+    }
+
+    #[test]
+    fn feasibility_names_the_numbers() {
+        // Time rule: slowest passing speed 0.375 m/s * 1 s = 0.375 m against 0.2 m needed: fine.
+        assert!(goal(None).check_feasible(1.0, 0.4).is_ok());
+        // 0.375 m/s * 0.1 s = 0.0375 m < 0.2 m.
+        let err = goal(None).check_feasible(0.1, 0.4).unwrap_err().to_string();
+        assert!(err.contains("0.0375") && err.contains("0.2000"), "{err}");
+        // Distance rule below half a torso height.
+        let err = goal(Some(0.1))
+            .check_feasible(1.0, 0.4)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("walk distance_m"), "{err}");
+        assert!(goal(Some(0.2)).check_feasible(1.0, 0.4).is_ok());
+    }
+
+    #[test]
+    fn walk_goal_validation_rejects_bad_values() {
+        let ok = walking(goal(Some(1.0)), 20.0);
+        assert!(ok.validate().is_ok());
+        for bad in [
+            WalkGoal::new(0.0),
+            WalkGoal::new(f64::NAN),
+            WalkGoal {
+                speed_tolerance: 1.0,
+                ..WalkGoal::new(0.5)
+            },
+            WalkGoal {
+                heading_tolerance_deg: 0.0,
+                ..WalkGoal::new(0.5)
+            },
+            WalkGoal {
+                heading_tolerance_deg: 91.0,
+                ..WalkGoal::new(0.5)
+            },
+            WalkGoal {
+                forward_heading_deg: Some(f64::INFINITY),
+                ..WalkGoal::new(0.5)
+            },
+            WalkGoal {
+                distance_m: Some(-1.0),
+                ..WalkGoal::new(0.5)
+            },
+        ] {
+            let mut c = ok.clone();
+            c.walk = Some(bad);
+            assert!(c.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn a_standing_criterion_serialises_without_walk_keys_effect() {
+        let stand = BalanceFeetCriterion::new("torso", vec!["foot".into()], 30.0, 3.0, 10.0);
+        let json = serde_json::to_value(&stand).unwrap();
+        let back: BalanceFeetCriterion = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(back, stand);
+        let mut without = json;
+        without.as_object_mut().unwrap().remove("walk");
+        let parsed: BalanceFeetCriterion = serde_json::from_value(without).unwrap();
+        assert!(parsed.walk.is_none());
+        assert!(parsed.contacts_satisfied(&[true]) && !parsed.contacts_satisfied(&[true, false]));
+    }
+
+    #[test]
+    fn a_recovery_payout_and_walk_progress_pay_the_larger_of_the_two() {
+        let c = walking(goal(Some(5.0)), 20.0);
+        let burst = |seq: u64, need: f64, progress: f64| {
+            let mut s = sample(
+                seq,
+                BOTH,
+                WalkReading {
+                    progress_m: progress,
+                    ..reading(0.0, 0.0)
+                },
+            );
+            s.support_need = Some(need);
+            s.support_level = Some(0.0);
+            s
+        };
+        let pleasure = |signals: Vec<RewardSignal>| {
+            signals
+                .iter()
+                .filter(|r| r.channel == AffectChannel::Pleasure)
+                .map(|r| r.magnitude)
+                .sum::<f64>()
+        };
+        // Credit worth 4 * 0.05 = 0.2 against 0.25 of walk progress: the walk term wins.
+        let mut reward = BalanceContributionReward::new();
+        reward.on_sample(&burst(1, 0.30, 0.0), None, &c);
+        let out = reward.on_sample(&burst(2, 0.25, 0.0125), None, &c);
+        assert!((pleasure(out) - 0.25).abs() < 1e-9);
+        // Credit worth 0.8 against 0.25: the recovery wins.
+        let mut reward = BalanceContributionReward::new();
+        reward.on_sample(&burst(1, 0.50, 0.0), None, &c);
+        let out = reward.on_sample(&burst(2, 0.30, 0.0125), None, &c);
+        assert!((pleasure(out) - 0.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn contribution_pays_progress_scaled_by_the_target_and_by_support() {
+        let c = walking(goal(Some(5.0)), 20.0);
+        let mut reward = BalanceContributionReward::new();
+        let mut s = sample(1, BOTH, reading(0.0, 0.0));
+        s.support_need = Some(0.2);
+        reward.on_sample(&s, None, &c);
+        // The target covers 0.5 m/s * 0.05 s = 0.025 m per burst.
+        let pay = |progress: f64, level: f64, reward: &mut BalanceContributionReward| {
+            let mut s = sample(
+                2,
+                BOTH,
+                WalkReading {
+                    progress_m: progress,
+                    ..reading(0.0, 0.0)
+                },
+            );
+            s.support_need = Some(0.2);
+            s.support_level = Some(level);
+            reward
+                .on_sample(&s, None, &c)
+                .iter()
+                .filter(|r| r.channel == AffectChannel::Pleasure)
+                .map(|r| r.magnitude)
+                .sum::<f64>()
+        };
+        assert!((pay(0.025, 0.0, &mut reward) - WALK_PROGRESS_PLEASURE).abs() < 1e-9);
+        assert!((pay(0.0125, 0.0, &mut reward) - 0.25).abs() < 1e-9);
+        assert!(
+            (pay(0.5, 0.0, &mut reward) - WALK_PROGRESS_PLEASURE).abs() < 1e-9,
+            "capped at the target pace"
+        );
+        assert!(
+            (pay(0.025, 0.6, &mut reward) - 0.2).abs() < 1e-9,
+            "held robot is discounted by 1 - a"
+        );
+        assert_eq!(
+            pay(0.0, 0.0, &mut reward),
+            0.0,
+            "no ground gained pays nothing"
+        );
+    }
+
+    #[test]
+    fn contribution_pays_no_progress_off_its_feet() {
+        let c = walking(goal(Some(5.0)), 20.0);
+        let mut reward = BalanceContributionReward::new();
+        let mut s = sample(
+            1,
+            [false, false],
+            WalkReading {
+                progress_m: 0.025,
+                ..reading(0.0, 0.0)
+            },
+        );
+        s.support_need = Some(0.2);
+        assert!(reward.on_sample(&s, None, &c).is_empty());
+    }
+
+    #[test]
+    fn walk_phase_metrics_appear_only_with_walk_stats() {
+        let c = walking(goal(Some(1.0)), 20.0);
+        let record =
+            run(&c, (1..=40).map(|i| (BOTH, f64::from(i) * 0.025, 0.0))).expect("finished");
+        let phase = BalancePhaseReport::from_attempts(vec![record]).expect("phase");
+        let metrics = balance_phase_metrics(&phase);
+        assert!((metrics["mean_forward_m"] - 1.0).abs() < 1e-9);
+        assert!((metrics["mean_speed_m_s"] - 0.5).abs() < 1e-9);
+        assert!(metrics.contains_key("mean_heading_error_deg"));
+        assert_eq!(metrics["success_rate"], 1.0);
+        let mut stand = c.clone();
+        stand.walk = None;
+        let stand_record = run_stand(&stand);
+        let phase = BalancePhaseReport::from_attempts(vec![stand_record]).expect("phase");
+        assert!(!balance_phase_metrics(&phase).contains_key("mean_forward_m"));
+    }
+
+    #[test]
+    fn contribution_policy_id_is_versioned_for_walk() {
+        assert_eq!(
+            BalanceRewardPolicy::Contribution.policy_id_for(true),
+            "reward.balance-contribution.v5"
+        );
+        assert_eq!(
+            BalanceRewardPolicy::Contribution.policy_id_for(false),
+            BalanceContributionReward::policy_id()
+        );
+    }
+
+    #[test]
+    fn a_walking_sample_without_a_position_is_an_error() {
+        let c = walking(goal(Some(1.0)), 20.0);
+        let mut s = sample(1, BOTH, reading(0.0, 0.0));
+        s.walk = None;
+        let open = OpenBalanceAttempt::for_attempt(1.0, 0.0);
+        assert!(observe_balance_sample(&open, &s, &c, 1).is_err());
     }
 }

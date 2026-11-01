@@ -19,7 +19,7 @@ pub use recording_connectome::RecordingConnectomeService;
 pub use recording_genome::RecordingGenomeService;
 pub use replay::apply_change;
 pub use types::{
-    ApplyGenomeChangeOutcome, ApplyGenomeChangeRequest, ChangeOrigin, ChangeTarget,
+    ApplyGenomeChangeOutcome, ApplyGenomeChangeRequest, ChangeOrigin, ChangeSource, ChangeTarget,
     ChangeTargetKind, ChangesPage, GenomeChange, GenomeChangeOperation,
 };
 

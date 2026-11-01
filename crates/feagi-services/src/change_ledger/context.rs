@@ -8,6 +8,7 @@
 //! task does not inherit the context, so changes made there are recorded without an
 //! agent id and in their own group.
 
+use super::types::ChangeSource;
 use std::future::Future;
 
 /// Identity of the original change being replayed from another instance.
@@ -25,6 +26,8 @@ pub struct ChangeContext {
     pub agent_id: Option<String>,
     /// Shared by every change the request produces; `None` gives each change its own group.
     pub group_id: Option<String>,
+    /// What triggered the work; recorded on every change made within the context.
+    pub source: ChangeSource,
     /// Set only while replaying a change received from another instance.
     pub replay: Option<ReplaySource>,
 }
@@ -55,6 +58,7 @@ mod tests {
         let context = ChangeContext {
             agent_id: Some("member-a".to_string()),
             group_id: Some("group-1".to_string()),
+            source: ChangeSource::default(),
             replay: None,
         };
         let seen = with_change_context(context.clone(), async { current_change_context() }).await;

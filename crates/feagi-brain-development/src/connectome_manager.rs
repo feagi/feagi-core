@@ -1084,9 +1084,20 @@ impl ConnectomeManager {
     ///
     /// # Note
     ///
-    /// This does NOT remove neurons from the NPU - that must be done separately.
+    /// The area's neurons (and the synapses touching them) are deleted from the NPU first, and
+    /// the StateManager neuron counts that health and genome stats read drop with them. Without
+    /// this the deleted area's neurons stay in the NPU and the counts only ever grow.
     ///
     pub fn remove_cortical_area(&mut self, cortical_id: &CorticalID) -> BduResult<()> {
+        if !self.cortical_areas.contains_key(cortical_id) {
+            return Err(BduError::InvalidArea(format!(
+                "Cortical area {} does not exist",
+                cortical_id
+            )));
+        }
+        // Before any bookkeeping is dropped, so a failure leaves the area untouched and the
+        // per-area StateManager counts can still be resolved from `cortical_idx_to_id`.
+        self.delete_area_neurons(cortical_id)?;
         let area = self.cortical_areas.remove(cortical_id).ok_or_else(|| {
             BduError::InvalidArea(format!("Cortical area {} does not exist", cortical_id))
         })?;
@@ -1120,6 +1131,28 @@ impl ConnectomeManager {
 
         self.refresh_cortical_area_hashes(true, true);
         Ok(())
+    }
+
+    /// Delete every NPU neuron of `cortical_id` and lower the StateManager neuron counts by the
+    /// number removed. No NPU, an unknown area or an area without neurons removes nothing.
+    fn delete_area_neurons(&self, cortical_id: &CorticalID) -> BduResult<usize> {
+        let (Some(npu), Some(cortical_idx)) = (
+            self.npu.as_ref(),
+            self.cortical_id_to_idx.get(cortical_id).copied(),
+        ) else {
+            return Ok(0);
+        };
+        let neuron_ids: Vec<u64> = npu
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
+            .get_neurons_in_cortical_area(cortical_idx)
+            .into_iter()
+            .map(u64::from)
+            .collect();
+        if neuron_ids.is_empty() {
+            return Ok(0);
+        }
+        self.delete_neurons_batch(neuron_ids)
     }
 
     /// Update a cortical area ID without changing its cortical_idx.
@@ -4465,6 +4498,95 @@ impl ConnectomeManager {
                      (or episodic_memory to its own twin)",
                     src_area_id, dst_area_id
                 )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Number of synapses that currently exist for the mapping `src` -> `dst`.
+    pub fn count_mapping_synapses(&self, src: &CorticalID, dst: &CorticalID) -> usize {
+        let (Some(npu), Some(src_idx), Some(dst_idx)) = (
+            self.npu.as_ref(),
+            self.cortical_id_to_idx.get(src).copied(),
+            self.cortical_id_to_idx.get(dst).copied(),
+        ) else {
+            return 0;
+        };
+        npu.lock()
+            .map(|npu| npu.count_synapses_between_areas(src_idx, dst_idx))
+            .unwrap_or(0)
+    }
+
+    /// Checks the plasticity options of one plastic mapping rule that the synapse build would
+    /// reject, so a caller can refuse the update before anything is stored. `src` and `dst`
+    /// only label the messages.
+    pub fn validate_plastic_rule_options(
+        rule: &serde_json::Map<String, serde_json::Value>,
+        src: &str,
+        dst: &str,
+    ) -> Result<(), String> {
+        let mode = match rule.get("plasticity_mode").and_then(|v| v.as_str()) {
+            Some(s) if s.eq_ignore_ascii_case("rstdp") || s.eq_ignore_ascii_case("r-stdp") => {
+                "rstdp"
+            }
+            Some(s) if s.eq_ignore_ascii_case("stdp") => "stdp",
+            Some(s) if s.eq_ignore_ascii_case("off") => "off",
+            Some(other) => {
+                return Err(format!(
+                    "Unknown plasticity_mode '{other}' in mapping rule {src} -> {dst}"
+                ));
+            }
+            None => "stdp",
+        };
+        let present = |key: &str| rule.get(key).is_some_and(|v| !v.is_null());
+        let eligibility = rule
+            .get("eligibility_decay_bursts")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        if mode != "rstdp" && eligibility != 0 {
+            return Err(format!(
+                "eligibility_decay_bursts is only valid when plasticity_mode='rstdp' on mapping {src} -> {dst}"
+            ));
+        }
+        if present("max_weight") {
+            let raw = rule.get("max_weight").and_then(|v| v.as_f64());
+            match raw {
+                None => {
+                    return Err(format!(
+                        "max_weight must be a number on mapping {src} -> {dst}"
+                    ))
+                }
+                Some(v) if v.is_nan() || v <= 0.0 => {
+                    return Err(format!(
+                        "max_weight must be strictly positive (got {v}) on mapping {src} -> {dst}"
+                    ));
+                }
+                Some(_) => {}
+            }
+            if mode == "off" {
+                return Err(format!(
+                    "max_weight is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {src} -> {dst}"
+                ));
+            }
+        }
+        if present("plasticity_eta") {
+            match rule.get("plasticity_eta").and_then(|v| v.as_f64()) {
+                None => {
+                    return Err(format!(
+                        "plasticity_eta must be a number on mapping {src} -> {dst}"
+                    ))
+                }
+                Some(v) if v.is_nan() || v <= 0.0 || !v.is_finite() => {
+                    return Err(format!(
+                        "plasticity_eta must be finite and strictly positive (got {v}) on mapping {src} -> {dst}"
+                    ));
+                }
+                Some(_) => {}
+            }
+            if mode == "off" {
+                return Err(format!(
+                    "plasticity_eta is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {src} -> {dst}"
+                ));
             }
         }
         Ok(())
@@ -9209,8 +9331,11 @@ impl ConnectomeManager {
     }
 
     /// Synchronize cortical area flags with NPU
-    /// This should be called after adding/updating cortical areas
-    fn sync_cortical_area_flags_to_npu(&mut self) -> BduResult<()> {
+    /// This should be called after adding/updating cortical areas, and after anything that
+    /// replaces the NPU's propagation engine (a connectome snapshot apply or a genome reset),
+    /// because the per-area flags (PSP uniformity, MP-driven PSP, baseline PSC, degeneration)
+    /// live in that engine and are rebuilt only from here.
+    pub fn sync_cortical_area_flags_to_npu(&self) -> BduResult<()> {
         if let Some(ref npu) = self.npu {
             if let Ok(mut npu_lock) = npu.lock() {
                 // Build psp_uniform_distribution flags map
@@ -10801,6 +10926,43 @@ mod tests {
 
         assert!(!npu.lock().unwrap().has_rate_modulated_leak(idx));
         assert!(!npu.lock().unwrap().is_homeostatic_leak_area(idx));
+    }
+
+    /// Deleting an area must delete its neurons and lower the counts that health and genome
+    /// stats read. The per-area StateManager entry is unique to this test's area id, so it is
+    /// asserted instead of the process-wide total that parallel tests also move.
+    #[test]
+    fn remove_cortical_area_deletes_its_neurons_and_lowers_the_counts() {
+        let (mut manager, npu, area_id, idx) = homeostat_test_manager();
+        let key = area_id.as_base_64();
+        let before = StateManager::instance()
+            .read()
+            .get_cortical_area_stats(&key)
+            .expect("per-area stats exist after neuron creation")
+            .neuron_count;
+        assert_eq!(before, 2);
+        assert_eq!(
+            npu.lock().unwrap().get_neurons_in_cortical_area(idx).len(),
+            2
+        );
+
+        manager.remove_cortical_area(&area_id).unwrap();
+
+        assert!(
+            npu.lock()
+                .unwrap()
+                .get_neurons_in_cortical_area(idx)
+                .is_empty(),
+            "the deleted area's neurons must leave the NPU"
+        );
+        let after = StateManager::instance()
+            .read()
+            .get_cortical_area_stats(&key)
+            .map_or(0, |stats| stats.neuron_count);
+        assert_eq!(
+            after, 0,
+            "the per-area neuron count must drop with the area"
+        );
     }
 
     #[test]
@@ -15407,5 +15569,38 @@ mod tests {
             "learned memory -> destination synapse must not survive mapping deletion"
         );
         assert_eq!(npu.get_synapse_count(), 0);
+    }
+
+    #[test]
+    fn plastic_rule_options_are_validated_before_a_mapping_is_stored() {
+        let check = |rule: serde_json::Value| {
+            ConnectomeManager::validate_plastic_rule_options(
+                rule.as_object().unwrap(),
+                "src",
+                "dst",
+            )
+        };
+        assert!(check(
+            serde_json::json!({"plasticity_mode": "rstdp", "eligibility_decay_bursts": 20})
+        )
+        .is_ok());
+        assert!(check(
+            serde_json::json!({"plasticity_mode": "stdp", "max_weight": 5.0, "plasticity_eta": 0.5})
+        )
+        .is_ok());
+        assert!(check(serde_json::json!({})).is_ok(), "absent mode is stdp");
+        let eligibility =
+            check(serde_json::json!({"plasticity_mode": "stdp", "eligibility_decay_bursts": 5}));
+        assert!(eligibility
+            .unwrap_err()
+            .contains("only valid when plasticity_mode='rstdp'"));
+        assert!(check(serde_json::json!({"eligibility_decay_bursts": 5})).is_err());
+        assert!(check(serde_json::json!({"plasticity_mode": "wat"})).is_err());
+        assert!(check(serde_json::json!({"max_weight": -1.0})).is_err());
+        assert!(check(serde_json::json!({"plasticity_eta": 0.0})).is_err());
+        assert!(check(serde_json::json!({"plasticity_mode": "off", "max_weight": 2.0})).is_err());
+        assert!(
+            check(serde_json::json!({"plasticity_mode": "off", "plasticity_eta": 2.0})).is_err()
+        );
     }
 }

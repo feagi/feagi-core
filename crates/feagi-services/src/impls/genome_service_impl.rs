@@ -383,9 +383,29 @@ pub fn sync_runtime_genome_from_connectome(
 
     for cortical_id in manager.get_cortical_area_ids() {
         if let Some(conn_area) = manager.get_cortical_area(cortical_id) {
-            genome
-                .cortical_areas
-                .insert(*cortical_id, conn_area.clone());
+            let mut area = conn_area.clone();
+            mirror_runtime_property_keys(&mut area.properties);
+            genome.cortical_areas.insert(*cortical_id, area);
+        }
+    }
+}
+
+/// Live-area property names (the ones the NPU accessors and runtime updates use) and the genome
+/// names the converter reads and writes for the same setting.
+const RUNTIME_TO_GENOME_KEYS: [(&str, &str); 3] = [
+    ("neurons_per_voxel", "per_voxel_neuron_cnt"),
+    ("consecutive_fire_limit", "consecutive_fire_cnt_max"),
+    ("snooze_period", "snooze_length"),
+];
+
+/// Copy each live-area setting to the genome name the converter reads. An area created at runtime
+/// holds only the live names, so without this its export writes the converter's defaults
+/// instead of the values the area runs with. The live names win: they are what runs and what
+/// runtime updates change.
+fn mirror_runtime_property_keys(properties: &mut HashMap<String, serde_json::Value>) {
+    for (runtime, genome) in RUNTIME_TO_GENOME_KEYS {
+        if let Some(value) = properties.get(runtime).cloned() {
+            properties.insert(genome.to_string(), value);
         }
     }
 }
@@ -5816,6 +5836,72 @@ impl GenomeServiceImpl {
 mod tests {
     use super::{normalize_quantization_precision, precision_import_warning_reason};
     use std::collections::HashMap;
+
+    #[test]
+    fn export_carries_the_live_neuron_settings_of_a_runtime_created_area() {
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_evolutionary::{
+            GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
+            RuntimeGenome,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let id = CorticalID::try_from_bytes(b"cexport2").unwrap();
+        let mut area = CorticalArea::new(
+            id,
+            3,
+            "created".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        // The keys the create path stores.
+        for (key, value) in [
+            ("neurons_per_voxel", 4),
+            ("consecutive_fire_limit", 3),
+            ("snooze_period", 5),
+        ] {
+            area.properties
+                .insert(key.to_string(), serde_json::json!(value));
+        }
+        manager.add_cortical_area(area).unwrap();
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "g".into(),
+                genome_title: "g".into(),
+                genome_description: String::new(),
+                version: "2.0".into(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".into(),
+                blueprint: "0000000000000000".into(),
+                physiology: "0000000000000000".into(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        super::sync_runtime_genome_from_connectome(&mut genome, &manager);
+        let exported = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+        let flat: serde_json::Value = serde_json::from_str(&exported).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = id.as_base_64();
+        assert_eq!(blueprint[&format!("_____10c-{b64}-cx-_n_cnt-i")], 4);
+        assert_eq!(blueprint[&format!("_____10c-{b64}-nx-c_fr_c-i")], 3);
+        assert_eq!(blueprint[&format!("_____10c-{b64}-nx-snooze-i")], 5);
+    }
 
     #[test]
     fn new_memory_area_defaults_to_firing_threshold_one() {

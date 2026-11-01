@@ -38,6 +38,15 @@ macro_rules! default_mp_charge_accumulation_impl {
     };
 }
 
+macro_rules! default_sensory_hold_last_frame_impl {
+    () => {
+        None
+    };
+    ($value:expr) => {
+        Some($value)
+    };
+}
+
 macro_rules! default_firing_threshold_increment_impl {
     () => {
         None
@@ -60,6 +69,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     $(default_firing_threshold: $default_firing_threshold:expr,)?
                     $(default_firing_threshold_increment: [$default_firing_threshold_increment_x:expr, $default_firing_threshold_increment_y:expr, $default_firing_threshold_increment_z:expr],)?
                     $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
+                    $(default_sensory_hold_last_frame: $default_sensory_hold_last_frame:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
@@ -203,6 +213,19 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
+            /// Returns the template-defined sensor-cadence hold default for this unit.
+            /// `None` means the wrapped-IO-type rule of
+            /// [`SensoryCorticalUnit::get_default_sensory_hold_last_frame`] applies.
+            pub const fn get_template_sensory_hold_last_frame(&self) -> Option<bool> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            default_sensory_hold_last_frame_impl!($($default_sensory_hold_last_frame)?)
+                        }
+                    )*
+                }
+            }
+
             /// Returns the accepted wrapped IO data type name for this sensory unit type.
             pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str { // TODO delete me!
                 match self {
@@ -310,10 +333,15 @@ pub fn resolve_sensory_hold_last_frame(
 
 impl SensoryCorticalUnit {
     /// Template default for the `sensory_hold_last_frame` cortical area property:
-    /// `true` for scalar sensor units (IMU, encoder, proximity, battery, analog, ...),
-    /// `false` for frame-based (vision, audio), boolean/digital and opaque (`MiscData`) inputs.
-    /// Derived from the unit's accepted wrapped IO data type.
+    /// `true` for scalar sensor units (IMU, encoder, proximity, battery, analog, ...) and for the
+    /// miscellaneous scalar-array input (`MiscData`); `false` for frame-based (vision, audio),
+    /// boolean/digital and event-like inputs (text tokens share the `MiscData` wire type but
+    /// must not repeat). A unit's own template value wins; otherwise it is derived from the
+    /// unit's accepted wrapped IO data type.
     pub fn get_default_sensory_hold_last_frame(&self) -> bool {
+        if let Some(declared) = self.get_template_sensory_hold_last_frame() {
+            return declared;
+        }
         matches!(
             self.get_accepted_wrapped_io_data_type(),
             "Percentage" | "Percentage_3D" | "SignedPercentage_4D" | "RawIMU"
@@ -447,6 +475,7 @@ mod sensory_hold_default_tests {
             SensoryCorticalUnit::Battery,
             SensoryCorticalUnit::AnalogGPIO,
             SensoryCorticalUnit::CartesianPosition,
+            SensoryCorticalUnit::MiscData,
         ] {
             assert!(unit.get_default_sensory_hold_last_frame(), "{unit:?}");
         }
@@ -455,7 +484,7 @@ mod sensory_hold_default_tests {
             SensoryCorticalUnit::SegmentedVision,
             SensoryCorticalUnit::AudioInput,
             SensoryCorticalUnit::DigitalGPIO,
-            SensoryCorticalUnit::MiscData,
+            SensoryCorticalUnit::TextEnglishInput,
             SensoryCorticalUnit::DepthMap,
         ] {
             assert!(!unit.get_default_sensory_hold_last_frame(), "{unit:?}");

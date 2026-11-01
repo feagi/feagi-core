@@ -50,6 +50,7 @@ pub async fn apply_change(
     let context = ChangeContext {
         agent_id,
         group_id: None,
+        source: request.source,
         replay: Some(ReplaySource {
             change_id: request.change_id.clone(),
             group_id: request.group_id.clone(),

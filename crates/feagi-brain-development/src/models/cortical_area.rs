@@ -378,7 +378,7 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn neuron_excitability(&self) -> f32 {
-        self.get_f32_property("neuron_excitability", 100.0)
+        self.get_f32_property("neuron_excitability", 1.0)
     }
 
     fn postsynaptic_current_max(&self) -> f32 {

@@ -17,10 +17,25 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeOrigin {
-    /// Made against this instance (API, agent registration, MCP, BV).
+    /// Made against this instance (API, agent registration, MCP, BV). The
+    /// [`ChangeSource`] tells registration-driven changes from authored ones.
     Local,
     /// Applied from another instance via the replay API.
     Replayed,
+}
+
+/// What triggered a change on the instance that made it.
+///
+/// Lets consumers keep machine-local changes (device registration creating this
+/// machine's own areas) apart from deliberately authored ones.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeSource {
+    /// An explicit request (API, MCP, BV, Trainer).
+    #[default]
+    Request,
+    /// Automatic reconciliation of an agent's device registration.
+    DeviceRegistration,
 }
 
 /// Kind of genome element a change touches.
@@ -239,6 +254,9 @@ pub struct GenomeChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     pub origin: ChangeOrigin,
+    /// What triggered the change. Absent in data written before this field existed.
+    #[serde(default)]
+    pub source: ChangeSource,
     pub replayable: bool,
     pub targets: Vec<ChangeTarget>,
     pub operation: GenomeChangeOperation,
@@ -275,6 +293,9 @@ pub struct ApplyGenomeChangeRequest {
     pub timestamp_ms: i64,
     #[serde(default)]
     pub agent_id: Option<String>,
+    /// Carried over from the original change; absent means `request`.
+    #[serde(default)]
+    pub source: ChangeSource,
     pub operation: GenomeChangeOperation,
 }
 

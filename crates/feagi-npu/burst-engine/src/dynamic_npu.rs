@@ -769,6 +769,10 @@ where
         )
     }
 
+    pub fn count_synapses_between_areas(&self, source_area: u32, target_area: u32) -> usize {
+        dispatch!(self, count_synapses_between_areas(source_area, target_area))
+    }
+
     pub fn remove_synapses_between(
         &mut self,
         sources: Vec<NeuronId>,

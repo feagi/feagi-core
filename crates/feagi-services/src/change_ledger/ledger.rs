@@ -219,6 +219,7 @@ impl ChangeLedger {
             recorded_at_ms,
             agent_id: context.agent_id.clone(),
             origin,
+            source: context.source,
             replayable: operation.is_replayable(),
             targets: operation.targets(),
             operation,
@@ -357,6 +358,7 @@ fn persisted_entry(change: &GenomeChange) -> serde_json::Result<Value> {
 mod tests {
     use super::*;
     use crate::change_ledger::context::ReplaySource;
+    use crate::change_ledger::types::ChangeSource;
 
     fn config(session_capacity: usize, max_persisted_entries: usize) -> ChangeLedgerConfig {
         ChangeLedgerConfig {
@@ -406,6 +408,7 @@ mod tests {
         let context = ChangeContext {
             agent_id: Some("member-a".to_string()),
             group_id: Some("req-1".to_string()),
+            source: ChangeSource::default(),
             replay: None,
         };
         let first = ledger.record(delete_op("a"), None, None, &context);
@@ -416,6 +419,21 @@ mod tests {
         assert_eq!(first.agent_id.as_deref(), Some("member-a"));
         assert_eq!(first.origin, ChangeOrigin::Local);
         assert_eq!(ledger.latest_sequence(), 2);
+    }
+
+    #[test]
+    fn source_follows_the_context() {
+        let (ledger, _) = ledger_with_genome(config(10, 10));
+        let registration = ChangeContext {
+            source: ChangeSource::DeviceRegistration,
+            ..ChangeContext::default()
+        };
+        let change = ledger.record(delete_op("a"), None, None, &registration);
+        assert_eq!(change.source, ChangeSource::DeviceRegistration);
+        let value = serde_json::to_value(&change).expect("serialize");
+        assert_eq!(value["source"], "device_registration");
+        let plain = ledger.record(delete_op("b"), None, None, &ChangeContext::default());
+        assert_eq!(plain.source, ChangeSource::Request);
     }
 
     #[test]
@@ -432,6 +450,7 @@ mod tests {
         let context = ChangeContext {
             agent_id: Some("member-b".to_string()),
             group_id: None,
+            source: ChangeSource::default(),
             replay: Some(ReplaySource {
                 change_id: "orig".to_string(),
                 group_id: "orig-group".to_string(),

@@ -288,6 +288,13 @@ fn modulators_for_kept_areas(
             }
         }
     }
+    // A modulator whose driver area is in the export belongs to it, subscribers or not: a region
+    // that only drives (a reward harness) must stay self-contained.
+    for (id, instance) in genome.modulators.iter() {
+        if kept.contains(&instance.driver_cortical_id.as_base_64()) {
+            ids.insert(id.to_string());
+        }
+    }
     let mut registry = crate::modulators::ModulatorRegistry::new();
     for id in ids {
         if let Some(instance) = genome.modulators.get(&id) {
@@ -931,6 +938,10 @@ mod tests {
             vec![&child_key],
             "an adopted driver stays in its own region"
         );
+        // The driver's own region has no subscriber, and still carries the modulator it drives.
+        let driver_only =
+            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+        assert!(driver_only.modulators.contains("answer"));
     }
 
     #[test]
