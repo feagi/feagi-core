@@ -2,9 +2,9 @@ use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQ
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;
-use crate::genome::genome_playwright::{GenomePlayWright};
+use crate::genome::genome_editing::{GenomeEditSequence};
 
-pub struct GenomePlayWrightCorticalArea<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomePlayWright<FIQ>);
+pub struct GenomePlayWrightCorticalArea<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
 
 
 impl<'a, FIQ: FeagiIndexQuantization> GenomePlayWrightCorticalArea<'a, FIQ> {
@@ -15,7 +15,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomePlayWrightCorticalArea<'a, FIQ> {
         positioning: GenomeObjectPositioning,
         parent_region: BrainRegionID,
         generator: CorticalAreaGeneratorEnum<FIQ>,
-    ) -> Result<&'a mut GenomePlayWright<FIQ>, ()> {
+    ) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
 
         // TODO error checking
 
@@ -24,8 +24,8 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomePlayWrightCorticalArea<'a, FIQ> {
         //self.0.0.push();
         Ok(self.0)
     }
-    
-    
+
+
 
     // TODO Remove
 
