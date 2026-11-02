@@ -1555,16 +1555,26 @@ async fn import_connectome_snapshot(
         in_progress: Arc::clone(&state.genome_transition_in_progress),
     };
 
-    super::genome::with_genome_state_lifecycle(
+    let outcome = super::genome::with_genome_state_lifecycle(
         state.connectome_service.import_connectome(snapshot),
     )
     .await
     .map_err(ApiError::from)?;
 
-    Ok(Json(HashMap::from([(
+    let mut response = HashMap::from([(
         "message".to_string(),
         "Connectome imported successfully".to_string(),
-    )])))
+    )]);
+    // Not silent: rows that no longer fit their memory area are reported, never dropped quietly.
+    if let Some(summary) = outcome.skipped_summary() {
+        tracing::warn!(target: "feagi-api", "[API] Connectome import skipped memory neurons: {}", summary);
+        response.insert(
+            "memory_neurons_skipped".to_string(),
+            outcome.total_memory_neurons_skipped().to_string(),
+        );
+        response.insert("memory_neurons_skipped_detail".to_string(), summary);
+    }
+    Ok(Json(response))
 }
 
 /// Connectome files are written under `{data_root}/connectome/{file_name}`.

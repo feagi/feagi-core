@@ -304,6 +304,17 @@ pub struct MemoryAreaConfig {
     pub scan: Option<MemoryScanConfig>,
 }
 
+/// Result of removing memory neurons that no longer fit a changed pattern shape.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryShapePurge {
+    /// Memory neurons removed (short-term and long-term).
+    pub removed: usize,
+    /// Of those, how many were long-term.
+    pub removed_long_term: usize,
+    /// Removed count per mismatch reason key.
+    pub reasons: std::collections::BTreeMap<String, usize>,
+}
+
 /// Runtime counts for a memory cortical area (plasticity layer).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryCorticalAreaRuntimeInfo {
@@ -1200,6 +1211,9 @@ impl PlasticityService {
                 }
                 MemoryNeuronRemovalReason::Evicted => {
                     memory_stats_cache::on_neuron_evicted(memory_stats_cache, area_name)
+                }
+                MemoryNeuronRemovalReason::ShapeChanged => {
+                    memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name)
                 }
             }
         }
@@ -2808,6 +2822,107 @@ impl PlasticityService {
         let restored = array.restore_long_term_memory_neurons(neurons);
         Self::publish_pool_counters(&array, &self.pool_counters);
         restored
+    }
+
+    /// Remove the area's memory neurons that no longer fit a new pattern shape.
+    ///
+    /// Acts only when `new_shape` differs from the registered one in temporal depth, episodic
+    /// upstream set or MP encoding mode; cap, eviction and lifespan changes keep every neuron.
+    /// Call before re-registering the area. Removal goes through the same path as expiry and
+    /// eviction (NPU state, queued commands, `MemoryNeuronRemoved` notices, stats cache), and
+    /// the cached pattern detector is dropped because it holds the old depth.
+    pub fn purge_neurons_outside_shape(
+        &self,
+        area_idx: u32,
+        new_shape: &crate::memory_shape::MemoryAreaShape,
+    ) -> MemoryShapePurge {
+        use crate::memory_shape::{MemoryAreaShape, ReplayFrameShape};
+
+        let old_shape = {
+            let areas = self.memory_areas.lock().unwrap();
+            areas.get(&area_idx).map(|cfg| {
+                MemoryAreaShape::new(cfg.temporal_depth, cfg.upstream_areas.clone(), cfg.mp_mode)
+            })
+        };
+        let Some(old_shape) = old_shape else {
+            return MemoryShapePurge::default();
+        };
+        if !old_shape.pattern_shape_differs(new_shape) {
+            return MemoryShapePurge::default();
+        }
+
+        let neuron_ids = {
+            let array = self.memory_neuron_array.lock().unwrap();
+            array.get_active_neurons_by_area(area_idx)
+        };
+        let mut doomed: Vec<u32> = Vec::new();
+        let mut reasons: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        {
+            let npu = self.npu.lock().unwrap();
+            for neuron_id in neuron_ids {
+                let Some(frames) = npu.get_memory_replay_frames(neuron_id) else {
+                    continue;
+                };
+                let shapes: Vec<ReplayFrameShape> = frames
+                    .iter()
+                    .map(|f| ReplayFrameShape {
+                        offset: f.offset,
+                        upstream_area_idx: f.upstream_area_idx,
+                        has_membrane_potentials: f.membrane_potentials.is_some(),
+                    })
+                    .collect();
+                if let Some(mismatch) = new_shape.mismatch(&shapes) {
+                    *reasons.entry(mismatch.key().to_string()).or_default() += 1;
+                    doomed.push(neuron_id);
+                }
+            }
+        }
+
+        // The detector caches the old depth, so it is dropped whether or not neurons go.
+        self.pattern_detector.forget_area(area_idx);
+        if doomed.is_empty() {
+            return MemoryShapePurge::default();
+        }
+
+        let (removed, long_term) = {
+            let mut array = self.memory_neuron_array.lock().unwrap();
+            array.remove_neurons_by_id(&doomed, MemoryNeuronRemovalReason::ShapeChanged);
+            let removed = array.drain_removed_neurons();
+            Self::count_removed_in_stats_cache(
+                &removed,
+                &self.memory_area_names,
+                &self.memory_stats_cache,
+            );
+            Self::update_memory_utilization_in_state_manager(&array, &self.config);
+            Self::publish_pool_counters(&array, &self.pool_counters);
+            let long_term = removed
+                .iter()
+                .filter(|r| r.reason == MemoryNeuronRemovalReason::ShapeChanged && r.was_longterm)
+                .count();
+            (removed, long_term)
+        };
+        let commands = Self::remove_from_npu(&self.npu, &self.command_queue, &removed);
+        if !commands.is_empty() {
+            self.command_queue.lock().unwrap().extend(commands);
+        }
+        let shape_removed = removed
+            .iter()
+            .filter(|r| r.reason == MemoryNeuronRemovalReason::ShapeChanged)
+            .count();
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Area {} pattern shape changed: removed {} memory neurons ({} long-term) {:?}",
+            area_idx,
+            shape_removed,
+            long_term,
+            reasons
+        );
+        MemoryShapePurge {
+            removed: shape_removed,
+            removed_long_term: long_term,
+            reasons,
+        }
     }
 
     /// Reset (delete) all memory neurons and their synapses in a cortical area.
@@ -4912,6 +5027,80 @@ mod tests {
         rig.burst(Some(2));
         assert_eq!(rig.active_ids(), before);
     }
+
+    #[test]
+    fn lowering_temporal_depth_removes_neurons_with_deeper_frames_only() {
+        use crate::memory_shape::MemoryAreaShape;
+        use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.burst(Some(0));
+        rig.burst(Some(1));
+        let ids = rig.active_ids();
+        assert_eq!(ids.len(), 2);
+        let (deep, shallow) = (ids[0], ids[1]);
+        let frame = |offset| MemoryReplayFrame {
+            offset,
+            upstream_area_idx: UPSTREAM_IDX,
+            coords: vec![(0, 0, 0)],
+            membrane_potentials: None,
+        };
+        {
+            let mut npu = rig.npu.lock().unwrap();
+            npu.register_memory_replay_frames(deep, vec![frame(0), frame(1)]);
+            npu.register_memory_replay_frames(shallow, vec![frame(0)]);
+        }
+        // The area was learned at depth 2.
+        assert!(rig.service.register_memory_area(
+            MEM_IDX,
+            rig.memory_cortical_id.as_base_64(),
+            2,
+            vec![UPSTREAM_IDX],
+            None,
+            MemoryMpMode::PatternOnly,
+        ));
+
+        // A cap/eviction/lifespan-only change keeps the shape, so nothing is judged.
+        let same = MemoryAreaShape::new(2, vec![UPSTREAM_IDX], MemoryMpMode::PatternOnly);
+        assert_eq!(
+            rig.service.purge_neurons_outside_shape(MEM_IDX, &same),
+            MemoryShapePurge::default()
+        );
+        assert_eq!(rig.active_ids().len(), 2);
+
+        let lowered = MemoryAreaShape::new(1, vec![UPSTREAM_IDX], MemoryMpMode::PatternOnly);
+        let purge = rig.service.purge_neurons_outside_shape(MEM_IDX, &lowered);
+        assert_eq!(purge.removed, 1);
+        assert_eq!(
+            purge.reasons.get("replay_offset_exceeds_temporal_depth"),
+            Some(&1)
+        );
+        assert_eq!(rig.active_ids(), vec![shallow]);
+        let npu = rig.npu.lock().unwrap();
+        assert!(
+            npu.get_memory_replay_frames(deep).is_none(),
+            "NPU state cleared"
+        );
+        assert!(npu.get_memory_replay_frames(shallow).is_some());
+        drop(npu);
+        assert!(
+            rig.service
+                .command_queue
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| matches!(
+                    c,
+                    PlasticityCommand::MemoryNeuronRemoved {
+                        neuron_id,
+                        reason: MemoryNeuronRemovalReason::ShapeChanged,
+                        ..
+                    } if *neuron_id == deep
+                )),
+            "downstream consumers get a removal notice"
+        );
+    }
+
     // ---- Classifier-shaped rig: sample/class inputs and memories joined associatively ----
 
     const SAMPLE_IN_IDX: u32 = 21;

@@ -33,6 +33,7 @@ pub mod episodic_scan;
 pub mod executor; // Abstraction layer for different execution models
 pub(crate) mod log_rate_limiter;
 pub mod memory_neuron_array;
+pub mod memory_shape;
 pub mod memory_stats_cache;
 pub mod mp_change_encoder;
 pub mod neuron_id_manager;
@@ -57,6 +58,7 @@ pub use memory_neuron_array::{
     LtmEviction, MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
     MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron,
 };
+pub use memory_shape::{MemoryAreaShape, MemoryShapeMismatch, ReplayFrameShape};
 pub use memory_stats_cache::{
     create_memory_stats_cache, get_area_stats, get_stats_snapshot, init_memory_area,
     on_creation_failed, on_neuron_created, on_neuron_deleted, on_neuron_evicted,
@@ -69,7 +71,7 @@ pub use neuron_id_manager::{
 pub use pattern_detector::{BatchPatternDetector, PatternConfig, PatternDetector, TemporalPattern};
 pub use service::{
     AnswerFeedbackLayout, ClassifierRewardConfig, MemoryAreaConfig, MemoryCorticalAreaRuntimeInfo,
-    MemoryScanConfig, MemoryScanSource, PlasticityCommand, PlasticityConfig, PlasticityService,
-    ReplayFrame, ScannerMaskSource,
+    MemoryScanConfig, MemoryScanSource, MemoryShapePurge, PlasticityCommand, PlasticityConfig,
+    PlasticityService, ReplayFrame, ScannerMaskSource,
 };
 pub use stdp::{compute_activity_factors, compute_timing_factors, STDPConfig};

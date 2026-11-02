@@ -1235,11 +1235,10 @@ impl Neuroembryogenesis {
                     );
                 }
                 Err(e) => {
-                    // If NPU not connected, estimate count
-                    warn!(target: "feagi-bdu","  Failed to create synapses for {}: {} (NPU may not be connected)",
+                    // Synapses for destinations applied before the error already exist
+                    // but are not reported by the failing call, so nothing is added here.
+                    warn!(target: "feagi-bdu", "  Mappings from {} were not fully applied: {}",
                         src_cortical_id_str, e);
-                    let estimated = estimate_synapses_for_area(src_area, genome);
-                    total_synapses_created += estimated;
                 }
             }
 

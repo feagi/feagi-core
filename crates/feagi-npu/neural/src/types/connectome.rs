@@ -760,7 +760,7 @@ impl ConnectomeSnapshot {
             replay_frames_for_ltm_ids(&self.long_term_memory_replay_frames, ltm_ids);
     }
 
-    fn long_term_memory_id_set(&self) -> HashSet<u32> {
+    pub fn long_term_memory_id_set(&self) -> HashSet<u32> {
         self.long_term_memory_neurons
             .iter()
             .filter(|n| n.is_longterm_memory && n.is_active)

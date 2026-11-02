@@ -394,6 +394,9 @@ use crate::{
         crate::endpoints::simulation::get_status,
         crate::endpoints::simulation::get_stats,
         crate::endpoints::simulation::post_config,
+        crate::endpoints::simulation::post_stimulus_schedule,
+        crate::endpoints::simulation::delete_stimulus_schedule,
+        crate::endpoints::simulation::get_stimulus_schedules,
 
         // Training endpoints
         crate::endpoints::training::post_shock,
@@ -486,6 +489,12 @@ use crate::{
             crate::v1::SimulationStatusResponse,
             crate::v1::SimulationStatsResponse,
             crate::v1::SimulationSuccessResponse,
+            crate::v1::StimulusScheduleEntryRequest,
+            crate::v1::StimulusScheduleRequest,
+            crate::v1::StimulusScheduleRepeat,
+            crate::v1::StimulusScheduleResponse,
+            crate::v1::StimulusScheduleInfo,
+            crate::v1::StimulusScheduleListResponse,
 
             // Training
             crate::v1::ShockConfigRequest,

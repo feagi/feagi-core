@@ -9,7 +9,7 @@
  */
 
 use crate::common::ApiState;
-use crate::common::{ApiError, ApiResult, Json, State};
+use crate::common::{ApiError, ApiResult, Json, Path, State};
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -125,4 +125,189 @@ pub async fn post_config(
         "message".to_string(),
         "Simulation configured successfully".to_string(),
     )])))
+}
+
+// ============================================================================
+// BURST-INDEXED STIMULUS SCHEDULE
+// ============================================================================
+
+/// Default potential of a scheduled voxel (same as manual stimulation).
+const SCHEDULED_STIMULUS_POTENTIAL: f32 = 100.0;
+
+/// Schedule multi-area force-fire stimulation at burst offsets.
+///
+/// Contract:
+/// - Request: `{ "entries": [ { "burst_offset": u64, "stimulation": { "<cortical id base64>":
+///   [[x, y, z], ...], ... } } ] }`. `stimulation` has the shape of `stimulation_payload` in
+///   `POST /v1/agent/manual_stimulation`; coordinates must be non-negative.
+/// - Offsets resolve to ABSOLUTE burst indexes when the request is accepted: offset 0 is the
+///   next burst. Entries fire in the burst loop through the manual-stimulation force-fire path,
+///   so all areas of one entry land on the same burst. An entry that is already late fires on
+///   the next burst, never earlier.
+/// - Optional `"repeat": { "period_bursts": u64 }`: the entries replay every `period_bursts`
+///   (entry fires at `offset + k * period_bursts`, k = 0, 1, 2, ...) until the schedule is
+///   cancelled with DELETE. `period_bursts` must be greater than the largest `burst_offset`
+///   (400 otherwise, and for 0). A replay that is already late fires on the next burst and
+///   missed slots are skipped, never queued up.
+/// - Response 200: `{ "schedule_id": u64, "start_burst": u64, "end_burst": u64 | null }`
+///   (absolute indexes of the first and last entry; `end_burst` is null for a repeating
+///   schedule). 400 on empty `entries`, unknown cortical area, invalid coordinate, an entry
+///   without voxels or an invalid `repeat`.
+/// - `DELETE /v1/simulation/stimulus_schedule/{schedule_id}` cancels the entries not yet fired
+///   (`{ "schedule_id", "cancelled": true }`, 404 if not active).
+/// - `GET /v1/simulation/stimulus_schedule` returns `{ "schedules": [ { "schedule_id",
+///   "start_burst", "end_burst", "remaining_entries", "next_burst", "repeat" } ] }`. A one-shot
+///   schedule is removed once its last entry has fired; a repeating one (`end_burst` null,
+///   `repeat: { "period_bursts" }`, `remaining_entries` = entries per cycle, `next_burst` =
+///   next replay) stays until cancelled.
+/// - Schedules are cleared on genome load / connectome reset, and a deleted cortical area's
+///   scheduled injections are dropped (a schedule left empty is removed).
+#[utoipa::path(
+    post,
+    path = "/v1/simulation/stimulus_schedule",
+    tag = "simulation",
+    request_body = crate::v1::StimulusScheduleRequest,
+    responses(
+        (status = 200, description = "Schedule accepted", body = crate::v1::StimulusScheduleResponse),
+        (status = 400, description = "Invalid schedule"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_stimulus_schedule(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::StimulusScheduleRequest>,
+) -> ApiResult<Json<crate::v1::StimulusScheduleResponse>> {
+    use feagi_services::traits::runtime_service::StimulusScheduleEntry;
+
+    if request.entries.is_empty() {
+        return Err(ApiError::invalid_input("'entries' must not be empty"));
+    }
+    let mut entries = Vec::with_capacity(request.entries.len());
+    for (index, entry) in request.entries.into_iter().enumerate() {
+        let mut areas = Vec::with_capacity(entry.stimulation.len());
+        for (cortical_id, coordinates) in entry.stimulation {
+            if !state
+                .connectome_service
+                .cortical_area_exists(&cortical_id)
+                .await?
+            {
+                return Err(ApiError::invalid_input(format!(
+                    "entries[{index}]: unknown cortical area '{cortical_id}'"
+                )));
+            }
+            let mut voxels = Vec::with_capacity(coordinates.len());
+            for coord in coordinates {
+                match coord.as_slice() {
+                    [x, y, z] if *x >= 0 && *y >= 0 && *z >= 0 => voxels.push((
+                        *x as u32,
+                        *y as u32,
+                        *z as u32,
+                        SCHEDULED_STIMULUS_POTENTIAL,
+                    )),
+                    _ => {
+                        return Err(ApiError::invalid_input(format!(
+                            "entries[{index}]: area '{cortical_id}': coordinate {coord:?} must be \
+                             non-negative [x, y, z]"
+                        )))
+                    }
+                }
+            }
+            if !voxels.is_empty() {
+                areas.push((cortical_id, voxels));
+            }
+        }
+        if areas.is_empty() {
+            return Err(ApiError::invalid_input(format!(
+                "entries[{index}]: 'stimulation' has no voxels"
+            )));
+        }
+        entries.push(StimulusScheduleEntry {
+            burst_offset: entry.burst_offset,
+            areas,
+        });
+    }
+
+    let repeat_period = request.repeat.map(|r| r.period_bursts);
+    if let Some(period) = repeat_period {
+        let max_offset = entries.iter().map(|e| e.burst_offset).max().unwrap_or(0);
+        if period == 0 || period <= max_offset {
+            return Err(ApiError::invalid_input(format!(
+                "'repeat.period_bursts' ({period}) must be greater than the largest \
+                 burst_offset ({max_offset})"
+            )));
+        }
+    }
+    let receipt = state
+        .runtime_service
+        .schedule_stimulus(entries, repeat_period)
+        .await?;
+    Ok(Json(crate::v1::StimulusScheduleResponse {
+        schedule_id: receipt.schedule_id,
+        start_burst: receipt.start_burst,
+        end_burst: receipt.end_burst,
+    }))
+}
+
+/// Cancel a stimulus schedule; entries not yet fired are dropped.
+#[utoipa::path(
+    delete,
+    path = "/v1/simulation/stimulus_schedule/{schedule_id}",
+    tag = "simulation",
+    params(("schedule_id" = u64, Path, description = "Schedule id from POST")),
+    responses(
+        (status = 200, description = "Schedule cancelled", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Schedule not active"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn delete_stimulus_schedule(
+    State(state): State<ApiState>,
+    Path(schedule_id): Path<u64>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
+    if !state
+        .runtime_service
+        .cancel_stimulus_schedule(schedule_id)
+        .await?
+    {
+        return Err(ApiError::not_found(
+            "stimulus_schedule",
+            &schedule_id.to_string(),
+        ));
+    }
+    Ok(Json(HashMap::from([
+        ("schedule_id".to_string(), json!(schedule_id)),
+        ("cancelled".to_string(), json!(true)),
+    ])))
+}
+
+/// List active stimulus schedules with their remaining entries.
+#[utoipa::path(
+    get,
+    path = "/v1/simulation/stimulus_schedule",
+    tag = "simulation",
+    responses(
+        (status = 200, description = "Active schedules", body = crate::v1::StimulusScheduleListResponse),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_stimulus_schedules(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<crate::v1::StimulusScheduleListResponse>> {
+    let schedules = state
+        .runtime_service
+        .list_stimulus_schedules()
+        .await?
+        .into_iter()
+        .map(|s| crate::v1::StimulusScheduleInfo {
+            schedule_id: s.schedule_id,
+            start_burst: s.start_burst,
+            end_burst: s.end_burst,
+            remaining_entries: s.remaining_entries,
+            next_burst: s.next_burst,
+            repeat: s
+                .repeat_period_bursts
+                .map(|period_bursts| crate::v1::StimulusScheduleRepeat { period_bursts }),
+        })
+        .collect();
+    Ok(Json(crate::v1::StimulusScheduleListResponse { schedules }))
 }

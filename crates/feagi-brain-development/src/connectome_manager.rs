@@ -853,6 +853,29 @@ impl ConnectomeManager {
             )));
         }
 
+        // Every area enters through here (genome load, runtime create): store excitability as the
+        // fraction the NPU and the update API use. Older genomes held a percent (100 = always).
+        if let Some(raw) = area
+            .properties
+            .get("neuron_excitability")
+            .and_then(serde_json::Value::as_f64)
+        {
+            let fraction = feagi_evolutionary::units::excitability_fraction(raw);
+            if (fraction - raw).abs() > 1e-12 {
+                warn!(
+                    target: "feagi-bdu",
+                    "Area {}: neuron_excitability {} is a legacy percent; stored as the fraction {}",
+                    area.cortical_id,
+                    raw,
+                    fraction
+                );
+                area.properties.insert(
+                    "neuron_excitability".to_string(),
+                    serde_json::json!(fraction),
+                );
+            }
+        }
+
         // CRITICAL: Reserve cortical_idx 0..=6 for invariant core areas.
         // Use feagi-data-processing types as single source of truth
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
@@ -4205,7 +4228,7 @@ impl ConnectomeManager {
             if !plastic {
                 continue;
             }
-            let (_weight, psp, synapse_type, _delay) =
+            let (_weight, psp, synapse_type, delay_bursts) =
                 self.resolve_synapse_params_for_rule(src_area_id, rule)?;
             Self::register_stdp_mapping_for_rule(
                 &npu_arc,
@@ -4217,6 +4240,7 @@ impl ConnectomeManager {
                 false,
                 psp,
                 synapse_type,
+                delay_bursts,
             )?;
         }
         Ok(())
@@ -5171,6 +5195,7 @@ impl ConnectomeManager {
         bidirectional_stdp: bool,
         synapse_psp: f32,
         synapse_type: feagi_npu_neural::SynapseType,
+        synapse_delay_bursts: u8,
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
             .get("plasticity_window")
@@ -5379,6 +5404,7 @@ impl ConnectomeManager {
                 == Some("associative_memory"),
             synapse_psp,
             synapse_type,
+            synapse_delay_bursts,
             plasticity_mode,
             eligibility_decay_bursts,
             max_weight,
@@ -5696,7 +5722,7 @@ impl ConnectomeManager {
                         "Plasticity mapping rule must be an object format".to_string(),
                     ));
                 };
-                let (_weight, psp, synapse_type, _delay_bursts) =
+                let (_weight, psp, synapse_type, delay_bursts) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
                 // Associative-memory mappings are directional.
                 // Bidirectional behavior requires two explicit mappings (A->B and B->A).
@@ -5711,6 +5737,7 @@ impl ConnectomeManager {
                     bidirectional_stdp,
                     psp,
                     synapse_type,
+                    delay_bursts,
                 ) {
                     tracing::error!(
                         target: "feagi-bdu",
@@ -5754,6 +5781,15 @@ impl ConnectomeManager {
                         )
                     })?;
                     let group = npu_lock.allocate_modulation_group(&ids);
+                    if group == 0 {
+                        tracing::warn!(
+                            target: "feagi-bdu",
+                            "Mapping {} -> {} lists modulator ids {:?}, but none is a defined synaptic modulator; the mapping runs without modulation",
+                            src_area_id,
+                            dst_area_id,
+                            ids
+                        );
+                    }
                     let end = npu_lock.synapse_count();
                     let start = end.saturating_sub(synapse_count);
                     npu_lock.stamp_synapse_modulation_group(start, end, group);
@@ -7308,7 +7344,7 @@ impl ConnectomeManager {
                         "Plasticity mapping rule must be an object format".to_string(),
                     ));
                 };
-                let (_weight, psp, synapse_type, _delay) =
+                let (_weight, psp, synapse_type, delay_bursts) =
                     self.resolve_synapse_params_for_rule(&src_id, rule)?;
                 Self::register_stdp_mapping_for_rule(
                     &npu_arc,
@@ -7320,6 +7356,7 @@ impl ConnectomeManager {
                     false,
                     psp,
                     synapse_type,
+                    delay_bursts,
                 )?;
             }
         }
@@ -8127,6 +8164,9 @@ impl ConnectomeManager {
 
         let mut total_synapses = 0u32;
         let mut upstream_updates: Vec<(CorticalID, u32)> = Vec::new(); // Collect updates to apply later
+                                                                       // One failing mapping must not take the source's other mappings down with it: every
+                                                                       // destination is attempted, and the failures are reported together at the end.
+        let mut failed_pairs: Vec<String> = Vec::new();
 
         // Process each destination area using the unified path
         for (dst_cortical_id_str, _rules) in dstmap {
@@ -8147,7 +8187,23 @@ impl ConnectomeManager {
 
             // Apply cortical mapping for this pair (handles STDP and all morphology rules)
             let synapse_count =
-                self.apply_cortical_mapping_for_pair(src_cortical_id, &dst_cortical_id)?;
+                match self.apply_cortical_mapping_for_pair(src_cortical_id, &dst_cortical_id) {
+                    Ok(count) => count,
+                    Err(error) => {
+                        error!(
+                            target: "feagi-bdu",
+                            "Mapping {} -> {} was not applied: {}",
+                            src_cortical_id,
+                            dst_cortical_id,
+                            error
+                        );
+                        failed_pairs.push(format!(
+                            "{} -> {}: {}",
+                            src_cortical_id, dst_cortical_id, error
+                        ));
+                        continue;
+                    }
+                };
             total_synapses += synapse_count as u32;
 
             // Queue upstream area update for ANY mapping (even if no synapses created)
@@ -8189,6 +8245,16 @@ impl ConnectomeManager {
             core_state.add_synapse_count(total_synapses);
         }
 
+        if !failed_pairs.is_empty() {
+            return Err(BduError::Internal(format!(
+                "{} of {} mappings from {} were not applied ({} synapses created for the rest): {}",
+                failed_pairs.len(),
+                dstmap.len(),
+                src_cortical_id,
+                total_synapses,
+                failed_pairs.join("; ")
+            )));
+        }
         Ok(total_synapses)
     }
 
@@ -15371,6 +15437,7 @@ mod tests {
             false,
             1.0,
             feagi_npu_neural::SynapseType::Excitatory,
+            1,
         )
     }
 
@@ -15601,6 +15668,155 @@ mod tests {
         assert!(check(serde_json::json!({"plasticity_mode": "off", "max_weight": 2.0})).is_err());
         assert!(
             check(serde_json::json!({"plasticity_mode": "off", "plasticity_eta": 2.0})).is_err()
+        );
+    }
+
+    /// One mapping that cannot be applied (a rule naming a modulator the genome never defined)
+    /// must not stop the source area's other mappings from getting their synapses.
+    #[test]
+    fn a_failing_mapping_does_not_take_the_sources_other_mappings_down() {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        mgr.setup_core_morphologies_for_testing();
+        let make = |mgr: &mut ConnectomeManager, bytes: &[u8; 8]| {
+            let id = CorticalID::try_from_bytes(bytes).unwrap();
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    "a".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            mgr.add_neuron(&id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+                .unwrap();
+            id
+        };
+        let src = make(&mut mgr, b"cfpsrc01");
+        let mut dsts = [
+            make(&mut mgr, b"cfpdst01"),
+            make(&mut mgr, b"cfpdst02"),
+            make(&mut mgr, b"cfpdst03"),
+        ];
+        // The dstmap is walked in key order; the middle destination is the bad one.
+        dsts.sort_by_key(|id| id.as_base_64());
+        let rule = |bad: bool| {
+            let mut rule = serde_json::json!({
+                "morphology_id": "projector",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1.0,
+                "plasticity_flag": false,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+            });
+            if bad {
+                let object = rule.as_object_mut().unwrap();
+                object.insert("plasticity_flag".into(), serde_json::json!(true));
+                object.insert("plasticity_mode".into(), serde_json::json!("rstdp"));
+                object.insert("eligibility_decay_bursts".into(), serde_json::json!(20));
+                object.insert("modulators".into(), serde_json::json!(["never_defined"]));
+            }
+            rule
+        };
+        let dstmap: serde_json::Map<String, serde_json::Value> = dsts
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_base_64(), serde_json::json!([rule(i == 1)])))
+            .collect();
+        mgr.get_cortical_area_mut(&src).unwrap().properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::Value::Object(dstmap),
+        );
+
+        let result = mgr.apply_cortical_mapping(&src);
+        let error = result
+            .expect_err("the bad mapping is still reported")
+            .to_string();
+        assert!(error.contains("1 of 3 mappings"), "{error}");
+        assert!(error.contains("not synaptic instances"), "{error}");
+        assert_eq!(
+            mgr.count_mapping_synapses(&src, &dsts[0]),
+            1,
+            "before the bad one"
+        );
+        assert_eq!(mgr.count_mapping_synapses(&src, &dsts[1]), 0, "the bad one");
+        assert_eq!(
+            mgr.count_mapping_synapses(&src, &dsts[2]),
+            1,
+            "after the bad one"
+        );
+    }
+
+    /// Areas of one genome must report one unit: a legacy percent (100) and the fraction (1) are
+    /// the same excitability and are both stored and reported as the fraction.
+    #[test]
+    fn excitability_is_stored_and_reported_as_a_fraction() {
+        use crate::models::CorticalAreaExt;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let mut mgr = ConnectomeManager::new_for_testing();
+        let mut make = |bytes: &[u8; 8], value: Option<serde_json::Value>| {
+            let id = CorticalID::try_from_bytes(bytes).unwrap();
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                "a".to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            if let Some(value) = value {
+                area.properties
+                    .insert("neuron_excitability".to_string(), value);
+            }
+            mgr.add_cortical_area(area).unwrap();
+            id
+        };
+        let percent = make(b"cexcpct1", Some(serde_json::json!(100)));
+        let fraction = make(b"cexcfrc1", Some(serde_json::json!(1.0)));
+        let partial = make(b"cexcpar1", Some(serde_json::json!(0.25)));
+        let legacy_partial = make(b"cexcleg1", Some(serde_json::json!(25)));
+        let unset = make(b"cexcunk1", None);
+        for (id, expected) in [
+            (percent, 1.0),
+            (fraction, 1.0),
+            (partial, 0.25),
+            (legacy_partial, 0.25),
+        ] {
+            let area = mgr.get_cortical_area(&id).unwrap();
+            let stored = area.properties["neuron_excitability"].as_f64().unwrap();
+            assert!(
+                (stored - expected).abs() < 1e-6,
+                "stored {stored} for {expected}"
+            );
+            assert!((f64::from(area.neuron_excitability()) - expected).abs() < 1e-6);
+        }
+        assert!(!mgr
+            .get_cortical_area(&unset)
+            .unwrap()
+            .properties
+            .contains_key("neuron_excitability"));
+        assert_eq!(
+            mgr.get_cortical_area(&unset).unwrap().neuron_excitability(),
+            1.0
         );
     }
 }

@@ -165,6 +165,7 @@ impl WasmConnectomeService {
         };
 
         CorticalAreaInfo {
+            memory_neurons_removed: None,
             cortical_id: cortical_id.to_string(),
             cortical_id_s: cortical_id.to_string(), // TODO: Decode base64 if needed
             cortical_idx: area.cortical_idx,
@@ -572,7 +573,7 @@ impl ConnectomeService for WasmConnectomeService {
     async fn import_connectome(
         &self,
         _snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-    ) -> ServiceResult<()> {
+    ) -> ServiceResult<feagi_services::types::ConnectomeImportOutcome> {
         Err(ServiceError::NotImplemented(
             "WASM connectome import is not supported".to_string(),
         ))

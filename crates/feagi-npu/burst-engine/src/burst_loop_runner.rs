@@ -22,6 +22,7 @@
 use crate::parameter_update_queue::{increment_from_parameter_update, ParameterUpdateQueue};
 use crate::sensory::AgentManager;
 use crate::sensory_hold::SensoryHold;
+use crate::stimulus_schedule::StimulusScheduleStore;
 use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
@@ -203,6 +204,8 @@ pub struct BurstLoopRunner {
     /// Input areas with `sensory_hold_last_frame` on (from ConnectomeManager). The loop
     /// re-injects their previous frame for one burst when no new frame arrived.
     cached_sensory_hold_areas: Arc<Mutex<ahash::AHashSet<CorticalID>>>,
+    /// Burst-indexed stimulus schedules, drained by the burst loop (force-fire injection).
+    stimulus_schedules: Arc<StimulusScheduleStore>,
 }
 
 type VisualizationGranularity = (u32, u32, u32);
@@ -401,6 +404,7 @@ impl BurstLoopRunner {
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
             cached_sensory_hold_areas: Arc::new(Mutex::new(ahash::AHashSet::new())),
+            stimulus_schedules: Arc::new(StimulusScheduleStore::new()),
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
@@ -710,6 +714,7 @@ impl BurstLoopRunner {
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
         let cached_sensory_hold_areas = self.cached_sensory_hold_areas.clone();
+        let stimulus_schedules = self.stimulus_schedules.clone();
         let sensory_intake = self.sensory_intake.clone();
         let sequential_ingest = self
             .sequential_ingest_max_frames
@@ -743,6 +748,7 @@ impl BurstLoopRunner {
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
                         cached_sensory_hold_areas,
+                        stimulus_schedules,
                         sensory_intake,
                         sequential_ingest,
                     );
@@ -1041,6 +1047,11 @@ impl BurstLoopRunner {
         let count = areas.len();
         *self.cached_sensory_hold_areas.lock().unwrap() = areas;
         debug!("[BURST-LOOP] Refreshed sensory hold areas: {} areas", count);
+    }
+
+    /// Store of burst-indexed stimulus schedules (drained by the burst loop).
+    pub fn stimulus_schedules(&self) -> Arc<StimulusScheduleStore> {
+        self.stimulus_schedules.clone()
     }
 
     /// Input areas currently configured to hold their last frame for one burst.
@@ -1579,6 +1590,7 @@ fn burst_loop(
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
     cached_sensory_hold_areas: Arc<Mutex<ahash::AHashSet<CorticalID>>>, // Input areas with sensory_hold_last_frame on
+    stimulus_schedules: Arc<StimulusScheduleStore>, // Burst-indexed stimulus schedules
     sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>, // Transport-agnostic (feagi-io)
     mut sequential_ingest: Option<crate::sequential_ingest::SequentialIngest>,
 ) {
@@ -2196,6 +2208,15 @@ fn burst_loop(
                             "[PARAM-QUEUE] ✓ Applied {} parameter updates in {:?}",
                             applied_count, update_duration
                         );
+                    }
+                }
+
+                // Scheduled stimuli due on this burst index (the burst about to run is
+                // count + 1). Same force-fire path as manual stimulation, so every area of
+                // one entry lands on the same burst.
+                for due in stimulus_schedules.take_due(npu_lock.get_burst_count() + 1) {
+                    for (cortical_id, voxels) in &due.areas {
+                        npu_lock.inject_force_fire_by_coordinates(cortical_id, voxels);
                     }
                 }
 

@@ -61,6 +61,7 @@ pub mod runtime;
 pub mod storage;
 pub mod templates;
 pub mod types;
+pub mod units;
 pub mod validator;
 
 // Re-export commonly used types

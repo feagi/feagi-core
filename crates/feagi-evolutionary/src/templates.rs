@@ -109,7 +109,7 @@ pub fn create_power_area() -> CorticalArea {
     props.insert("2d_coordinate".to_string(), Value::from(vec![-10, -10]));
     props.insert("firing_threshold".to_string(), Value::from(0.1));
     props.insert("postsynaptic_current".to_string(), Value::from(500.0));
-    props.insert("neuron_excitability".to_string(), Value::from(100.0));
+    props.insert("neuron_excitability".to_string(), Value::from(1.0));
     props.insert("degeneration".to_string(), Value::from(0.0));
     props.insert("psp_uniform_distribution".to_string(), Value::from(true));
     area.properties = props;

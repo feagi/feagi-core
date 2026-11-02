@@ -73,6 +73,7 @@ fn stdp_params(
         associative_memory_mapping: false,
         synapse_psp,
         synapse_type,
+        synapse_delay_bursts: 1,
         plasticity_mode: PlasticityMode::Stdp,
         eligibility_decay_bursts: 0,
         max_weight: f32::INFINITY,
@@ -583,5 +584,60 @@ fn test_directional_associative_mapping_synthesizes_synapse_without_seed() {
             .iter()
             .any(|(target, _, _, _)| *target == destination_neuron.0),
         "Directional associative mapping should synthesize a memory-to-non-memory synapse"
+    );
+}
+
+/// Build a directional associative mapping with `delay` bursts, synthesize the synapse in one
+/// burst, then fire the memory source alone and return how many bursts later the destination fires.
+fn associative_delivery_latency(delay: u8) -> u64 {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src, dst_neurons) = create_stdp_network();
+    npu.configure_fire_ledger_window(10, 1).unwrap();
+    npu.configure_fire_ledger_window(11, 1).unwrap();
+
+    let mut params = stdp_params(1, 1, 5, 0, false, 100.0, SynapseType::Excitatory);
+    params.associative_memory_mapping = true;
+    params.synapse_delay_bursts = delay;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let source = NeuronId(MEMORY_NEURON_ID_START + 10);
+    let dst = dst_neurons[0];
+    npu.inject_memory_neuron_to_fcl_with_kind(source.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    process_burst_with_injection(&mut npu, &[(dst, 128.0)]);
+    assert_eq!(
+        npu.get_outgoing_synapses(source.0).len(),
+        1,
+        "synapse must be synthesized"
+    );
+
+    // Stop plasticity from re-synthesizing while measuring delivery.
+    let mut frozen = params;
+    frozen.frozen = true;
+    npu.register_stdp_mapping(10, 11, frozen).unwrap();
+    // Let any pending PSP drain.
+    for _ in 0..8 {
+        npu.process_burst().unwrap();
+    }
+
+    // Fire the source on burst T and look for the destination spike.
+    npu.inject_memory_neuron_to_fcl_with_kind(source.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let fire_burst = npu.process_burst().unwrap().burst;
+    for _ in 0..(delay as u64 + 3) {
+        let r = npu.process_burst().unwrap();
+        if r.fired_neurons.contains(&dst) {
+            return r.burst - fire_burst;
+        }
+    }
+    panic!("destination never fired for delay {delay}");
+}
+
+#[test]
+fn test_associative_synapse_honors_synaptic_delay_bursts() {
+    let fast = associative_delivery_latency(1);
+    let slow = associative_delivery_latency(3);
+    assert_eq!(
+        slow,
+        fast + 2,
+        "delay 3 must deliver 2 bursts after delay 1"
     );
 }

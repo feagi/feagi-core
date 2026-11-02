@@ -198,6 +198,26 @@ impl AsyncPlasticityExecutor {
         service.restore_long_term_memory_neurons(neurons)
     }
 
+    /// Remove an area's memory neurons that no longer fit `new_shape`; call before re-registering
+    /// the area. See [`crate::PlasticityService::purge_neurons_outside_shape`].
+    pub fn purge_memory_neurons_outside_shape(
+        &self,
+        area_idx: u32,
+        new_shape: &crate::memory_shape::MemoryAreaShape,
+    ) -> crate::service::MemoryShapePurge {
+        let Ok(guard) = self.service.lock() else {
+            warn!(
+                "[PLASTICITY-EXEC] Failed to lock service while purging area_idx={}",
+                area_idx
+            );
+            return Default::default();
+        };
+        guard
+            .as_ref()
+            .map(|service| service.purge_neurons_outside_shape(area_idx, new_shape))
+            .unwrap_or_default()
+    }
+
     /// Stop pattern detection for one cortical index and delete its memory neurons.
     pub fn unregister_memory_area(&self, area_idx: u32) {
         let Ok(guard) = self.service.lock() else {

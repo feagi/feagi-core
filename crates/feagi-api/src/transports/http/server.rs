@@ -1315,6 +1315,14 @@ fn create_v1_router() -> Router<ApiState> {
             "/simulation/config",
             axum::routing::post(simulation::post_config),
         )
+        .route(
+            "/simulation/stimulus_schedule",
+            get(simulation::get_stimulus_schedules).post(simulation::post_stimulus_schedule),
+        )
+        .route(
+            "/simulation/stimulus_schedule/:schedule_id",
+            axum::routing::delete(simulation::delete_stimulus_schedule),
+        )
         // ===== TRAINING MODULE (25 endpoints) =====
         .route("/training/shock", axum::routing::post(training::post_shock))
         .route("/training/shock/options", get(training::get_shock_options))

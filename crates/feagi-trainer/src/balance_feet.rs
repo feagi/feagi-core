@@ -1750,6 +1750,8 @@ pub struct MeasureRequest {
     pub contacts_except: Vec<Vec<String>>,
     /// Also report every actuator's command. Sent only when true.
     pub actuators: bool,
+    /// Also report every actuator's applied force. Sent only when true, as `actuator_force`.
+    pub actuator_force: bool,
 }
 
 /// One body in a `measure` reply.
@@ -1839,6 +1841,10 @@ pub struct Measurement {
     /// Actuator command (ctrl) by actuator name; present only when requested.
     #[serde(default)]
     pub actuators: BTreeMap<String, f64>,
+    /// Applied actuator force by actuator name (same keys as `actuators`); present only when
+    /// requested and supported by the controller.
+    #[serde(default)]
+    pub actuator_force: BTreeMap<String, f64>,
 }
 
 fn named_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
@@ -1951,6 +1957,10 @@ pub struct BalanceSample {
     /// `record_actuators`.
     #[serde(default)]
     pub actuators: BTreeMap<String, f64>,
+    /// Applied actuator force by actuator name at this burst. Empty unless the criterion sets
+    /// `record_actuators` and the controller reports it.
+    #[serde(default)]
+    pub actuator_force: BTreeMap<String, f64>,
     /// Stability readings of the torso at this burst. Absent when not measured.
     #[serde(default)]
     pub stability: Option<StabilitySample>,
@@ -2176,6 +2186,51 @@ pub struct StabilitySample {
     pub tilt_vec_rad: Option<[f64; 2]>,
     /// Subtree CoM horizontal position (x, y), m. Absent when not reported.
     pub com_xy_m: Option<[f64; 2]>,
+    /// Heading of the torso about up (the measure reply's `heading.yaw_rad`), rad. Absent on a
+    /// controller that does not report it, or when forward points along up.
+    #[serde(default)]
+    pub yaw_rad: Option<f64>,
+}
+
+/// Signed lean of one burst: `(x, y)` are the components of the tilt vector on the controller's
+/// two horizontal axes (world X, Y for z-up) and `(forward, left)` the same lean in the torso
+/// frame, positive leaning toward the torso's forward or left. All degrees.
+///
+/// The tilt vector is the rotation that takes the torso's up axis back onto world up, so leaning
+/// toward +X gives `(0, -theta)` and leaning toward +Y gives `(theta, 0)`. With forward
+/// `f = (cos yaw, sin yaw)` and left `l = (-sin yaw, cos yaw)`: `left = r . f`,
+/// `forward = -(r . l)`.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct TiltComponentsDeg {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub forward: Option<f64>,
+    pub left: Option<f64>,
+}
+
+impl StabilitySample {
+    /// The signed lean components of this burst; each is empty when its inputs were not reported.
+    pub fn tilt_components_deg(&self) -> TiltComponentsDeg {
+        let Some([rx, ry]) = self.tilt_vec_rad else {
+            return TiltComponentsDeg::default();
+        };
+        let (forward, left) = match self.yaw_rad {
+            Some(yaw) => {
+                let (sin, cos) = yaw.sin_cos();
+                (
+                    Some((-(-rx * sin + ry * cos)).to_degrees()),
+                    Some((rx * cos + ry * sin).to_degrees()),
+                )
+            }
+            None => (None, None),
+        };
+        TiltComponentsDeg {
+            x: Some(rx.to_degrees()),
+            y: Some(ry.to_degrees()),
+            forward,
+            left,
+        }
+    }
 }
 
 impl StabilitySample {
@@ -2185,6 +2240,7 @@ impl StabilitySample {
             horizontal_ang_vel_rad_s: body.ang_vel.map(|w| w[0].hypot(w[1])),
             tilt_vec_rad: body.tilt_vec,
             com_xy_m: body.subtree_com.map(|c| [c[0], c[1]]),
+            yaw_rad: body.heading.as_ref().and_then(|heading| heading.yaw_rad),
         }
     }
 }
@@ -4185,7 +4241,10 @@ fn run_phase_attempts(
     let mut train_done: u32 = 0;
     let mut probes_run: u32 = 0;
     let mut probes_frozen = true;
-    let mut steps_table = StepsTable { actuators: None };
+    let mut steps_table = StepsTable {
+        actuators: None,
+        actuator_force: Vec::new(),
+    };
     if let Some(sink) = run.data.as_deref_mut() {
         sink.declare_table(&attempts_table_spec(criterion.walk.is_some()));
         sink.event(EventTime::default(), "phase_start", run.phase);
@@ -4444,6 +4503,7 @@ fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
             Vec::new()
         },
         actuators: criterion.record_actuators,
+        actuator_force: criterion.record_actuators,
     }
 }
 
@@ -4655,6 +4715,8 @@ const ATTEMPTS_TABLE: &str = "attempts";
 /// Column names of the per-burst table that depend on the model: filled at the first sample.
 struct StepsTable {
     actuators: Option<Vec<String>>,
+    /// `actuator_force_<name>` columns; empty when the controller reports no force.
+    actuator_force: Vec<String>,
 }
 
 fn contact_column(body: &str) -> String {
@@ -4665,7 +4727,15 @@ fn actuator_column(name: &str) -> String {
     format!("actuator_{name}")
 }
 
-fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> TableSpec {
+fn actuator_force_column(name: &str) -> String {
+    format!("actuator_force_{name}")
+}
+
+fn steps_table_spec(
+    criterion: &BalanceFeetCriterion,
+    actuators: &[String],
+    actuator_force: &[String],
+) -> TableSpec {
     let mut columns = vec![
         ColumnSpec::unitless("phase", "Phase the burst belongs to."),
         ColumnSpec::unitless("attempt", "Attempt index within the phase."),
@@ -4683,6 +4753,26 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
             "ang_vel_xy",
             "rad/s",
             "Torso horizontal angular velocity hypot(wx, wy); empty when the controller did not report it.",
+        ),
+        ColumnSpec::with_unit(
+            "tilt_x",
+            "deg",
+            "Signed lean: component of the tilt vector on the controller's first horizontal axis (world X for z-up). Leaning toward +Y reads positive here; leaning toward +X reads negative on tilt_y. See tilt_forward and tilt_left for the torso frame. Empty when the controller did not report the tilt vector.",
+        ),
+        ColumnSpec::with_unit(
+            "tilt_y",
+            "deg",
+            "Signed lean: component of the tilt vector on the controller's second horizontal axis (world Y for z-up). Leaning toward +X reads negative here. Empty when the controller did not report the tilt vector.",
+        ),
+        ColumnSpec::with_unit(
+            "tilt_forward",
+            "deg",
+            "Signed lean in the torso frame, positive leaning toward the torso's forward (the body's measured heading). Empty when the controller did not report the tilt vector or the heading.",
+        ),
+        ColumnSpec::with_unit(
+            "tilt_left",
+            "deg",
+            "Signed lean in the torso frame, positive leaning toward the torso's left. Empty when the controller did not report the tilt vector or the heading.",
         ),
     ];
     columns.extend(criterion.contact_bodies.iter().map(|body| {
@@ -4727,6 +4817,12 @@ fn steps_table_spec(criterion: &BalanceFeetCriterion, actuators: &[String]) -> T
             .iter()
             .map(|name| ColumnSpec::unitless(&actuator_column(name), "Actuator command (ctrl).")),
     );
+    columns.extend(actuator_force.iter().map(|name| {
+        ColumnSpec::unitless(
+            &actuator_force_column(name),
+            "Applied actuator force, as reported by the simulator.",
+        )
+    }));
     TableSpec {
         name: STEPS_TABLE.to_string(),
         description: "One row per counted burst.".to_string(),
@@ -4891,11 +4987,17 @@ impl AttemptHooks<'_, '_> {
         let Some(sink) = self.data.as_deref_mut() else {
             return;
         };
-        let actuators = self.steps.actuators.get_or_insert_with(|| {
+        if self.steps.actuators.is_none() {
             let names: Vec<String> = sample.actuators.keys().cloned().collect();
-            sink.declare_table(&steps_table_spec(criterion, &names));
-            names
-        });
+            self.steps.actuator_force = sample.actuator_force.keys().cloned().collect();
+            sink.declare_table(&steps_table_spec(
+                criterion,
+                &names,
+                &self.steps.actuator_force,
+            ));
+            self.steps.actuators = Some(names);
+        }
+        let actuators = self.steps.actuators.as_ref().expect("declared above");
         let mut row = vec![
             RunDataValue::text(self.phase),
             RunDataValue::count(self.attempt_index as u64),
@@ -4913,6 +5015,17 @@ impl AttemptHooks<'_, '_> {
                     .and_then(|st| st.horizontal_ang_vel_rad_s),
             ),
         ];
+        let lean = sample
+            .stability
+            .as_ref()
+            .map(StabilitySample::tilt_components_deg)
+            .unwrap_or_default();
+        row.extend([
+            RunDataValue::opt_float(lean.x),
+            RunDataValue::opt_float(lean.y),
+            RunDataValue::opt_float(lean.forward),
+            RunDataValue::opt_float(lean.left),
+        ]);
         row.extend((0..criterion.contact_bodies.len()).map(|i| {
             sample
                 .contacts
@@ -4947,6 +5060,12 @@ impl AttemptHooks<'_, '_> {
         row.extend(actuators.iter().map(|name| {
             sample
                 .actuators
+                .get(name)
+                .map_or(RunDataValue::Null, |v| RunDataValue::Float(*v))
+        }));
+        row.extend(self.steps.actuator_force.iter().map(|name| {
+            sample
+                .actuator_force
                 .get(name)
                 .map_or(RunDataValue::Null, |v| RunDataValue::Float(*v))
         }));
@@ -5309,6 +5428,7 @@ fn run_balance_attempt(
             assist_slow: None,
             assist_rise: None,
             actuators: reading.actuators.clone(),
+            actuator_force: reading.actuator_force.clone(),
             stability: Some(StabilitySample::from_body(body)),
             walk: walk_reading,
         };
@@ -5523,6 +5643,9 @@ pub fn measure_request_body(request: &MeasureRequest) -> serde_json::Value {
     });
     if request.actuators {
         body["actuators"] = serde_json::Value::Bool(true);
+    }
+    if request.actuator_force {
+        body["actuator_force"] = serde_json::Value::Bool(true);
     }
     body
 }
@@ -5868,6 +5991,7 @@ mod tests {
             assist_slow: None,
             assist_rise: None,
             actuators: BTreeMap::new(),
+            actuator_force: BTreeMap::new(),
             stability: None,
             walk: None,
         }
@@ -5887,7 +6011,7 @@ mod tests {
 
     #[test]
     fn steps_table_declares_height_fraction_after_height() {
-        let spec = steps_table_spec(&fall_criterion(), &[]);
+        let spec = steps_table_spec(&fall_criterion(), &[], &[]);
         let names: Vec<&str> = spec.columns.iter().map(|c| c.name.as_str()).collect();
         let h = names.iter().position(|n| *n == "height").unwrap();
         assert_eq!(names[h + 1], "height_fraction");
@@ -6063,6 +6187,7 @@ mod tests {
             horizontal_ang_vel_rad_s: Some(w),
             tilt_vec_rad: Some(tilt),
             com_xy_m: Some(com),
+            yaw_rad: None,
         });
         s
     }
@@ -7093,6 +7218,11 @@ mod tests {
                 } else {
                     BTreeMap::new()
                 },
+                actuator_force: if request.actuator_force {
+                    BTreeMap::from([("joint_a".to_string(), f64::from(k) * 2.0)])
+                } else {
+                    BTreeMap::new()
+                },
             })
         }
     }
@@ -7222,6 +7352,49 @@ mod tests {
         assert!(facing(0.0, None));
         assert!(!facing(std::f64::consts::FRAC_PI_2, None));
         assert!(facing(std::f64::consts::FRAC_PI_2, Some(0.0)));
+    }
+
+    #[test]
+    fn signed_lean_is_read_in_the_world_axes_and_in_the_torso_frame() {
+        let lean = |tilt: Option<[f64; 2]>, yaw: Option<f64>| {
+            StabilitySample {
+                horizontal_ang_vel_rad_s: None,
+                tilt_vec_rad: tilt,
+                com_xy_m: None,
+                yaw_rad: yaw,
+            }
+            .tilt_components_deg()
+        };
+        let theta = 0.1_f64;
+        let deg = theta.to_degrees();
+        // Leaning toward +X reads (0, -theta); a torso facing +X is leaning forward.
+        let c = lean(Some([0.0, -theta]), Some(0.0));
+        assert_eq!((c.x, c.y), (Some(0.0), Some(-deg)));
+        assert!((c.forward.unwrap() - deg).abs() < 1e-9 && c.left.unwrap().abs() < 1e-9);
+        // Leaning toward +Y reads (theta, 0); facing +X that is a lean to the left.
+        let c = lean(Some([theta, 0.0]), Some(0.0));
+        assert!((c.left.unwrap() - deg).abs() < 1e-9 && c.forward.unwrap().abs() < 1e-9);
+        // The same lean toward +Y, with the torso turned to face +Y, is a lean forward.
+        let c = lean(Some([theta, 0.0]), Some(std::f64::consts::FRAC_PI_2));
+        assert!((c.forward.unwrap() - deg).abs() < 1e-9 && c.left.unwrap().abs() < 1e-9);
+        // Facing -X, a lean toward +X is backward and one toward +Y is to the right.
+        let c = lean(Some([0.0, -theta]), Some(std::f64::consts::PI));
+        assert!((c.forward.unwrap() + deg).abs() < 1e-9);
+        // No heading: only the axis components. No tilt vector: nothing.
+        let c = lean(Some([theta, 0.0]), None);
+        assert!(c.x.is_some() && c.forward.is_none() && c.left.is_none());
+        assert_eq!(lean(None, Some(0.0)), TiltComponentsDeg::default());
+    }
+
+    #[test]
+    fn the_steps_table_documents_the_signed_lean_after_the_angular_velocity() {
+        let spec = steps_table_spec(&criterion(), &[], &[]);
+        let names: Vec<&str> = spec.columns.iter().map(|c| c.name.as_str()).collect();
+        let at = names.iter().position(|n| *n == "ang_vel_xy").unwrap();
+        assert_eq!(
+            &names[at + 1..at + 5],
+            ["tilt_x", "tilt_y", "tilt_forward", "tilt_left"]
+        );
     }
 
     #[test]
@@ -8237,8 +8410,10 @@ mod tests {
             contacts: vec![vec!["a".to_string()], vec!["b".to_string()]],
             contacts_except: vec![vec!["a".to_string(), "b".to_string()]],
             actuators: false,
+            actuator_force: false,
         });
         assert!(m.get("actuators").is_none(), "{m}");
+        assert!(m.get("actuator_force").is_none(), "{m}");
         assert_eq!(m["bodies"], serde_json::json!(["torso"]));
         assert_eq!(
             m["contacts"][1],
@@ -8517,6 +8692,7 @@ mod tests {
             assist_slow: None,
             assist_rise: None,
             actuators: BTreeMap::new(),
+            actuator_force: BTreeMap::new(),
             ..sample(seq, 1, 2.0)
         }
     }
@@ -8703,6 +8879,7 @@ mod tests {
             assist_slow: None,
             assist_rise: None,
             actuators: BTreeMap::new(),
+            actuator_force: BTreeMap::new(),
             support_need: Some(0.2),
             support_effort: Some(0.3),
             ..sample(seq, 1, 2.0)
@@ -9788,6 +9965,7 @@ mod tests {
         let rising = |rise: f64| BalanceSample {
             assist_rise: Some(rise),
             actuators: BTreeMap::new(),
+            actuator_force: BTreeMap::new(),
             ..contribution_sample(0.5, 0.5)
         };
         // A rise of exactly the threshold or more pays the full 0.5; a smaller one a share.
@@ -10224,6 +10402,13 @@ mod tests {
             assert!(tape.column_index("steps", &contact_column(body)).is_some());
         }
         let actuator = col("actuator_joint_a");
+        // The mock reports force when asked, so the force column is declared from the model's
+        // actuator names; it is absent when the controller reports none (see the no-sink test).
+        let force = col("actuator_force_joint_a");
+        assert!(tape
+            .rows_of("steps")
+            .iter()
+            .all(|r| matches!(r[force], RunDataValue::Float(_))));
         let (attempt, settling, time) = (col("attempt"), col("settling"), col("sim_time"));
         let rows = tape.rows_of("steps");
         for index in 0..2u64 {
@@ -10446,14 +10631,20 @@ mod tests {
         assert!(measure_request_body(&measure_request(&c))
             .get("actuators")
             .is_none());
+        assert!(measure_request_body(&measure_request(&c))
+            .get("actuator_force")
+            .is_none());
         c.record_actuators = true;
         let body = measure_request_body(&measure_request(&c));
         assert_eq!(body["actuators"], serde_json::json!(true));
+        assert_eq!(body["actuator_force"], serde_json::json!(true));
         let parsed: Measurement = serde_json::from_value(serde_json::json!({
-            "sim_time_s": 0.1, "physics_steps": 5, "actuators": {"joint_a": 0.25}
+            "sim_time_s": 0.1, "physics_steps": 5, "actuators": {"joint_a": 0.25},
+            "actuator_force": {"joint_a": 3.5}
         }))
         .expect("parse");
         assert_eq!(parsed.actuators["joint_a"], 0.25);
+        assert_eq!(parsed.actuator_force["joint_a"], 3.5);
     }
 }
 
@@ -10513,6 +10704,7 @@ mod walk_tests {
             assist_slow: None,
             assist_rise: None,
             actuators: BTreeMap::new(),
+            actuator_force: BTreeMap::new(),
             stability: None,
             walk: Some(walk),
         }

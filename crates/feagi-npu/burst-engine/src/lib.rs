@@ -109,8 +109,9 @@ pub mod runtime_taps;
 pub mod sensory; // Rust sensory injection system
 pub mod sensory_hold; // Sensor cadence hold (re-inject last IPU frame for one burst)
 pub mod sequential_ingest;
-// Disabled - uses DynamicNPU
-// pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+pub mod stimulus_schedule; // Burst-indexed multi-area stimulus schedules
+                           // Disabled - uses DynamicNPU
+                           // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod sparse_memory_lif;
 pub mod synaptic_arrival_schedule;
 pub mod synaptic_propagation;

@@ -1591,11 +1591,22 @@ pub async fn put_cortical_area(
                 cortical_id,
                 updated_id
             );
-            Ok(Json(HashMap::from([
+            let mut response = HashMap::from([
                 ("message".to_string(), "Cortical area updated".to_string()),
                 ("cortical_id".to_string(), updated_id),
                 ("previous_cortical_id".to_string(), cortical_id),
-            ])))
+            ]);
+            if let Some(removed) = &area_info.memory_neurons_removed {
+                response.insert(
+                    "memory_neurons_removed".to_string(),
+                    removed.count.to_string(),
+                );
+                response.insert(
+                    "memory_neurons_removed_reason".to_string(),
+                    removed.reason.clone(),
+                );
+            }
+            Ok(Json(response))
         }
         Err(e) => {
             tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - failed for {}: {}", cortical_id, e);

@@ -52,6 +52,75 @@ pub struct CreateNeuronParams {
 // CORTICAL AREA DTOs
 // ============================================================================
 
+/// Memory neurons removed from an area because its pattern shape changed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MemoryNeuronsRemoved {
+    /// Neurons removed (short-term plus long-term).
+    pub count: usize,
+    /// Of those, how many were long-term.
+    pub long_term: usize,
+    /// Why they no longer fit, as `reason key -> count`.
+    pub reasons: std::collections::BTreeMap<String, usize>,
+    /// One-line human-readable reason.
+    pub reason: String,
+}
+
+/// Memory neurons a connectome load skipped in one memory area because they no longer fit
+/// the area's pattern shape.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MemoryNeuronsSkipped {
+    /// Memory cortical area (base64 cortical ID).
+    pub cortical_id: String,
+    /// Rows skipped in this area.
+    pub count: usize,
+    /// Why they were skipped, as `reason key -> count`.
+    pub reasons: std::collections::BTreeMap<String, usize>,
+}
+
+/// Result of a connectome import.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConnectomeImportOutcome {
+    /// Long-term memory rows left out of the load, per memory area. Empty when none.
+    pub memory_neurons_skipped: Vec<MemoryNeuronsSkipped>,
+}
+
+impl ConnectomeImportOutcome {
+    /// Total memory rows skipped across areas.
+    pub fn total_memory_neurons_skipped(&self) -> usize {
+        self.memory_neurons_skipped.iter().map(|a| a.count).sum()
+    }
+
+    /// One-line summary for the API response and notices; `None` when nothing was skipped.
+    pub fn skipped_summary(&self) -> Option<String> {
+        let total = self.total_memory_neurons_skipped();
+        if total == 0 {
+            return None;
+        }
+        let areas: Vec<String> = self
+            .memory_neurons_skipped
+            .iter()
+            .map(|area| {
+                let reasons: Vec<String> = area
+                    .reasons
+                    .iter()
+                    .map(|(reason, n)| format!("{reason} x{n}"))
+                    .collect();
+                format!(
+                    "{}: {} ({})",
+                    area.cortical_id,
+                    area.count,
+                    reasons.join(", ")
+                )
+            })
+            .collect();
+        Some(format!(
+            "{total} memory neuron(s) no longer fit their area's temporal depth, upstream set or \
+             MP encoding and were left out: {}",
+            areas.join("; ")
+        ))
+    }
+}
+
 /// Information about a cortical area
 /// This structure matches the Python FEAGI API for full compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,6 +229,11 @@ pub struct CorticalAreaInfo {
     /// Omitted for non-memory areas.
     #[serde(rename = "ltm_eviction", skip_serializing_if = "Option::is_none")]
     pub ltm_eviction: Option<String>,
+    /// Set on an update response when the change altered the memory area's pattern shape
+    /// (temporal depth, episodic upstream set or MP encoding mode) and neurons that no longer
+    /// fit were removed. Absent on reads and on updates that removed nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_neurons_removed: Option<MemoryNeuronsRemoved>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)

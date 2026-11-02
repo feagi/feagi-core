@@ -19,7 +19,10 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
-use crate::traits::runtime_service::{ManualStimulationMode, FIRE_HISTORY_SUBSCRIPTION_TTL};
+use crate::traits::runtime_service::{
+    ManualStimulationMode, StimulusScheduleEntry, StimulusScheduleReceipt, StimulusScheduleStatus,
+    FIRE_HISTORY_SUBSCRIPTION_TTL,
+};
 use crate::traits::RuntimeService;
 use crate::types::{
     FireHistory, FireHistoryArea, FireHistoryFrame, FiredNeuron, RuntimeStatus, ServiceError,
@@ -678,6 +681,89 @@ impl RuntimeService for RuntimeServiceImpl {
         }
 
         Ok(injected_count)
+    }
+
+    async fn schedule_stimulus(
+        &self,
+        entries: Vec<StimulusScheduleEntry>,
+        repeat_period_bursts: Option<u64>,
+    ) -> ServiceResult<StimulusScheduleReceipt> {
+        use feagi_npu_burst_engine::stimulus_schedule::ScheduledStimulus;
+
+        if entries.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "stimulus schedule needs at least one entry".to_string(),
+            ));
+        }
+        if let Some(period) = repeat_period_bursts {
+            let max_offset = entries.iter().map(|e| e.burst_offset).max().unwrap_or(0);
+            if period == 0 || period <= max_offset {
+                return Err(ServiceError::InvalidInput(format!(
+                    "repeat period_bursts ({period}) must be greater than the largest \
+                     burst_offset ({max_offset})"
+                )));
+            }
+        }
+        let mut parsed = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let mut areas = Vec::with_capacity(entry.areas.len());
+            for (cortical_id, voxels) in entry.areas {
+                let id = CorticalID::try_from_base_64(&cortical_id).map_err(|e| {
+                    ServiceError::InvalidInput(format!(
+                        "Invalid cortical ID '{}': {}",
+                        cortical_id, e
+                    ))
+                })?;
+                areas.push((id, voxels));
+            }
+            parsed.push((entry.burst_offset, areas));
+        }
+
+        let runner = self.burst_runner.read();
+        // The burst about to run has index count + 1; offset 0 targets it.
+        let next_burst = runner.get_burst_count().saturating_add(1);
+        let scheduled = parsed
+            .into_iter()
+            .map(|(offset, areas)| ScheduledStimulus {
+                burst: next_burst.saturating_add(offset),
+                areas,
+            })
+            .collect();
+        let (schedule_id, start_burst, end_burst) = runner
+            .stimulus_schedules()
+            .add_with_repeat(scheduled, repeat_period_bursts)
+            .ok_or_else(|| ServiceError::InvalidInput("empty stimulus schedule".to_string()))?;
+        Ok(StimulusScheduleReceipt {
+            schedule_id,
+            start_burst,
+            end_burst,
+        })
+    }
+
+    async fn cancel_stimulus_schedule(&self, schedule_id: u64) -> ServiceResult<bool> {
+        Ok(self
+            .burst_runner
+            .read()
+            .stimulus_schedules()
+            .cancel(schedule_id))
+    }
+
+    async fn list_stimulus_schedules(&self) -> ServiceResult<Vec<StimulusScheduleStatus>> {
+        Ok(self
+            .burst_runner
+            .read()
+            .stimulus_schedules()
+            .list()
+            .into_iter()
+            .map(|s| StimulusScheduleStatus {
+                schedule_id: s.schedule_id,
+                start_burst: s.start_burst,
+                end_burst: s.end_burst,
+                remaining_entries: s.remaining_entries,
+                next_burst: s.next_burst,
+                repeat_period_bursts: s.repeat_period_bursts,
+            })
+            .collect())
     }
 
     async fn reset_cortical_area_states(

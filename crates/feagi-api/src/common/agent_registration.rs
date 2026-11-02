@@ -6,10 +6,10 @@
 use crate::common::ApiState;
 use crate::v1::RegistrationAreaDiff;
 use feagi_config::load_config;
-use feagi_services::types::CreateCorticalAreaParams;
 use feagi_services::change_ledger::{
     current_change_context, with_change_context, ChangeContext, ChangeSource,
 };
+use feagi_services::types::CreateCorticalAreaParams;
 use feagi_services::ConnectomeService;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,

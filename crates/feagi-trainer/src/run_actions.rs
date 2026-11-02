@@ -37,6 +37,10 @@ pub enum ScheduledAction {
         bursts: Option<u32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         seconds: Option<f64>,
+        /// Hold form: fire the voxels on every burst until the attempt or phase ends. Replaces
+        /// `bursts` and `seconds`, which must then be absent.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        hold: bool,
     },
     /// Sent by the runner (never part of a schedule) when an attempt begins, so the applier can
     /// end anything the previous attempt left running. Not serializable.
@@ -105,6 +109,7 @@ impl ScheduledEvent {
                 voxels,
                 bursts,
                 seconds,
+                hold,
             } => {
                 named("area", area)?;
                 if voxels.is_empty() {
@@ -113,12 +118,13 @@ impl ScheduledEvent {
                         self.label
                     )));
                 }
-                match (bursts, seconds) {
-                    (Some(b), None) if *b >= 1 => {}
-                    (None, Some(s)) if s.is_finite() && *s > 0.0 => {}
+                match (bursts, seconds, hold) {
+                    (None, None, true) => {}
+                    (Some(b), None, false) if *b >= 1 => {}
+                    (None, Some(s), false) if s.is_finite() && *s > 0.0 => {}
                     _ => {
                         return Err(TrainerError::Config(format!(
-                            "scheduled event {:?}: give exactly one of bursts (>= 1) or seconds (finite, > 0)",
+                            "scheduled event {:?}: give exactly one of bursts (>= 1), seconds (finite, > 0) or hold: true",
                             self.label
                         )));
                     }
@@ -246,12 +252,15 @@ mod tests {
             with(action)
         };
         assert!(stim(json!({"seconds": 0.2})).validate().is_ok());
+        assert!(stim(json!({"hold": true})).validate().is_ok());
         for bad in [
             json!({}),
             json!({"bursts": 0}),
             json!({"bursts": 3, "seconds": 1.0}),
             json!({"seconds": 0.0}),
             json!({"seconds": -1.0}),
+            json!({"hold": true, "bursts": 3}),
+            json!({"hold": false}),
         ] {
             assert!(stim(bad.clone()).validate().is_err(), "{bad}");
         }

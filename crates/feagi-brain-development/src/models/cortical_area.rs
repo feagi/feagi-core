@@ -378,7 +378,10 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn neuron_excitability(&self) -> f32 {
-        self.get_f32_property("neuron_excitability", 1.0)
+        // Always the fraction 0..=1, also for an area that still holds a legacy percent.
+        feagi_evolutionary::units::excitability_fraction(f64::from(
+            self.get_f32_property("neuron_excitability", 1.0),
+        )) as f32
     }
 
     fn postsynaptic_current_max(&self) -> f32 {

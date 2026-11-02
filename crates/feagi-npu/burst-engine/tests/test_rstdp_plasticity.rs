@@ -131,6 +131,7 @@ fn rstdp_params(mode: PlasticityMode, eligibility_decay_bursts: u32) -> StdpMapp
         associative_memory_mapping: false,
         synapse_psp: 100.0,
         synapse_type: SynapseType::Excitatory,
+        synapse_delay_bursts: 1,
         plasticity_mode: mode,
         eligibility_decay_bursts,
         max_weight: f32::INFINITY,

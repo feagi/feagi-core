@@ -1287,7 +1287,7 @@ pub async fn get_fire_ledger_history(
 // ============================================================================
 
 /// Most areas one fire-history request may cover.
-pub const FIRE_HISTORY_MAX_AREAS: usize = 16;
+pub const FIRE_HISTORY_MAX_AREAS: usize = 64;
 /// Most bursts one fire-history request may cover.
 pub const FIRE_HISTORY_MAX_BURSTS: usize = 2000;
 /// Bursts returned when the query omits `bursts`.
@@ -1353,7 +1353,7 @@ async fn resolve_fire_history_areas(
 
 /// GET /v1/burst_engine/fire_history?areas=<id,id,...>&bursts=<n>
 ///
-/// Burst-aligned firing history for up to 16 cortical areas over the last `bursts`
+/// Burst-aligned firing history for up to 64 cortical areas over the last `bursts`
 /// bursts (1..=2000, default 100). Each area gets one frame per burst, oldest first,
 /// with an explicit empty frame for a silent burst, so frames of different areas line up
 /// by their `burst` number.
@@ -1377,7 +1377,7 @@ async fn resolve_fire_history_areas(
     path = "/v1/burst_engine/fire_history",
     tag = "burst_engine",
     params(
-        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 16"),
+        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 64"),
         ("bursts" = Option<usize>, Query, description = "Bursts to return, 1..=2000 (default 100)")
     ),
     responses(
@@ -1469,7 +1469,7 @@ pub async fn get_fire_history(
     path = "/v1/burst_engine/fire_history",
     tag = "burst_engine",
     params(
-        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 16")
+        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 64")
     ),
     responses(
         (status = 200, description = "Subscriptions dropped", body = HashMap<String, serde_json::Value>),

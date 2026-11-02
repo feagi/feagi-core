@@ -100,6 +100,9 @@ pub enum MemoryNeuronRemovalReason {
     Expired,
     /// Evicted to make room for a new neuron (area cap or full pool).
     Evicted,
+    /// Removed because its area's pattern shape (temporal depth, episodic upstream set or MP
+    /// encoding mode) changed and the neuron no longer fits.
+    ShapeChanged,
 }
 
 /// A memory neuron that left the array and whose NPU-side footprint still has to be removed.
@@ -422,11 +425,34 @@ impl MemoryNeuronArray {
 
     /// Remove an active neuron to free its slot and record it for NPU-side cleanup.
     fn evict_neuron(&mut self, idx: usize) {
+        self.remove_neuron(idx, MemoryNeuronRemovalReason::Evicted);
+    }
+
+    /// Remove active neurons by id and record each for NPU-side cleanup. Returns how many were
+    /// removed; ids that are not active memory neurons are ignored.
+    pub fn remove_neurons_by_id(
+        &mut self,
+        neuron_ids: &[u32],
+        reason: MemoryNeuronRemovalReason,
+    ) -> usize {
+        let mut removed = 0;
+        for &neuron_id in neuron_ids {
+            if let Some(idx) = self.find_neuron_index_by_global_id(neuron_id) {
+                if self.is_valid_index(idx) && self.is_active[idx] {
+                    self.remove_neuron(idx, reason);
+                    removed += 1;
+                }
+            }
+        }
+        removed
+    }
+
+    fn remove_neuron(&mut self, idx: usize, reason: MemoryNeuronRemovalReason) {
         let record = RemovedMemoryNeuron {
             neuron_id: self.neuron_ids[idx],
             area_idx: self.cortical_area_ids[idx],
             was_longterm: self.is_longterm_memory[idx],
-            reason: MemoryNeuronRemovalReason::Evicted,
+            reason,
             counted_in_stats: true,
         };
         self.is_active[idx] = false;

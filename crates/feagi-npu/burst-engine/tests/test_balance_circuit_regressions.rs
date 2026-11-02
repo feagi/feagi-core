@@ -57,6 +57,7 @@ fn stdp_params(mode: PlasticityMode, group: u16) -> StdpMappingParams {
         associative_memory_mapping: false,
         synapse_psp: 10.0,
         synapse_type: SynapseType::Excitatory,
+        synapse_delay_bursts: 1,
         plasticity_mode: mode,
         eligibility_decay_bursts: 0,
         max_weight: 3.0,

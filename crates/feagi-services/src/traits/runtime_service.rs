@@ -40,6 +40,41 @@ pub struct FireQueueSnapshot {
     pub areas: std::collections::HashMap<u32, FireQueueAreaSample>,
 }
 
+/// Force-fire voxels of one area: `(x, y, z, potential)`.
+pub type StimulusVoxels = Vec<(u32, u32, u32, f32)>;
+
+/// One scheduled force-fire injection: all `areas` fire on the same burst.
+#[derive(Debug, Clone)]
+pub struct StimulusScheduleEntry {
+    /// Burst offset from the next burst (0 = next burst).
+    pub burst_offset: u64,
+    /// `(base64 cortical id, [(x, y, z, potential)])` per area.
+    pub areas: Vec<(String, StimulusVoxels)>,
+}
+
+/// Receipt for an accepted stimulus schedule (absolute burst indexes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StimulusScheduleReceipt {
+    pub schedule_id: u64,
+    pub start_burst: u64,
+    /// Absolute burst of the last entry; `None` for a repeating schedule.
+    pub end_burst: Option<u64>,
+}
+
+/// An active stimulus schedule with its not-yet-fired entries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StimulusScheduleStatus {
+    pub schedule_id: u64,
+    pub start_burst: u64,
+    /// Absolute burst of the last entry; `None` for a repeating schedule.
+    pub end_burst: Option<u64>,
+    pub remaining_entries: usize,
+    /// Absolute burst of the next entry still to fire.
+    pub next_burst: Option<u64>,
+    /// Replay period in bursts when the schedule repeats until cancelled.
+    pub repeat_period_bursts: Option<u64>,
+}
+
 /// Runtime control service (transport-agnostic)
 #[async_trait]
 pub trait RuntimeService: Send + Sync {
@@ -298,6 +333,34 @@ pub trait RuntimeService: Send + Sync {
         xyzp_data: &[(u32, u32, u32, f32)],
         mode: ManualStimulationMode,
     ) -> ServiceResult<usize>;
+
+    /// Schedule force-fire injections at burst offsets, resolved to absolute burst indexes now
+    /// (offset 0 = next burst). Injection reuses the manual-stimulation force-fire path.
+    /// With `repeat_period_bursts` the entries replay every period until cancelled; the period
+    /// must be greater than the largest `burst_offset`.
+    async fn schedule_stimulus(
+        &self,
+        _entries: Vec<StimulusScheduleEntry>,
+        _repeat_period_bursts: Option<u64>,
+    ) -> ServiceResult<StimulusScheduleReceipt> {
+        Err(ServiceError::NotImplemented(
+            "stimulus schedules are not supported by this runtime service".to_string(),
+        ))
+    }
+
+    /// Cancel a stimulus schedule; returns whether it was active.
+    async fn cancel_stimulus_schedule(&self, _schedule_id: u64) -> ServiceResult<bool> {
+        Err(ServiceError::NotImplemented(
+            "stimulus schedules are not supported by this runtime service".to_string(),
+        ))
+    }
+
+    /// List active stimulus schedules.
+    async fn list_stimulus_schedules(&self) -> ServiceResult<Vec<StimulusScheduleStatus>> {
+        Err(ServiceError::NotImplemented(
+            "stimulus schedules are not supported by this runtime service".to_string(),
+        ))
+    }
 
     /// Register motor subscriptions with per-agent rate limits.
     ///

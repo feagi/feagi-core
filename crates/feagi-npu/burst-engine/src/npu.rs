@@ -178,6 +178,9 @@ pub struct StdpMappingParams {
     pub associative_memory_mapping: bool,
     pub synapse_psp: f32,
     pub synapse_type: SynapseType,
+    /// Synaptic delay in bursts (>= 1) stamped on synapses this mapping creates through
+    /// associative synaptogenesis. Mirrors the rule's `synaptic_delay_bursts`.
+    pub synapse_delay_bursts: u8,
     /// Plasticity mode (Off / Stdp / RStdp). See `PlasticityMode`.
     pub plasticity_mode: PlasticityMode,
     /// Eligibility-trace decay constant in bursts. `0` means "no persistence" (STDP-equivalent
@@ -224,6 +227,7 @@ impl Default for StdpMappingParams {
             associative_memory_mapping: false,
             synapse_psp: 0.0,
             synapse_type: SynapseType::Excitatory,
+            synapse_delay_bursts: 1,
             plasticity_mode: PlasticityMode::Off,
             eligibility_decay_bursts: 0,
             max_weight: f32::INFINITY,
@@ -6745,7 +6749,7 @@ impl<
                 let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
                 let n_new = source_ids.len();
                 let stdp_edge_flags: Vec<u8> = vec![SYNAPSE_EDGE_ASSOCIATIVE_MEMORY; n_new];
-                let delay_bursts: Vec<u8> = vec![1u8; n_new];
+                let delay_bursts: Vec<u8> = vec![params.synapse_delay_bursts.max(1); n_new];
 
                 self.synapse_storage
                     .write()

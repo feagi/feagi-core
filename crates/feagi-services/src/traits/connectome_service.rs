@@ -418,11 +418,14 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidInput` - Invalid snapshot data
     /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
     ///
+    /// # Returns
+    /// The import outcome, which reports memory neurons left out of the load because they no
+    /// longer fit their area's pattern shape.
     #[cfg(feature = "connectome-io")]
     async fn import_connectome(
         &self,
         snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-    ) -> ServiceResult<()>;
+    ) -> ServiceResult<crate::types::ConnectomeImportOutcome>;
 
     /// Persist a first-class classifier assembly on the live connectome and genome.
     async fn upsert_classifier(

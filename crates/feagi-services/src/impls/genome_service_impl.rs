@@ -550,7 +550,10 @@ impl GenomeServiceImpl {
     /// sample and the global burst taps, which that reset does not touch.
     fn clear_published_activity(&self) {
         if let Some(ref burst_runner) = self.burst_runner {
-            burst_runner.read().clear_cached_fire_queue();
+            let runner = burst_runner.read();
+            runner.clear_cached_fire_queue();
+            // Scheduled stimuli target the previous genome's areas.
+            runner.stimulus_schedules().clear_all();
         }
         feagi_npu_burst_engine::BurstTaps::instance().clear();
     }
@@ -3322,6 +3325,9 @@ impl GenomeServiceImpl {
         // - PlasticityService keeps running with the old temporal_depth/lifecycle config until genome reload
         //
         // This block re-registers the memory area configuration in the live executor.
+        // When the change alters the area's pattern shape, neurons that no longer fit go first.
+        #[allow(unused_mut)]
+        let mut memory_neurons_removed: Option<crate::types::MemoryNeuronsRemoved> = None;
         #[cfg(feature = "plasticity")]
         {
             let memory_param_changed = changes.keys().any(|k| {
@@ -3404,9 +3410,37 @@ impl GenomeServiceImpl {
                                         &cortical_id_typed,
                                     );
                                 // Re-registering replaces the area's settings only; the
-                                // plasticity service keeps the area's existing neurons.
+                                // plasticity service keeps the area's existing neurons unless
+                                // the pattern shape changed (depth, upstream set, MP mode).
                                 let lifecycle_config =
                                     feagi_brain_development::memory_lifecycle_config(&mem_props);
+
+                                if let Ok(mode) = &mp_mode {
+                                    let shape = feagi_npu_plasticity::MemoryAreaShape::new(
+                                        mem_props.temporal_depth,
+                                        upstream_areas.clone(),
+                                        *mode,
+                                    );
+                                    let purge = exec
+                                        .purge_memory_neurons_outside_shape(cortical_idx, &shape);
+                                    if purge.removed > 0 {
+                                        let reason = purge
+                                            .reasons
+                                            .iter()
+                                            .map(|(key, n)| format!("{key} x{n}"))
+                                            .collect::<Vec<_>>()
+                                            .join(", ");
+                                        memory_neurons_removed =
+                                            Some(crate::types::MemoryNeuronsRemoved {
+                                                count: purge.removed,
+                                                long_term: purge.removed_long_term,
+                                                reasons: purge.reasons,
+                                                reason: format!(
+                                                    "pattern shape changed (temporal depth, upstream set or MP encoding); neurons that no longer fit were removed: {reason}"
+                                                ),
+                                            });
+                                    }
+                                }
 
                                 match mp_mode {
                                     Ok(mp_mode) => exec.register_memory_area(
@@ -3436,7 +3470,9 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[FAST-UPDATE] Parameter update complete");
 
         // Return updated info
-        self.get_cortical_area_info(cortical_id).await
+        let mut info = self.get_cortical_area_info(cortical_id).await?;
+        info.memory_neurons_removed = memory_neurons_removed;
+        Ok(info)
     }
 
     /// Update IO coding parameters and remap the cortical ID.
@@ -5266,6 +5302,7 @@ impl GenomeServiceImpl {
 
             // Build full response using area properties (same as get_cortical_area_info_blocking)
             Ok(CorticalAreaInfo {
+                memory_neurons_removed: None,
                 cortical_id: area.cortical_id.as_base_64(),
                 cortical_id_s: area.cortical_id.to_string(),
                 cortical_idx,
@@ -5481,6 +5518,7 @@ impl GenomeServiceImpl {
         let encoding_format = coding_type.clone();
 
         Ok(CorticalAreaInfo {
+            memory_neurons_removed: None,
             cortical_id: area.cortical_id.as_base_64(),
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
@@ -5694,6 +5732,7 @@ impl GenomeServiceImpl {
         let encoding_format = coding_type.clone();
 
         Ok(CorticalAreaInfo {
+            memory_neurons_removed: None,
             cortical_id: area.cortical_id.as_base_64(),
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
@@ -6620,6 +6659,188 @@ mod tests {
         // A null clears the whole setting.
         send(serde_json::Value::Null).await.expect("clear");
         assert!(stored(&connectome).is_none_or(|v| v.is_null()));
+    }
+
+    #[cfg(feature = "plasticity")]
+    #[tokio::test]
+    async fn lowering_temporal_depth_removes_deeper_memory_neurons_and_reports_the_count() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_plasticity::executor::PlasticityExecutor;
+        use feagi_npu_plasticity::{AsyncPlasticityExecutor, MemoryNeuronDetail, PlasticityConfig};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "shape-update-npu"));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        let exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            dyn_npu.clone(),
+        )));
+
+        let src_id = CorticalID::try_from_bytes(b"cshpsrc1").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mshpmem1").unwrap();
+        let dims = CorticalAreaDimensions::new(1, 1, 1).unwrap();
+        let mut src = CorticalArea::new(
+            src_id,
+            0,
+            "src".to_string(),
+            dims,
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "mem".to_string(),
+            dims,
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(2));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(exec.clone());
+            manager.add_cortical_area(src.clone()).unwrap();
+            manager.add_cortical_area(mem.clone()).unwrap();
+            manager.refresh_all_upstream_cortical_areas_from_mappings();
+        }
+        let (src_idx, mem_idx) = {
+            let manager = connectome.read();
+            (
+                manager.get_cortical_idx(&src_id).unwrap(),
+                manager.get_cortical_idx(&mem_id).unwrap(),
+            )
+        };
+        let (deep_id, shallow_id) = (50_000_000u32, 50_000_001u32);
+        {
+            let exec = exec.lock().unwrap();
+            PlasticityExecutor::register_memory_area(
+                &*exec,
+                mem_idx,
+                mem_id.as_base_64(),
+                2,
+                vec![src_idx],
+                None,
+                feagi_npu_plasticity::MemoryMpMode::PatternOnly,
+            );
+            let detail = |neuron_id, hash| MemoryNeuronDetail {
+                neuron_id,
+                cortical_area_idx: mem_idx,
+                pattern_hash: Some(hash),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 100,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 1.0,
+                creation_burst: 0,
+                last_activation_burst: 0,
+                activation_count: 1,
+                spatial_signature: None,
+                class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
+            };
+            exec.restore_long_term_memory_neurons(&[detail(deep_id, 1), detail(shallow_id, 2)])
+                .unwrap();
+        }
+        {
+            let frame = |offset| MemoryReplayFrame {
+                offset,
+                upstream_area_idx: src_idx,
+                coords: vec![(0, 0, 0)],
+                membrane_potentials: None,
+            };
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.register_memory_replay_frames(deep_id, vec![frame(0), frame(1)]);
+            npu.register_memory_replay_frames(shallow_id, vec![frame(0)]);
+        }
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "shape".to_string(),
+                genome_title: "shape".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src), (mem_id, mem)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc = GenomeServiceImpl::new(connectome.clone());
+        *svc.get_current_genome_arc().write() = Some(genome);
+
+        // A cap change keeps every neuron and reports nothing removed.
+        let info = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([("memory_neuron_cap".to_string(), serde_json::json!(10))]),
+            )
+            .await
+            .expect("cap update");
+        assert!(info.memory_neurons_removed.is_none());
+        assert!(exec.lock().unwrap().memory_neuron_detail(deep_id).is_some());
+
+        let info = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([("temporal_depth".to_string(), serde_json::json!(1))]),
+            )
+            .await
+            .expect("depth update");
+        let removed = info
+            .memory_neurons_removed
+            .expect("the depth change reports the removal");
+        assert_eq!(removed.count, 1);
+        assert_eq!(removed.long_term, 1);
+        assert_eq!(
+            removed.reasons.get("replay_offset_exceeds_temporal_depth"),
+            Some(&1)
+        );
+        let exec = exec.lock().unwrap();
+        assert!(exec.memory_neuron_detail(deep_id).is_none());
+        assert!(exec.memory_neuron_detail(shallow_id).is_some());
     }
 
     #[tokio::test]

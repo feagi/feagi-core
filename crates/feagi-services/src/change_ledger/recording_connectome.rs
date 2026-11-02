@@ -330,10 +330,10 @@ impl ConnectomeService for RecordingConnectomeService {
     async fn import_connectome(
         &self,
         snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-    ) -> ServiceResult<()> {
-        self.inner.import_connectome(snapshot).await?;
+    ) -> ServiceResult<crate::types::ConnectomeImportOutcome> {
+        let outcome = self.inner.import_connectome(snapshot).await?;
         self.record(GenomeChangeOperation::ConnectomeImported, None, None);
-        Ok(())
+        Ok(outcome)
     }
 
     async fn upsert_classifier(&self, classifier: Classifier) -> ServiceResult<()> {
