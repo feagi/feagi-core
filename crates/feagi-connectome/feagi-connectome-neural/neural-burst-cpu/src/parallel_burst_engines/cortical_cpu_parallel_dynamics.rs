@@ -77,7 +77,7 @@ where
 
         // We should apply any modifiers to the outgoing neuron potential,
         // regardless of firing state
-        if !cortical_flags.is_psp_using_membrane_potential() {
+        if !cortical_flags.is_psp_using_neuron_potential() {
             *processing_buffer = *cortical_level_psp;
         }
 

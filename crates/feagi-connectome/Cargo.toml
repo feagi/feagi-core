@@ -48,5 +48,8 @@ uuid = { workspace = true, features = ["serde"] }
 rand = {workspace = true}
 rayon = {workspace = true, optional = true}
 
+[dev-dependencies]
+serde_json = { workspace = true, features = ["std"] }
+
 [lints]
 workspace = true

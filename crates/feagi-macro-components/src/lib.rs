@@ -1,6 +1,7 @@
 pub mod common;
 pub mod cortical_dynamics;
 pub mod feagi_messages;
+pub mod model_family;
 pub mod template_parsing;
 
 /// Template maps keep their entries in template order, so generated fields, variants, and type

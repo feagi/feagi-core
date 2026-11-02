@@ -1,8 +1,7 @@
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_connectome_neural::neural_basis::neuron_model::data::data_containers::{
-    CorticalModelFullStorageData, CorticalModelGenomePropertiesData, CorticalModelNPUInterfaceData, CorticalModelSpawnData,
-};
-use feagi_connectome_neural::neural_basis::neuron_model::data::neuron_layout::implementations::voxels::NeuronLayoutVoxelDefaultType;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::generators::CorticalModelDefaultsSpawnData;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::shared::NeuronModelUniversalCorticalProperties;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::implementations::voxels::NeuronLayoutVoxelDefaultType;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::CorticalUniversalDefaults;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalFunctionSpecification,

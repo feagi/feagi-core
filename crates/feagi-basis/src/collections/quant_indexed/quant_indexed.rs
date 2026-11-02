@@ -10,16 +10,22 @@ pub struct QuantIndexed<QI, S> {
     pub(crate) _marker: PhantomData<QI>,
 }
 
+
+
 #[cfg(feature = "alloc")]
 pub type QuantIndexedVector<QI, D> = QuantIndexed<QI, Vec<D>>;
+#[cfg(feature = "alloc")]
+unsafe impl<QI, D> Send for QuantIndexedVector<QI, D> where D: Send {}
 
 pub type QuantIndexedArray<QI, D, const N: usize> = QuantIndexed<QI, [D; N]>;
+unsafe impl<QI, D, const N: usize> Send for QuantIndexedArray<QI, D, N> where D: Send {}
 
 pub type QuantIndexedSlice<'a, QI, D> = QuantIndexed<QI, &'a [D]>;
 
 pub type QuantIndexedSliceMut<'a, QI, D> = QuantIndexed<QI, &'a mut [D]>;
 
 pub type QuantIndexedHeaplessVec<QI, D, const N: usize> = QuantIndexed<QI, ::heapless::Vec<D, N>>;
+unsafe impl<QI, D, const N: usize> Send for QuantIndexedHeaplessVec<QI, D, N> where D: Send {}
 
 //region Backing Stores
 
@@ -143,9 +149,9 @@ impl<D, const N: usize> QuantContiguousStoreMut for ::heapless::Vec<D, N> {
 /// Which kind of contiguous store (Vec, array, heapless) backs a [`QuantIndexed`], for any element
 /// type. Lets a type pick the kind of store while the element type is decided elsewhere, such as
 /// per quantization level. Implemented by a zero sized marker per kind
-pub trait QuantContiguousStoreBackend {
+pub trait QuantContiguousStoreBackend: Send {
     /// The store of this kind holding elements of type `D`
-    type Store<D>: QuantContiguousStore<Elem = D>;
+    type Store<D: Send>: QuantContiguousStore<Elem = D>;
 }
 
 /// A [`QuantIndexed`] backed by a store of the backend `B`
@@ -158,7 +164,7 @@ pub struct QuantContiguousStoreBackendVec;
 
 #[cfg(feature = "alloc")]
 impl QuantContiguousStoreBackend for QuantContiguousStoreBackendVec {
-    type Store<D> = Vec<D>;
+    type Store<D: Send> = Vec<D>;
 }
 
 /// Backs a [`QuantIndexed`] with an array of `N` elements
@@ -166,7 +172,7 @@ impl QuantContiguousStoreBackend for QuantContiguousStoreBackendVec {
 pub struct QuantContiguousStoreBackendArray<const N: usize>;
 
 impl<const N: usize> QuantContiguousStoreBackend for QuantContiguousStoreBackendArray<N> {
-    type Store<D> = [D; N];
+    type Store<D: Send> = [D; N];
 }
 
 /// Backs a [`QuantIndexed`] with a [`heapless::Vec`] of up to `N` elements
@@ -174,7 +180,7 @@ impl<const N: usize> QuantContiguousStoreBackend for QuantContiguousStoreBackend
 pub struct QuantContiguousStoreBackendHeapless<const N: usize>;
 
 impl<const N: usize> QuantContiguousStoreBackend for QuantContiguousStoreBackendHeapless<N> {
-    type Store<D> = ::heapless::Vec<D, N>;
+    type Store<D: Send> = ::heapless::Vec<D, N>;
 }
 
 //endregion

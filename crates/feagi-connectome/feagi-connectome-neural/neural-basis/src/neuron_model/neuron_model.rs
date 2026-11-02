@@ -1,4 +1,4 @@
-use crate::neuron_model::data::neuron_layout::NeuronLayout;
+use crate::neuron_model::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use core::fmt::Debug;
@@ -54,8 +54,6 @@ pub trait NeuronLayoutType: Clone + Copy + Debug + PartialEq + Sync + Send + Ser
     /// The layout at a given [`FeagiIndexQuantization`]
     type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
-
-
 
 
 
@@ -151,5 +149,5 @@ pub trait CorticalUniversalDefaults {
 
     const CORTICAL_LEVEL_PSP: CorticalAreaNeuronPotential<<Self::Reference as MembranePotentialQuantization>::MembranePotentialQuant>;
     const IS_PSP_UNIFORM: bool;
-    const IS_PSP_USING_MEMBRANE_POTENTIAL: bool;
+    const IS_PSP_USING_NEURON_POTENTIAL: bool;
 }
