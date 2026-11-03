@@ -42,8 +42,8 @@ pub trait NeuronLayout<
     /// Init the cortical context after validation
     fn new(init_data: Self::CorticalLevelContext) -> Self;
 
-    /// Gets the (max) number of neurons that this layout encloses
-    fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
+    /// Gets the (max) number of neurons that this layout encloses to have allocation for
+    fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
 
     /// Gets the struct denoting the "location" of a neuron in the context of the cortical area
     fn get_neuron_layout_context(
@@ -57,7 +57,7 @@ pub trait NeuronLayout<
 
 /// Allows defining the Neuron Layout type without knowing the FIQ in the moment
 pub trait NeuronLayoutType {
-    type Layout<FIQ: FeagiIndexQuantization>;
+    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
 
 

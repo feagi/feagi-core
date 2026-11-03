@@ -11,7 +11,7 @@ where
     /// Whatever is needed for the burst engine to init
     type InitParameters: Send;
     /// The error returned if the burst engine has an error initializing
-    type InitError; //: Send + core::fmt::Debug; // TODO
+    type InitError: Send + core::fmt::Debug;
     /// Which channel (heap allocated, static) visualization is published through
     type VisualizationTransmitter: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>;
 

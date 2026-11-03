@@ -28,7 +28,7 @@ where
 
     /// Number of neurons needed in the cortical area
     fn get_total_number_neurons_needed(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
-        self.get_neuron_layout().get_neuron_count()
+        self.get_neuron_layout().get_number_neurons_to_allocate_for()
     }
 
     /// Use as an iterator to generate neuron values without needing to collect it all first

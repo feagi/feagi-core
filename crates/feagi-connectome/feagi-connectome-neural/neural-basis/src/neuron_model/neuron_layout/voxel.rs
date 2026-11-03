@@ -28,7 +28,7 @@ for NeuronLayoutVoxel<FIQ> {
         Self{helper: SpatialHelper::new(init_data) }
     }
 
-    fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
+    fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
         CorticalAreaNeuronCount::quant_from_usize_unchecked(
             self.helper.get_dimensions().spatial_element_count()
         )

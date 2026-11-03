@@ -26,7 +26,7 @@ for NeuronLayoutSingleSteppedDynamic<FIQ> {
         Self {neuron_count: init_data}
     }
 
-    fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
+    fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
         self.neuron_count
     }
 
