@@ -2,7 +2,6 @@ pub mod items;
 pub mod genome_edit_step;
 pub mod genome_edit_steps;
 
-use genome_edit_steps::cortical_area::GenomePlayWrightCorticalArea;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::genome::genome_editing::genome_edit_steps::brain_region::GenomeEditStepBrainRegionBuilder;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepEnum;
@@ -10,7 +9,8 @@ use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepEnum;
 pub struct GenomeEditSequence<FIQ: FeagiIndexQuantization>
 {
     requires_connectome_edits: bool,
-    sequence: Vec<GenomeEditStepEnum<FIQ>>
+    sequence: Vec<GenomeEditStepEnum<FIQ>>,
+    _p: core::marker::PhantomData<FIQ>,
 }
 
 
@@ -19,14 +19,15 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditSequence<FIQ> {
         Self {
             requires_connectome_edits: false,
             sequence: vec![],
+            _p: core::marker::PhantomData,
         }
     }
 
 
 
 
-    pub fn brain_region(&mut self) -> &GenomeEditStepBrainRegionBuilder<FIQ> {
-        GenomeEditStepBrainRegionBuilder
+    pub fn brain_region(&mut self) -> GenomeEditStepBrainRegionBuilder<'_, FIQ> {
+        GenomeEditStepBrainRegionBuilder::new(self)
     }
 
     pub fn cortical_area(&mut self) -> () {

@@ -701,13 +701,16 @@ impl ModelFamilyTemplate {
         let member_quant_enums: Vec<Ident> = member_models.iter().map(|model| Self::quant_enum_name(model)).collect();
         let member_quant_kinds: Vec<Ident> = member_models.iter().map(|model| Self::quant_kind_name(model)).collect();
         let member_markers: Vec<proc_macro2::TokenStream> = members.iter().map(|(model, level)| self.marker_path(model, level)).collect();
+        let member_model_modules: Vec<Ident> = member_models.iter().map(|model| Self::model_module(model)).collect();
 
         let with_macro = self.with_macro_name();
         let with_doc = format!(
             "Runs the same code against whichever member of `{enum_name}` is held.\n\n\
              `{with_macro}!(value, |inner| body)` binds the data held to `inner`. \
              `{with_macro}!(value, <NM> |inner| body)` additionally aliases the marker struct of \
-             the member held as `NM` within `body`. Requires the `{family_module}` module in scope"
+             the member held as `NM` within `body`. `{with_macro}!(value, <NM, Model> |inner| body)` \
+             further aliases the model module of the member held as `Model` within `body`. Requires \
+             the `{family_module}` module in scope"
         );
 
         let with_kind_macro = self.with_kind_macro_name();
@@ -722,12 +725,14 @@ impl ModelFamilyTemplate {
             let quant_enum = Self::quant_enum_name(model);
             let levels: Vec<&Ident> = template.quantization_levels.keys().collect();
             let markers: Vec<proc_macro2::TokenStream> = levels.iter().map(|level| self.marker_path(model, level)).collect();
+            let model_module = Self::model_module(model);
             let doc = format!(
                 "Runs the same code against whichever quantization level of `{quant_enum}` is held.\n\n\
                  `{with_model_macro}!(value, |inner| body)` binds the data held to `inner`. \
                  `{with_model_macro}!(value, <NM> |inner| body)` additionally aliases the marker \
-                 struct of the level held as `NM` within `body`. Requires the `{family_module}` \
-                 module in scope"
+                 struct of the level held as `NM` within `body`. `{with_model_macro}!(value, \
+                 <NM, Model> |inner| body)` further aliases the `{family_module}::{model_module}` \
+                 module as `Model` within `body`. Requires the `{family_module}` module in scope"
             );
             quote! {
                 #[doc = #doc]
@@ -743,6 +748,17 @@ impl ModelFamilyTemplate {
                             #( #family_module::#quant_enum::#levels($inner) => {
                                 #[allow(dead_code)]
                                 type $level = #markers;
+                                $body
+                            } )*
+                        }
+                    };
+                    ($value:expr, <$level:ident, $model:ident> |$inner:pat_param| $body:expr) => {
+                        match $value {
+                            #( #family_module::#quant_enum::#levels($inner) => {
+                                #[allow(dead_code)]
+                                type $level = #markers;
+                                #[allow(unused_imports)]
+                                use #family_module::#model_module as $model;
                                 $body
                             } )*
                         }
@@ -765,6 +781,17 @@ impl ModelFamilyTemplate {
                         #( #family_module::#enum_name::#member_models(#family_module::#member_quant_enums::#member_levels($inner)) => {
                             #[allow(dead_code)]
                             type $member = #member_markers;
+                            $body
+                        } )*
+                    }
+                };
+                ($value:expr, <$member:ident, $model:ident> |$inner:pat_param| $body:expr) => {
+                    match $value {
+                        #( #family_module::#enum_name::#member_models(#family_module::#member_quant_enums::#member_levels($inner)) => {
+                            #[allow(dead_code)]
+                            type $member = #member_markers;
+                            #[allow(unused_imports)]
+                            use #family_module::#member_model_modules as $model;
                             $body
                         } )*
                     }

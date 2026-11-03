@@ -1,7 +1,87 @@
 use core::cmp::min;
-use feagi_basis::prelude::*;
+use feagi_basis::collections::quant_indexed::quant_indexed::QuantIndexedVector;
 use feagi_basis::feagi_basis_proc_common::bit_struct_builder;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use feagi_basis::prelude::*;
+use neural_basis::neuron_model::cortical_indexing::{
+    CorticalAreaEngineIndex, NeuronEngineIndex, NeuronModelCorticalQuantIndex, NeuronModelNeuronQuantIndex,
+};
+use neural_basis::neuron_model::neuron_model::NeuronModel;
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+
+//region Parallel Structs
+
+pub(crate) struct EnginePerCorticalData<FIQ: FeagiIndexQuantization> {
+    pub cortical_flags: QuantIndexedVector<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaUbiquitousFlags>,
+}
+
+impl<FIQ: FeagiIndexQuantization> EnginePerCorticalData<FIQ> {
+    pub fn new() -> Self {
+        Self {
+            cortical_flags: QuantIndexedVector::default(),
+        }
+    }
+}
+
+pub(crate) struct ModelQuantPerCorticalDataType<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
+    pub cortical_level_psp:
+        QuantIndexedVector<NeuronModelCorticalQuantIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaNeuronPotential<NM::MembranePotentialQuant>>,
+    pub model_properties: QuantIndexedVector<NeuronModelCorticalQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataProperties>,
+    pub model_internal: QuantIndexedVector<NeuronModelCorticalQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataInternal>,
+    pub model_scratch: QuantIndexedVector<NeuronModelCorticalQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataScratch>,
+}
+
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> ModelQuantPerCorticalDataType<FIQ, NM> {
+    pub fn new() -> Self {
+        Self {
+            cortical_level_psp: QuantIndexedVector::default(),
+            model_properties: QuantIndexedVector::default(),
+            model_internal: QuantIndexedVector::default(),
+            model_scratch: QuantIndexedVector::default(),
+        }
+    }
+}
+
+pub(crate) struct EnginePerNeuronData<FIQ: FeagiIndexQuantization> {
+    pub neuron_model_and_quant: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, ()>,
+    pub cortical_index: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
+    pub neuron_flags: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, PerNeuronUbiquitousFlags>,
+}
+
+impl<FIQ: FeagiIndexQuantization> EnginePerNeuronData<FIQ> {
+    pub fn new() -> Self {
+        Self {
+            neuron_model_and_quant: QuantIndexedVector::default(),
+            cortical_index: QuantIndexedVector::default(),
+            neuron_flags: QuantIndexedVector::default(),
+        }
+    }
+}
+
+pub(crate) struct ModelQuantPerNeuronDataType<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
+    pub membrane_potentials:
+        QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, CorticalAreaNeuronPotential<NM::MembranePotentialQuant>>,
+    pub inverse_connection_count:
+        QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, InverseOutgoingConnectionCount<NM::MembranePotentialQuant>>,
+    pub model_internal: QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, NM::NeuronDataInternal>,
+    pub model_scratch: QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, NM::NeuronDataScratch>,
+}
+
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> ModelQuantPerNeuronDataType<FIQ, NM> {
+    pub fn new() -> Self {
+        Self {
+            membrane_potentials: QuantIndexedVector::default(),
+            inverse_connection_count: QuantIndexedVector::default(),
+            model_internal: QuantIndexedVector::default(),
+            model_scratch: QuantIndexedVector::default(),
+        }
+    }
+}
+//endregion
+
+//region Singular Datas
+
+//region Flags
 
 bit_struct_builder! {
     u8,
@@ -18,31 +98,6 @@ bit_struct_builder! {
         is_visualizer_active, // Cortical property or config set, read during intra-neuron-synapse phase
     }
 }
-
-
-
-
-create_wrapped_quantized_decimal!(
-    /// When psp uniformity is DISABLED, we divide the membrane potential by the number of outgoing
-    /// connection, for each connection. However, since storing the connection count as an int,
-    /// then turning it into a float, then dividing with it is slow, here we precompute that into
-    /// this struct. This is read during neuron dynamics phase, modified by external tuning
-    // TODO This may actually be bad behavior, as synapses that slowly die will result in sudden
-    // jumps in sharing ratios
-    pub InverseOutgoingConnectionCount
-);
-
-impl<Q: QuantizedDecimalUnwrappedTrait> InverseOutgoingConnectionCount<Q> {
-    /// Defines a new inverse count from a number of connections uint. If 0 is supplied, it rounds 
-    /// up to one
-    pub fn new_from_count<FIQ: FeagiIndexQuantization>(number_connections: FIQ::SynapseIndexCountQuant) -> Self {
-        // We don't want to end up dividing by 0
-        let number_connections = min(FIQ::SynapseIndexCountQuant::QUANT_ONE, number_connections);
-        let as_decimal: Q = Q::from_quantized_unsigned_integer(number_connections);
-        Self(as_decimal.reciprocal())
-    }
-}
-
 
 /// Within a single byte, stores various boolean flags about the configuration of post potential
 /// neuron behavior, such as overrides of firing behavior and logic. It also carries a single
@@ -84,7 +139,7 @@ impl PerNeuronUbiquitousFlags {
         }
     }
 
-    /// Given neuron model firing result, calculates if the final psp is of firing or not, stores 
+    /// Given neuron model firing result, calculates if the final psp is of firing or not, stores
     /// it and returns it as well
     pub fn process_neuron_firing(&mut self, is_neuron_model_firing: bool) -> bool {
         let mut is_firing = is_neuron_model_firing & !self.is_bit(Self::MASK_PROBE_IS_REPRESSING_FIRE);
@@ -125,3 +180,28 @@ impl PerNeuronUbiquitousFlags {
         self.0 |= bit;
     }
 }
+
+//endregion
+
+create_wrapped_quantized_decimal!(
+    /// When psp uniformity is DISABLED, we divide the membrane potential by the number of outgoing
+    /// connection, for each connection. However, since storing the connection count as an int,
+    /// then turning it into a float, then dividing with it is slow, here we precompute that into
+    /// this struct. This is read during neuron dynamics phase, modified by external tuning
+    // TODO This may actually be bad behavior, as synapses that slowly die will result in sudden
+    // jumps in sharing ratios
+    pub InverseOutgoingConnectionCount
+);
+
+impl<Q: QuantizedDecimalUnwrappedTrait> InverseOutgoingConnectionCount<Q> {
+    /// Defines a new inverse count from a number of connections uint. If 0 is supplied, it rounds
+    /// up to one
+    pub fn new_from_count<FIQ: FeagiIndexQuantization>(number_connections: FIQ::SynapseIndexCountQuant) -> Self {
+        // We don't want to end up dividing by 0
+        let number_connections = min(FIQ::SynapseIndexCountQuant::QUANT_ONE, number_connections);
+        let as_decimal: Q = Q::from_quantized_unsigned_integer(number_connections);
+        Self(as_decimal.reciprocal())
+    }
+}
+
+//endregion

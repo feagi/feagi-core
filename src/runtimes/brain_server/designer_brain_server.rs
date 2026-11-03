@@ -11,7 +11,15 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
+use feagi_basis::target_frequency::TargetFrequency;
+use feagi_connectome::burst_engine_cpu::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
+use feagi_connectome::neural_processors::singular::{
+    NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
+    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
+};
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_genome::workers::genome_manager::requests::category_structs::{GenomeManagerConfigurables, GenomeManagerRequesters};
+use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
 use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
 use feagi_interop::transport::rest::server::error::FeagiRestServerError;
@@ -21,6 +29,15 @@ use feagi_interop::transport::zenoh::zenoh_configuration::ZenohConfiguration;
 use feagi_interop::transport::zenoh::zenoh_worker_builder::{FeagiBuildZenohWorkerError, ZenohStdWorker, ZenohWorkerBuilder};
 
 type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
+
+/// The quantization of the brain server's connectome
+type FIQ = FeagiIndexQuantizationStandard;
+
+/// The burst engine the neural processor runs
+type BurstEngine = BurstEngineCPURayon<FIQ, NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>>;
+
+/// The neural processor worker, running the burst engine
+type NeuralProcessorWorker = FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse>;
 
 /// The request categories the REST server serves: the genome manager's, and system, which the
 /// brain server worker answers itself
@@ -40,18 +57,26 @@ const SYSTEM_REQUEST_QUEUE_LENGTH: usize = 4;
 /// late a system request is answered while idle
 const IDLE_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(1);
 
+/// How often the neural processor bursts at launch, matching the `simulation_timestep` reported by
+/// the health check
+const INITIAL_BURST_FREQUENCY_HZ: f64 = 20.0;
+
+/// How often the neural processor sends visualization at launch
+const INITIAL_VISUALIZATION_FREQUENCY_HZ: f64 = 20.0;
+
 //region Builder
 
-/// Launches the genome manager, a REST server serving the genome manager's and the system request
-/// categories, and a zenoh worker announcing the brain server on the network. The worker it builds
-/// owns all of them, answers system requests itself, and stops them when stopped
+/// Launches the genome manager, a neural processor running a CPU burst engine, a REST server
+/// serving the genome manager's and the system request categories, and a zenoh worker announcing
+/// the brain server on the network. The worker it builds owns all of them, answers system requests
+/// itself, and stops them when stopped
 pub struct DesignerBrainServerWorkerBuilder {
     pub rest_server_socket: core::net::SocketAddr,
     pub zenoh_configuration: ZenohConfiguration,
 }
 
-/// The brain server worker. Stopping it stops the zenoh worker, the REST server, and the genome
-/// manager
+/// The brain server worker. Stopping it stops the zenoh worker, the REST server, the neural
+/// processor, and the genome manager
 pub type DesignerBrainServerWorker = FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, (), ()>;
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuilder {
@@ -68,6 +93,18 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
         let (genome_manager, ()) = genome_manager_builder
             .build_worker(spawner, genome_manager_responders)
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
+
+        // Not connected to the genome manager yet, so its engine has no cortical areas. Its
+        // visualization receiver is held until it is wired to zenoh
+        let neural_processor_builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, BurstEngine> {
+            initial_target_frequency: TargetFrequency::new_from_frequency(INITIAL_BURST_FREQUENCY_HZ),
+            initial_visualization_frequency: TargetFrequency::new_from_frequency(INITIAL_VISUALIZATION_FREQUENCY_HZ),
+            engine_init_parameters: (),
+        };
+        let (visualization_transmitter, visualization_receiver) = neural_processor_builder.spawn_related_channel_pairs();
+        let (neural_processor, ()) = neural_processor_builder
+            .build_worker(spawner, visualization_transmitter)
             .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         // System requests are answered by the brain server worker itself, which keeps the responder
@@ -101,7 +138,14 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
             .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         let (command_requester, command_responder) = ChannelBackend::create_channels(COMMAND_QUEUE_LENGTH);
-        let handler = DesignerBrainServerCommandHandler { system: Some(system_responder), genome_manager, rest_server, zenoh };
+        let handler = DesignerBrainServerCommandHandler {
+            system: Some(system_responder),
+            genome_manager,
+            neural_processor,
+            visualization_receiver,
+            rest_server,
+            zenoh,
+        };
         let handle = spawner.spawn_worker(move || server_runtime(command_responder, handler))?;
         Ok((FeagiWorker::new(command_requester, handle), ()))
     }
@@ -119,6 +163,11 @@ pub struct DesignerBrainServerCommandHandler {
     /// Taken when stopping, so system requests are no longer answered
     system: Option<FeagiCategoryResponder<SystemRequestCategory, ChannelBackend>>,
     genome_manager: FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, (), ()>,
+    neural_processor: NeuralProcessorWorker,
+    // TODO wire to zenoh as a publishing event. Until then nothing reads it, so the neural
+    // processor skips visualization once its slots fill
+    #[allow(dead_code)]
+    visualization_receiver: NeuronProcessorSingleEngineVisualizationReceiver<FIQ>,
     rest_server: StdRestServerWorker,
     zenoh: ZenohStdWorker,
 }
@@ -128,7 +177,8 @@ impl FeagiWorkerCommandProcessor for DesignerBrainServerCommandHandler {
     type CustomResponse = ();
 
     /// Zenoh is stopped first, so other nodes see the brain server leave before it stops serving.
-    /// Then the REST server, so no new requests reach the genome manager while it stops
+    /// Then the REST server, so no new requests reach the genome manager while it stops. The
+    /// neural processor is stopped before the genome manager, which will be editing it
     async fn on_stop(&mut self) {
         // A worker that already exited can't be stopped, but is stopped all the same
         let _ = self.zenoh.stop().await;
@@ -136,6 +186,7 @@ impl FeagiWorkerCommandProcessor for DesignerBrainServerCommandHandler {
         // responder fails any the REST server is waiting on, so it is free to stop
         self.system = None;
         let _ = self.rest_server.stop().await;
+        let _ = self.neural_processor.stop().await;
         let _ = self.genome_manager.stop().await;
     }
 
@@ -227,10 +278,13 @@ async fn server_runtime(
     // If the brain server's handle was dropped without stopping, joining drops each worker's
     // handle first, so they exit too. The system responder goes first, so a REST request
     // waiting on it fails rather than holding the REST server up
-    let DesignerBrainServerCommandHandler { system, genome_manager, rest_server, zenoh } = commands.into_processor();
+    let DesignerBrainServerCommandHandler { system, genome_manager, neural_processor, visualization_receiver, rest_server, zenoh } =
+        commands.into_processor();
     drop(system);
+    drop(visualization_receiver);
     let _ = zenoh.join();
     let _ = rest_server.join();
+    let _ = neural_processor.join();
     let _ = genome_manager.join();
 }
 
@@ -240,6 +294,8 @@ async fn server_runtime(
 pub enum DesignerBrainServerLaunchError {
     #[error("Genome manager failed to start: {0}")]
     GenomeManager(#[from] WorkerStartError<GenomeManagerWorkerBuilderError>),
+    #[error("Neural processor failed to start: {0}")]
+    NeuralProcessor(#[from] WorkerStartError<NeuronProcessorSingleEngineWorkerBuilderError<BurstEngineCPURayonInitError>>),
     #[error("REST server failed to start: {0}")]
     RestServer(#[from] WorkerStartError<FeagiRestServerError>),
     #[error("Zenoh worker failed to start: {0}")]

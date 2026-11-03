@@ -42,7 +42,13 @@ pub trait GenomeEditStepType<FIQ: FeagiIndexQuantization>: Sized
 
 pub(crate) enum GenomeEditStepEnum<FIQ: FeagiIndexQuantization> {
     BrainRegion(GenomeEditStepBrainRegionEnum),
-    CorticalArea(),
+    CorticalArea(core::marker::PhantomData<FIQ>), // TODO cortical area edits, which will use FIQ
     ConnectivityRule(),
     CorticalMapping(),
+}
+
+impl<FIQ: FeagiIndexQuantization> From<GenomeEditStepBrainRegionEnum> for GenomeEditStepEnum<FIQ> {
+    fn from(value: GenomeEditStepBrainRegionEnum) -> Self {
+        GenomeEditStepEnum::BrainRegion(value)
+    }
 }

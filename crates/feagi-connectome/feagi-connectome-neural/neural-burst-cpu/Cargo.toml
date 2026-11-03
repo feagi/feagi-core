@@ -44,4 +44,5 @@ serde = {workspace = true} # Required by FeagiError
 heapless = {workspace = true, default-features = false, features = ["serde"]}
 half = {workspace = true, default-features = false, features = ["serde"]}
 ahash = { workspace = true, default-features = false, features = ["serde"]}
+thiserror = {workspace = true}
 rayon = { workspace = true, default-features = false, optional = true}

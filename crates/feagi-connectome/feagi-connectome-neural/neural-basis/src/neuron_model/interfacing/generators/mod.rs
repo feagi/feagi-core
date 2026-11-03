@@ -11,6 +11,16 @@ pub use cortical_area_generator_from_defaults::{CorticalAreaGeneratorFromDefault
 mod cortical_area_generator_from_stored;
 mod cortical_area_generator_from_defaults;
 
+/// Something that wants a generator with its concrete types
+pub trait CorticalAreaGeneratorVisitor<FIQ: FeagiIndexQuantization> {
+    type Output;
+    fn visit<NM: NeuronModel, CAG: CorticalAreaGenerator<FIQ, NM>>(self, generator: CAG) -> Self::Output;
+}
+
+/// Something that holds a generator and can give it, with its real types, to a visitor
+pub trait CorticalAreaGeneratorDispatch<FIQ: FeagiIndexQuantization>: Send {
+    fn dispatch<V: CorticalAreaGeneratorVisitor<FIQ>>(self, visitor: V) -> V::Output;
+}
 
 /// Handles generating a cortical area
 pub trait CorticalAreaGenerator<FIQ, NM>: Send

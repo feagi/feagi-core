@@ -36,7 +36,7 @@ default = [
 std = [
     "alloc",
     "thiserror/std", "serde/std", "serde_json/std",
-    "feagi-basis/std", "feagi-basis/rayon", "feagi-interop/std", "feagi-genome/std",
+    "feagi-basis/std", "feagi-basis/rayon", "feagi-interop/std", "feagi-genome/std", "feagi-connectome/burst-engine-cpu",
     "feagi-migrator/std", "feagi-pns-structures/std", "feagi-pns-processing/std"
 ]
 
@@ -44,7 +44,7 @@ alloc = [
     "serde_json",
     "serde/alloc", "serde/derive", "serde_json/alloc",
     "feagi-basis/alloc", "feagi-interop/alloc",
-    "feagi-genome/alloc", "feagi-migrator/alloc", "feagi-pns-structures/alloc", "feagi-pns-processing/alloc"
+    "feagi-genome/alloc", "feagi-connectome/alloc", "feagi-migrator/alloc", "feagi-pns-structures/alloc", "feagi-pns-processing/alloc"
 ]
 
 ### Runtimes are default implementations ###
@@ -83,6 +83,7 @@ feagi-interop = {path = "crates/feagi-interop"}
 
 # Feagi (Sometimes)
 feagi-genome = {path = "crates/feagi-genome"}
+feagi-connectome = {path = "crates/feagi-connectome", default-features = false}
 feagi-migrator = {path = "crates/feagi-migrator"}
 feagi-pns-structures = {path = "crates/feagi-pns-structures"}
 feagi-pns-processing = {path = "crates/feagi-pns-processing"}

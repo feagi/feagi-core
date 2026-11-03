@@ -10,13 +10,13 @@ use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQ
 //region Data
 
 /// Holds the [`CorticalAreaGeneratorFromDefaults`] of a cortical area
-pub struct FromDefaultsGenerator<FIQ>(PhantomData<fn() -> FIQ>);
+pub struct FromDefaultsNeuronModelGenerator<FIQ>(PhantomData<fn() -> FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for FromDefaultsGenerator<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for FromDefaultsNeuronModelGenerator<FIQ> {
     type Of<M: NeuronModel> = CorticalAreaGeneratorFromDefaults<FIQ, M>;
 }
 
 /// The Genomic Data For a given Cortical Area
-pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<FromDefaultsGenerator<FIQ>>;
+pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<FromDefaultsNeuronModelGenerator<FIQ>>;
 
 //endregion

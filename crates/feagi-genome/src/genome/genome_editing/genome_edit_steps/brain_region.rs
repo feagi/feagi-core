@@ -2,18 +2,21 @@ use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::basis::specifications::cortical_area::cortical_id::CorticalID;
 use crate::genome::genome_editing::GenomeEditSequence;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::genome::genome_editing::genome_edit_steps::{GenomeEditStepEnum, GenomeEditStepType};
+use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepType;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;
 
 pub(crate) enum GenomeEditStepBrainRegionEnum {
     AddRegion(GenomeEditStepBrainRegionAddRegion),
+    /*
     RemoveRegion(),
     MoveCorticalAreaToRegion(),
     MoveBrainRegionToRegion(),
     TranslateBrainRegion(),
     EditNameDescriptionBrainRegion(),
     DeleteBrainRegion(),
+
+     */
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditStepType<FIQ> for GenomeEditStepBrainRegionEnum {
@@ -26,13 +29,18 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditStepType<FIQ> for GenomeEditStepBrai
 
     fn genome_validity_check(&self) -> Result<(), ()> {
         match self {
-            GenomeEditStepBrainRegionEnum::AddRegion(step) => {}
+            GenomeEditStepBrainRegionEnum::AddRegion(step) => {
+                Ok(())
+            }
+            /*
             GenomeEditStepBrainRegionEnum::RemoveRegion(step) => {}
             GenomeEditStepBrainRegionEnum::MoveCorticalAreaToRegion(step) => {}
             GenomeEditStepBrainRegionEnum::MoveBrainRegionToRegion(step) => {}
             GenomeEditStepBrainRegionEnum::TranslateBrainRegion(step) => {}
             GenomeEditStepBrainRegionEnum::EditNameDescriptionBrainRegion(step) => {}
             GenomeEditStepBrainRegionEnum::DeleteBrainRegion(step) => {}
+
+             */
         }
     }
 
@@ -53,12 +61,12 @@ pub(crate) struct GenomeEditStepBrainRegionAddRegion {
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditStepType<FIQ> for GenomeEditStepBrainRegionAddRegion {
-    type SuperEditEnum = ();
+    type SuperEditEnum = GenomeEditStepBrainRegionEnum;
 
     type ConnectomeEditStep = ();
 
     fn wrap_to_sub_category_enum(self) -> Self::SuperEditEnum {
-        todo!()
+        GenomeEditStepBrainRegionEnum::AddRegion(self)
     }
 
     fn genome_validity_check(&self) -> Result<(), ()> {
@@ -72,18 +80,18 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditStepType<FIQ> for GenomeEditStepBrai
     fn apply_edit_to_genome(&self, connectome_edit_response: (), genome: ()) -> Result<(), ()> {
         todo!()
     }
-
-    fn wrap_to_enum_and_inject(self) -> GenomeEditStepEnum<FIQ> {
-        let wrapper = GenomeEditStepBrainRegionEnum::AddRegion(self);
-        let wrapper = GenomeEditStepEnum::BrainRegion(wrapper);
-        
-    }
 }
 
 
 
 
 pub struct GenomeEditStepBrainRegionBuilder<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
+
+impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> {
+    pub(crate) fn new(field0: &'a mut GenomeEditSequence<FIQ>) -> Self {
+        Self(field0)
+    }
+}
 
 impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> {
     pub fn add_now(self, parent_region: BrainRegionID) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
@@ -95,8 +103,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> 
             parent_region,
             new_region,
         };
-        
-        
+        GenomeEditStepType::<FIQ>::wrap_to_enum_and_inject(step, self.0);
         Ok(self.0)
     }
 

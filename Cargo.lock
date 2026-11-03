@@ -745,6 +745,7 @@ name = "feagi-core"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
+ "feagi-connectome",
  "feagi-genome",
  "feagi-interop",
  "feagi-migrator",
@@ -1675,6 +1676,7 @@ dependencies = [
  "paste",
  "rayon",
  "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -8,9 +8,11 @@ pub use super::family::*;
 /// The `FoundationPower` model
 pub mod foundation_power {
     pub use crate::neuron_models::foundation_power::data::*;
+    pub use crate::neuron_models::foundation_power::burst_dynamics::FoundationPowerBurstEngineDynamics as BurstEngineDynamics;
 }
 
 /// The `FeagiAdvanced` model
 pub mod feagi_advanced {
     pub use crate::neuron_models::feagi_advanced::data::*;
+    pub use crate::neuron_models::feagi_advanced::burst_dynamics::FeagiAdvancedBurstEngineDynamics as BurstEngineDynamics;
 }

@@ -114,13 +114,6 @@ Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
 
 
 
-
-
-
-
-
-
-
 /// The [`NeuronLayout`] of neuron model `NM` at [`FeagiIndexQuantization`] `FIQ`
 pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutType as NeuronLayoutType>::Layout<FIQ>;
 

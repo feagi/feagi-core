@@ -88,5 +88,6 @@ pub mod misc;
 pub mod neurons;
 pub mod voxels;
 pub mod feagi_id;
+pub mod target_frequency;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;

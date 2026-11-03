@@ -93,6 +93,30 @@ fn dispatch_macros() {
 }
 
 #[test]
+fn dispatch_macros_alias_model_module() {
+    use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+
+    let foundation_power = named::<NeuronModelFoundationPowerFloat32>();
+    let dynamics = feagi_connectome::with_neuron_model!(&foundation_power, <NM, Model> |_data| {
+        core::any::type_name::<Model::BurstEngineDynamics<FeagiIndexQuantizationStandard, NM>>()
+    });
+    assert!(dynamics.contains("FoundationPowerBurstEngineDynamics"));
+    assert!(dynamics.contains("NeuronModelFoundationPowerFloat32"));
+
+    let feagi_advanced = named::<NeuronModelFeagiAdvancedDefaultQuant>();
+    let dynamics = feagi_connectome::with_neuron_model!(&feagi_advanced, <NM, Model> |_data| {
+        core::any::type_name::<Model::BurstEngineDynamics<FeagiIndexQuantizationStandard, NM>>()
+    });
+    assert!(dynamics.contains("FeagiAdvancedBurstEngineDynamics"));
+
+    let inner = FoundationPowerQuantEnum::<Named>::from_data::<NeuronModelFoundationPowerFloat16>(String::from("x"));
+    let dynamics = feagi_connectome::with_neuron_model_foundation_power!(&inner, <NM, Model> |_data| {
+        core::any::type_name::<Model::BurstEngineDynamics<FeagiIndexQuantizationStandard, NM>>()
+    });
+    assert!(dynamics.contains("NeuronModelFoundationPowerFloat16"));
+}
+
+#[test]
 fn serde_round_trip() {
     let value = named::<NeuronModelFoundationPowerFloat64>();
     let json = serde_json::to_string(&value).unwrap();

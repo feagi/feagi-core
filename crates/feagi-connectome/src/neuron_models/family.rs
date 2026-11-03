@@ -4,6 +4,8 @@
 use super::neuron_model;
 use feagi_connectome_proc::{define_model_family_template, expand_model_family};
 
+
+
 define_model_family_template! {
     /// Every neuron model, each at any of its quantization levels
     Family: NeuronModel,
