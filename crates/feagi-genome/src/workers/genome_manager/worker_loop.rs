@@ -3,8 +3,8 @@ use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
-
+use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use crate::genome::genomes::designer::designer_genome::DesignerGenome;
 use crate::workers::genome_manager::requests::category_structs::GenomeManagerResponders;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
 use crate::workers::genome_manager::response_processing::cortical_area::cortical_area_response;
@@ -29,13 +29,13 @@ impl FeagiWorkerCommandProcessor for GenomeManagerCommandHandler {
 
 /// The actual genome manager loop. Listens for various requests on the state of the genome, or
 /// for edits, and then acts upon them
-pub(crate) async fn run_genome_manager(
+pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
     responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
     genome_request_responders: GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>
 )
 {
 
-    //let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new_now("Blank Genome".to_string());
+    let mut graph = DesignerGenome::<FIQ>::new_genome_now("Genome Test Name".to_string());
 
     let mut commands = FeagiWorkerPollingRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
@@ -51,7 +51,7 @@ pub(crate) async fn run_genome_manager(
         // implemented, so requesters don't wait forever
         busy |= burst_engine_response(&burst_engine).await;
         busy |= answer_not_implemented(&connectome).await;
-        //busy |= cortical_area_response(&cortical_area, &mut graph).await;
+        busy |= cortical_area_response(&cortical_area, &mut graph).await;
         busy |= answer_not_implemented(&cortical_mapping).await;
         busy |= answer_not_implemented(&genome).await;
         busy |= morphology_response(&morphology).await;

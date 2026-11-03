@@ -25,13 +25,10 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-/// Cortical ID of some sort (faux or real)
-pub trait CorticalIDIdentifier: Copy + Eq + core::hash::Hash + core::fmt::Debug {}
-
 /// Whether `bytes` name a known area kind in their first byte.
 ///
 /// Custom, memory, core, brain-input, and brain-output prefixes pass. Const so
-/// [`CorticalID::from_id_bytes_const`] can check at compile time
+/// [`CorticalIDLegacy::from_id_bytes_const`] can check at compile time
 const fn is_valid_cortical_id_bytes(bytes: &[u8; 8]) -> bool {
     match_bytes_by_cortical_type!(bytes,
         custom => { true },
@@ -52,9 +49,9 @@ const fn is_valid_cortical_id_bytes(bytes: &[u8; 8]) -> bool {
 /// Accept a cortical ID whose first byte names a known area kind.
 ///
 /// Any other prefix returns [`GenomeIdentifierError::CannotParseFromBytes`].
-fn try_cortical_id_from_bytes(bytes: [u8; 8]) -> Result<CorticalID, GenomeIdentifierError> {
+fn try_cortical_id_from_bytes(bytes: [u8; 8]) -> Result<CorticalIDLegacy, GenomeIdentifierError> {
     if is_valid_cortical_id_bytes(&bytes) {
-        Ok(CorticalID(bytes))
+        Ok(CorticalIDLegacy(bytes))
     } else {
         Err(GenomeIdentifierError::CannotParseFromBytes("CorticalID"))
     }
@@ -62,12 +59,12 @@ fn try_cortical_id_from_bytes(bytes: [u8; 8]) -> Result<CorticalID, GenomeIdenti
 
 feagi_id! {
     /// A unique identifier for a cortical area in a genome
-    pub CorticalID: 8,
+    pub CorticalIDLegacy: 8,
     try_from = (GenomeIdentifierError, try_cortical_id_from_bytes),
     base64 = Base64EncodedCorticalID,
 }
 
-impl CorticalID {
+impl CorticalIDLegacy {
     /// Wraps `bytes` as a cortical ID, running the same check as `try_from_id_bytes`.
     ///
     /// # Panics
@@ -81,6 +78,7 @@ impl CorticalID {
 }
 
 
+/*
 feagi_id! {
     /// A faux identifier unique to a processing context for a cortical area
     pub FauxCorticalID: 8,
@@ -105,3 +103,6 @@ impl CorticalIDIdentifier for CorticalID {}
 
 impl CorticalIDIdentifier for FauxCorticalID {}
 
+
+
+ */

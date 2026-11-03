@@ -1,6 +1,6 @@
-use crate::basis::cortical_area_types::cortical_area_type::FoundationSuperTypeKind;
-use crate::basis::specifications::cortical_area::cortical_id::CorticalID;
+use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
 use crate::basis::specifications::genome_identifier_error::GenomeIdentifierError;
+use crate::cortical_area_types::cortical_area_type::FoundationSuperTypeKind;
 
 // NOTE: Future foundation types, once added to the family template
 //     /// Termination/death signal processing
@@ -30,10 +30,10 @@ impl FoundationSuperTypeKind {
         }
     }
 
-    pub fn to_cortical_id(&self) -> CorticalID {
+    pub fn to_cortical_id(&self) -> CorticalIDLegacy {
         match self {
             //Self::Death => const { CorticalID::from_id_bytes_const(*b"___death") },
-            Self::Power => const { CorticalID::from_id_bytes_const(*b"___power") },
+            Self::Power => const { CorticalIDLegacy::from_id_bytes_const(*b"___power") },
             //Self::Fatigue => const { CorticalID::from_id_bytes_const(*b"___fatig") },
             //Self::Pain => const { CorticalID::from_id_bytes_const(*b"___pain_") },
             //Self::Pleasure => const { CorticalID::from_id_bytes_const(*b"___pleas") },

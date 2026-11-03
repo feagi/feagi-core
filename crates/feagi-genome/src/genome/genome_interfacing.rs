@@ -1,13 +1,13 @@
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::specifications::cortical_area::cortical_id::CorticalID;
+use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
 use crate::genome::genomes::designer::designer_cortical_container::DesignerCorticalAreaContainer;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 // TODO for designer only right now, fix this
 
 /// Common Genome Reading Properties
 pub trait FeagiGenomeReading<FIQ: FeagiIndexQuantization>
 {
-    fn get_cortical_areas<'a>(&self, cortical_ids: &[CorticalID]) -> impl ExactSizeIterator<Item=Result<&'a DesignerCorticalAreaContainer<FIQ>, ()>>;
+    fn get_cortical_areas<'a>(&self, cortical_ids: &[CorticalIDLegacy]) -> impl ExactSizeIterator<Item=Result<&'a DesignerCorticalAreaContainer<FIQ>, ()>>;
 
     
     

@@ -1,10 +1,10 @@
-use std::collections::HashSet;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::specifications::cortical_area::cortical_id::CorticalID;
-use crate::basis::cortical_area_types::enums::CorticalGenomicDataEnum;
-use crate::genome::genome_object_metadata::GenomeObjectMetadata;
+use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
 use crate::basis::specifications::brain_regions::BrainRegionID;
+use crate::cortical_area_types::enums::CorticalGenomicDataEnum;
+use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use std::collections::HashSet;
 
 pub struct DesignerCorticalAreaContainer<FIQ: FeagiIndexQuantization> {
     metadata: GenomeObjectMetadata,
@@ -13,8 +13,8 @@ pub struct DesignerCorticalAreaContainer<FIQ: FeagiIndexQuantization> {
 
     // Cache items
     cache_parent_region_id: BrainRegionID,
-    cache_incoming_mappings: HashSet<CorticalID>,
-    cache_outgoing_mappings: HashSet<CorticalID>,
+    cache_incoming_mappings: HashSet<CorticalIDLegacy>,
+    cache_outgoing_mappings: HashSet<CorticalIDLegacy>,
 }
 
 impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
@@ -24,8 +24,8 @@ impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
         positioning: GenomeObjectPositioning,
         data: CorticalGenomicDataEnum<FIQ>,
         cache_parent_region_id: BrainRegionID,
-        cache_incoming_mappings: HashSet<CorticalID>,
-        cache_outgoing_mappings: HashSet<CorticalID>,
+        cache_incoming_mappings: HashSet<CorticalIDLegacy>,
+        cache_outgoing_mappings: HashSet<CorticalIDLegacy>,
     ) -> Self {
         Self {
             metadata,
@@ -58,11 +58,11 @@ impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
         self.cache_parent_region_id
     }
 
-    pub fn incoming_cortical_ids(&self) -> &HashSet<CorticalID> {
+    pub fn incoming_cortical_ids(&self) -> &HashSet<CorticalIDLegacy> {
         &self.cache_incoming_mappings
     }
 
-    pub fn outgoing_cortical_ids(&self) -> &HashSet<CorticalID> {
+    pub fn outgoing_cortical_ids(&self) -> &HashSet<CorticalIDLegacy> {
         &self.cache_outgoing_mappings
     }
 }

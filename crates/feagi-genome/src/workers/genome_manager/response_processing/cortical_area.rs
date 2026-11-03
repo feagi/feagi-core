@@ -1,14 +1,14 @@
 use std::collections::HashMap;
-use feagi_basis::feagi_id::feagi_id::HasBase64;
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
+use crate::genome::genomes::designer::designer_genome::DesignerGenome;
 use crate::workers::genome_manager::requests::categories::prelude::*;
 
-pub(crate) async fn cortical_area_response(
+pub(crate) async fn cortical_area_response<FIQ: FeagiIndexQuantization>(
     responder: &FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    graph: () /* &mut DesignerGraph<FeagiIndexQuantizationStandard> */) -> bool {
+    graph:  &mut DesignerGenome<FIQ> ) -> bool {
     
     responder.try_process_next(
         async | request: CorticalAreaRequests | {

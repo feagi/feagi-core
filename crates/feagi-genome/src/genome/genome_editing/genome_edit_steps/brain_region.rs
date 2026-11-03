@@ -1,10 +1,10 @@
+use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::basis::specifications::cortical_area::cortical_id::CorticalID;
-use crate::genome::genome_editing::GenomeEditSequence;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepType;
+use crate::genome::genome_editing::GenomeEditSequence;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub(crate) enum GenomeEditStepBrainRegionEnum {
     AddRegion(GenomeEditStepBrainRegionAddRegion),
@@ -111,7 +111,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> 
         Ok(self.0)
     }
 
-    pub fn move_cortical_area_to_region(self, area: CorticalID, to_region: BrainRegionID) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
+    pub fn move_cortical_area_to_region(self, area: CorticalIDLegacy, to_region: BrainRegionID) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
         Ok(self.0)
     }
 

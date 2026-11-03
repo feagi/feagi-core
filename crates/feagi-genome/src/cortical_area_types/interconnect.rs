@@ -1,5 +1,5 @@
-use crate::basis::cortical_area_types::cortical_area_type::CorticalAreaTypeKind;
-use crate::basis::specifications::cortical_area::cortical_area_type::CorticalAreaType;
+use crate::basis::cortical_area::cortical_area_type::CorticalAreaType;
+use crate::cortical_area_types::cortical_area_type::CorticalAreaTypeKind;
 use feagi_connectome::cortical_area::neuron_layout::implementations::voxels::NeuronLayoutVoxelDefaultType;
 use feagi_connectome::cortical_area::CorticalAreaGeneratorFromDefaults;
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::NeuronModelFeagiAdvanced;

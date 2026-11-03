@@ -4,6 +4,7 @@ use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::workers::genome_manager::requests::categories::prelude::*;
 use crate::workers::genome_manager::requests::category_structs::{GenomeManagerRequesters, GenomeManagerResponders};
 
@@ -12,7 +13,7 @@ const COMMAND_QUEUE_LENGTH: usize = 2;
 
 /// Responsible for spawning the genome manager, which handles high level genome processing
 /// and is the proxy through which connectomes are modified
-pub struct GenomeManagerWorkerBuilder {
+pub struct GenomeManagerWorkerBuilder<FIQ: FeagiIndexQuantization> {
     pub burst_engine_request_queue_length: usize,
     pub connectome_request_queue_length: usize,
     pub cortical_area_request_queue_length: usize,
@@ -20,10 +21,10 @@ pub struct GenomeManagerWorkerBuilder {
     pub genome_queue_length: usize,
     pub morphology_queue_length: usize,
     pub region_queue_length: usize,
+    _p: core::marker::PhantomData<FIQ>
 }
 
-impl Default for GenomeManagerWorkerBuilder {
-       
+impl<FIQ: FeagiIndexQuantization> Default for GenomeManagerWorkerBuilder<FIQ> {
     fn default() -> Self {
         Self {
             burst_engine_request_queue_length: 8,
@@ -33,12 +34,13 @@ impl Default for GenomeManagerWorkerBuilder {
             genome_queue_length: 8,
             morphology_queue_length: 8,
             region_queue_length: 8,
+            _p: core::marker::PhantomData
         }
     }
 }
 
 // This is STD thread only for the time being
-impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
+impl<FIQ: FeagiIndexQuantization> FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder<FIQ> {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     type BuildInputs = GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>;
     type BuildOutputs = ();
@@ -54,7 +56,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
         
         let (responders) = inputs;
         let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);
-        let handle = spawner.spawn_worker(move || run_genome_manager(cmd_responder, responders)).unwrap(); // TODO actual error handling
+        let handle = spawner.spawn_worker(move || run_genome_manager::<FIQ>(cmd_responder, responders)).unwrap(); // TODO actual error handling
         Ok((FeagiWorker::new(cmd_requester, handle), ()))
     }
 

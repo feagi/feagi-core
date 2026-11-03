@@ -2,4 +2,5 @@
 //! crate.
 
 pub mod specifications;
-pub mod cortical_area_types;
+pub mod cortical_area;
+pub mod connectivity_rules;

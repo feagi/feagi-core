@@ -1,11 +1,11 @@
+use crate::basis::cortical_area::cortical_area_type::{CorticalAreaType, FoundationCorticalAreaSubType};
+use crate::cortical_area_types::cortical_area_type::{CorticalAreaTypeKind, FoundationSuperTypeKind};
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::prelude::QuantizedElementBase;
-use crate::basis::cortical_area_types::cortical_area_type::{CorticalAreaTypeKind, FoundationSuperTypeKind};
-use crate::basis::specifications::cortical_area::cortical_area_type::{CorticalAreaType, FoundationCorticalAreaSubType};
 use feagi_connectome::cortical_area::neuron_layout::implementations::voxels::{NeuronLayoutVoxelDefault, NeuronLayoutVoxelDefaultType};
-use feagi_connectome::cortical_area::{CorticalAreaGeneratorFromDefaults, CorticalModelDefaultsSpawnData, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPower, NeuronModelFoundationPowerFloat64};
+use feagi_connectome::cortical_area::{CorticalAreaGeneratorFromDefaults, CorticalModelDefaultsSpawnData, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::neuron_models::neuron_model::foundation_power::NeuronModelFoundationPower;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Power management processing

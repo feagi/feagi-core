@@ -89,7 +89,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
 
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(DesignerBrainServerWorker, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
         // The genome manager makes the request channels of its categories, and keeps the responders
-        let genome_manager_builder = GenomeManagerWorkerBuilder::default();
+        let genome_manager_builder = GenomeManagerWorkerBuilder::<FIQ>::default();
         let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
         let (genome_manager, ()) = genome_manager_builder
             .build_worker(spawner, genome_manager_responders)

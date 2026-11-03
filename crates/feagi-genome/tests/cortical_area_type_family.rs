@@ -3,13 +3,13 @@ use feagi_connectome::neuron_models::neuron_model::feagi_advanced::NeuronModelFe
 use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32};
 use feagi_connectome::neuron_models::neuron_model::{FoundationPowerQuantKind, NeuronModel, NeuronModelContainer, NeuronModelKind, NeuronModelMember, NeuronModelSelectionError};
 use feagi_connectome::{with_neuron_model_feagi_advanced, with_neuron_model_foundation_power};
-use feagi_genome::basis::cortical_area_types::cortical_area_type;
-use feagi_genome::basis::cortical_area_types::cortical_area_type::foundation::power::CorticalAreaTypeFoundationPower;
-use feagi_genome::basis::cortical_area_types::cortical_area_type::interconnect::CorticalAreaTypeInterconnect;
-use feagi_genome::basis::cortical_area_types::cortical_area_type::{
+use feagi_genome::cortical_area_types::cortical_area_type;
+use feagi_genome::cortical_area_types::cortical_area_type::foundation::power::CorticalAreaTypeFoundationPower;
+use feagi_genome::cortical_area_types::cortical_area_type::interconnect::CorticalAreaTypeInterconnect;
+use feagi_genome::cortical_area_types::cortical_area_type::{
     CorticalAreaTypeEnum, CorticalAreaTypeKind, CorticalAreaTypeMember, CorticalAreaTypeSelectionError, FoundationSuperTypeEnum, FoundationSuperTypeKind,
 };
-use feagi_genome::basis::cortical_area_types::enums::CorticalGenomicDataEnum;
+use feagi_genome::cortical_area_types::enums::CorticalGenomicDataEnum;
 
 /// A container holding the name of the neuron model member it is held for
 struct Named;
