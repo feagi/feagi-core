@@ -2,9 +2,9 @@ use crate::basis::cortical_area::cortical_area_type::{CorticalAreaType, Foundati
 use crate::cortical_area_types::cortical_area_type::{CorticalAreaTypeKind, FoundationSuperTypeKind};
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::prelude::QuantizedElementBase;
-use feagi_connectome::cortical_area::neuron_layout::implementations::voxels::{NeuronLayoutVoxelDefault, NeuronLayoutVoxelDefaultType};
+use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTypeVoxel, NeuronLayoutVoxel};
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::cortical_area::{CorticalAreaGeneratorFromDefaults, CorticalModelDefaultsSpawnData, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::neuron_models::neuron_model::foundation_power::NeuronModelFoundationPower;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
@@ -15,11 +15,9 @@ impl<NM: NeuronModelFoundationPower> CorticalAreaType<NM> for CorticalAreaTypeFo
 
     const CORTICAL_AREA_TYPE: CorticalAreaTypeKind = CorticalAreaTypeKind::Foundation(FoundationSuperTypeKind::Power);
 
-    type NeuronLayout = NeuronLayoutVoxelDefaultType;
+    type NeuronLayout = NeuronLayoutTypeVoxel;
 
     type CorticalIDGenerator = ();
-
-    type CorticalAreaGenerator<FIQ: FeagiIndexQuantization> = CorticalAreaGeneratorFromDefaults<FIQ, NM>;
 }
 
 impl<NM: NeuronModelFoundationPower> FoundationCorticalAreaSubType<NM> for CorticalAreaTypeFoundationPower<NM> {
@@ -32,22 +30,22 @@ impl<NM: NeuronModelFoundationPower> FoundationCorticalAreaSubType<NM> for Corti
 pub fn get_foundation_power_defaults<
     FIQ: FeagiIndexQuantization,
     NM: NeuronModelFoundationPower
->() -> CorticalModelDefaultsSpawnData<FIQ, NM> {
-    CorticalModelDefaultsSpawnData {
-        layout: NeuronLayoutVoxelDefault::new(
+>() -> CorticalAreaSpec<FIQ, NM> {
+    CorticalAreaSpec::new_uniform(
+        NeuronLayoutVoxel::new(
             DimensionalCorticalAreaDimensions::new_dimensions_from_usize(
                 [1, 1, 1, 1]
             ).unwrap()),
-        cortical_properties: NM::CorticalDataProperties::new(),
-        cortical_internal: NM::CorticalDataInternal::new(),
-        cortical_scratch: NM::CorticalDataScratch::new(),
-        neuron_variance_properties: NM::CorticalFunctionContext::new(),
-        neuron_internal: NM::NeuronDataInternal::new(),
-        neuron_scratch: NM::NeuronDataScratch::new(),
-        universal_data: NeuronModelUniversalCorticalProperties {
+        NeuronModelUniversalCorticalProperties {
             cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
             is_psp_uniform: false,
             is_psp_using_neuron_potential: false,
         },
-    }
+        NM::CorticalDataProperties::new(),
+        NM::CorticalDataInternal::new(),
+        NM::CorticalDataScratch::new(),
+        NM::CorticalDataVariance::new(),
+        NM::NeuronDataInternal::new(),
+        NM::NeuronDataScratch::new(),
+    )
 }

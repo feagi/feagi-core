@@ -9,6 +9,7 @@ use syn::{braced, Attribute, Token, Type, TypeParamBound};
 
 mod kw {
     syn::custom_keyword!(NeuronLayout);
+    syn::custom_keyword!(CustomNeuronInit);
     syn::custom_keyword!(Quantizables);
     syn::custom_keyword!(QuantizationLevels);
     syn::custom_keyword!(DataSpecifications);
@@ -16,6 +17,14 @@ mod kw {
 
 /// Name of the quantization level entry that sets `MembranePotentialQuantization::MembranePotentialQuant`
 const MEMBRANE_POTENTIAL_QUANT: &str = "MembranePotentialQuant";
+
+/// Data type of `NeuronModel` that the model's per neuron variance is derived from, whose
+/// specification trait has a function to implement
+const CORTICAL_DATA_VARIANCE: &str = "CorticalDataVariance";
+
+/// Data type of `NeuronModel` derived from [`CORTICAL_DATA_VARIANCE`], so it is never serialized
+/// nor has a default
+const NEURON_DATA_VARIANCE: &str = "NeuronDataVariance";
 
 /// Name of the neuron model generic of the generated data structs
 const NEURON_MODEL_GENERIC: &str = "NM";
@@ -31,22 +40,23 @@ const PHANTOM_FIELD: &str = "_p";
 
 /// The data types of `NeuronModel` in trait order, with the specification trait each of their
 /// structs implements
-pub const MODEL_DATA_STRUCTS: [(&str, &str); 6] = [
+pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
     ("CorticalDataProperties", "CorticalDataPropertiesSpecification"),
     ("CorticalDataInternal", "CorticalDataInternalSpecification"),
     ("CorticalDataScratch", "CorticalDataScratchSpecification"),
-    ("CorticalFunctionContext", "CorticalFunctionSpecification"),
+    (CORTICAL_DATA_VARIANCE, "CorticalDataVarianceSpecification"),
     ("NeuronDataInternal", "NeuronDataInternalSpecification"),
     ("NeuronDataScratch", "NeuronDataScratchSpecification"),
+    (NEURON_DATA_VARIANCE, "NeuronDataVarianceSpecification"),
 ];
 
 /// The data types the model's defaults trait holds a const of, with the name of the const and the
-/// field of `CorticalModelDefaultsSpawnData` it fills. The cortical properties are instead given
-/// to the trait's `assemble`
+/// `CorticalAreaSpec::new_uniform` parameter it fills. The cortical properties are instead given to
+/// the trait's `assemble`, and the neuron variance is derived from the cortical variance
 pub const MODEL_DEFAULTS: [(&str, &str, &str); 5] = [
     ("CorticalDataInternal", "CORTICAL_INTERNAL", "cortical_internal"),
     ("CorticalDataScratch", "CORTICAL_SCRATCH", "cortical_scratch"),
-    ("CorticalFunctionContext", "CORTICAL_FUNCTION_CONTEXT", "neuron_variance_properties"),
+    (CORTICAL_DATA_VARIANCE, "CORTICAL_VARIANCE", "cortical_variance"),
     ("NeuronDataInternal", "NEURON_INTERNAL", "neuron_internal"),
     ("NeuronDataScratch", "NEURON_SCRATCH", "neuron_scratch"),
 ];
@@ -58,7 +68,9 @@ pub const MODEL_DEFAULTS: [(&str, &str, &str); 5] = [
 /// /// Optional model description
 /// ModelName
 ///
-/// NeuronLayout: NeuronLayoutVoxelDefaultType
+/// NeuronLayout: NeuronLayoutTypeVoxel
+///
+/// CustomNeuronInit: SomeInitializer<Self>
 ///
 /// Quantizables: {
 ///     /// Optional description
@@ -82,18 +94,22 @@ pub const MODEL_DEFAULTS: [(&str, &str, &str); 5] = [
 /// ```
 /// The optional `NeuronLayout` entry sets the `NeuronLayoutType` the model is implemented for (see
 /// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutType`. The optional
-/// `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
+/// `CustomNeuronInit` entry sets `NeuronModel::CustomNeuronInit` of every level, defaulting to
+/// `NoCustomNeuronInit`. The optional `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
 /// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
 /// model's data structs, one per data type of `NeuronModel` (see
 /// [`MODEL_DATA_STRUCTS`]). A field typed by a quantizable is its wrapper at the level's
 /// quantization, and `MembranePotentialQuant` the level's membrane potential type. Any other type
 /// is kept as written. Entries keep their template order, except data structs, which keep trait
-/// order
+/// order. A model giving fields for neither `CorticalDataVariance` nor `NeuronDataVariance` has its
+/// variance generated as nothing, otherwise `CorticalDataVarianceSpecification` must be implemented
+/// by hand for `{Model}CorticalDataVariance`
 pub struct CorticalDynamicsQuantizationTemplate {
     pub model_attributes: Vec<Attribute>,
     pub model_name: Ident,
     pub layout: ModelLayoutTemplate,
+    pub custom_neuron_init: Type,
     pub quantizables: IndexMap<Ident, QuantizableTemplate>,
     pub quantization_levels: IndexMap<Ident, QuantizationLevelTemplate>,
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
@@ -102,7 +118,7 @@ pub struct CorticalDynamicsQuantizationTemplate {
 /// The `NeuronLayoutType` a model is implemented for, which decides the generics of its
 /// quantization level structs `NeuronModel{Model}{Level}`
 pub enum ModelLayoutTemplate {
-    /// `NeuronLayout: NeuronLayoutVoxelDefaultType`, a single layout type, which the model trait
+    /// `NeuronLayout: NeuronLayoutTypeVoxel`, a single layout type, which the model trait
     /// `NeuronModel{Model}` fixes. The level structs are `NeuronModel{Model}{Level}`
     Fixed(Type),
     /// `NeuronLayout: NL: NeuronLayoutType`, any layout type within the bounds, which the model
@@ -365,6 +381,7 @@ impl CorticalDynamicsQuantizationTemplate {
         let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| format_ident!("{}", name)).collect();
         let model_data_structs: Vec<Ident> = model_data_names.iter().map(|name| self.data_struct_name(name)).collect();
 
+        let custom_neuron_init = &self.custom_neuron_init;
         let quantization_levels = self.quantization_levels.iter().map(|(name, level)| {
             let struct_name = self.quantization_level_struct_name(name);
             let membrane_potential_quant = &level.membrane_potential_quant;
@@ -388,6 +405,7 @@ impl CorticalDynamicsQuantizationTemplate {
                 impl #level_generics NeuronModel for #struct_name #level_generic_names {
                     type LayoutType = #layout_definition;
                     #( type #model_data_names = #model_data_structs<Self>; )*
+                    type CustomNeuronInit = #custom_neuron_init;
                 }
 
                 impl #level_generics #model_trait for #struct_name #level_generic_names {
@@ -399,7 +417,9 @@ impl CorticalDynamicsQuantizationTemplate {
         let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
         let basis = basis_path();
         let quantization_error = quote!(#basis::quantization::quantizable::DataValueQuantizationError);
+        let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
         let no_fields = IndexMap::new();
+        let has_variance = [CORTICAL_DATA_VARIANCE, NEURON_DATA_VARIANCE].iter().any(|name| self.data_specifications.contains_key(&format_ident!("{}", name)));
         let data_structs = MODEL_DATA_STRUCTS.iter().map(|(data_struct, specification)| {
             let data_struct = format_ident!("{}", data_struct);
             let specification = format_ident!("{}", specification);
@@ -410,14 +430,38 @@ impl CorticalDynamicsQuantizationTemplate {
             let field_types: Vec<proc_macro2::TokenStream> = fields.values().map(|field| self.resolve_field_type(&field.field_type)).collect();
             let field_conversions = fields.iter().map(|(name, field)| self.requantize_field(name, &field.field_type));
             let quantization_error = &quantization_error;
+            let (serde_derive, phantom_attribute) = match data_struct == NEURON_DATA_VARIANCE {
+                true => (quote!(), quote!()),
+                false => (quote!(, ::serde::Serialize, ::serde::Deserialize), quote!(#[serde(skip)])),
+            };
+            // The cortical variance specification has a function, which only a model without any
+            // variance can have written for it
+            let specification_impl = match data_struct == CORTICAL_DATA_VARIANCE {
+                false => quote!(impl<#nm: #model_trait> #specification<#nm> for #struct_name<#nm> {}),
+                true if has_variance => quote!(),
+                true => {
+                    let neuron_variance = self.data_struct_name(&format_ident!("{}", NEURON_DATA_VARIANCE));
+                    quote! {
+                        impl<#nm: #model_trait> #specification<#nm> for #struct_name<#nm> {
+                            fn neuron_variance_at<#fiq: FeagiIndexQuantization>(
+                                &self,
+                                _layout: &NeuronLayoutOf<#nm, #fiq>,
+                                _index: &#basis::neurons::CorticalAreaNeuronLocalIndex<#fiq::NeuronIndexQuant>,
+                            ) -> #neuron_variance<#nm> {
+                                #neuron_variance::new()
+                            }
+                        }
+                    }
+                }
+            };
             quote! {
-                #[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+                #[derive(Clone, Debug, PartialEq #serde_derive)]
                 pub struct #struct_name<#nm: #model_trait> {
                     #(
                         #( #field_attributes )*
                         pub #field_names: #field_types,
                     )*
-                    #[serde(skip)]
+                    #phantom_attribute
                     _p: ::core::marker::PhantomData<#nm>,
                 }
 
@@ -436,7 +480,7 @@ impl CorticalDynamicsQuantizationTemplate {
                     }
                 }
 
-                impl<#nm: #model_trait> #specification<#nm> for #struct_name<#nm> {}
+                #specification_impl
             }
         });
 
@@ -450,29 +494,35 @@ impl CorticalDynamicsQuantizationTemplate {
         let default_consts: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(_, name, _)| format_ident!("{}", name)).collect();
         let default_structs: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(data_struct, _, _)| self.data_struct_name(&format_ident!("{}", data_struct))).collect();
         let default_fields: Vec<Ident> = MODEL_DEFAULTS.iter().map(|(_, _, field)| format_ident!("{}", field)).collect();
-        let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
         let defaults = quote! {
             #[doc = #defaults_doc]
             pub trait #defaults_trait: CorticalUniversalDefaults<Reference: #model_trait> {
                 #( const #default_consts: #default_structs<Self::Reference>; )*
 
-                /// Assembles the data to spawn a cortical area of quantization `NM` from the given
-                /// cortical properties and layout, and these defaults requantized to `NM`. Returns an
-                /// error if a decimal default becomes infinite or NaN at `NM`
+                /// Assembles the spec of a cortical area of quantization `NM` from the given cortical
+                /// properties and layout, and these defaults requantized to `NM`. Every neuron starts
+                /// with the same data. Returns an error if a decimal default becomes infinite or NaN
+                /// at `NM`
                 fn assemble<#fiq: FeagiIndexQuantization, #nm: #model_trait>(
                     cortical_properties: #nm::CorticalDataProperties,
                     layout: NeuronLayoutOf<#nm, #fiq>,
-                ) -> ::core::result::Result<CorticalModelDefaultsSpawnData<#fiq, #nm>, #quantization_error> {
-                    ::core::result::Result::Ok(CorticalModelDefaultsSpawnData {
+                ) -> ::core::result::Result<CorticalAreaSpec<#fiq, #nm>, #quantization_error> {
+                    #( let #default_fields = Self::#default_consts.requantize()?; )*
+                    let universal_properties = NeuronModelUniversalCorticalProperties {
+                        cortical_level_psp: #basis::quantization::quantizable::QuantizedDecimalTrait::try_to_quantization(Self::CORTICAL_LEVEL_PSP)?,
+                        is_psp_uniform: Self::IS_PSP_UNIFORM,
+                        is_psp_using_neuron_potential: Self::IS_PSP_USING_NEURON_POTENTIAL,
+                    };
+                    ::core::result::Result::Ok(CorticalAreaSpec::new_uniform(
                         layout,
+                        universal_properties,
                         cortical_properties,
-                        #( #default_fields: Self::#default_consts.requantize()?, )*
-                        universal_data: NeuronModelUniversalCorticalProperties {
-                            cortical_level_psp: #basis::quantization::quantizable::QuantizedDecimalTrait::try_to_quantization(Self::CORTICAL_LEVEL_PSP)?,
-                            is_psp_uniform: Self::IS_PSP_UNIFORM,
-                            is_psp_using_neuron_potential: Self::IS_PSP_USING_NEURON_POTENTIAL,
-                        },
-                    })
+                        cortical_internal,
+                        cortical_scratch,
+                        cortical_variance,
+                        neuron_internal,
+                        neuron_scratch,
+                    ))
                 }
             }
         };
@@ -510,6 +560,16 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             ModelLayoutTemplate::default()
         };
 
+        let custom_neuron_init = if input.peek(kw::CustomNeuronInit) {
+            input.parse::<kw::CustomNeuronInit>()?;
+            input.parse::<Token![:]>()?;
+            let custom_neuron_init = input.parse::<Type>()?;
+            parse_optional_comma(input)?;
+            custom_neuron_init
+        } else {
+            syn::parse_quote!(NoCustomNeuronInit)
+        };
+
         let quantizables = if input.peek(kw::Quantizables) {
             input.parse::<kw::Quantizables>()?;
             input.parse::<Token![:]>()?;
@@ -543,6 +603,7 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             model_attributes,
             model_name,
             layout,
+            custom_neuron_init,
             quantizables,
             quantization_levels,
             data_specifications,
@@ -557,6 +618,7 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
         let model_attributes = &self.model_attributes;
         let model_name = &self.model_name;
         let layout = &self.layout;
+        let custom_neuron_init = &self.custom_neuron_init;
 
         let quantizables = self.quantizables.iter().map(|(name, quantizable)| {
             let attributes = &quantizable.attributes;
@@ -600,6 +662,8 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
             #model_name
 
             NeuronLayout: #layout,
+
+            CustomNeuronInit: #custom_neuron_init,
 
             Quantizables: {
                 #( #quantizables )*

@@ -19,14 +19,14 @@ pub enum ConnectomeEditResultantCorticalAreaEnum<FIQ: FeagiIndexQuantization> {
 //region Step
 
 pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
-    pub cortical_area_generator_dispatch: CVDW::CorticalAreaGeneratorDispatch,
+    pub cortical_area_spec_dispatch: CVDW::CorticalAreaSpecDispatch,
     _p: core::marker::PhantomData<FIQ>,
 }
 
 impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepCorticalAreaAdd<FIQ, CVDW>
 {
-    pub fn new(cortical_area_generator_dispatch: CVDW::CorticalAreaGeneratorDispatch) -> Self {
-        Self { cortical_area_generator_dispatch, _p: core::marker::PhantomData }
+    pub fn new(cortical_area_spec_dispatch: CVDW::CorticalAreaSpecDispatch) -> Self {
+        Self { cortical_area_spec_dispatch, _p: core::marker::PhantomData }
     }
 }
 

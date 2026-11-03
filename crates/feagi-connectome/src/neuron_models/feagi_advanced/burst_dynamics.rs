@@ -58,7 +58,7 @@ where
         layout_context: &NeuronLayoutOf<NM, FIQ>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
-        neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch),
+        neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),
     ) -> bool {
         todo!()
     }

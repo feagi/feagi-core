@@ -35,7 +35,8 @@ where
         ),
         neuron_data: (
             &mut NM::NeuronDataInternal,
-            &mut NM::NeuronDataScratch
+            &mut NM::NeuronDataScratch,
+            &NM::NeuronDataVariance
         ),
     ) -> bool; // true if firing
 
@@ -55,7 +56,8 @@ where
         ),
         neuron_data: (
             &mut NM::NeuronDataInternal,
-            &mut NM::NeuronDataScratch
+            &mut NM::NeuronDataScratch,
+            &NM::NeuronDataVariance
         ),
         cortical_flags: &CorticalAreaUbiquitousFlags,
         cortical_level_psp: &CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,

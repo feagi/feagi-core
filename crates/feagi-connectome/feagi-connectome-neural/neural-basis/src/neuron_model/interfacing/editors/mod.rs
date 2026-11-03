@@ -1,9 +1,15 @@
 pub mod genome_property_editing;
 
+// TODO editors:
+//
+
+
+
+
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::neuron_model::interfacing::shared::NeuronModelUniversalCorticalProperties;
+use crate::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
@@ -33,7 +39,7 @@ where
     /// Runtime cortical level data, not saved. May update every burst.
     pub cortical_scratch: NM::CorticalDataScratch,
     /// Not direct properties, but rather parameters used by functions to set per neuron variance
-    pub neuron_variance_properties: NM::CorticalFunctionContext, // TODO
+    pub cortical_variance: NM::CorticalDataVariance, // TODO
 }
 
 

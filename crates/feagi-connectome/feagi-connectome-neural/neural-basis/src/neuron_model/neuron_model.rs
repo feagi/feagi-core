@@ -1,7 +1,9 @@
 use core::fmt::Debug;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
+use crate::neuron_model::interfacing::cortical_area_spec::NeuronInitializer;
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutType};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
@@ -31,9 +33,8 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// genome developers nor is it saved (starts clean with every init)
     type CorticalDataScratch: CorticalDataScratchSpecification<Self>;
 
-    /// Not actual cortical data, but rather represents various "values" that are actually the result
-    /// of running functions on the neuron data
-    type CorticalFunctionContext: CorticalFunctionSpecification<Self>;
+    /// The cortical level data that [`Self::NeuronDataVariance`] is derived from
+    type CorticalDataVariance: CorticalDataVarianceSpecification<Self>;
     //endregion
 
     //region Per Neuron Data
@@ -44,7 +45,15 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// (starts clean with every init)
     type NeuronDataScratch: NeuronDataScratchSpecification<Self>;
 
+    /// The per neuron level data derived from [`Self::CorticalDataVariance`]. Read only to neuron
+    /// dynamics and never saved, as it can be generated again
+    type NeuronDataVariance: NeuronDataVarianceSpecification<Self>;
+
     //endregion
+
+    /// A way of initializing neurons specific to this model. Use `NoCustomNeuronInit` if there is
+    /// none
+    type CustomNeuronInit: NeuronInitializer<Self>;
 
 }
 
@@ -73,11 +82,31 @@ Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
-/// Not actual cortical data, but rather represents various "values" that are actually the result
-/// of running functions on the neuron data
-pub trait CorticalFunctionSpecification<NM: NeuronModel>:
+/// The cortical level data that the per neuron variance data is derived from. Exposed to genome
+/// developers, and editable during runtime by writing the per neuron variance data again
+pub trait CorticalDataVarianceSpecification<NM: NeuronModel>:
 Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
-    // Any cortical area model data should be defined here (for the specification)
+    /// What the variance data of a neuron should be at the given index
+    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
+        &self,
+        layout: &NeuronLayoutOf<NM, FIQ>,
+        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> NM::NeuronDataVariance;
+
+    /// Writes the variance data of every neuron into a preallocated slice, one element per neuron.
+    /// Overwrites what was there, so no previous variance needs to be undone
+    fn write_neuron_variance_into_slice<FIQ: FeagiIndexQuantization>(
+        &self,
+        layout: &NeuronLayoutOf<NM, FIQ>,
+        variance: &mut [NM::NeuronDataVariance],
+    ) {
+        assert_eq!(variance.len(), layout.get_number_neurons_to_allocate_for().quant_to_usize());
+        for (i, variance_out) in variance.iter_mut().enumerate() {
+            *variance_out = self.neuron_variance_at::<FIQ>(layout, &CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(i));
+        }
+    }
+    
+    // TODO rayon
 }
 
 
@@ -91,6 +120,13 @@ Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
 /// (starts clean with every init)
 pub trait NeuronDataScratchSpecification<NM: NeuronModel>:
 Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
+    // Any cortical area model data should be defined here (for the specification)
+}
+
+/// The per neuron level data derived from the cortical variance. Read only to neuron dynamics, and
+/// not saved to the connectome
+pub trait NeuronDataVarianceSpecification<NM: NeuronModel>:
+Clone + Debug + PartialEq + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 

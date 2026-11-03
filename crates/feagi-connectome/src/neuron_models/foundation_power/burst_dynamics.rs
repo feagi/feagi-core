@@ -63,7 +63,7 @@ where
         _layout_context: &NeuronLayoutOf<NM, FIQ>,
         _neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         _cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
-        _neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch),
+        _neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),
     ) -> bool {
         // Power type always fires. We don't care about anything else
         // TODO we should enforce ! md-psp for this, which means this enforcement needs to exist

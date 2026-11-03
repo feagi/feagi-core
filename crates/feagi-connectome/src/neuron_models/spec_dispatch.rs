@@ -1,0 +1,41 @@
+//! The spec of a cortical area at any member of the `NeuronModel` family, and its dispatch to code
+//! needing the concrete neuron model
+
+use super::neuron_model;
+use super::neuron_model::{NeuronModel, NeuronModelContainer, NeuronModelEnum};
+use core::marker::PhantomData;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
+use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+
+/// Holds the [`CorticalAreaSpec`] of a cortical area
+pub struct CorticalAreaSpecContainer<FIQ>(PhantomData<fn() -> FIQ>);
+
+impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for CorticalAreaSpecContainer<FIQ> {
+    type Of<M: NeuronModel> = CorticalAreaSpec<FIQ, M>;
+}
+
+/// The spec of a cortical area, at whichever member of the `NeuronModel` family it uses
+pub type CorticalAreaSpecEnum<FIQ> = NeuronModelEnum<CorticalAreaSpecContainer<FIQ>>;
+
+#[cfg(feature = "burst-engine-cpu")]
+impl<FIQ: FeagiIndexQuantization> feagi_connectome_neural::burst_engine_cpu::CpuCorticalAreaSpecDispatch<FIQ>
+for CorticalAreaSpecEnum<FIQ> {
+    fn dispatch_cpu<V: feagi_connectome_neural::burst_engine_cpu::CpuCorticalAreaSpecVisitor<FIQ>>(
+        self,
+        visitor: V,
+    ) -> V::Output {
+        with_neuron_model!(self, <NM, Model> |spec| {
+            visitor.visit::<NM, Model::BurstEngineDynamics<FIQ, NM>>(spec)
+        })
+    }
+}
+
+/// The dispatch types of this connectome, for the connectome edit steps
+#[cfg(feature = "std")]
+pub struct ConnectomeDispatch;
+
+#[cfg(feature = "std")]
+impl<FIQ: FeagiIndexQuantization> feagi_connectome_neural::neural_basis::connectome_editing::ConnectomeVisitorDispatchWrapper<FIQ>
+for ConnectomeDispatch {
+    type CorticalAreaSpecDispatch = CorticalAreaSpecEnum<FIQ>;
+}

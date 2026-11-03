@@ -5,4 +5,4 @@ pub mod feagi_advanced;
 pub mod neuron_model;
 #[macro_use]
 pub mod family;
-pub mod generator_dispatch;
+pub mod spec_dispatch;

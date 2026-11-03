@@ -1,4 +1,4 @@
-use feagi_connectome::neuron_models::generator_dispatch::CorticalAreaGeneratorEnum;
+use feagi_connectome::neuron_models::spec_dispatch::CorticalAreaSpecEnum;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
@@ -15,7 +15,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomePlayWrightCorticalArea<'a, FIQ> {
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
         parent_region: BrainRegionID,
-        generator: CorticalAreaGeneratorEnum<FIQ>,
+        spec: CorticalAreaSpecEnum<FIQ>,
     ) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
 
         // TODO error checking

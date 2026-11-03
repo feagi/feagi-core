@@ -1,7 +1,6 @@
 use crate::cortical_area_types::cortical_area_type::CorticalAreaTypeKind;
 use feagi_connectome::cortical_area::neuron_layout::implementations::linear::NeuronLayoutLinearType;
-use feagi_connectome::cortical_area::{CorticalAreaGenerator, NeuronLayoutType, NeuronModel};
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::cortical_area::{NeuronLayoutType, NeuronModel};
 // TODO NeuronLayoutRestrictor to enable sensor / motors with various size limits without
 // needed to make a type for each! (or part of NM?)
 
@@ -20,9 +19,6 @@ where
     // TODO NeuronLayoutRestrictor
 
     type CorticalIDGenerator; // TODO
-
-
-    type CorticalAreaGenerator<FIQ: FeagiIndexQuantization>: CorticalAreaGenerator<FIQ, NM>;
 }
 
 
