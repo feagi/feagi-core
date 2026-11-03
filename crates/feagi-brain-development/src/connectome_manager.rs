@@ -1051,9 +1051,11 @@ impl ConnectomeManager {
             synapse_cache.insert(cortical_id, AtomicUsize::new(0));
         }
         // @cursor:critical-path - BV pulls per-area stats from StateManager without NPU lock.
-        let state_manager = StateManager::instance();
-        let state_manager = state_manager.read();
-        state_manager.init_cortical_area_stats(&cortical_id.as_base_64());
+        {
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            state_manager.init_cortical_area_stats(&cortical_id.as_base_64());
+        }
 
         // CRITICAL: Register cortical area in NPU during corticogenesis
         // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
@@ -7846,21 +7848,25 @@ impl ConnectomeManager {
         }
 
         // @cursor:critical-path - Keep BV-facing stats in StateManager.
-        let state_manager = StateManager::instance();
-        let state_manager = state_manager.read();
-        state_manager
-            .set_cortical_area_neuron_count(&cortical_id.as_base_64(), neuron_count as usize);
+        {
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            state_manager
+                .set_cortical_area_neuron_count(&cortical_id.as_base_64(), neuron_count as usize);
+        }
 
         // Update total neuron count cache
         self.cached_neuron_count
             .fetch_add(neuron_count as usize, Ordering::Relaxed);
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
-        let state_manager = StateManager::instance();
-        let state_manager = state_manager.read();
-        let core_state = state_manager.get_core_state();
-        core_state.add_neuron_count(neuron_count);
-        core_state.add_regular_neuron_count(neuron_count);
+        {
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(neuron_count);
+            core_state.add_regular_neuron_count(neuron_count);
+        }
 
         // Opt-in homeostatic leak: register on NPU (cold pass only when enabled; see `neural/docs/rate_modulated_leak.md`).
         if let Some(npu) = &self.npu {

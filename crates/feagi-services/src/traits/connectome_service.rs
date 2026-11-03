@@ -355,7 +355,9 @@ pub trait ConnectomeService: Send + Sync {
     /// * `mapping_data` - List of connection specifications
     ///
     /// # Returns
-    /// * `usize` - Number of synapses created
+    /// * `usize` - Number of synapses the mapping holds after the call: the freshly generated
+    ///   count when the mapping was rebuilt, or the existing count when the rules are unchanged
+    ///   or only plasticity settings changed (applied in place, nothing rebuilt)
     ///
     /// # Errors
     /// * `ServiceError::NotFound` - Source or destination area not found

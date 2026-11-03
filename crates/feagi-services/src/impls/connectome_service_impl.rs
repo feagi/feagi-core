@@ -7359,8 +7359,9 @@ mod tests {
             .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule.clone()])
             .await?;
         assert_eq!(
-            regenerated, 0,
-            "identical rule plus carried-over flag must not regenerate"
+            regenerated, 1,
+            "identical rule plus carried-over flag reports the existing synapse count; the \
+             unchanged weight below proves nothing was regenerated"
         );
         {
             let npu = dyn_npu.lock().unwrap();
@@ -11438,7 +11439,10 @@ mod plasticity_in_place_update_tests {
             .update_cortical_mapping(s.clone(), d.clone(), vec![rule("projector", false, 10)])
             .await
             .unwrap();
-        assert_eq!(n, 0, "in-place update creates no synapses");
+        assert_eq!(
+            n, 2,
+            "in-place update reports the existing synapse count; the unchanged weights below prove nothing was rebuilt"
+        );
         assert_eq!(weights(&npu, &srcs), learned);
         assert!(
             !npu.lock()
