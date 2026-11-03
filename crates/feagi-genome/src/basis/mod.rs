@@ -3,4 +3,4 @@
 
 pub mod specifications;
 pub mod cortical_area;
-pub mod connectivity_rules;
+

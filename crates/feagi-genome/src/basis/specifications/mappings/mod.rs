@@ -45,6 +45,7 @@ impl MappingID {
     }
 }
 
+/*
 /// During amalgamation, denotes a connection between 2 incoming areas via their faux cortical id,
 /// or an open ended one on either end. This struct cannot be open on both ends
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
@@ -74,5 +75,7 @@ impl FauxMappingID {
         self.source == self.destination
     }
 }
+
+ */
 
 //endregion

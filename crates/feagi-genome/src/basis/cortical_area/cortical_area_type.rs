@@ -1,10 +1,10 @@
 use crate::cortical_area_types::cortical_area_type::CorticalAreaTypeKind;
-use feagi_connectome::cortical_area::neuron_layout::implementations::linear::NeuronLayoutLinearType;
 use feagi_connectome::cortical_area::{NeuronLayoutType, NeuronModel};
-// TODO NeuronLayoutRestrictor to enable sensor / motors with various size limits without
-// needed to make a type for each! (or part of NM?)
+use feagi_connectome::cortical_area::neuron_layout::single_stepped_dynamic::NeuronLayoutTypeSingleSteppedDynamic;
 
-/// Describes a specific cortical area type. A cortical type type could use various models
+
+
+/// Describes a specific cortical area type. A cortical type could use various models
 /// (and their quantizations) but it must stick to a certain neuron layout
 pub trait CorticalAreaType<NM>:
 where
@@ -35,7 +35,7 @@ where
 /// and can grow dynamically. They are trained.
 pub trait MemoryCorticalAreaSubType<NM>: CorticalAreaType<NM>
 where
-    NM: NeuronModel<LayoutType=NeuronLayoutLinearType>, // Memory models must be linear (no dimensions)
+    NM: NeuronModel<LayoutType=NeuronLayoutTypeSingleSteppedDynamic>, // Memory models must be linear (no dimensions)
 {
     // TODO stuff
 }

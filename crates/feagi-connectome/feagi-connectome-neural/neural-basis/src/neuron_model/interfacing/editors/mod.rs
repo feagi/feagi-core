@@ -5,12 +5,9 @@ pub mod genome_property_editing;
 
 
 
-
-use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
+use crate::neuron_model::neuron_model::{NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 

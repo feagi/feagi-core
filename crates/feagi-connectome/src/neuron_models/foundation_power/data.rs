@@ -1,6 +1,6 @@
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::{CorticalAreaSpec, NoCustomNeuronInit};
-use feagi_connectome_neural::neural_basis::neuron_model::interfacing::shared::NeuronModelUniversalCorticalProperties;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTypeVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::CorticalUniversalDefaults;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{

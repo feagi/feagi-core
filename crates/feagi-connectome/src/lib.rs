@@ -19,7 +19,7 @@ pub mod cortical_area {
     pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::{
         CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer, NoCustomNeuronInit,
     };
-    pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::shared::NeuronModelUniversalCorticalProperties;
+    pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
 }
 
 /// Macros for defining families of models, and families of cortical area types using them

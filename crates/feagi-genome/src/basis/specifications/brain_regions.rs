@@ -16,7 +16,6 @@ feagi_id! {
     base64 = Base64EncodedBrainRegionAncestryID,
 }
 
-// TODO comparisons / logic between brain ancestry and brain ID
 
 impl From<BrainRegionID> for BrainRegionAncestryID {
     fn from(value: BrainRegionID) -> Self {
