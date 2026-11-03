@@ -1,7 +1,6 @@
 use crate::neuron_model::interfacing::generators::cortical::CorticalAreaGeneratorCortical;
 use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use crate::neuron_model::interfacing::shared::NeuronModelUniversalCorticalProperties;
 
 pub struct CorticalAreaGeneratorCorticalFromStored<FIQ, NM>
@@ -46,6 +45,8 @@ where
         }
     }
 }
+
+unsafe impl<FIQ, NM> Send for CorticalAreaGeneratorCorticalFromStored<FIQ, NM> where FIQ: FeagiIndexQuantization, NM: NeuronModel, {}
 
 impl<FIQ, NM> CorticalAreaGeneratorCortical<FIQ, NM> for CorticalAreaGeneratorCorticalFromStored<FIQ, NM>
 where

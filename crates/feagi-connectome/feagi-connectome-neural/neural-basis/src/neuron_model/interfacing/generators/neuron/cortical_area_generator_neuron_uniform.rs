@@ -24,6 +24,7 @@ where
     }
 }
 
+unsafe impl<FIQ, NM> Send for CorticalAreaGeneratorNeuronUniform<FIQ, NM> where FIQ: FeagiIndexQuantization, NM: NeuronModel, {}
 
 impl<FIQ, NM> CorticalAreaGeneratorNeuron<FIQ, NM> for CorticalAreaGeneratorNeuronUniform<FIQ, NM>
 where

@@ -1,10 +1,11 @@
-use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use core::fmt::Debug;
-use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutType};
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+
 // NOTE: How this works is a sub trait is made FIRST per neuron model, then there are
 // implementations under that, one per quantization level of the model
 
@@ -46,17 +47,6 @@ pub trait NeuronModel: MembranePotentialQuantization {
     //endregion
 
 }
-
-/// Selects a [`NeuronLayout`] independently of [`FeagiIndexQuantization`], so a model sub trait
-/// can restrict its layout without an `FIQ` in scope (which stable Rust cannot express on a
-/// generic associated type directly)
-pub trait NeuronLayoutType: Clone + Copy + Debug + PartialEq + Sync + Send + Serialize + DeserializeOwned + 'static {
-    /// The layout at a given [`FeagiIndexQuantization`]
-    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
-}
-
-
-
 
 
 //region Specifications

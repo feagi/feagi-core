@@ -1,13 +1,15 @@
-pub mod synapse_mapping;
+pub mod dimensional;
 
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 
 
 
-
+pub trait ConnectivityRule<FIQ: FeagiIndexQuantization> {
+    type MappingInputLayout;
+    type MappingOutputLayout;
+}
 
 
 

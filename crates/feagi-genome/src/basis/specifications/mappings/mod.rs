@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_id_legacy::{CorticalIDLegacy, FauxCorticalID};
+use crate::basis::cortical_area::cortical_id_legacy::{CorticalIDLegacy};
 use crate::basis::specifications::genome_identifier_error::GenomeIdentifierError;
 use feagi_basis::feagi_id::feagi_id;
 
