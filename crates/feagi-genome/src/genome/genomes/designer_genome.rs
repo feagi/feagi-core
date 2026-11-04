@@ -1,19 +1,18 @@
 use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::basis::specifications::genome_id::GenomeID;
-use crate::genome::genomes::designer::designer_brain_region::BrainRegionDesignerContainer;
-use crate::genome::genomes::designer::designer_cortical_container::DesignerCorticalAreaContainer;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use std::collections::HashMap;
+use crate::genome::containers::brain_region::BrainRegionContainerRuntime;
+use crate::genome::containers::cortical_area::CorticalAreaContainerTypedDesigner;
 
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
 /// as the interface and translator for modifications to that brain directly on the genome and
 /// through the NPU
 pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     genome_name: String,
-    genome_id: GenomeID,
-    brain_regions: HashMap<BrainRegionID, BrainRegionDesignerContainer>,
-    cortical_areas: HashMap<CorticalIdentifier, DesignerCorticalAreaContainer<FIQ>>,
+    root_brain_region_id: BrainRegionID,
+    brain_regions: HashMap<BrainRegionID, BrainRegionContainerRuntime>,
+    cortical_areas: HashMap<CorticalIdentifier, CorticalAreaContainerTypedDesigner<FIQ>>,
 
     // TODO NPU
 
@@ -29,7 +28,7 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
     pub fn new_genome_now(genome_name: String) -> Self {
         Self {
             genome_name,
-            genome_id: GenomeID::new_now(),
+            root_brain_region_id: BrainRegionID::new_now(),
             brain_regions: Default::default(),
             cortical_areas: Default::default(),
             _p: Default::default(),

@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
 use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
+use serde::{Deserialize, Serialize};
+
+//region Positioning
 
 /// Specifies that a given genome object has positioning context in 2D and 3D space
 pub trait GenomeObjectHasPositioning {
@@ -26,3 +28,16 @@ SignedIntegerSpatial<i64, 3>;
 /// Defines the 2d coordinate of a genome object in relation to its parent brain region (circuit)
 pub type GenomeObjectCoordinate2D =
 SignedIntegerSpatial<i64, 2>;
+
+//endregion
+
+//region Metadata
+
+// TODO sizing limits?
+/// Stores data that all genome objects have. Bears no computational consequence.
+pub struct GenomeObjectMetadata {
+    pub name: String,
+    pub description: String,
+}
+
+//endregion

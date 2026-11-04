@@ -1,9 +1,9 @@
-use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
+use crate::cortical_area::CorticalIdentifier;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepType;
 use crate::genome::genome_editing::GenomeEditSequence;
-use crate::genome::genome_object_metadata::GenomeObjectMetadata;
-use crate::genome::genome_object_positioning::GenomeObjectPositioning;
+use crate::genome::genome_object::GenomeObjectMetadata;
+use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub(crate) enum GenomeEditStepBrainRegionEnum {

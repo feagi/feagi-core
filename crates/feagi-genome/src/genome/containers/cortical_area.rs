@@ -1,17 +1,13 @@
-use std::collections::HashSet;
+use crate::basis::specifications::brain_regions::BrainRegionID;
+use crate::cortical_area::CorticalIdentifier;
+use crate::genome::genome_object::GenomeObjectMetadata;
+use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::cortical_area::NeuronModel;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::cortical_area::CorticalIdentifier;
-use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::genome::genome_object_metadata::GenomeObjectMetadata;
-use crate::genome::genome_object_positioning::GenomeObjectPositioning;
+use std::collections::HashSet;
 
 
-
-
-/*
-
-pub struct CorticalAreaContainerTypedRuntime<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+pub struct CorticalAreaContainerTypedDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
@@ -22,9 +18,7 @@ pub struct CorticalAreaContainerTypedRuntime<FIQ: FeagiIndexQuantization, NM: Ne
 }
 
 
-
-
-
+/*
 
 pub struct CorticalAreaContainerTypedStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 {
@@ -34,8 +28,7 @@ pub struct CorticalAreaContainerTypedStorage<FIQ: FeagiIndexQuantization, NM: Ne
     pub cortical_area_model: (),
 }
 
-
-
  */
+
 
 

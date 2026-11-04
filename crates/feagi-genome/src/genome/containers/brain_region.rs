@@ -1,8 +1,8 @@
 use std::collections::HashSet;
-use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::{BrainRegionAncestryID, BrainRegionID};
-use crate::genome::genome_object_metadata::GenomeObjectMetadata;
-use crate::genome::genome_object_positioning::GenomeObjectPositioning;
+use crate::cortical_area::CorticalIdentifier;
+use crate::genome::genome_object::GenomeObjectMetadata;
+use crate::genome::genome_object::GenomeObjectPositioning;
 
 
 pub trait BrainRegionContainer {

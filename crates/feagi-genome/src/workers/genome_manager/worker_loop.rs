@@ -1,15 +1,15 @@
-use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
-use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
-use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use crate::genome::genomes::designer::designer_genome::DesignerGenome;
+use crate::genome::genomes::designer_genome::DesignerGenome;
 use crate::workers::genome_manager::requests::category_structs::GenomeManagerResponders;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
 use crate::workers::genome_manager::response_processing::cortical_area::cortical_area_response;
 use crate::workers::genome_manager::response_processing::morphology::morphology_response;
 use crate::workers::genome_manager::response_processing::region::region_response;
+use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
