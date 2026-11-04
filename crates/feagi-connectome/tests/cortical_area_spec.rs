@@ -81,10 +81,10 @@ fn spec_writes_variance_alongside_neuron_data() {
         FeagiAdvancedCorticalDataInternal::new(),
         FeagiAdvancedCorticalDataScratch::new(),
         advanced_variance(3.0, 0.0, 0.0),
-        FeagiAdvancedNeuronDataInternal::new(),
+        FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO),
         FeagiAdvancedNeuronDataScratch::new(),
     );
-    let mut internal = vec![FeagiAdvancedNeuronDataInternal::new(); 2];
+    let mut internal = vec![FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO); 2];
     let mut scratch = vec![FeagiAdvancedNeuronDataScratch::new(); 2];
     let mut variance = vec![FeagiAdvancedNeuronDataVariance::new(-1.0); 2];
     spec.write_into_slices(&mut internal, &mut scratch, &mut variance);
@@ -220,6 +220,7 @@ mod dispatch {
     use super::*;
     use feagi_basis::BurstIndex;
     use feagi_connectome::burst_engine_cpu::{CorticalCPUParallelDynamics, CpuCorticalAreaSpecDispatch, CpuCorticalAreaSpecVisitor};
+    use feagi_connectome::neuron_models::neuron_model::feagi_advanced::BurstEngineDynamics;
     use feagi_connectome::neuron_models::neuron_model::NeuronModelEnum;
     use feagi_connectome::neuron_models::spec_dispatch::{CorticalAreaSpecContainer, CorticalAreaSpecEnum};
 
@@ -260,6 +261,78 @@ mod dispatch {
         );
         // The power model always fires
         assert_eq!(spec.dispatch_cpu(FireFirstNeuron), (4, true));
+    }
+
+    /// A neuron of the advanced model, with a threshold of 10, half of its charge leaking every
+    /// burst, and 2 bursts of refractory period
+    struct AdvancedNeuron {
+        /// Carried between bursts, as the engine does
+        processing_buffer: CorticalAreaNeuronPotential<f32>,
+        internal: FeagiAdvancedNeuronDataInternal<Advanced>,
+        variance: FeagiAdvancedNeuronDataVariance<Advanced>,
+    }
+
+    impl AdvancedNeuron {
+        fn new(threshold_offset: f32) -> Self {
+            Self {
+                processing_buffer: CorticalAreaNeuronPotential::QUANT_ZERO,
+                internal: FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO),
+                variance: FeagiAdvancedNeuronDataVariance::new(threshold_offset),
+            }
+        }
+
+        /// Integrates the input, returns if the neuron fired and the potential it output
+        fn burst(&mut self, incoming: f32) -> (bool, f32) {
+            self.processing_buffer = CorticalAreaNeuronPotential::new(self.processing_buffer.dewrap() + incoming);
+            let is_firing = <BurstEngineDynamics<Fiq, Advanced> as CorticalCPUParallelDynamics<Fiq, Advanced>>::process_model_neuron_dynamics(
+                &mut self.processing_buffer,
+                &BurstIndex::QUANT_ZERO,
+                &voxel_layout([1, 1, 1, 1]),
+                &CorticalAreaNeuronLocalIndex::QUANT_ZERO,
+                (
+                    &FeagiAdvancedCorticalDataProperties::new(Period::new(2.0), 10.0, 0.5, 0.0, 1.0, 1.0, 0.0),
+                    &FeagiAdvancedCorticalDataInternal::new(),
+                    &FeagiAdvancedCorticalDataScratch::new(),
+                ),
+                (&mut self.internal, &mut FeagiAdvancedNeuronDataScratch::new(), &self.variance),
+            );
+            (is_firing, self.processing_buffer.dewrap())
+        }
+    }
+
+    #[test]
+    fn advanced_neuron_leaks_integrates_and_fires_at_threshold() {
+        let mut neuron = AdvancedNeuron::new(0.0);
+        assert_eq!(neuron.burst(4.0), (false, 2.0));
+        assert_eq!(neuron.burst(4.0), (false, 3.0));
+        // Exactly reaching the threshold fires, and outputs the firing potential unleaked
+        assert_eq!(neuron.burst(7.0), (true, 10.0));
+    }
+
+    #[test]
+    fn advanced_neuron_decays_without_input() {
+        let mut neuron = AdvancedNeuron::new(0.0);
+        assert_eq!(neuron.burst(8.0), (false, 4.0));
+        assert_eq!(neuron.burst(0.0), (false, 2.0));
+        assert_eq!(neuron.burst(0.0), (false, 1.0));
+    }
+
+    #[test]
+    fn advanced_neuron_clears_and_ignores_input_while_refractory() {
+        let mut neuron = AdvancedNeuron::new(0.0);
+        assert_eq!(neuron.burst(10.0), (true, 10.0));
+        assert_eq!(neuron.burst(100.0), (false, 0.0));
+        assert_eq!(neuron.burst(100.0), (false, 0.0));
+        // Starts charging from rest again, the charge from before firing and during the
+        // refractory period is gone
+        assert_eq!(neuron.burst(4.0), (false, 2.0));
+    }
+
+    #[test]
+    fn advanced_neuron_threshold_includes_its_offset() {
+        let mut neuron = AdvancedNeuron::new(5.0);
+        assert_eq!(neuron.burst(12.0), (false, 6.0));
+        assert_eq!(neuron.burst(9.0), (true, 15.0));
     }
 }
 

@@ -58,6 +58,11 @@ define_cortical_dynamics_quantization_template! {
             firing_threshold_increment_z: MembranePotentialQuant,
         }
 
+        NeuronDataInternal: {
+            /// How many more bursts the neuron is refractory for
+            refractory_countdown: Period,
+        }
+
         NeuronDataVariance: {
             /// Added to the firing threshold of the cortical area, for this neuron
             firing_threshold_offset: MembranePotentialQuant,
