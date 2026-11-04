@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_id_legacy::{CorticalIDLegacy};
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::genome_identifier_error::GenomeIdentifierError;
 use feagi_basis::feagi_id::feagi_id;
 
@@ -22,20 +22,20 @@ feagi_id! {
 /// Defines a directional mapping between 2 cortical areas (or to itself)
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
 pub struct MappingID {
-    pub source: CorticalIDLegacy,
-    pub destination: CorticalIDLegacy,
+    pub source: CorticalIdentifier,
+    pub destination: CorticalIdentifier,
 }
 
 impl MappingID {
-    pub const fn new(source: CorticalIDLegacy, destination: CorticalIDLegacy) -> Self {
+    pub const fn new(source: CorticalIdentifier, destination: CorticalIdentifier) -> Self {
         Self { source, destination }
     }
 
-    pub fn get_source(&self) -> &CorticalIDLegacy {
+    pub fn get_source(&self) -> &CorticalIdentifier {
         &self.source
     }
 
-    pub fn get_destination(&self) -> &CorticalIDLegacy {
+    pub fn get_destination(&self) -> &CorticalIdentifier {
         &self.destination
     }
 

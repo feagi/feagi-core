@@ -41,5 +41,8 @@ heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true }
 rand = {workspace = true}
 
+[dev-dependencies]
+postcard = { workspace = true, features = ["alloc"] }
+
 [lints]
 workspace = true

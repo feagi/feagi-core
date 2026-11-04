@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::basis::specifications::genome_id::GenomeID;
 use crate::genome::genomes::designer::designer_brain_region::BrainRegionDesignerContainer;
@@ -13,7 +13,7 @@ pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     genome_name: String,
     genome_id: GenomeID,
     brain_regions: HashMap<BrainRegionID, BrainRegionDesignerContainer>,
-    cortical_areas: HashMap<CorticalIDLegacy, DesignerCorticalAreaContainer<FIQ>>,
+    cortical_areas: HashMap<CorticalIdentifier, DesignerCorticalAreaContainer<FIQ>>,
 
     // TODO NPU
 

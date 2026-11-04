@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::{BrainRegionAncestryID, BrainRegionID};
 use std::collections::HashSet;
 
@@ -8,7 +8,7 @@ pub struct BrainRegionDesignerContainer {
     ancestry_id: BrainRegionAncestryID,
 
 
-    cache_containing_areas: HashSet<CorticalIDLegacy>,
+    cache_containing_areas: HashSet<CorticalIdentifier>,
     cache_brain_regions: HashSet<BrainRegionID>
 }
 

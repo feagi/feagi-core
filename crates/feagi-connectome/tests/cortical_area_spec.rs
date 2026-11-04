@@ -8,13 +8,13 @@ use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
 };
 use feagi_connectome::neuron_models::neuron_model::foundation_power::{
     FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
-    FoundationPowerDefaults, FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
-    NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64,
+    FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
+    NeuronModelFoundationPowerFloat32,
 };
 use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification,
-    CorticalUniversalDefaults, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronLayoutOf, NeuronModel,
+    NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronLayoutOf, NeuronModel, NeuronModelTag,
 };
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
@@ -127,33 +127,6 @@ fn model_without_variance_generates_nothing() {
         scratch: FoundationPowerNeuronDataScratch::new(),
     }).unwrap();
     assert_eq!(spec.iter().len(), 4);
-}
-
-struct TestPowerDefaults;
-
-impl CorticalUniversalDefaults for TestPowerDefaults {
-    type Reference = Power;
-    const CORTICAL_LEVEL_PSP: CorticalAreaNeuronPotential<f32> = CorticalAreaNeuronPotential::QUANT_ONE;
-    const IS_PSP_UNIFORM: bool = true;
-    const IS_PSP_USING_NEURON_POTENTIAL: bool = false;
-}
-
-impl FoundationPowerDefaults for TestPowerDefaults {
-    const CORTICAL_INTERNAL: FoundationPowerCorticalDataInternal<Power> = FoundationPowerCorticalDataInternal::new();
-    const CORTICAL_SCRATCH: FoundationPowerCorticalDataScratch<Power> = FoundationPowerCorticalDataScratch::new();
-    const CORTICAL_VARIANCE: FoundationPowerCorticalDataVariance<Power> = FoundationPowerCorticalDataVariance::new();
-    const NEURON_INTERNAL: FoundationPowerNeuronDataInternal<Power> = FoundationPowerNeuronDataInternal::new();
-    const NEURON_SCRATCH: FoundationPowerNeuronDataScratch<Power> = FoundationPowerNeuronDataScratch::new();
-}
-
-#[test]
-fn defaults_assemble_a_spec_at_another_quantization() {
-    let spec = TestPowerDefaults::assemble::<Fiq, NeuronModelFoundationPowerFloat64>(
-        FoundationPowerCorticalDataProperties::new(),
-        voxel_layout([3, 1, 1, 1]),
-    ).unwrap();
-    assert_eq!(spec.iter().len(), 3);
-    assert!(spec.get_cortical_universal_properties().is_psp_uniform);
 }
 
 //region Custom Init

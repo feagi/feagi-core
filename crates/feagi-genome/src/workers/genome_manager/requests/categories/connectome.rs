@@ -1,7 +1,7 @@
 //! Connectome requests: inspecting, exporting and importing the neurons, synapses and cortical
 //! areas of the running brain. Converted from the old `connectome` endpoints, for reference only
 
-use crate::basis::cortical_area::cortical_id_legacy::Base64EncodedCorticalID;
+use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ pub struct ConnectomeCorticalTypeGroup {
     /// Human readable name of the subtype
     pub title: String,
     /// Base64 cortical IDs of this subtype, sorted
-    pub cortical_ids: Vec<Base64EncodedCorticalID>,
+    pub cortical_ids: Vec<CorticalIdentifierBase64>,
     /// Group IDs used by this subtype, sorted
     pub group_ids: Vec<u8>,
 }
@@ -26,7 +26,7 @@ define_request_message_category! {
             description: "Get every cortical area with all its properties",
             alloc_only: true,
             response: {
-                areas: HashMap<Base64EncodedCorticalID, serde_json::Value>, "Serialized cortical area per cortical ID",
+                areas: HashMap<CorticalIdentifierBase64, serde_json::Value>, "Serialized cortical area per cortical ID",
             },
         },
         "CorticalAreaListTypes": {
@@ -42,7 +42,7 @@ define_request_message_category! {
             description: "Get all cortical area mappings",
             alloc_only: true,
             response: {
-                mappings: HashMap<Base64EncodedCorticalID, Vec<Base64EncodedCorticalID>>, "Destination cortical IDs per source cortical ID",
+                mappings: HashMap<CorticalIdentifierBase64, Vec<CorticalIdentifierBase64>>, "Destination cortical IDs per source cortical ID",
             },
         },
         "Snapshot": {
@@ -90,7 +90,7 @@ define_request_message_category! {
             description: "Get the properties of a neuron, by ID in the path",
             alloc_only: true,
             response: {
-                properties: HashMap<Base64EncodedCorticalID, serde_json::Value>,
+                properties: HashMap<CorticalIdentifierBase64, serde_json::Value>,
             },
         },
         "NeuronProperties": {
@@ -101,7 +101,7 @@ define_request_message_category! {
                 neuron_id: u64,
             },
             response: {
-                properties: HashMap<Base64EncodedCorticalID, serde_json::Value>,
+                properties: HashMap<CorticalIdentifierBase64, serde_json::Value>,
             },
         },
         "MemoryNeuron": { // cannot be implemented

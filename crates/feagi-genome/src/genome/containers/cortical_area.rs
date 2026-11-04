@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use feagi_connectome::cortical_area::NeuronModel;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_identifier::CorticalIdentifier;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;

@@ -1,4 +1,4 @@
-use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepType;
 use crate::genome::genome_editing::GenomeEditSequence;
@@ -111,7 +111,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> 
         Ok(self.0)
     }
 
-    pub fn move_cortical_area_to_region(self, area: CorticalIDLegacy, to_region: BrainRegionID) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
+    pub fn move_cortical_area_to_region(self, area: CorticalIdentifier, to_region: BrainRegionID) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
         Ok(self.0)
     }
 

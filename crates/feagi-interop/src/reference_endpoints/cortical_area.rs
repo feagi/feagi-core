@@ -35,7 +35,7 @@ pub struct CorticalIOCodingOptions {
 pub struct CorticalAreaInfo {
     /// Base64 cortical area ID
     pub cortical_id: String,
-    /// Human-readable ASCII form of the ID (e.g. "___power")
+    /// Human-readable ASCII form of the ID
     pub cortical_id_s: String,
     /// Internal numerical index
     pub cortical_idx: u32,

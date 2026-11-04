@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
+use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::interfacing::cortical_area_spec::NeuronInitializer;
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutType};
@@ -55,6 +55,13 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// none
     type CustomNeuronInit: NeuronInitializer<Self>;
 
+}
+
+/// Names one neuron model as a whole, across its quantization levels, and the layout it is fixed
+/// to. Lets something differ per model, without needing to name each quantization level
+pub trait NeuronModelTag {
+    /// How the neurons of this model are laid out
+    type LayoutType: NeuronLayoutType;
 }
 
 
@@ -159,14 +166,3 @@ where
 
 
 
-/// Defaults of the cortical level data every neuron model has, defined at the quantization of
-/// [`Self::Reference`]. Meant to be implemented on a zero sized struct, which then implements the
-/// defaults trait of its model as well (such as `FeagiAdvancedDefaults`), which assembles them
-pub trait CorticalUniversalDefaults {
-    /// The neuron model (and so quantization level) the defaults are defined at
-    type Reference: NeuronModel;
-
-    const CORTICAL_LEVEL_PSP: CorticalAreaNeuronPotential<<Self::Reference as MembranePotentialQuantization>::MembranePotentialQuant>;
-    const IS_PSP_UNIFORM: bool;
-    const IS_PSP_USING_NEURON_POTENTIAL: bool;
-}

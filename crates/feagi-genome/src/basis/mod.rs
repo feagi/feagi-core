@@ -2,5 +2,4 @@
 //! crate.
 
 pub mod specifications;
-pub mod cortical_area;
 

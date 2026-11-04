@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use crate::basis::cortical_area::cortical_identifier::CorticalIdentifier;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::{BrainRegionAncestryID, BrainRegionID};
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;

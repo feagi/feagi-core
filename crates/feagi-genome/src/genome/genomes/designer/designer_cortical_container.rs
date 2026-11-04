@@ -1,6 +1,6 @@
-use crate::basis::cortical_area::cortical_id_legacy::CorticalIDLegacy;
+use crate::cortical_area::CorticalIdentifier;
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::cortical_area_types::enums::CorticalGenomicDataEnum;
+use crate::cortical_area::CorticalGenomicDataEnum;
 use crate::genome::genome_object_metadata::GenomeObjectMetadata;
 use crate::genome::genome_object_positioning::GenomeObjectPositioning;
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
@@ -13,8 +13,8 @@ pub struct DesignerCorticalAreaContainer<FIQ: FeagiIndexQuantization> {
 
     // Cache items
     cache_parent_region_id: BrainRegionID,
-    cache_incoming_mappings: HashSet<CorticalIDLegacy>,
-    cache_outgoing_mappings: HashSet<CorticalIDLegacy>,
+    cache_incoming_mappings: HashSet<CorticalIdentifier>,
+    cache_outgoing_mappings: HashSet<CorticalIdentifier>,
 }
 
 impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
@@ -24,8 +24,8 @@ impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
         positioning: GenomeObjectPositioning,
         data: CorticalGenomicDataEnum<FIQ>,
         cache_parent_region_id: BrainRegionID,
-        cache_incoming_mappings: HashSet<CorticalIDLegacy>,
-        cache_outgoing_mappings: HashSet<CorticalIDLegacy>,
+        cache_incoming_mappings: HashSet<CorticalIdentifier>,
+        cache_outgoing_mappings: HashSet<CorticalIdentifier>,
     ) -> Self {
         Self {
             metadata,
@@ -58,11 +58,11 @@ impl<FIQ: FeagiIndexQuantization> DesignerCorticalAreaContainer<FIQ> {
         self.cache_parent_region_id
     }
 
-    pub fn incoming_cortical_ids(&self) -> &HashSet<CorticalIDLegacy> {
+    pub fn incoming_cortical_ids(&self) -> &HashSet<CorticalIdentifier> {
         &self.cache_incoming_mappings
     }
 
-    pub fn outgoing_cortical_ids(&self) -> &HashSet<CorticalIDLegacy> {
+    pub fn outgoing_cortical_ids(&self) -> &HashSet<CorticalIdentifier> {
         &self.cache_outgoing_mappings
     }
 }

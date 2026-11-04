@@ -1,7 +1,7 @@
 //! Brain regions: hierarchical groupings of cortical areas (and child regions), with their
 //! layout coordinates and IO designations. Converted from the old `region` endpoints.
 
-use crate::basis::cortical_area::cortical_id_legacy::Base64EncodedCorticalID;
+use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ pub struct RegionMembersEntry {
     /// 3D layout coordinate
     pub coordinate_3d: [i32; 3],
     /// IDs of member cortical areas
-    pub areas: Vec<Base64EncodedCorticalID>,
+    pub areas: Vec<CorticalIdentifierBase64>,
     /// IDs of child regions
     pub regions: Vec<String>,
     /// Cortical area IDs acting as region inputs
@@ -109,7 +109,7 @@ define_request_message_category! {
                 region_type: Option<String>, "Functional type; defaults to Undefined",
                 coordinate_2d: [i32; 2], "2D layout coordinate (alias: coordinates_2d)",
                 coordinate_3d: [i32; 3], "3D layout coordinate (alias: coordinates_3d)",
-                areas: Option<Vec<Base64EncodedCorticalID>>, "IDs of cortical areas to place in the region",
+                areas: Option<Vec<CorticalIdentifierBase64>>, "IDs of cortical areas to place in the region",
                 regions: Option<Vec<String>>, "IDs of regions to place in the region",
             },
             response: {
@@ -120,8 +120,8 @@ define_request_message_category! {
                 coordinate_3d: [i32; 3],
                 areas: Vec<String>,
                 regions: Vec<String>,
-                inputs: Option<Vec<Base64EncodedCorticalID>>, "Cortical area IDs acting as region inputs",
-                outputs: Option<Vec<Base64EncodedCorticalID>>, "Cortical area IDs acting as region outputs",
+                inputs: Option<Vec<CorticalIdentifierBase64>>, "Cortical area IDs acting as region inputs",
+                outputs: Option<Vec<CorticalIdentifierBase64>>, "Cortical area IDs acting as region outputs",
             },
             error: {
                 InvalidRegionId: "The given region_id is not a valid region ID",

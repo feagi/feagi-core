@@ -1,7 +1,7 @@
 //! Morphologies: named connection patterns (vectors, patterns, functions, composite) used by
 //! cortical mappings. Converted from the old `morphology` endpoints.
 
-use crate::basis::cortical_area::cortical_id_legacy::Base64EncodedCorticalID;
+use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 
@@ -122,7 +122,7 @@ define_request_message_category! {
                 morphology_name: String,
             },
             response: {
-                usage: Vec<[Base64EncodedCorticalID; 2]>, "[source area ID, destination area ID] pairs",
+                usage: Vec<[CorticalIdentifierBase64; 2]>, "[source area ID, destination area ID] pairs",
             },
         },
     },
