@@ -34,7 +34,7 @@ impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderDecrementing<NUM_DI
         let mut i = NUM_DIMS as u8;
         while i != 0 {
             i = i - 1;
-            out[i as usize] = i
+            out[i as usize] = (NUM_DIMS as u8) - 1 - i;
         }
         AxisOrderArray { data: out }
     };

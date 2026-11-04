@@ -13,6 +13,17 @@ pub struct NeuronLayoutVoxel<FIQ: FeagiIndexQuantization> {
     helper: SpatialHelper<FIQ::NeuronIndexQuant, AxisOrderDecrementing<4>, 4>
 }
 
+impl<FIQ: FeagiIndexQuantization> NeuronLayoutVoxel<FIQ> {
+    /// Gets the index of the neuron at the given coordinates, the inverse of
+    /// `get_neuron_layout_context`. Does NOT check that the coordinates fit this layout!
+    pub fn neuron_coordinates_to_index(
+        &self,
+        coordinates: &DimensionalCorticalAreaNeuronCoordinates<FIQ::NeuronIndexQuant>,
+    ) -> CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant> {
+        CorticalAreaNeuronLocalIndex::new(self.helper.coordinate_to_linear(coordinates))
+    }
+}
+
 impl<
     FIQ: FeagiIndexQuantization,
 > NeuronLayout<FIQ>
