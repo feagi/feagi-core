@@ -16,6 +16,7 @@ pub mod cortical_area {
     pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout;
     pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutType;
     pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::NeuronModel;
+    pub use feagi_connectome_neural::neural_basis::neuron_model::cortical_indexing::CorticalAreaEngineIndex;
     pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::{
         CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer, NoCustomNeuronInit,
     };
