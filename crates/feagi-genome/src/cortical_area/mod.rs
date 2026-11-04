@@ -4,6 +4,8 @@
 //! per neuron model it allows. Generated items are also reached through `cortical_area_type`
 
 use feagi_connectome::family_macros::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
+#[cfg(feature = "std")]
+use feagi_connectome::family_macros::expand_cortical_area_map;
 use feagi_connectome::neuron_models::neuron_model;
 pub use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronLayoutType};
 pub use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
@@ -83,6 +85,8 @@ define_cortical_type_family_template! {
 
 cortical_area_type_family_template!(expand_cortical_type_family);
 cortical_area_type_family_template!(expand_cortical_identifier);
+#[cfg(feature = "std")]
+cortical_area_type_family_template!(expand_cortical_area_map);
 
 /// The Genomic Data For a given Cortical Area
 pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaSpecContainer<FIQ>>;

@@ -13,11 +13,11 @@ use quote::{format_ident, quote};
 /// ```
 impl CorticalTypeFamilyTemplate {
     /// The fully decoded form of the identifier
-    fn path_name(&self) -> Ident {
+    pub(super) fn path_name(&self) -> Ident {
         format_ident!("{}Path", self.identifier_name)
     }
 
-    fn super_type_path_name(&self, super_type: &Ident) -> Ident {
+    pub(super) fn super_type_path_name(&self, super_type: &Ident) -> Ident {
         format_ident!("{}{}Path", super_type, self.identifier_name)
     }
 

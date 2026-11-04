@@ -1,16 +1,27 @@
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::cortical_area::{CorticalAreaType, CorticalIdentifier, NeuronLayoutType};
+use crate::cortical_area::{CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalIdentifier, NeuronLayoutType};
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::cortical_area::{CorticalAreaEngineIndex, NeuronModel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use std::collections::HashSet;
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
+use feagi_connectome::neuron_models::neuron_model::NeuronModelContainer;
+
+
+
+/// What the designer genome holds for each cortical area, whichever its cortical type
+pub struct CorticalAreaContainersDesigner<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
+
+impl<FIQ: FeagiIndexQuantization> CorticalAreaTypeMapValue for CorticalAreaContainersDesigner<FIQ> {
+    type Of<T: CorticalAreaTypeMember> = CorticalAreaContainerDesigner<FIQ, T>;
+}
+
 
 pub struct CorticalAreaContainerDesigner<FIQ, CT>
 where
     FIQ: FeagiIndexQuantization,
-    CT: CorticalAreaType
+    CT: CorticalAreaTypeMember
 {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
@@ -18,17 +29,26 @@ where
     pub incoming_mappings: HashSet<CorticalIdentifier>,
     pub outgoing_mappings: HashSet<CorticalIdentifier>,
     pub layout_context: <<CT::NeuronLayout as NeuronLayoutType>::Layout<FIQ> as NeuronLayout<FIQ>>::CorticalLevelContext,
-    pub neuron_model_data: // TODO Cortical Type Specific enum wrapping an enum (not cortical type specific) of NeuronModelDataDesigner at different quants
+    /// Whichever model this cortical type allows is in use, at whichever quantization of that model
+    pub neuron_model_data: CT::Models<NeuronModelDataDesignerContainer<FIQ>>,
 }
 
 impl<FIQ, CT> CorticalAreaContainerDesigner<FIQ, CT>
 where
     FIQ: FeagiIndexQuantization,
-    CT: CorticalAreaType
+    CT: CorticalAreaTypeMember
 {
 
 
-    
+
+}
+
+
+/// Holds the [`NeuronModelDataDesigner`] of a cortical area
+pub struct NeuronModelDataDesignerContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
+
+impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for NeuronModelDataDesignerContainer<FIQ> {
+    type Of<M: NeuronModel> = NeuronModelDataDesigner<FIQ, M>;
 }
 
 

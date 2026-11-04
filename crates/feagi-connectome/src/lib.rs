@@ -26,7 +26,8 @@ pub mod cortical_area {
 /// Macros for defining families of models, and families of cortical area types using them
 pub mod family_macros {
     pub use feagi_connectome_proc::{
-        define_cortical_type_family_template, define_model_family_template, expand_cortical_identifier, expand_cortical_type_family, expand_model_family,
+        define_cortical_type_family_template, define_model_family_template, expand_cortical_area_map, expand_cortical_identifier, expand_cortical_type_family,
+        expand_model_family,
     };
 }
 

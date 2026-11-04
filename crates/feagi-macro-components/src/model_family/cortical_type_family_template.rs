@@ -826,9 +826,11 @@ impl CorticalTypeFamilyTemplate {
         let member_impls = self.cortical_types().into_iter().map(|leaf| {
             let cortical_type = self.cortical_type_path(leaf.super_type, leaf.name);
             let kind_value = self.kind_value(leaf.super_type, leaf.name);
+            let model_enum = Self::model_enum_name(leaf.super_type, leaf.name);
             quote! {
                 impl #member_trait for #cortical_type {
                     const KIND: #family_kind = #kind_value;
+                    type Models<C: #container> = #model_enum<C>;
                 }
             }
         });
@@ -900,6 +902,9 @@ impl CorticalTypeFamilyTemplate {
             pub trait #member_trait: #base_trait {
                 /// The cortical type this is
                 const KIND: #family_kind;
+
+                /// The models this cortical type allows, holding the data of container `C`
+                type Models<C: #container>;
             }
 
             #( #member_impls )*

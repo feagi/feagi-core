@@ -236,7 +236,8 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 /// - The trait `Uses{Model}` per allowed model, to be implemented by hand by each cortical type
 ///   allowing it. Giving a cortical type a layout other than its model's is a compile error, as is
 ///   a cortical type listing a model without implementing this
-/// - The trait `{Family}Member`, implemented for every cortical type, holding its kind, and
+/// - The trait `{Family}Member`, implemented for every cortical type, holding its kind and its model
+///   enum as `type Models<C>`, and
 ///   `{Family}MemberAt<M>`, implemented for every cortical type at every member of the models it
 ///   allows, converting its data between itself and `{Family}Enum<C>`, through which
 ///   `{Family}Enum<C>` has `from_data`, `try_as`, `try_as_mut`, and `try_into_data`
@@ -274,6 +275,30 @@ pub fn expand_cortical_identifier(input: proc_macro::TokenStream) -> proc_macro:
     match syn::parse::<CorticalTypeFamilyTemplate>(input) {
         Err(e) => e.to_compile_error().into(),
         Ok(template) => template.generate_rust_identifier().into(),
+    }
+}
+
+/// Expands the map of cortical areas of a cortical type family, as given by its template macro,
+/// which holds areas by super type, then cortical type, then inner ID. What is held for each cortical
+/// type may differ, and can never disagree with the identifier it is found by. Generates:
+/// - `{Family}MapValue`, deciding what is held per cortical type as `type Of<T: {Family}Member>`, to
+///   be implemented on a zero sized struct per kind of map
+/// - `{Family}Map<V>`, with a public `{SuperType}SuperTypeMap<V>` field per super type, which has a
+///   public `HashMap` field per cortical type from its inner ID to what is held. It has `get`,
+///   `get_mut`, `contains`, `of`, `of_mut`, `identifiers`, `len`, and `is_empty`
+/// - `{Family}Ref<'a, V>` and `{Family}RefMut<'a, V>`, which `get` and `get_mut` return, with a variant
+///   per super type holding its `{SuperType}SuperTypeRef<'a, V>` or `{SuperType}SuperTypeRefMut<'a, V>`,
+///   which have a variant per cortical type
+/// - `{Family}MapMember`, implemented for every cortical type, through which `of` and `of_mut` give
+///   the `HashMap` of a cortical type known at compile time
+///
+/// [`expand_cortical_type_family`] and [`expand_cortical_identifier`] must also be expanded in the
+/// same place, as this uses their items. Must be used with `std`
+#[proc_macro]
+pub fn expand_cortical_area_map(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match syn::parse::<CorticalTypeFamilyTemplate>(input) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(template) => template.generate_rust_area_map().into(),
     }
 }
 

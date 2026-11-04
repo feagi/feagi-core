@@ -22,7 +22,7 @@ pub trait NeuronLayout<
     const SPARSITY: NeuronLayoutSparsity;
 
     /// What data describes the cortical context that summerizes the state of the whole area
-    type CorticalLevelContext;
+    type CorticalLevelContext: Clone;
 
     /// The per neuron context, helps identify a neurons "location" relative to others within a
     /// cortical area
