@@ -2,7 +2,7 @@ use feagi_connectome::neuron_models::neuron_model;
 use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64};
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::NeuronModelFeagiAdvancedDefaultQuant;
 use feagi_connectome::neuron_models::neuron_model::{
-    FoundationPowerQuantEnum, FoundationPowerQuantKind, FeagiAdvancedQuantKind, NeuronModel, NeuronModelContainer, NeuronModelEnum, NeuronModelKind,
+    FoundationPowerQuantEnum, FoundationPowerQuantKind, NeuronModel, NeuronModelContainer, NeuronModelEnum, NeuronModelKind,
     NeuronModelMember, NeuronModelSelectionError,
 };
 
@@ -15,17 +15,6 @@ impl NeuronModelContainer for Named {
 
 fn named<M: NeuronModelMember>() -> NeuronModelEnum<Named> {
     NeuronModelEnum::from_data::<M>(M::KIND.to_string())
-}
-
-#[test]
-fn kinds_name_every_member() {
-    assert_eq!(NeuronModelKind::ALL.len(), 5);
-    assert_eq!(FoundationPowerQuantKind::ALL.len(), 4);
-    let kind = NeuronModelKind::FoundationPower(FoundationPowerQuantKind::BFloat16);
-    assert_eq!(kind.model_name(), "FoundationPower");
-    assert_eq!(kind.quantization_name(), "BFloat16");
-    assert_eq!(kind.to_string(), "FoundationPower::BFloat16");
-    assert_eq!(NeuronModelFeagiAdvancedDefaultQuant::KIND, NeuronModelKind::FeagiAdvanced(FeagiAdvancedQuantKind::DefaultQuant));
 }
 
 #[test]

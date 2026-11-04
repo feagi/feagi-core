@@ -22,8 +22,8 @@ impl FoundationSuperTypeKind {
             //b"___death" => Ok(FoundationSuperTypeKind::Death),
             b"___power" => Ok(FoundationSuperTypeKind::Power),
             //b"___fatig" => Ok(FoundationSuperTypeKind::Fatigue),
-            //b"___pain_" => Ok(FoundationSuperTypeKind::Pain),
-            //b"___pleas" => Ok(FoundationSuperTypeKind::Pleasure),
+            //b"___pain_" => Ok(FoundationSuperTypeKind::Pain), // TODO
+            //b"___pleas" => Ok(FoundationSuperTypeKind::Pleasure), // TODO
             //b"___fear_" => Ok(FoundationSuperTypeKind::Fear),
             //b"___hope_" => Ok(FoundationSuperTypeKind::Hope),
             _ => Err(GenomeIdentifierError::CannotParseFromBytes("CorticalID")),

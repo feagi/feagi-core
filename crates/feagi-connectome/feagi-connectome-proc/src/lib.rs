@@ -143,6 +143,9 @@ pub fn define_model_family_template(input: proc_macro::TokenStream) -> proc_macr
 }
 
 /// Expands a model family template, as given by its template macro. Generates:
+/// - The module named the snake case of the family, such as `neuron_model`, re-exporting everything
+///   public where this is expanded, with a sub module per model named the snake case of the model,
+///   such as `foundation_power`, re-exporting that model
 /// - `{Model}QuantKind` per model, a data less enum with a variant per quantization level, and
 ///   `{Family}Kind`, with a variant per model holding its `{Model}QuantKind`. Both are `Copy`,
 ///   serializable, and name their variants
@@ -161,12 +164,12 @@ pub fn define_model_family_template(input: proc_macro::TokenStream) -> proc_macr
 ///   `with_{family}_kind!`, which run the same code against whichever member is held, optionally
 ///   aliasing its marker struct
 ///
-/// Must be in scope where this is expanded: the module named the snake case of the family, such
-/// as `neuron_model`, holding the base trait `{Family}`, with a sub module per model named the
-/// snake case of the model, such as `foundation_power`, holding the model trait `{Family}{Model}` and
-/// every marker struct `{Family}{Model}{Level}` of it. Marker structs must be unit structs. The
-/// dispatch macros also expect the generated items in the family module. The crate must depend on
-/// `feagi_basis`, which serde is reached through
+/// The base trait `{Family}` must be public where this is expanded. Next to the file expanding this
+/// must be a folder per model named the snake case of the model, such as `foundation_power`, holding
+/// a `data` module with the model trait `{Family}{Model}` and every marker struct
+/// `{Family}{Model}{Level}` of it, and a `burst_dynamics` module with `{Model}BurstEngineDynamics`.
+/// Marker structs must be unit structs. The dispatch macros expect the family module in scope where
+/// they are called. The crate must depend on `feagi_basis`, which serde is reached through
 #[proc_macro]
 pub fn expand_model_family(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match syn::parse::<ModelFamilyTemplate>(input) {

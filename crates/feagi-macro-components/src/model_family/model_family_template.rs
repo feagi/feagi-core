@@ -35,11 +35,15 @@ const SERDE_CRATE: &str = "::feagi_basis::__private::serde";
 ///     FeagiAdvanced: { DefaultQuant }
 /// }
 /// ```
-/// No paths are given. Generated code instead expects a module named the snake case of the family
-/// to be in scope where it is expanded, holding the base trait `{Family}` and the items generated
-/// for the family, with a sub module per model named the snake case of the model, holding the
-/// model trait `{Family}{Model}` and the marker struct `{Family}{Model}{Level}` of each of its
-/// quantization levels. Marker structs must be unit structs. Every map keeps its template order
+/// No paths are given. Expanding this generates the family module, named the snake case of the
+/// family, which re-exports everything public where it is expanded. That must include the base
+/// trait `{Family}`, as the items generated for the family reach it through this module. The family
+/// module has a sub module per model named the snake case of the model, re-exporting the model from
+/// the folder of that name next to the file the template is expanded in. Each folder must hold a
+/// `data` module, with the model trait `{Family}{Model}` and the marker struct
+/// `{Family}{Model}{Level}` of each of its quantization levels, and a `burst_dynamics` module, with
+/// `{Model}BurstEngineDynamics`, which is re-exported as `BurstEngineDynamics`. Marker structs must
+/// be unit structs. Every map keeps its template order
 pub struct ModelFamilyTemplate {
     pub family_attributes: Vec<Attribute>,
     pub family_name: Ident,
@@ -166,9 +170,10 @@ impl ModelFamilyTemplate {
         }
     }
 
-    /// Generate the kinds, error, container trait, enums, member traits, and dispatch macros of
-    /// the family
+    /// Generate the family module, kinds, error, container trait, enums, member traits, and
+    /// dispatch macros of the family
     pub fn generate_rust_family(&self) -> proc_macro2::TokenStream {
+        let family_module = self.generate_family_module();
         let kinds = self.generate_kinds();
         let error = self.generate_error();
         let container = self.generate_container_trait();
@@ -177,6 +182,7 @@ impl ModelFamilyTemplate {
         let members = self.generate_member_traits();
         let with_macros = self.generate_with_macros();
         quote! {
+            #family_module
             #kinds
             #error
             #container
@@ -186,6 +192,41 @@ impl ModelFamilyTemplate {
             #with_macros
         }
     }
+
+    //region Family Module
+
+    /// The module named the snake case of the family, re-exporting everything public where it is
+    /// expanded, with a sub module per model re-exporting the model from its folder. The folders
+    /// are next to the file expanding this, which is three levels up from a model sub module: the
+    /// model sub module, the family module, and the module being expanded in
+    fn generate_family_module(&self) -> proc_macro2::TokenStream {
+        let family_module = self.family_module();
+        let doc = format!("The `{}` family: the base trait and every generated item, with a sub module per model", self.family_name);
+
+        let model_modules = self.models.iter().map(|(model, template)| {
+            let attributes = &template.attributes;
+            let model_module = Self::model_module(model);
+            let burst_dynamics = format_ident!("{}BurstEngineDynamics", model);
+            quote! {
+                #( #attributes )*
+                pub mod #model_module {
+                    pub use super::super::super::#model_module::data::*;
+                    pub use super::super::super::#model_module::burst_dynamics::#burst_dynamics as BurstEngineDynamics;
+                }
+            }
+        });
+
+        quote! {
+            #[doc = #doc]
+            pub mod #family_module {
+                pub use super::*;
+
+                #( #model_modules )*
+            }
+        }
+    }
+
+    //endregion
 
     //region Kinds
 
