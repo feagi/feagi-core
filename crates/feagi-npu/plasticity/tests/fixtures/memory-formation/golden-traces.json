@@ -1,0 +1,4395 @@
+{
+  "source_crates": [
+    "feagi-npu-plasticity",
+    "feagi-npu-burst-engine"
+  ],
+  "functions": [
+    "MemoryNeuronArray::create_memory_neuron",
+    "MemoryNeuronArray::reactivate_memory_neuron",
+    "MemoryNeuronArray::age_memory_neurons",
+    "MemoryNeuronArray::check_longterm_conversion_by_area",
+    "MemoryNeuronArray::promote_to_longterm_by_id",
+    "ModulatorEngine::memory_formation_suppressed"
+  ],
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "seen_once_expires",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 100,
+        "presentations": [
+          [
+            0,
+            1
+          ]
+        ],
+        "reward_promotions": [],
+        "formation_driver_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 1,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 2,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 10,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 11,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 12,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 13,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 14,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 15,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 16,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 17,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 18,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 19,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 20,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 22,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 24,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 26,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 28,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 30,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 32,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 34,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 36,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 38,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 40,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 42,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 44,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 46,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        }
+      ]
+    },
+    {
+      "name": "returns_every_6_bursts_too_slow",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 100,
+        "presentations": [
+          [
+            0,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            12,
+            1
+          ],
+          [
+            18,
+            1
+          ],
+          [
+            24,
+            1
+          ],
+          [
+            30,
+            1
+          ],
+          [
+            36,
+            1
+          ],
+          [
+            42,
+            1
+          ]
+        ],
+        "reward_promotions": [],
+        "formation_driver_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 1,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 2,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 10,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 11,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 12,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 13,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 14,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 15,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 16,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 17,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 18,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 19,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 20,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 22,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 24,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 26,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 28,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 30,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 32,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 34,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 36,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 38,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 40,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 42,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 44,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 46,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        }
+      ]
+    },
+    {
+      "name": "held_becomes_long_term",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 3.0,
+        "longterm_threshold": 30,
+        "presentations": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            5,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            7,
+            1
+          ],
+          [
+            8,
+            1
+          ],
+          [
+            9,
+            1
+          ],
+          [
+            10,
+            1
+          ],
+          [
+            11,
+            1
+          ],
+          [
+            12,
+            1
+          ],
+          [
+            13,
+            1
+          ],
+          [
+            14,
+            1
+          ],
+          [
+            15,
+            1
+          ],
+          [
+            16,
+            1
+          ],
+          [
+            17,
+            1
+          ],
+          [
+            18,
+            1
+          ],
+          [
+            19,
+            1
+          ]
+        ],
+        "reward_promotions": [],
+        "formation_driver_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 1,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 12,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 2,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 15,
+              "long_term": false,
+              "activations": 3
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 18,
+              "long_term": false,
+              "activations": 4
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 21,
+              "long_term": false,
+              "activations": 5
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 24,
+              "long_term": false,
+              "activations": 6
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 27,
+              "long_term": false,
+              "activations": 7
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": false,
+              "activations": 8
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "promoted_long_term"
+            },
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 9
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 10
+            }
+          ]
+        },
+        {
+          "burst": 10,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 11
+            }
+          ]
+        },
+        {
+          "burst": 11,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 12
+            }
+          ]
+        },
+        {
+          "burst": 12,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 13
+            }
+          ]
+        },
+        {
+          "burst": 13,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 14
+            }
+          ]
+        },
+        {
+          "burst": 14,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 15
+            }
+          ]
+        },
+        {
+          "burst": 15,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 16
+            }
+          ]
+        },
+        {
+          "burst": 16,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 17
+            }
+          ]
+        },
+        {
+          "burst": 17,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 18
+            }
+          ]
+        },
+        {
+          "burst": 18,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 19
+            }
+          ]
+        },
+        {
+          "burst": 19,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 20,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 22,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 24,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 26,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 28,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 30,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 32,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 34,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 36,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 38,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 40,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 42,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 44,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 46,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 30,
+              "long_term": true,
+              "activations": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reward_makes_it_long_term",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 100,
+        "presentations": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "reward_promotions": [
+          [
+            3,
+            1
+          ]
+        ],
+        "formation_driver_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [
+            1,
+            2
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            },
+            {
+              "pattern": 2,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 1,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 2,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "promoted_reward"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            },
+            {
+              "pattern": 2,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 2,
+              "kind": "expired"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 10,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 11,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 12,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 13,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 14,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 15,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 16,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 17,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 18,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 19,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 20,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 22,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 24,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 26,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 28,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 30,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 32,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 34,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 36,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 38,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 40,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 42,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 44,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 46,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": true,
+              "activations": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "formation_blocked_then_allowed",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 100,
+        "presentations": [
+          [
+            2,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            14,
+            2
+          ]
+        ],
+        "reward_promotions": [],
+        "formation_driver_bursts": [
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 1,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 2,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [],
+          "suppressing": true,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [
+            1,
+            2
+          ],
+          "suppressing": true,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            },
+            {
+              "pattern": 2,
+              "kind": "suppressed"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [],
+          "suppressing": true,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [],
+          "suppressing": true,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [],
+          "suppressing": true,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 10,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 11,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 12,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 13,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 14,
+          "presented": [
+            2
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 2,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 15,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 16,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 7,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 17,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 6,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 18,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 5,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 19,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 4,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 20,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 3,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 2,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 22,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 2,
+              "lifespan": 1,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 2,
+              "kind": "expired"
+            }
+          ],
+          "neurons": []
+        },
+        {
+          "burst": 24,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 26,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 28,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 30,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 32,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 34,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 36,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 38,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 40,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 42,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 44,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 46,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": []
+        }
+      ]
+    },
+    {
+      "name": "returns_every_2_bursts_stays_alive",
+      "settings": {
+        "initial_lifespan": 9,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 100,
+        "presentations": [
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            8,
+            1
+          ],
+          [
+            10,
+            1
+          ],
+          [
+            12,
+            1
+          ],
+          [
+            14,
+            1
+          ],
+          [
+            16,
+            1
+          ],
+          [
+            18,
+            1
+          ],
+          [
+            20,
+            1
+          ],
+          [
+            22,
+            1
+          ],
+          [
+            24,
+            1
+          ],
+          [
+            26,
+            1
+          ],
+          [
+            28,
+            1
+          ],
+          [
+            30,
+            1
+          ],
+          [
+            32,
+            1
+          ],
+          [
+            34,
+            1
+          ],
+          [
+            36,
+            1
+          ],
+          [
+            38,
+            1
+          ],
+          [
+            40,
+            1
+          ],
+          [
+            42,
+            1
+          ],
+          [
+            44,
+            1
+          ],
+          [
+            46,
+            1
+          ]
+        ],
+        "reward_promotions": [],
+        "formation_driver_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "created"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 1,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 1
+            }
+          ]
+        },
+        {
+          "burst": 2,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 3,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 2
+            }
+          ]
+        },
+        {
+          "burst": 4,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 3
+            }
+          ]
+        },
+        {
+          "burst": 5,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 3
+            }
+          ]
+        },
+        {
+          "burst": 6,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 4
+            }
+          ]
+        },
+        {
+          "burst": 7,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 4
+            }
+          ]
+        },
+        {
+          "burst": 8,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 5
+            }
+          ]
+        },
+        {
+          "burst": 9,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 5
+            }
+          ]
+        },
+        {
+          "burst": 10,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 6
+            }
+          ]
+        },
+        {
+          "burst": 11,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 6
+            }
+          ]
+        },
+        {
+          "burst": 12,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 7
+            }
+          ]
+        },
+        {
+          "burst": 13,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 7
+            }
+          ]
+        },
+        {
+          "burst": 14,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 8
+            }
+          ]
+        },
+        {
+          "burst": 15,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 8
+            }
+          ]
+        },
+        {
+          "burst": 16,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 9
+            }
+          ]
+        },
+        {
+          "burst": 17,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 9
+            }
+          ]
+        },
+        {
+          "burst": 18,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 10
+            }
+          ]
+        },
+        {
+          "burst": 19,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 10
+            }
+          ]
+        },
+        {
+          "burst": 20,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 11
+            }
+          ]
+        },
+        {
+          "burst": 21,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 11
+            }
+          ]
+        },
+        {
+          "burst": 22,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 12
+            }
+          ]
+        },
+        {
+          "burst": 23,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 12
+            }
+          ]
+        },
+        {
+          "burst": 24,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 13
+            }
+          ]
+        },
+        {
+          "burst": 25,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 13
+            }
+          ]
+        },
+        {
+          "burst": 26,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 14
+            }
+          ]
+        },
+        {
+          "burst": 27,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 14
+            }
+          ]
+        },
+        {
+          "burst": 28,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 15
+            }
+          ]
+        },
+        {
+          "burst": 29,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 15
+            }
+          ]
+        },
+        {
+          "burst": 30,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 16
+            }
+          ]
+        },
+        {
+          "burst": 31,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 16
+            }
+          ]
+        },
+        {
+          "burst": 32,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 17
+            }
+          ]
+        },
+        {
+          "burst": 33,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 17
+            }
+          ]
+        },
+        {
+          "burst": 34,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 18
+            }
+          ]
+        },
+        {
+          "burst": 35,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 18
+            }
+          ]
+        },
+        {
+          "burst": 36,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 19
+            }
+          ]
+        },
+        {
+          "burst": 37,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 19
+            }
+          ]
+        },
+        {
+          "burst": 38,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 39,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 20
+            }
+          ]
+        },
+        {
+          "burst": 40,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 21
+            }
+          ]
+        },
+        {
+          "burst": 41,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 21
+            }
+          ]
+        },
+        {
+          "burst": 42,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 22
+            }
+          ]
+        },
+        {
+          "burst": 43,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 22
+            }
+          ]
+        },
+        {
+          "burst": 44,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 23
+            }
+          ]
+        },
+        {
+          "burst": 45,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 23
+            }
+          ]
+        },
+        {
+          "burst": 46,
+          "presented": [
+            1
+          ],
+          "suppressing": false,
+          "events": [
+            {
+              "pattern": 1,
+              "kind": "reactivated"
+            }
+          ],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 9,
+              "long_term": false,
+              "activations": 24
+            }
+          ]
+        },
+        {
+          "burst": 47,
+          "presented": [],
+          "suppressing": false,
+          "events": [],
+          "neurons": [
+            {
+              "pattern": 1,
+              "lifespan": 8,
+              "long_term": false,
+              "activations": 24
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

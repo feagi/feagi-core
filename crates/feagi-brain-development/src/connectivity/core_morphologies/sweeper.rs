@@ -80,7 +80,8 @@ pub fn apply_sweeper_morphology_with_dimensions(
     Ok(synapse_count)
 }
 
-fn next_sweep_position(
+/// Destination voxel one source voxel connects to under `sweeper`, or `None` at the last voxel.
+pub fn next_sweep_position(
     src_pos: Position,
     dst_dimensions: (usize, usize, usize),
 ) -> Option<Position> {

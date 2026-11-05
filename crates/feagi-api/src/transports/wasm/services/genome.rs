@@ -36,12 +36,16 @@ impl GenomeService for WasmGenomeService {
     }
 
     async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
-        let subset =
-            feagi_evolutionary::subset_runtime_genome_for_region_branch(&self.genome, &region_id)
-                .map_err(|e| match e {
-                feagi_evolutionary::EvoError::InvalidRegion(msg) => ServiceError::InvalidInput(msg),
-                other => ServiceError::Internal(other.to_string()),
-            })?;
+        let subset = feagi_evolutionary::subset_runtime_genome_for_region_branch(
+            &self.genome,
+            &region_id,
+            // This transport has no connectome to count synapses in.
+            |_| 0,
+        )
+        .map_err(|e| match e {
+            feagi_evolutionary::EvoError::InvalidRegion(msg) => ServiceError::InvalidInput(msg),
+            other => ServiceError::Internal(other.to_string()),
+        })?;
         feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
             ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
         })

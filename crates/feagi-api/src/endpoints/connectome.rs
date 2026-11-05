@@ -1555,7 +1555,7 @@ async fn import_connectome_snapshot(
         in_progress: Arc::clone(&state.genome_transition_in_progress),
     };
 
-    let outcome = super::genome::with_genome_state_lifecycle(
+    let outcome = super::genome::with_rollback_aware_genome_state_lifecycle(
         state.connectome_service.import_connectome(snapshot),
     )
     .await

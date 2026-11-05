@@ -47,7 +47,9 @@ pub use migration::{
     V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator, V5ToV6Migrator, V6ToV7Migrator,
 };
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
-pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer, V6Normalizer};
+pub use normalizers::{
+    NormalizationDiagnostics, Normalizer, V3Normalizer, V6Normalizer, V7Normalizer,
+};
 pub use parser::{GenomeParser, ParsedGenome};
 pub use region_export::{
     apply_genome_title_to_unique_top_circuit, subset_runtime_genome_for_region_branch,
@@ -105,6 +107,10 @@ pub fn default_chain_registry() -> ChainRegistry {
     registry
         .register_normalizer(Box::new(V6Normalizer::new()))
         .expect("V6Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_normalizer(Box::new(V7Normalizer::new()))
+        .expect("V7Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry.register_validator(Box::new(V3Validator::new()));
     registry.register_validator(Box::new(V4Validator::new()));

@@ -55,6 +55,12 @@ pub enum ServiceError {
     /// Not yet implemented
     #[error("Not implemented: {0}")]
     NotImplemented(String),
+
+    /// An operation failed after it began replacing the live brain, and the previous brain was
+    /// restored. Carries the original error; callers report that error and treat the live brain
+    /// (and its genome state) as unchanged.
+    #[error("{0} (the previous brain was restored)")]
+    RolledBack(Box<ServiceError>),
 }
 
 /// Result type for service operations

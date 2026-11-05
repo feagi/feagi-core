@@ -201,8 +201,15 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
         hierarchical.insert("signatures".to_string(), signatures.clone());
     }
 
-    // Copy metadata
-    for field in &["genome_id", "genome_title", "version", "timestamp"] {
+    // Copy metadata. `genome_schema_version` must survive so the chain starts at the
+    // stamped version instead of re-running migrators on an already-migrated genome.
+    for field in &[
+        "genome_id",
+        "genome_title",
+        "version",
+        "genome_schema_version",
+        "timestamp",
+    ] {
         if let Some(value) = flat_genome.get(field) {
             hierarchical.insert(field.to_string(), value.clone());
         }
@@ -909,5 +916,24 @@ mod tests {
 
         assert_eq!(area.get("degeneration").unwrap(), &json!(0.0));
         assert_eq!(area.get("psp_uniform_distribution").unwrap(), &json!(true));
+    }
+
+    #[test]
+    fn test_genome_schema_version_is_carried_to_hierarchical() {
+        let flat = json!({
+            "version": "2.0",
+            "genome_schema_version": 7,
+            "blueprint": {
+                "_____10c-_power-cx-__name-t": "Brain_Power",
+                "_____10c-_power-cx-___bbx-i": 1,
+                "_____10c-_power-cx-___bby-i": 1,
+                "_____10c-_power-cx-___bbz-i": 1
+            },
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+
+        let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
+        assert_eq!(hierarchical.get("genome_schema_version"), Some(&json!(7)));
     }
 }

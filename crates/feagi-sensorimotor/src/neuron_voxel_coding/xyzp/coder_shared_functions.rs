@@ -77,7 +77,7 @@ pub(crate) fn decode_unsigned_percentage_from_fractional_exponential_neurons(
 ) {
     let mut processing: f32 = 0.0; // WARNING: If there are repeats along z, then we will have issues
     for z in neuron_indexes_along_z {
-        processing += 0.5f32.powi(*z as i32);
+        processing += 0.5f32.powi(*z as i32 + 1);
     }
     replace_val.inplace_update_unchecked(processing);
 }
@@ -90,10 +90,10 @@ pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(
 ) {
     let mut processing: f32 = 0.0; // WARNING: If there are repeats along z, then we will have issues
     for z in neuron_indexes_along_z_positive {
-        processing += 0.5f32.powi(*z as i32);
+        processing += 0.5f32.powi(*z as i32 + 1);
     }
     for z in neuron_indexes_along_z_negative {
-        processing -= 0.5f32.powi(*z as i32);
+        processing -= 0.5f32.powi(*z as i32 + 1);
     }
     replace_val.inplace_update_unchecked(processing);
 }
@@ -595,7 +595,7 @@ mod tests {
             );
             assert!(
                 neuron_indexes.contains(&0),
-                "0.5 should activate neuron at z=0 (0.5^0 = 0.5)"
+                "0.5 should activate neuron at z=0 (weight 0.5^(z+1) = 0.5)"
             );
 
             let mut decoded_percentage = Percentage::new_zero();
@@ -1031,5 +1031,68 @@ mod tests {
                 percentage.get_as_m1_1()
             );
         }
+    }
+
+    /// Diagnostic: measures the fractional encode -> decode round trip (prints a table).
+    #[test]
+    fn fractional_round_trip_measurement() {
+        let depth: u32 = 10;
+        let mut worst_u: f32 = 0.0;
+        for i in 0..=20 {
+            let v = i as f32 / 20.0;
+            let p = Percentage::new_from_0_1_unchecked(v);
+            let mut idx = Vec::new();
+            encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(
+                &p, depth, &mut idx,
+            );
+            let mut out = Percentage::new_zero();
+            decode_unsigned_percentage_from_fractional_exponential_neurons(&idx, &mut out);
+            let d = out.get_as_0_1();
+            worst_u = worst_u.max((d - v).abs());
+            println!(
+                "UNSIGNED in={:.3} z={:?} out={:.5} err={:+.5}",
+                v,
+                idx,
+                d,
+                d - v
+            );
+        }
+        let mut worst_s: f32 = 0.0;
+        for i in -10..=10 {
+            let v = i as f32 / 10.0;
+            let p = SignedPercentage::new_from_m1_1_unchecked(v);
+            let (mut pos, mut neg) = (Vec::new(), Vec::new());
+            encode_signed_percentage_to_fractional_exponential_neuron_z_indexes(
+                &p, depth, &mut pos, &mut neg,
+            );
+            let mut out = SignedPercentage::new_from_m1_1_unchecked(0.0);
+            decode_signed_percentage_from_fractional_exponential_neurons(&pos, &neg, &mut out);
+            let d = out.get_as_m1_1();
+            worst_s = worst_s.max((d - v).abs());
+            println!(
+                "SIGNED in={:+.2} pos={:?} neg={:?} out={:+.5} err={:+.5}",
+                v,
+                pos,
+                neg,
+                d,
+                d - v
+            );
+        }
+        println!(
+            "WORST unsigned err={:.5} signed err={:.5}",
+            worst_u, worst_s
+        );
+        // Encoder quantizes to 2^-depth steps; decode must invert it.
+        let tol = 0.5f32.powi(depth as i32) + 1e-6;
+        assert!(
+            worst_u <= tol,
+            "unsigned fractional round trip off by {}",
+            worst_u
+        );
+        assert!(
+            worst_s <= tol,
+            "signed fractional round trip off by {}",
+            worst_s
+        );
     }
 }

@@ -29,6 +29,7 @@ std = ["feagi-state-manager/std"]
 
 [dev-dependencies]
 feagi-npu-runtime = { version = "0.0.53", path = "../runtime", features = ["std"] }
+serde_json = { workspace = true }  # Golden-trace tests for teaching visuals
 
 
 

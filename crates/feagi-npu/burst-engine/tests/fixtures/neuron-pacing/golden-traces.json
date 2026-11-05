@@ -1,0 +1,2032 @@
+{
+  "source_crate": "feagi-npu-burst-engine",
+  "functions": [
+    "process_neural_dynamics",
+    "finish_burst_refractory_period"
+  ],
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "default_refractory_1_limit_3_snooze_2",
+      "settings": {
+        "refractory_period": 1,
+        "consecutive_fire_limit": 3,
+        "snooze_period": 2,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 3,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 3,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_1_no_limit",
+      "settings": {
+        "refractory_period": 1,
+        "consecutive_fire_limit": 0,
+        "snooze_period": 2,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 7,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 7,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 8,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 8,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_2_no_limit",
+      "settings": {
+        "refractory_period": 2,
+        "consecutive_fire_limit": 0,
+        "snooze_period": 0,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_0_no_limit",
+      "settings": {
+        "refractory_period": 0,
+        "consecutive_fire_limit": 0,
+        "snooze_period": 0,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 7,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 8,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 9,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 10,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 11,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 12,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 13,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 14,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 15,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 16,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_0_limit_3_snooze_0",
+      "settings": {
+        "refractory_period": 0,
+        "consecutive_fire_limit": 3,
+        "snooze_period": 0,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_0_limit_3_snooze_2",
+      "settings": {
+        "refractory_period": 0,
+        "consecutive_fire_limit": 3,
+        "snooze_period": 2,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_0_limit_1_snooze_0",
+      "settings": {
+        "refractory_period": 0,
+        "consecutive_fire_limit": 1,
+        "snooze_period": 0,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "limit",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 2.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_2_limit_2_snooze_1",
+      "settings": {
+        "refractory_period": 2,
+        "consecutive_fire_limit": 2,
+        "snooze_period": 1,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 3,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 3,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "limit_2_snooze_0_refractory_1",
+      "settings": {
+        "refractory_period": 1,
+        "consecutive_fire_limit": 2,
+        "snooze_period": 0,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_5_limit_6_snooze_6",
+      "settings": {
+        "refractory_period": 5,
+        "consecutive_fire_limit": 6,
+        "snooze_period": 6,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 5,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 4,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 3,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 5,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 4,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 3,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 5,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 4,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 3,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "snooze_ignored_without_limit",
+      "settings": {
+        "refractory_period": 1,
+        "consecutive_fire_limit": 0,
+        "snooze_period": 6,
+        "weak_bursts": []
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 4,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 5,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 6,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 7,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 7,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 8,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 8,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "refractory_0_limit_3_weak_gap",
+      "settings": {
+        "refractory_period": 0,
+        "consecutive_fire_limit": 3,
+        "snooze_period": 2,
+        "weak_bursts": [
+          1,
+          5
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 0.25,
+          "fired": false,
+          "blocked_by": "input",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.25
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 5,
+          "drive": 0.25,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 1,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        }
+      ]
+    },
+    {
+      "name": "default_with_weak_gap",
+      "settings": {
+        "refractory_period": 1,
+        "consecutive_fire_limit": 3,
+        "snooze_period": 2,
+        "weak_bursts": [
+          3,
+          4,
+          9
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 1,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 2,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 3,
+          "drive": 0.25,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 4,
+          "drive": 0.25,
+          "fired": false,
+          "blocked_by": "input",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.25
+        },
+        {
+          "burst": 5,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 6,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 7,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 8,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 9,
+          "drive": 0.25,
+          "fired": false,
+          "blocked_by": "input",
+          "countdown": 0,
+          "fire_count": 0,
+          "membrane_potential": 0.25
+        },
+        {
+          "burst": 10,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 11,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 1,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 12,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 1,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 13,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 0,
+          "fire_count": 2,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 14,
+          "drive": 2.0,
+          "fired": true,
+          "blocked_by": null,
+          "countdown": 3,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        },
+        {
+          "burst": 15,
+          "drive": 2.0,
+          "fired": false,
+          "blocked_by": "rest",
+          "countdown": 2,
+          "fire_count": 3,
+          "membrane_potential": 0.0
+        }
+      ]
+    }
+  ]
+}

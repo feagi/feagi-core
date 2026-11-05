@@ -1,0 +1,5811 @@
+{
+  "source_crate": "feagi-npu-neural",
+  "function": "update_neuron_lif",
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "no_leak",
+      "settings": {
+        "fire_threshold": 1.0,
+        "leak": 0.0,
+        "input_strength": 0.3,
+        "bursts_between_inputs": 1
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 1,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 2,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 3,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 4,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 5,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 6,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 7,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 8,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 9,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 10,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 11,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 12,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 13,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 14,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 15,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 16,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 17,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 18,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 19,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 20,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 21,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 22,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 23,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 24,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 25,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 26,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 27,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 28,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 29,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 30,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 31,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 32,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 33,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 34,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 35,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 36,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 37,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 38,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 39,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 40,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 41,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 42,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 43,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 44,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 45,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 46,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 47,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 48,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 49,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 50,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 51,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 52,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 53,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 54,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 55,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 56,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 57,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 58,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 59,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 60,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 61,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 62,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 63,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 64,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 65,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 66,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 67,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 68,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 69,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 70,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 71,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 72,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 73,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 74,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 75,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 76,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 77,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 78,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 79,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 80,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 81,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 82,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 83,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 84,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 85,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 86,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 87,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 88,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 89,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 90,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 91,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 92,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 93,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 94,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 95,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 96,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 97,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 98,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 99,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 100,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 101,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 102,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 103,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 104,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 105,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 106,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 107,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 108,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 109,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 110,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 111,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 112,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 113,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 114,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 115,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 116,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 117,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 118,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 119,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 120,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 121,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 122,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 123,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 124,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 125,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 126,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 127,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 128,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 129,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 130,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 131,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 132,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 133,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 134,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 135,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 136,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 137,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 138,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 139,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 140,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 141,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 142,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 143,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 144,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 145,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 146,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 147,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 148,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 149,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 150,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 151,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 152,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 153,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 154,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 155,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 156,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 157,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 158,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 159,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 160,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 161,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 162,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 163,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 164,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 165,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 166,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 167,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 168,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 169,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 170,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 171,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 172,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 173,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 174,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 175,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 176,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 177,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 178,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 179,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 180,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 181,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 182,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 183,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 184,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 185,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 186,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 187,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 188,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 189,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 190,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 191,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 192,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 193,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 194,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 195,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 196,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 197,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 198,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 199,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 200,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 201,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 202,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 203,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 204,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 205,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 206,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 207,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 208,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 209,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 210,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 211,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 212,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 213,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 214,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 215,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 216,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 217,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 218,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 219,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 220,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 221,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 222,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 223,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 224,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 225,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 226,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 227,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 228,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 229,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 230,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 231,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 232,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 233,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 234,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 235,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 236,
+          "input": 0.3,
+          "membrane_potential": 0.3,
+          "fired": false
+        },
+        {
+          "burst": 237,
+          "input": 0.3,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 238,
+          "input": 0.3,
+          "membrane_potential": 0.90000004,
+          "fired": false
+        },
+        {
+          "burst": 239,
+          "input": 0.3,
+          "membrane_potential": 0.0,
+          "fired": true
+        }
+      ]
+    },
+    {
+      "name": "leak_input_every_burst",
+      "settings": {
+        "fire_threshold": 1.0,
+        "leak": 0.1,
+        "input_strength": 0.25,
+        "bursts_between_inputs": 1
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 1,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 2,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 3,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 4,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 5,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 6,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 7,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 8,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 9,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 10,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 11,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 12,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 13,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 14,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 15,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 16,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 17,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 18,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 19,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 20,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 21,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 22,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 23,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 24,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 25,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 26,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 27,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 28,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 29,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 30,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 31,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 32,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 33,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 34,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 35,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 36,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 37,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 38,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 39,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 40,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 41,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 42,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 43,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 44,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 45,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 46,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 47,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 48,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 49,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 50,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 51,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 52,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 53,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 54,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 55,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 56,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 57,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 58,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 59,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 60,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 61,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 62,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 63,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 64,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 65,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 66,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 67,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 68,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 69,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 70,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 71,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 72,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 73,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 74,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 75,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 76,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 77,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 78,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 79,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 80,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 81,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 82,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 83,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 84,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 85,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 86,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 87,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 88,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 89,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 90,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 91,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 92,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 93,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 94,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 95,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 96,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 97,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 98,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 99,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 100,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 101,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 102,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 103,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 104,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 105,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 106,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 107,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 108,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 109,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 110,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 111,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 112,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 113,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 114,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 115,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 116,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 117,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 118,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 119,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 120,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 121,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 122,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 123,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 124,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 125,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 126,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 127,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 128,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 129,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 130,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 131,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 132,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 133,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 134,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 135,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 136,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 137,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 138,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 139,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 140,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 141,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 142,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 143,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 144,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 145,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 146,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 147,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 148,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 149,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 150,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 151,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 152,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 153,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 154,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 155,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 156,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 157,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 158,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 159,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 160,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 161,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 162,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 163,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 164,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 165,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 166,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 167,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 168,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 169,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 170,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 171,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 172,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 173,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 174,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 175,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 176,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 177,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 178,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 179,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 180,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 181,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 182,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 183,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 184,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 185,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 186,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 187,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 188,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 189,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 190,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 191,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 192,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 193,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 194,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 195,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 196,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 197,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 198,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 199,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 200,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 201,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 202,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 203,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 204,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 205,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 206,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 207,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 208,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 209,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 210,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 211,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 212,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 213,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 214,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 215,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 216,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 217,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 218,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 219,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 220,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 221,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 222,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 223,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 224,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 225,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 226,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 227,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 228,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 229,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 230,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 231,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 232,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 233,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 234,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 235,
+          "input": 0.25,
+          "membrane_potential": 0.25,
+          "fired": false
+        },
+        {
+          "burst": 236,
+          "input": 0.25,
+          "membrane_potential": 0.475,
+          "fired": false
+        },
+        {
+          "burst": 237,
+          "input": 0.25,
+          "membrane_potential": 0.6775,
+          "fired": false
+        },
+        {
+          "burst": 238,
+          "input": 0.25,
+          "membrane_potential": 0.85975,
+          "fired": false
+        },
+        {
+          "burst": 239,
+          "input": 0.25,
+          "membrane_potential": 0.0,
+          "fired": true
+        }
+      ]
+    },
+    {
+      "name": "leak_idle_between_inputs",
+      "settings": {
+        "fire_threshold": 1.0,
+        "leak": 0.1,
+        "input_strength": 0.6,
+        "bursts_between_inputs": 3
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 1,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 2,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 3,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 4,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 5,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 6,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 7,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 8,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 9,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 10,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 11,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 12,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 13,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 14,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 15,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 16,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 17,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 18,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 19,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 20,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 21,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 22,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 23,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 24,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 25,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 26,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 27,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 28,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 29,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 30,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 31,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 32,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 33,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 34,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 35,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 36,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 37,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 38,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 39,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 40,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 41,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 42,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 43,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 44,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 45,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 46,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 47,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 48,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 49,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 50,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 51,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 52,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 53,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 54,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 55,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 56,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 57,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 58,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 59,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 60,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 61,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 62,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 63,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 64,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 65,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 66,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 67,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 68,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 69,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 70,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 71,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 72,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 73,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 74,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 75,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 76,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 77,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 78,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 79,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 80,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 81,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 82,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 83,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 84,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 85,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 86,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 87,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 88,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 89,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 90,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 91,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 92,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 93,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 94,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 95,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 96,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 97,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 98,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 99,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 100,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 101,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 102,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 103,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 104,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 105,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 106,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 107,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 108,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 109,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 110,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 111,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 112,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 113,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 114,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 115,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 116,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 117,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 118,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 119,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 120,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 121,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 122,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 123,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 124,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 125,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 126,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 127,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 128,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 129,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 130,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 131,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 132,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 133,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 134,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 135,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 136,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 137,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 138,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 139,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 140,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 141,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 142,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 143,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 144,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 145,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 146,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 147,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 148,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 149,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 150,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 151,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 152,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 153,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 154,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 155,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 156,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 157,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 158,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 159,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 160,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 161,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 162,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 163,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 164,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 165,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 166,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 167,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 168,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 169,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 170,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 171,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 172,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 173,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 174,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 175,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 176,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 177,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 178,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 179,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 180,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 181,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 182,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 183,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 184,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 185,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 186,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 187,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 188,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 189,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 190,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 191,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 192,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 193,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 194,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 195,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 196,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 197,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 198,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 199,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 200,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 201,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 202,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 203,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 204,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 205,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 206,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 207,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 208,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 209,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 210,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 211,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 212,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 213,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 214,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 215,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 216,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 217,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 218,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 219,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 220,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 221,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 222,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 223,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 224,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 225,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 226,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 227,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 228,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 229,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 230,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 231,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 232,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 233,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 234,
+          "input": 0.6,
+          "membrane_potential": 0.6,
+          "fired": false
+        },
+        {
+          "burst": 235,
+          "input": 0.0,
+          "membrane_potential": 0.54,
+          "fired": false
+        },
+        {
+          "burst": 236,
+          "input": 0.0,
+          "membrane_potential": 0.48599997,
+          "fired": false
+        },
+        {
+          "burst": 237,
+          "input": 0.6,
+          "membrane_potential": 0.0,
+          "fired": true
+        },
+        {
+          "burst": 238,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        },
+        {
+          "burst": 239,
+          "input": 0.0,
+          "membrane_potential": 0.0,
+          "fired": false
+        }
+      ]
+    },
+    {
+      "name": "input_too_weak",
+      "settings": {
+        "fire_threshold": 1.0,
+        "leak": 0.1,
+        "input_strength": 0.05,
+        "bursts_between_inputs": 1
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": 0.05,
+          "membrane_potential": 0.05,
+          "fired": false
+        },
+        {
+          "burst": 1,
+          "input": 0.05,
+          "membrane_potential": 0.095,
+          "fired": false
+        },
+        {
+          "burst": 2,
+          "input": 0.05,
+          "membrane_potential": 0.1355,
+          "fired": false
+        },
+        {
+          "burst": 3,
+          "input": 0.05,
+          "membrane_potential": 0.17195,
+          "fired": false
+        },
+        {
+          "burst": 4,
+          "input": 0.05,
+          "membrane_potential": 0.204755,
+          "fired": false
+        },
+        {
+          "burst": 5,
+          "input": 0.05,
+          "membrane_potential": 0.23427948,
+          "fired": false
+        },
+        {
+          "burst": 6,
+          "input": 0.05,
+          "membrane_potential": 0.26085153,
+          "fired": false
+        },
+        {
+          "burst": 7,
+          "input": 0.05,
+          "membrane_potential": 0.28476638,
+          "fired": false
+        },
+        {
+          "burst": 8,
+          "input": 0.05,
+          "membrane_potential": 0.30628973,
+          "fired": false
+        },
+        {
+          "burst": 9,
+          "input": 0.05,
+          "membrane_potential": 0.32566077,
+          "fired": false
+        },
+        {
+          "burst": 10,
+          "input": 0.05,
+          "membrane_potential": 0.3430947,
+          "fired": false
+        },
+        {
+          "burst": 11,
+          "input": 0.05,
+          "membrane_potential": 0.35878524,
+          "fired": false
+        },
+        {
+          "burst": 12,
+          "input": 0.05,
+          "membrane_potential": 0.3729067,
+          "fired": false
+        },
+        {
+          "burst": 13,
+          "input": 0.05,
+          "membrane_potential": 0.38561603,
+          "fired": false
+        },
+        {
+          "burst": 14,
+          "input": 0.05,
+          "membrane_potential": 0.39705443,
+          "fired": false
+        },
+        {
+          "burst": 15,
+          "input": 0.05,
+          "membrane_potential": 0.407349,
+          "fired": false
+        },
+        {
+          "burst": 16,
+          "input": 0.05,
+          "membrane_potential": 0.4166141,
+          "fired": false
+        },
+        {
+          "burst": 17,
+          "input": 0.05,
+          "membrane_potential": 0.4249527,
+          "fired": false
+        },
+        {
+          "burst": 18,
+          "input": 0.05,
+          "membrane_potential": 0.43245742,
+          "fired": false
+        },
+        {
+          "burst": 19,
+          "input": 0.05,
+          "membrane_potential": 0.43921167,
+          "fired": false
+        },
+        {
+          "burst": 20,
+          "input": 0.05,
+          "membrane_potential": 0.4452905,
+          "fired": false
+        },
+        {
+          "burst": 21,
+          "input": 0.05,
+          "membrane_potential": 0.45076147,
+          "fired": false
+        },
+        {
+          "burst": 22,
+          "input": 0.05,
+          "membrane_potential": 0.45568532,
+          "fired": false
+        },
+        {
+          "burst": 23,
+          "input": 0.05,
+          "membrane_potential": 0.46011677,
+          "fired": false
+        },
+        {
+          "burst": 24,
+          "input": 0.05,
+          "membrane_potential": 0.4641051,
+          "fired": false
+        },
+        {
+          "burst": 25,
+          "input": 0.05,
+          "membrane_potential": 0.46769458,
+          "fired": false
+        },
+        {
+          "burst": 26,
+          "input": 0.05,
+          "membrane_potential": 0.47092512,
+          "fired": false
+        },
+        {
+          "burst": 27,
+          "input": 0.05,
+          "membrane_potential": 0.4738326,
+          "fired": false
+        },
+        {
+          "burst": 28,
+          "input": 0.05,
+          "membrane_potential": 0.47644934,
+          "fired": false
+        },
+        {
+          "burst": 29,
+          "input": 0.05,
+          "membrane_potential": 0.4788044,
+          "fired": false
+        },
+        {
+          "burst": 30,
+          "input": 0.05,
+          "membrane_potential": 0.48092398,
+          "fired": false
+        },
+        {
+          "burst": 31,
+          "input": 0.05,
+          "membrane_potential": 0.4828316,
+          "fired": false
+        },
+        {
+          "burst": 32,
+          "input": 0.05,
+          "membrane_potential": 0.48454845,
+          "fired": false
+        },
+        {
+          "burst": 33,
+          "input": 0.05,
+          "membrane_potential": 0.4860936,
+          "fired": false
+        },
+        {
+          "burst": 34,
+          "input": 0.05,
+          "membrane_potential": 0.48748425,
+          "fired": false
+        },
+        {
+          "burst": 35,
+          "input": 0.05,
+          "membrane_potential": 0.48873582,
+          "fired": false
+        },
+        {
+          "burst": 36,
+          "input": 0.05,
+          "membrane_potential": 0.48986223,
+          "fired": false
+        },
+        {
+          "burst": 37,
+          "input": 0.05,
+          "membrane_potential": 0.49087602,
+          "fired": false
+        },
+        {
+          "burst": 38,
+          "input": 0.05,
+          "membrane_potential": 0.49178842,
+          "fired": false
+        },
+        {
+          "burst": 39,
+          "input": 0.05,
+          "membrane_potential": 0.4926096,
+          "fired": false
+        },
+        {
+          "burst": 40,
+          "input": 0.05,
+          "membrane_potential": 0.49334863,
+          "fired": false
+        },
+        {
+          "burst": 41,
+          "input": 0.05,
+          "membrane_potential": 0.49401376,
+          "fired": false
+        },
+        {
+          "burst": 42,
+          "input": 0.05,
+          "membrane_potential": 0.4946124,
+          "fired": false
+        },
+        {
+          "burst": 43,
+          "input": 0.05,
+          "membrane_potential": 0.49515116,
+          "fired": false
+        },
+        {
+          "burst": 44,
+          "input": 0.05,
+          "membrane_potential": 0.49563605,
+          "fired": false
+        },
+        {
+          "burst": 45,
+          "input": 0.05,
+          "membrane_potential": 0.49607244,
+          "fired": false
+        },
+        {
+          "burst": 46,
+          "input": 0.05,
+          "membrane_potential": 0.4964652,
+          "fired": false
+        },
+        {
+          "burst": 47,
+          "input": 0.05,
+          "membrane_potential": 0.4968187,
+          "fired": false
+        },
+        {
+          "burst": 48,
+          "input": 0.05,
+          "membrane_potential": 0.49713683,
+          "fired": false
+        },
+        {
+          "burst": 49,
+          "input": 0.05,
+          "membrane_potential": 0.49742314,
+          "fired": false
+        },
+        {
+          "burst": 50,
+          "input": 0.05,
+          "membrane_potential": 0.49768084,
+          "fired": false
+        },
+        {
+          "burst": 51,
+          "input": 0.05,
+          "membrane_potential": 0.49791276,
+          "fired": false
+        },
+        {
+          "burst": 52,
+          "input": 0.05,
+          "membrane_potential": 0.4981215,
+          "fired": false
+        },
+        {
+          "burst": 53,
+          "input": 0.05,
+          "membrane_potential": 0.49830934,
+          "fired": false
+        },
+        {
+          "burst": 54,
+          "input": 0.05,
+          "membrane_potential": 0.4984784,
+          "fired": false
+        },
+        {
+          "burst": 55,
+          "input": 0.05,
+          "membrane_potential": 0.49863058,
+          "fired": false
+        },
+        {
+          "burst": 56,
+          "input": 0.05,
+          "membrane_potential": 0.49876752,
+          "fired": false
+        },
+        {
+          "burst": 57,
+          "input": 0.05,
+          "membrane_potential": 0.4988908,
+          "fired": false
+        },
+        {
+          "burst": 58,
+          "input": 0.05,
+          "membrane_potential": 0.4990017,
+          "fired": false
+        },
+        {
+          "burst": 59,
+          "input": 0.05,
+          "membrane_potential": 0.49910155,
+          "fired": false
+        },
+        {
+          "burst": 60,
+          "input": 0.05,
+          "membrane_potential": 0.4991914,
+          "fired": false
+        },
+        {
+          "burst": 61,
+          "input": 0.05,
+          "membrane_potential": 0.49927226,
+          "fired": false
+        },
+        {
+          "burst": 62,
+          "input": 0.05,
+          "membrane_potential": 0.49934503,
+          "fired": false
+        },
+        {
+          "burst": 63,
+          "input": 0.05,
+          "membrane_potential": 0.49941054,
+          "fired": false
+        },
+        {
+          "burst": 64,
+          "input": 0.05,
+          "membrane_potential": 0.4994695,
+          "fired": false
+        },
+        {
+          "burst": 65,
+          "input": 0.05,
+          "membrane_potential": 0.49952254,
+          "fired": false
+        },
+        {
+          "burst": 66,
+          "input": 0.05,
+          "membrane_potential": 0.49957028,
+          "fired": false
+        },
+        {
+          "burst": 67,
+          "input": 0.05,
+          "membrane_potential": 0.49961326,
+          "fired": false
+        },
+        {
+          "burst": 68,
+          "input": 0.05,
+          "membrane_potential": 0.49965194,
+          "fired": false
+        },
+        {
+          "burst": 69,
+          "input": 0.05,
+          "membrane_potential": 0.49968675,
+          "fired": false
+        },
+        {
+          "burst": 70,
+          "input": 0.05,
+          "membrane_potential": 0.49971807,
+          "fired": false
+        },
+        {
+          "burst": 71,
+          "input": 0.05,
+          "membrane_potential": 0.49974626,
+          "fired": false
+        },
+        {
+          "burst": 72,
+          "input": 0.05,
+          "membrane_potential": 0.49977162,
+          "fired": false
+        },
+        {
+          "burst": 73,
+          "input": 0.05,
+          "membrane_potential": 0.49979445,
+          "fired": false
+        },
+        {
+          "burst": 74,
+          "input": 0.05,
+          "membrane_potential": 0.49981502,
+          "fired": false
+        },
+        {
+          "burst": 75,
+          "input": 0.05,
+          "membrane_potential": 0.49983352,
+          "fired": false
+        },
+        {
+          "burst": 76,
+          "input": 0.05,
+          "membrane_potential": 0.49985018,
+          "fired": false
+        },
+        {
+          "burst": 77,
+          "input": 0.05,
+          "membrane_potential": 0.49986517,
+          "fired": false
+        },
+        {
+          "burst": 78,
+          "input": 0.05,
+          "membrane_potential": 0.49987864,
+          "fired": false
+        },
+        {
+          "burst": 79,
+          "input": 0.05,
+          "membrane_potential": 0.49989077,
+          "fired": false
+        },
+        {
+          "burst": 80,
+          "input": 0.05,
+          "membrane_potential": 0.4999017,
+          "fired": false
+        },
+        {
+          "burst": 81,
+          "input": 0.05,
+          "membrane_potential": 0.49991155,
+          "fired": false
+        },
+        {
+          "burst": 82,
+          "input": 0.05,
+          "membrane_potential": 0.4999204,
+          "fired": false
+        },
+        {
+          "burst": 83,
+          "input": 0.05,
+          "membrane_potential": 0.49992836,
+          "fired": false
+        },
+        {
+          "burst": 84,
+          "input": 0.05,
+          "membrane_potential": 0.4999355,
+          "fired": false
+        },
+        {
+          "burst": 85,
+          "input": 0.05,
+          "membrane_potential": 0.49994195,
+          "fired": false
+        },
+        {
+          "burst": 86,
+          "input": 0.05,
+          "membrane_potential": 0.49994776,
+          "fired": false
+        },
+        {
+          "burst": 87,
+          "input": 0.05,
+          "membrane_potential": 0.49995297,
+          "fired": false
+        },
+        {
+          "burst": 88,
+          "input": 0.05,
+          "membrane_potential": 0.49995768,
+          "fired": false
+        },
+        {
+          "burst": 89,
+          "input": 0.05,
+          "membrane_potential": 0.4999619,
+          "fired": false
+        },
+        {
+          "burst": 90,
+          "input": 0.05,
+          "membrane_potential": 0.49996573,
+          "fired": false
+        },
+        {
+          "burst": 91,
+          "input": 0.05,
+          "membrane_potential": 0.49996915,
+          "fired": false
+        },
+        {
+          "burst": 92,
+          "input": 0.05,
+          "membrane_potential": 0.49997225,
+          "fired": false
+        },
+        {
+          "burst": 93,
+          "input": 0.05,
+          "membrane_potential": 0.49997503,
+          "fired": false
+        },
+        {
+          "burst": 94,
+          "input": 0.05,
+          "membrane_potential": 0.49997753,
+          "fired": false
+        },
+        {
+          "burst": 95,
+          "input": 0.05,
+          "membrane_potential": 0.49997976,
+          "fired": false
+        },
+        {
+          "burst": 96,
+          "input": 0.05,
+          "membrane_potential": 0.4999818,
+          "fired": false
+        },
+        {
+          "burst": 97,
+          "input": 0.05,
+          "membrane_potential": 0.4999836,
+          "fired": false
+        },
+        {
+          "burst": 98,
+          "input": 0.05,
+          "membrane_potential": 0.49998525,
+          "fired": false
+        },
+        {
+          "burst": 99,
+          "input": 0.05,
+          "membrane_potential": 0.49998674,
+          "fired": false
+        },
+        {
+          "burst": 100,
+          "input": 0.05,
+          "membrane_potential": 0.49998808,
+          "fired": false
+        },
+        {
+          "burst": 101,
+          "input": 0.05,
+          "membrane_potential": 0.49998927,
+          "fired": false
+        },
+        {
+          "burst": 102,
+          "input": 0.05,
+          "membrane_potential": 0.49999034,
+          "fired": false
+        },
+        {
+          "burst": 103,
+          "input": 0.05,
+          "membrane_potential": 0.4999913,
+          "fired": false
+        },
+        {
+          "burst": 104,
+          "input": 0.05,
+          "membrane_potential": 0.49999216,
+          "fired": false
+        },
+        {
+          "burst": 105,
+          "input": 0.05,
+          "membrane_potential": 0.49999294,
+          "fired": false
+        },
+        {
+          "burst": 106,
+          "input": 0.05,
+          "membrane_potential": 0.49999365,
+          "fired": false
+        },
+        {
+          "burst": 107,
+          "input": 0.05,
+          "membrane_potential": 0.49999428,
+          "fired": false
+        },
+        {
+          "burst": 108,
+          "input": 0.05,
+          "membrane_potential": 0.49999484,
+          "fired": false
+        },
+        {
+          "burst": 109,
+          "input": 0.05,
+          "membrane_potential": 0.49999535,
+          "fired": false
+        },
+        {
+          "burst": 110,
+          "input": 0.05,
+          "membrane_potential": 0.49999583,
+          "fired": false
+        },
+        {
+          "burst": 111,
+          "input": 0.05,
+          "membrane_potential": 0.49999624,
+          "fired": false
+        },
+        {
+          "burst": 112,
+          "input": 0.05,
+          "membrane_potential": 0.49999663,
+          "fired": false
+        },
+        {
+          "burst": 113,
+          "input": 0.05,
+          "membrane_potential": 0.49999696,
+          "fired": false
+        },
+        {
+          "burst": 114,
+          "input": 0.05,
+          "membrane_potential": 0.49999726,
+          "fired": false
+        },
+        {
+          "burst": 115,
+          "input": 0.05,
+          "membrane_potential": 0.49999753,
+          "fired": false
+        },
+        {
+          "burst": 116,
+          "input": 0.05,
+          "membrane_potential": 0.49999776,
+          "fired": false
+        },
+        {
+          "burst": 117,
+          "input": 0.05,
+          "membrane_potential": 0.499998,
+          "fired": false
+        },
+        {
+          "burst": 118,
+          "input": 0.05,
+          "membrane_potential": 0.4999982,
+          "fired": false
+        },
+        {
+          "burst": 119,
+          "input": 0.05,
+          "membrane_potential": 0.4999984,
+          "fired": false
+        },
+        {
+          "burst": 120,
+          "input": 0.05,
+          "membrane_potential": 0.49999854,
+          "fired": false
+        },
+        {
+          "burst": 121,
+          "input": 0.05,
+          "membrane_potential": 0.4999987,
+          "fired": false
+        },
+        {
+          "burst": 122,
+          "input": 0.05,
+          "membrane_potential": 0.4999988,
+          "fired": false
+        },
+        {
+          "burst": 123,
+          "input": 0.05,
+          "membrane_potential": 0.49999893,
+          "fired": false
+        },
+        {
+          "burst": 124,
+          "input": 0.05,
+          "membrane_potential": 0.49999905,
+          "fired": false
+        },
+        {
+          "burst": 125,
+          "input": 0.05,
+          "membrane_potential": 0.49999914,
+          "fired": false
+        },
+        {
+          "burst": 126,
+          "input": 0.05,
+          "membrane_potential": 0.49999923,
+          "fired": false
+        },
+        {
+          "burst": 127,
+          "input": 0.05,
+          "membrane_potential": 0.4999993,
+          "fired": false
+        },
+        {
+          "burst": 128,
+          "input": 0.05,
+          "membrane_potential": 0.49999937,
+          "fired": false
+        },
+        {
+          "burst": 129,
+          "input": 0.05,
+          "membrane_potential": 0.49999943,
+          "fired": false
+        },
+        {
+          "burst": 130,
+          "input": 0.05,
+          "membrane_potential": 0.4999995,
+          "fired": false
+        },
+        {
+          "burst": 131,
+          "input": 0.05,
+          "membrane_potential": 0.49999955,
+          "fired": false
+        },
+        {
+          "burst": 132,
+          "input": 0.05,
+          "membrane_potential": 0.4999996,
+          "fired": false
+        },
+        {
+          "burst": 133,
+          "input": 0.05,
+          "membrane_potential": 0.49999964,
+          "fired": false
+        },
+        {
+          "burst": 134,
+          "input": 0.05,
+          "membrane_potential": 0.49999967,
+          "fired": false
+        },
+        {
+          "burst": 135,
+          "input": 0.05,
+          "membrane_potential": 0.4999997,
+          "fired": false
+        },
+        {
+          "burst": 136,
+          "input": 0.05,
+          "membrane_potential": 0.49999973,
+          "fired": false
+        },
+        {
+          "burst": 137,
+          "input": 0.05,
+          "membrane_potential": 0.49999976,
+          "fired": false
+        },
+        {
+          "burst": 138,
+          "input": 0.05,
+          "membrane_potential": 0.4999998,
+          "fired": false
+        },
+        {
+          "burst": 139,
+          "input": 0.05,
+          "membrane_potential": 0.49999982,
+          "fired": false
+        },
+        {
+          "burst": 140,
+          "input": 0.05,
+          "membrane_potential": 0.49999985,
+          "fired": false
+        },
+        {
+          "burst": 141,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 142,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 143,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 144,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 145,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 146,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 147,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 148,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 149,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 150,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 151,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 152,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 153,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 154,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 155,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 156,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 157,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 158,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 159,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 160,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 161,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 162,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 163,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 164,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 165,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 166,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 167,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 168,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 169,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 170,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 171,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 172,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 173,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 174,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 175,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 176,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 177,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 178,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 179,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 180,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 181,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 182,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 183,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 184,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 185,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 186,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 187,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 188,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 189,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 190,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 191,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 192,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 193,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 194,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 195,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 196,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 197,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 198,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 199,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 200,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 201,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 202,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 203,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 204,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 205,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 206,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 207,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 208,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 209,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 210,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 211,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 212,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 213,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 214,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 215,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 216,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 217,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 218,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 219,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 220,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 221,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 222,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 223,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 224,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 225,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 226,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 227,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 228,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 229,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 230,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 231,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 232,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 233,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 234,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 235,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 236,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 237,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 238,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        },
+        {
+          "burst": 239,
+          "input": 0.05,
+          "membrane_potential": 0.49999988,
+          "fired": false
+        }
+      ]
+    }
+  ]
+}

@@ -134,17 +134,33 @@ impl Drop for GenomeTransitionFlagGuard {
 /// - [Self::enter][]: Loading
 /// - [Self::succeed][]: Loaded (call when transition fully finished, including post-load agent IO)
 /// - Drop without succeed: Error (failed or aborted transition)
-struct GenomeTransitionStateLifecycle;
+struct GenomeTransitionStateLifecycle {
+    /// The state before the transition began, put back when the transition was rolled back.
+    #[cfg(feature = "services")]
+    previous: feagi_state_manager::GenomeState,
+}
 
 impl GenomeTransitionStateLifecycle {
     fn enter() -> Self {
         #[cfg(feature = "services")]
         {
-            feagi_state_manager::StateManager::instance()
-                .read()
-                .set_genome_state(feagi_state_manager::GenomeState::Loading);
+            let state = feagi_state_manager::StateManager::instance();
+            let state = state.read();
+            let previous = state.get_genome_state();
+            state.set_genome_state(feagi_state_manager::GenomeState::Loading);
+            Self { previous }
         }
-        Self
+        #[cfg(not(feature = "services"))]
+        Self {}
+    }
+
+    /// The transition failed but the previous brain is live again: its state stands.
+    #[cfg(feature = "services")]
+    fn restore_previous(self) {
+        feagi_state_manager::StateManager::instance()
+            .read()
+            .set_genome_state(self.previous);
+        std::mem::forget(self);
     }
 
     fn succeed(self) {
@@ -169,6 +185,9 @@ impl Drop for GenomeTransitionStateLifecycle {
     }
 }
 
+// Production imports use `with_rollback_aware_genome_state_lifecycle`; this generic form
+// stays for the lifecycle tests.
+#[cfg(test)]
 /// Runs a brain transition that is not a genome upload (a connectome import) under the
 /// same health_check genome_state lifecycle, so a brain restored from a connectome reports
 /// `loaded` like one loaded from a genome. Clients gate autosave on that state.
@@ -181,6 +200,28 @@ pub(crate) async fn with_genome_state_lifecycle<T, E>(
         lifecycle.succeed();
     }
     result
+}
+
+/// Like [`with_genome_state_lifecycle`] for a service call that can roll back. A
+/// `ServiceError::RolledBack` leaves the previous brain live, so the genome state returns to
+/// what it was before the call (not `Error`) and the original error is returned.
+#[cfg(feature = "services")]
+pub(crate) async fn with_rollback_aware_genome_state_lifecycle<T>(
+    transition: impl std::future::Future<Output = Result<T, feagi_services::ServiceError>>,
+) -> Result<T, feagi_services::ServiceError> {
+    let lifecycle = GenomeTransitionStateLifecycle::enter();
+    match transition.await {
+        Ok(value) => {
+            lifecycle.succeed();
+            Ok(value)
+        }
+        Err(feagi_services::ServiceError::RolledBack(original)) => {
+            lifecycle.restore_previous();
+            Err(*original)
+        }
+        // Dropping the lifecycle records Error.
+        Err(error) => Err(error),
+    }
 }
 
 /// Execute a genome load with strict priority over concurrent operations.
@@ -1471,10 +1512,14 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<(HeaderMap
 mod tests {
     use super::*;
 
+    /// Both lifecycle tests write the process-wide genome state.
+    static LIFECYCLE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[cfg(feature = "http")]
     #[tokio::test]
     async fn connectome_transition_reports_loaded_then_error_on_failure() {
         use feagi_state_manager::{GenomeState, StateManager};
+        let _lock = LIFECYCLE_TEST_LOCK.lock().await;
         let state = || StateManager::instance().read().get_genome_state();
 
         StateManager::instance()
@@ -1500,6 +1545,43 @@ mod tests {
             with_genome_state_lifecycle(async { Err("bad artifact") }).await;
         assert!(failed.is_err());
         assert_eq!(state(), GenomeState::Error);
+    }
+
+    #[cfg(feature = "http")]
+    #[tokio::test]
+    async fn rolled_back_transition_restores_previous_state_and_returns_the_original_error() {
+        use feagi_services::ServiceError;
+        use feagi_state_manager::{GenomeState, StateManager};
+        let _lock = LIFECYCLE_TEST_LOCK.lock().await;
+        let state = || StateManager::instance().read().get_genome_state();
+
+        StateManager::instance()
+            .read()
+            .set_genome_state(GenomeState::Loaded);
+        let rolled_back: Result<(), ServiceError> =
+            with_rollback_aware_genome_state_lifecycle(async {
+                assert_eq!(state(), GenomeState::Loading);
+                Err(ServiceError::RolledBack(Box::new(ServiceError::Backend(
+                    "rebind failed".to_string(),
+                ))))
+            })
+            .await;
+        match rolled_back {
+            Err(ServiceError::Backend(message)) => assert_eq!(message, "rebind failed"),
+            other => panic!("the original error must come back, got {other:?}"),
+        }
+        assert_eq!(state(), GenomeState::Loaded, "the previous brain is live");
+
+        let failed: Result<(), ServiceError> = with_rollback_aware_genome_state_lifecycle(async {
+            Err(ServiceError::Backend("no rollback".to_string()))
+        })
+        .await;
+        assert!(failed.is_err());
+        assert_eq!(
+            state(),
+            GenomeState::Error,
+            "an unrestored failure is an Error"
+        );
     }
 
     #[test]

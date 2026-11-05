@@ -1,0 +1,605 @@
+{
+  "source_crates": [
+    "feagi-npu-plasticity",
+    "feagi-npu-burst-engine"
+  ],
+  "functions": [
+    "FireLedger::track_area",
+    "FireLedger::archive_burst",
+    "FireLedger::get_dense_window_bitmaps",
+    "PatternDetector::detect_pattern"
+  ],
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "depth1_abab",
+      "settings": {
+        "temporal_depth": 1,
+        "inputs": [
+          "A",
+          "B",
+          "A",
+          "B"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "B",
+          "window": [
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "A",
+          "window": [
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 0,
+          "memories": 2
+        },
+        {
+          "burst": 3,
+          "input": "B",
+          "window": [
+            "B"
+          ],
+          "outcome": "seen",
+          "pattern": 1,
+          "memories": 2
+        }
+      ]
+    },
+    {
+      "name": "depth2_abab",
+      "settings": {
+        "temporal_depth": 2,
+        "inputs": [
+          "A",
+          "B",
+          "A",
+          "B"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "quiet",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "B",
+          "window": [
+            "A",
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "A",
+          "window": [
+            "B",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 2,
+          "memories": 3
+        },
+        {
+          "burst": 3,
+          "input": "B",
+          "window": [
+            "A",
+            "B"
+          ],
+          "outcome": "seen",
+          "pattern": 1,
+          "memories": 3
+        }
+      ]
+    },
+    {
+      "name": "depth2_baba",
+      "settings": {
+        "temporal_depth": 2,
+        "inputs": [
+          "B",
+          "A",
+          "B",
+          "A"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "B",
+          "window": [
+            "quiet",
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "A",
+          "window": [
+            "B",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "B",
+          "window": [
+            "A",
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 2,
+          "memories": 3
+        },
+        {
+          "burst": 3,
+          "input": "A",
+          "window": [
+            "B",
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 1,
+          "memories": 3
+        }
+      ]
+    },
+    {
+      "name": "depth3_ababab",
+      "settings": {
+        "temporal_depth": 3,
+        "inputs": [
+          "A",
+          "B",
+          "A",
+          "B",
+          "A",
+          "B"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "quiet",
+            "quiet",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "B",
+          "window": [
+            "quiet",
+            "A",
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "A",
+          "window": [
+            "A",
+            "B",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 2,
+          "memories": 3
+        },
+        {
+          "burst": 3,
+          "input": "B",
+          "window": [
+            "B",
+            "A",
+            "B"
+          ],
+          "outcome": "new",
+          "pattern": 3,
+          "memories": 4
+        },
+        {
+          "burst": 4,
+          "input": "A",
+          "window": [
+            "A",
+            "B",
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 2,
+          "memories": 4
+        },
+        {
+          "burst": 5,
+          "input": "B",
+          "window": [
+            "B",
+            "A",
+            "B"
+          ],
+          "outcome": "seen",
+          "pattern": 3,
+          "memories": 4
+        }
+      ]
+    },
+    {
+      "name": "depth1_quiet_gap",
+      "settings": {
+        "temporal_depth": 1,
+        "inputs": [
+          "A",
+          "quiet",
+          "A",
+          "quiet",
+          "quiet"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "quiet",
+          "window": [
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 1
+        },
+        {
+          "burst": 2,
+          "input": "A",
+          "window": [
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 3,
+          "input": "quiet",
+          "window": [
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 1
+        },
+        {
+          "burst": 4,
+          "input": "quiet",
+          "window": [
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 1
+        }
+      ]
+    },
+    {
+      "name": "depth2_quiet_gap",
+      "settings": {
+        "temporal_depth": 2,
+        "inputs": [
+          "A",
+          "quiet",
+          "quiet",
+          "A",
+          "quiet",
+          "quiet",
+          "quiet"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "quiet",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "quiet",
+          "window": [
+            "A",
+            "quiet"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 2
+        },
+        {
+          "burst": 3,
+          "input": "A",
+          "window": [
+            "quiet",
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 0,
+          "memories": 2
+        },
+        {
+          "burst": 4,
+          "input": "quiet",
+          "window": [
+            "A",
+            "quiet"
+          ],
+          "outcome": "seen",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 5,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 2
+        },
+        {
+          "burst": 6,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 2
+        }
+      ]
+    },
+    {
+      "name": "depth3_quiet_gap",
+      "settings": {
+        "temporal_depth": 3,
+        "inputs": [
+          "A",
+          "quiet",
+          "quiet",
+          "quiet",
+          "quiet",
+          "A",
+          "quiet",
+          "quiet",
+          "quiet"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "A",
+          "window": [
+            "quiet",
+            "quiet",
+            "A"
+          ],
+          "outcome": "new",
+          "pattern": 0,
+          "memories": 1
+        },
+        {
+          "burst": 1,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "A",
+            "quiet"
+          ],
+          "outcome": "new",
+          "pattern": 1,
+          "memories": 2
+        },
+        {
+          "burst": 2,
+          "input": "quiet",
+          "window": [
+            "A",
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "new",
+          "pattern": 2,
+          "memories": 3
+        },
+        {
+          "burst": 3,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 3
+        },
+        {
+          "burst": 4,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 3
+        },
+        {
+          "burst": 5,
+          "input": "A",
+          "window": [
+            "quiet",
+            "quiet",
+            "A"
+          ],
+          "outcome": "seen",
+          "pattern": 0,
+          "memories": 3
+        },
+        {
+          "burst": 6,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "A",
+            "quiet"
+          ],
+          "outcome": "seen",
+          "pattern": 1,
+          "memories": 3
+        },
+        {
+          "burst": 7,
+          "input": "quiet",
+          "window": [
+            "A",
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "seen",
+          "pattern": 2,
+          "memories": 3
+        },
+        {
+          "burst": 8,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 3
+        }
+      ]
+    },
+    {
+      "name": "depth2_all_quiet",
+      "settings": {
+        "temporal_depth": 2,
+        "inputs": [
+          "quiet",
+          "quiet",
+          "quiet"
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 0
+        },
+        {
+          "burst": 1,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 0
+        },
+        {
+          "burst": 2,
+          "input": "quiet",
+          "window": [
+            "quiet",
+            "quiet"
+          ],
+          "outcome": "none",
+          "pattern": null,
+          "memories": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6955 @@
+{
+  "source_crates": [
+    "feagi-sensorimotor"
+  ],
+  "functions": [
+    "encode_unsigned_percentage_to_linear_neuron_z_index",
+    "encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes",
+    "encode_signed_percentage_to_linear_neuron_z_index_along_z",
+    "encode_signed_percentage_to_fractional_exponential_neuron_z_indexes"
+  ],
+  "layout": {
+    "channels": 1,
+    "linear_signed": "one column, along Z (+1 at Z 0, -1 at the last plane)",
+    "fractional_signed": "two columns, positive and negative"
+  },
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "unsigned_1_planes",
+      "settings": {
+        "signed": false,
+        "planes": 1
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_2_planes",
+      "settings": {
+        "signed": false,
+        "planes": 2
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_3_planes",
+      "settings": {
+        "signed": false,
+        "planes": 3
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_4_planes",
+      "settings": {
+        "signed": false,
+        "planes": 4
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_5_planes",
+      "settings": {
+        "signed": false,
+        "planes": 5
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_6_planes",
+      "settings": {
+        "signed": false,
+        "planes": 6
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_7_planes",
+      "settings": {
+        "signed": false,
+        "planes": 7
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_8_planes",
+      "settings": {
+        "signed": false,
+        "planes": 8
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_9_planes",
+      "settings": {
+        "signed": false,
+        "planes": 9
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_10_planes",
+      "settings": {
+        "signed": false,
+        "planes": 10
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_11_planes",
+      "settings": {
+        "signed": false,
+        "planes": 11
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6,
+            7,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6,
+            8,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6,
+            7,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "unsigned_12_planes",
+      "settings": {
+        "signed": false,
+        "planes": 12
+      },
+      "rows": [
+        {
+          "reading": 0.0,
+          "linear_z": [
+            11
+          ],
+          "fractional_positive_z": [
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            11
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.01,
+          "linear_z": [
+            11
+          ],
+          "fractional_positive_z": [
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.125,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.2,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            2,
+            3,
+            6,
+            7,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            1,
+            4,
+            5,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.4,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6666667,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            4,
+            6,
+            8,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.7,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            6,
+            7,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_1_planes",
+      "settings": {
+        "signed": true,
+        "planes": 1
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_2_planes",
+      "settings": {
+        "signed": true,
+        "planes": 2
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_3_planes",
+      "settings": {
+        "signed": true,
+        "planes": 3
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            2
+          ],
+          "fractional_negative_z": [
+            2
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_4_planes",
+      "settings": {
+        "signed": true,
+        "planes": 4
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            3
+          ],
+          "fractional_negative_z": [
+            3
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_5_planes",
+      "settings": {
+        "signed": true,
+        "planes": 5
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            4
+          ],
+          "fractional_negative_z": [
+            4
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1,
+            3
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_6_planes",
+      "settings": {
+        "signed": true,
+        "planes": 6
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            5
+          ],
+          "fractional_negative_z": [
+            5
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_7_planes",
+      "settings": {
+        "signed": true,
+        "planes": 7
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            6
+          ],
+          "fractional_negative_z": [
+            6
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_8_planes",
+      "settings": {
+        "signed": true,
+        "planes": 8
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4,
+            7
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5,
+            7
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4,
+            7
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            7
+          ],
+          "fractional_negative_z": [
+            7
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_9_planes",
+      "settings": {
+        "signed": true,
+        "planes": 9
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5,
+            7
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            8
+          ],
+          "fractional_negative_z": [
+            8
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_10_planes",
+      "settings": {
+        "signed": true,
+        "planes": 10
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            9
+          ]
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": [
+            9
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_11_planes",
+      "settings": {
+        "signed": true,
+        "planes": 11
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4,
+            7,
+            8
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            9
+          ]
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            10
+          ],
+          "fractional_negative_z": [
+            10
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    },
+    {
+      "name": "signed_12_planes",
+      "settings": {
+        "signed": true,
+        "planes": 12
+      },
+      "rows": [
+        {
+          "reading": -1.0,
+          "linear_z": [
+            11
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "reading": -0.9999999,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "reading": -0.875,
+          "linear_z": [
+            10
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "reading": -0.75,
+          "linear_z": [
+            9
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            1
+          ]
+        },
+        {
+          "reading": -0.6,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0,
+            3,
+            4,
+            7,
+            8,
+            11
+          ]
+        },
+        {
+          "reading": -0.5,
+          "linear_z": [
+            8
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            0
+          ]
+        },
+        {
+          "reading": -0.3333333,
+          "linear_z": [
+            7
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1,
+            3,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        {
+          "reading": -0.25,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            1
+          ]
+        },
+        {
+          "reading": -0.1,
+          "linear_z": [
+            6
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            3,
+            4,
+            7,
+            8,
+            11
+          ]
+        },
+        {
+          "reading": -0.001,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [],
+          "fractional_negative_z": [
+            9
+          ]
+        },
+        {
+          "reading": 0.0,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            11
+          ],
+          "fractional_negative_z": [
+            11
+          ]
+        },
+        {
+          "reading": 0.001,
+          "linear_z": [
+            5
+          ],
+          "fractional_positive_z": [
+            9
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.1,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            3,
+            4,
+            7,
+            8,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.25,
+          "linear_z": [
+            4
+          ],
+          "fractional_positive_z": [
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.3333333,
+          "linear_z": [
+            3
+          ],
+          "fractional_positive_z": [
+            1,
+            3,
+            5,
+            7,
+            9,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.5,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.6,
+          "linear_z": [
+            2
+          ],
+          "fractional_positive_z": [
+            0,
+            3,
+            4,
+            7,
+            8,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.74,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.75,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.76,
+          "linear_z": [
+            1
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            6,
+            8
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.875,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.99,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 0.9999999,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        },
+        {
+          "reading": 1.0,
+          "linear_z": [
+            0
+          ],
+          "fractional_positive_z": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "fractional_negative_z": []
+        }
+      ]
+    }
+  ]
+}

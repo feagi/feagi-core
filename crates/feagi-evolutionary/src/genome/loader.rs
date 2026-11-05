@@ -472,6 +472,31 @@ mod tests {
     }
 
     #[test]
+    fn load_flat_genome_stamped_current_runs_no_migrators() {
+        // A flat genome stamped v7 must keep its stamp through the flat ->
+        // hierarchical conversion, so no migrator re-runs on it.
+        let json = r#"{
+            "genome_schema_version": 7,
+            "genome_id": "t-flat-current",
+            "genome_title": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-_power-cx-__name-t": "Power",
+                "_____10c-_power-cx-___bbx-i": 1,
+                "_____10c-_power-cx-___bby-i": 1,
+                "_____10c-_power-cx-___bbz-i": 1
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "timestamp": 0.0
+        }"#;
+
+        let (_genome, report) = load_genome_with_report(json).unwrap();
+        assert_eq!(report.from_version.as_u32(), 7);
+        assert!(report.migrators_applied.is_empty());
+    }
+
+    #[test]
     fn load_never_hard_fails_on_validator_errors() {
         // This test pins the policy: the library does not convert
         // validator errors into Err. If V3Validator ever gains rules

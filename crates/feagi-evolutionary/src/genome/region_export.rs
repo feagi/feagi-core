@@ -400,9 +400,14 @@ fn attach_classifier_areas_to_parent_regions(
 /// - Nested circuits are wrapped under a new `Root Brain Region`; the circuit name is kept.
 /// - Strips synapse destination mappings that leave the branch.
 /// - Keeps classifiers parented in the branch, plus the areas those records own.
+///
+/// `count_synapses` receives the exported cortical area ids and returns the genome-expressed
+/// synapse count among them (see [`GenomeStats::from_genome`]); the exported genome's `stats`
+/// are computed from the exported areas and that count.
 pub fn subset_runtime_genome_for_region_branch(
     genome: &RuntimeGenome,
     root_region_id: &str,
+    count_synapses: impl FnOnce(&[CorticalID]) -> usize,
 ) -> EvoResult<RuntimeGenome> {
     let children = children_by_parent(genome);
     let branch_ids = collect_region_branch_ids(genome, root_region_id, &children)?;
@@ -477,7 +482,10 @@ pub fn subset_runtime_genome_for_region_branch(
         brain_regions_root: Some(genome_root_id),
     };
 
-    Ok(RuntimeGenome {
+    let exported_ids: Vec<CorticalID> = cortical_areas.keys().copied().collect();
+    let synapse_count = count_synapses(&exported_ids);
+
+    let mut exported = RuntimeGenome {
         metadata,
         cortical_areas,
         brain_regions,
@@ -493,7 +501,9 @@ pub fn subset_runtime_genome_for_region_branch(
         },
         stats: GenomeStats::default(),
         change_history: Vec::new(),
-    })
+    };
+    exported.stats = GenomeStats::from_genome(&exported, synapse_count);
+    Ok(exported)
 }
 
 #[cfg(test)]
@@ -556,7 +566,8 @@ mod tests {
     #[test]
     fn subset_rejects_unknown_region() {
         let (g, _p, _c) = runtime_parent_and_child();
-        let err = subset_runtime_genome_for_region_branch(&g, "nonexistent-region-id").unwrap_err();
+        let err = subset_runtime_genome_for_region_branch(&g, "nonexistent-region-id", |_| 0)
+            .unwrap_err();
         assert!(matches!(err, EvoError::InvalidRegion(_)));
     }
 
@@ -648,7 +659,7 @@ mod tests {
     #[test]
     fn subset_child_region_is_wrapped_under_new_root_preserving_name() {
         let (g, _parent_key, child_key) = runtime_parent_and_child();
-        let sub = subset_runtime_genome_for_region_branch(&g, &child_key).expect("subset");
+        let sub = subset_runtime_genome_for_region_branch(&g, &child_key, |_| 0).expect("subset");
         assert_eq!(sub.brain_regions.len(), 2);
         assert!(sub.brain_regions.contains_key(&child_key));
         assert_eq!(sub.brain_regions[&child_key].name, "Child");
@@ -714,7 +725,7 @@ mod tests {
             change_history: Vec::new(),
         };
 
-        let sub = subset_runtime_genome_for_region_branch(&g, &root_key).expect("subset");
+        let sub = subset_runtime_genome_for_region_branch(&g, &root_key, |_| 0).expect("subset");
         let named_roots = sub
             .brain_regions
             .values()
@@ -737,7 +748,7 @@ mod tests {
             child.name = "The Essential Genome".to_string();
             child.add_property("region_title".to_string(), json!("Goal Seeker"));
         }
-        let sub = subset_runtime_genome_for_region_branch(&g, &child_key).expect("subset");
+        let sub = subset_runtime_genome_for_region_branch(&g, &child_key, |_| 0).expect("subset");
         assert_eq!(sub.brain_regions[&child_key].name, "Goal Seeker");
         assert_eq!(sub.metadata.genome_title, "Goal Seeker");
     }
@@ -866,7 +877,7 @@ mod tests {
         );
 
         let exported =
-            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+            subset_runtime_genome_for_region_branch(&genome, &child_key, |_| 0).expect("subset");
         let classifier = exported
             .classifiers
             .get("clf-1")
@@ -877,6 +888,66 @@ mod tests {
         assert!(exported.brain_regions[&child_key]
             .cortical_areas
             .contains(&kernel_mem_id));
+    }
+
+    #[test]
+    fn region_export_stats_cover_only_the_exported_areas() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+
+        let (mut genome, parent_key, child_key) = runtime_parent_and_child();
+        // (id, region, dims, neurons_per_voxel property, memory area)
+        let specs = [
+            (b"cstaouta", &parent_key, (2, 1, 1), Some(3), false),
+            (b"cstainna", &child_key, (2, 2, 1), None, false),
+            (b"cstainnb", &child_key, (1, 1, 1), Some(5), true),
+        ];
+        for (idx, (raw, region, (x, y, z), per_voxel, is_memory)) in specs.into_iter().enumerate() {
+            let id = CorticalID::try_from_bytes(raw).expect("id");
+            let cortical_type = if is_memory {
+                CorticalAreaType::Memory(MemoryCorticalType::Memory)
+            } else {
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire)
+            };
+            let mut area = CorticalArea::new(
+                id,
+                idx as u32,
+                "area".to_string(),
+                CorticalAreaDimensions::new(x, y, z).expect("dims"),
+                (0, 0, 0).into(),
+                cortical_type,
+            )
+            .expect("area");
+            if let Some(n) = per_voxel {
+                area.properties
+                    .insert("neurons_per_voxel".to_string(), json!(n));
+            }
+            genome
+                .brain_regions
+                .get_mut(region)
+                .expect("region")
+                .add_area(id);
+            genome.cortical_areas.insert(id, area);
+        }
+        genome.stats = GenomeStats {
+            innate_cortical_area_count: 99,
+            innate_neuron_count: 99,
+            innate_synapse_count: 99,
+        };
+
+        let mut seen = 0usize;
+        let exported = subset_runtime_genome_for_region_branch(&genome, &child_key, |ids| {
+            seen = ids.len();
+            ids.len() * 10
+        })
+        .expect("subset");
+
+        // Child region only: 2x2x1 x 1 (default) + 1x1x1 x 5 (memory area included) = 9.
+        assert_eq!(seen, 2);
+        assert_eq!(exported.stats.innate_cortical_area_count, 2);
+        assert_eq!(exported.stats.innate_neuron_count, 9);
+        assert_eq!(exported.stats.innate_synapse_count, 20);
     }
 
     #[test]
@@ -925,7 +996,7 @@ mod tests {
         );
 
         let exported =
-            subset_runtime_genome_for_region_branch(&genome, &parent_key).expect("subset");
+            subset_runtime_genome_for_region_branch(&genome, &parent_key, |_| 0).expect("subset");
         assert!(exported.modulators.contains("answer"));
         let homes: Vec<&String> = exported
             .brain_regions
@@ -940,7 +1011,7 @@ mod tests {
         );
         // The driver's own region has no subscriber, and still carries the modulator it drives.
         let driver_only =
-            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+            subset_runtime_genome_for_region_branch(&genome, &child_key, |_| 0).expect("subset");
         assert!(driver_only.modulators.contains("answer"));
     }
 
@@ -973,7 +1044,7 @@ mod tests {
         );
 
         let exported =
-            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+            subset_runtime_genome_for_region_branch(&genome, &child_key, |_| 0).expect("subset");
         assert!(exported.classifiers.is_empty());
     }
 }

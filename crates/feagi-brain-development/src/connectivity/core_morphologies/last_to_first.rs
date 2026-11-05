@@ -8,7 +8,7 @@ Connects only the highest source voxel (max x, max y, max z)
 to destination voxel (0, 0, 0).
 */
 
-use crate::types::BduResult;
+use crate::types::{BduResult, Position};
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
@@ -45,7 +45,10 @@ pub fn apply_last_to_first_morphology_with_dimensions(
         (src_dimensions.1 - 1) as u32,
         (src_dimensions.2 - 1) as u32,
     );
-    let dst_first = (0u32, 0u32, 0u32);
+    let Some(dst_first) = last_to_first_destination(src_last, src_dimensions, dst_dimensions)
+    else {
+        return Ok(0);
+    };
 
     let mut dst_first_nid: Option<u32> = None;
     for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
@@ -81,6 +84,33 @@ pub fn apply_last_to_first_morphology_with_dimensions(
     }
 
     Ok(synapse_count)
+}
+
+/// Destination voxel one source voxel connects to under `last_to_first`: voxel (0, 0, 0) for the
+/// highest source voxel, and `None` for every other source voxel.
+pub fn last_to_first_destination(
+    src_pos: Position,
+    src_dimensions: (usize, usize, usize),
+    dst_dimensions: (usize, usize, usize),
+) -> Option<Position> {
+    if src_dimensions.0 == 0
+        || src_dimensions.1 == 0
+        || src_dimensions.2 == 0
+        || dst_dimensions.0 == 0
+        || dst_dimensions.1 == 0
+        || dst_dimensions.2 == 0
+    {
+        return None;
+    }
+    let src_last = (
+        (src_dimensions.0 - 1) as u32,
+        (src_dimensions.1 - 1) as u32,
+        (src_dimensions.2 - 1) as u32,
+    );
+    if src_pos != src_last {
+        return None;
+    }
+    Some((0, 0, 0))
 }
 
 #[cfg(test)]

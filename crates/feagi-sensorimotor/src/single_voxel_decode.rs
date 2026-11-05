@@ -541,8 +541,8 @@ mod tests {
         let r = decode_single_voxel(&id, 0, 0, 0, dims, 1);
         assert!(r.success);
         assert!(
-            (r.value_0_1 - 1.0).abs() < 0.01,
-            "z=0 -> 0.5^0 = 1.0 (max for exponential)"
+            (r.value_0_1 - 0.5).abs() < 0.01,
+            "z=0 -> weight 0.5^(0+1) = 0.5 (largest single-neuron value, matches the encoder)"
         );
     }
 }

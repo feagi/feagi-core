@@ -20,6 +20,25 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
+/// Append the migration note to `genome_description`.
+///
+/// The input `version` is kept as-is: the genome loader rejects unknown version
+/// strings, so the tool must not invent one.
+fn annotate_migrated_genome(genome: &mut serde_json::Value) {
+    if let Some(genome_obj) = genome.as_object_mut() {
+        let mut description = genome_obj
+            .get("genome_description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        description.push_str(" [Migrated to new cortical ID format]");
+        genome_obj.insert(
+            "genome_description".to_string(),
+            serde_json::json!(description),
+        );
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
@@ -101,23 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
-    // Update version to 2.2 (migrated with new cortical IDs)
     let mut migrated_genome = migration_result.genome;
-    if let Some(genome_obj) = migrated_genome.as_object_mut() {
-        genome_obj.insert("version".to_string(), serde_json::json!("2.2"));
-
-        // Add migration metadata
-        let mut description = genome_obj
-            .get("genome_description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        description.push_str(" [Migrated to new cortical ID format v2.2]");
-        genome_obj.insert(
-            "genome_description".to_string(),
-            serde_json::json!(description),
-        );
-    }
+    annotate_migrated_genome(&mut migrated_genome);
 
     // Save migrated genome
     println!("💾 Saving migrated genome...");
@@ -159,4 +163,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Migration complete!");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::annotate_migrated_genome;
+    use serde_json::json;
+
+    #[test]
+    fn annotate_keeps_input_version() {
+        let mut genome = json!({ "version": "2.0", "genome_description": "base" });
+        annotate_migrated_genome(&mut genome);
+        assert_eq!(genome["version"], json!("2.0"));
+        assert_eq!(
+            genome["genome_description"],
+            json!("base [Migrated to new cortical ID format]")
+        );
+    }
+
+    #[test]
+    fn annotate_does_not_add_version_when_absent() {
+        let mut genome = json!({});
+        annotate_migrated_genome(&mut genome);
+        assert!(genome.get("version").is_none());
+    }
 }

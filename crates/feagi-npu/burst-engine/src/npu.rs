@@ -154,12 +154,14 @@ pub enum PlasticityMode {
 ///
 /// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
 ///
-/// For R-STDP, the burst engine maintains a per-synapse eligibility trace `e_ij` updated by
-/// the same LTP/LTD windowed-correlation rule, then commits weight as
-/// `w_ij += plasticity_eta * R(t) * e_ij` at end-of-burst (timing option (a)). `plasticity_eta`
-/// defaults to `1.0` and is a separate f32 from the integer LTP/LTD `delta_plus` / `delta_minus`
-/// (see `delta_plus_u8`); this gives sub-unit scaling of weight updates without changing trace
-/// accumulation, which is useful when the multipliers are stored as `i8`.
+/// For R-STDP, the burst engine maintains a per-synapse eligibility trace `e_ij`, a unitless
+/// event count (+1 per co-firing burst, -1 per one-sided-firing burst, decayed each burst), then
+/// commits weight as `w_ij += plasticity_eta * R(t) * e_ij * step` at end-of-burst (timing
+/// option (a)). `step` is `delta_plus` (LTP) for reward on a co-firing trace and `delta_minus`
+/// (LTD) for punishment on a co-firing trace and for reward on a one-sided trace; punishment on
+/// a one-sided trace is skipped. `plasticity_eta` defaults to `1.0` and is a separate f32 from
+/// the integer LTP/LTD `delta_plus` / `delta_minus` (see `delta_plus_u8`); this gives sub-unit
+/// scaling of weight updates, which is useful when the multipliers are stored as `i8`.
 /// The wireheading lint enforces that the driver areas of a mapping's reward modulators
 /// receive no plastic input, so the policy cannot drive its own reward.
 #[derive(Debug, Clone, Copy)]
@@ -202,7 +204,8 @@ pub struct StdpMappingParams {
     /// `0.0` as before, so LTD / punishment can always drive a synapse all the way to zero.
     pub max_weight: f32,
     /// Scales the end-of-burst weight commit in the unified plasticity path:
-    /// `w_ij += plasticity_eta * R(t) * e_ij` (Stdp: R=1.0; RStdp: R=summed reward modulators).
+    /// `w_ij += plasticity_eta * R(t) * e_ij * step` (Stdp: R=1.0; RStdp: R=summed reward
+    /// modulators; `e_ij` is an event count and `step` is the LTP or LTD magnitude).
     /// `1.0` preserves the historical magnitude; use `(0, 1]` to slow runaway R-STDP when
     /// integer `ltp`/`ltd` cannot be fractional, complementary to `max_weight`.
     /// Rejected in the BDU at parse time if not finite, `<= 0`, or non-finite/NaN. Omitted
@@ -5896,6 +5899,37 @@ impl<
         (incoming, outgoing)
     }
 
+    /// Count valid synapses that a genome expresses inside a set of cortical areas.
+    ///
+    /// A synapse counts when its source and its target are both regular neurons living in
+    /// one of `cortical_indices` (the set may be a subset of the brain, as for a region
+    /// export). Synapses with a source or target outside the set are not counted, and
+    /// neither is any synapse touching a memory neuron (id at or above
+    /// `MEMORY_NEURON_ID_START`): those are learned, not genome-expressed. One pass over
+    /// the synapse arrays; each synapse is tested once, so none is counted twice.
+    pub fn count_genome_synapses_within_areas(&self, cortical_indices: &[u32]) -> usize {
+        let wanted: AHashSet<u32> = cortical_indices.iter().copied().collect();
+        let neurons = self.neuron_storage.read().unwrap();
+        let synapses = self.synapse_storage.read().unwrap();
+        let neuron_areas = neurons.cortical_areas();
+        let valid = synapses.valid_mask();
+        let sources = synapses.source_neurons();
+        let targets = synapses.target_neurons();
+        let in_set = |neuron: u32| {
+            neuron < MEMORY_NEURON_ID_START
+                && neuron_areas
+                    .get(neuron as usize)
+                    .is_some_and(|area| wanted.contains(area))
+        };
+        let mut total = 0usize;
+        for i in 0..synapses.count() {
+            if valid[i] && in_set(sources[i]) && in_set(targets[i]) {
+                total += 1;
+            }
+        }
+        total
+    }
+
     /// Get all outgoing synapses from a source neuron
     /// Returns Vec of (target_neuron_id, weight, psp, synapse_type)
     pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
@@ -6432,10 +6466,12 @@ impl<
         //
         // Step ordering per synapse (option (a) end-of-burst timing):
         //   1. e_ij <- e_ij * decay
-        //   2. if co-fire across the plasticity window:                e_ij += delta_plus
-        //      else if uncorrelated firing across the window:          e_ij -= delta_minus
-        //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas; positive deltas
-        //                                  only when R > 0, e_ij > 0 and delta_plus > 0)
+        //   2. if co-fire across the plasticity window:                e_ij += 1
+        //      else if uncorrelated firing across the window:          e_ij -= 1
+        //      (e_ij is a unitless event count; LTP/LTD magnitudes apply at commit)
+        //   3. w_ij += eta * R(t) * e_ij * step, step chosen by sign (clamp at 0 on negative
+        //      deltas): R>0,e>0 -> delta_plus; R>0,e<0 -> delta_minus; R<0,e>0 -> delta_minus;
+        //      R<0,e<0 -> skipped.
         let modulators = self
             .modulator_engine
             .lock()
@@ -6566,23 +6602,26 @@ impl<
                             && !activity.dst_any.is_empty());
                     let co_fired_within_window = src_any_present && dst_any_present;
                     if co_fired_within_window {
-                        e_ij += delta_plus;
+                        e_ij += 1.0;
                     } else if !params.associative_memory_mapping
                         && (src_any_present || dst_any_present)
                         && delta_minus > 0.0
                     {
-                        e_ij -= delta_minus;
+                        e_ij -= 1.0;
                     }
 
                     synapse_storage.eligibility_traces_mut()[syn_idx] = e_ij;
 
                     // Step 3: R(t)-modulated weight commit.
                     //
-                    // Weight can only rise when R > 0, e_ij > 0 and delta_plus > 0.
-                    // Depression is unchanged: R > 0 with e_ij < 0 (one-sided firing) and
-                    // R < 0 with e_ij > 0 (punished co-firing) both lower the weight.
-                    // R < 0 with e_ij < 0 (punishment on a one-sided-firing trace) is a
-                    // no-op: punishment must never potentiate.
+                    // `e_ij` counts events (+1 co-firing, -1 one-sided firing); the step
+                    // magnitude is picked by sign:
+                    //   R > 0, e > 0: delta_plus (LTP)
+                    //   R > 0, e < 0: delta_minus (LTD, one-sided firing)
+                    //   R < 0, e > 0: delta_minus (LTD, punished co-firing)
+                    //   R < 0, e < 0: skipped (punishment must never potentiate)
+                    // A step of 0 means no change, so LTP 0 disables reward only and
+                    // LTD 0 disables punishment and one-sided depression.
                     //
                     // Positive deltas are clamped to `params.max_weight` (default
                     // `f32::INFINITY`) to prevent runaway potentiation when the integer-valued
@@ -6594,14 +6633,19 @@ impl<
                         && e_ij != 0.0
                         && (!params.associative_memory_mapping || co_fired_within_window)
                     {
-                        let mut delta_w = params.plasticity_eta * reward * e_ij;
-                        // Sign guard: potentiation requires reward > 0, a positive trace
-                        // and LTP enabled (`delta_plus > 0`). Without it, punishment
-                        // (R < 0) times an LTD trace (e < 0) would raise the weight, and
-                        // `ltp_multiplier = 0` could not disable potentiation.
-                        if delta_w > 0.0 && !(reward > 0.0 && e_ij > 0.0 && delta_plus > 0.0) {
-                            delta_w = 0.0;
-                        }
+                        let step = if reward > 0.0 && e_ij > 0.0 {
+                            Some(delta_plus)
+                        } else if reward > 0.0 || e_ij > 0.0 {
+                            // R > 0 with e < 0, or R < 0 with e > 0.
+                            Some(delta_minus)
+                        } else {
+                            // R < 0 with e < 0: skip.
+                            None
+                        };
+                        let delta_w = match step {
+                            Some(step) => params.plasticity_eta * reward * e_ij * step,
+                            None => 0.0,
+                        };
                         let old = synapse_storage.weights()[syn_idx];
                         let new_w = if delta_w >= 0.0 {
                             (old + delta_w).min(params.max_weight)
@@ -9191,6 +9235,86 @@ mod tests {
             .fold((0, 0), |a, c| (a.0 + c.0, a.1 + c.1));
         assert_eq!(inc, total);
         assert_eq!(out, total);
+    }
+
+    #[test]
+    fn genome_synapse_count_excludes_cross_boundary_and_memory_synapses() {
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let area_a = CorticalID::try_from_bytes(b"cnta0001").unwrap();
+        let area_b = CorticalID::try_from_bytes(b"cntb0001").unwrap();
+        let area_c = CorticalID::try_from_bytes(b"cntc0001").unwrap();
+        let area_m = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        npu.register_cortical_area(10, area_a.as_base_64());
+        npu.register_cortical_area(20, area_b.as_base_64());
+        npu.register_cortical_area(30, area_c.as_base_64());
+        npu.register_cortical_area(40, area_m.as_base_64());
+        let mut add = |area: u32, x: u32| {
+            npu.add_neuron(
+                1.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                true,
+                area,
+                x,
+                0,
+                0,
+            )
+            .unwrap()
+            .0
+        };
+        let (a0, a1) = (add(10, 0), add(10, 1));
+        let (b0, b1) = (add(20, 0), add(20, 1));
+        let c0 = add(30, 0);
+        let mem_a = 50_000_000u32;
+        let mem_b = 50_000_001u32;
+        npu.register_dynamic_neuron_mapping(mem_a, area_m);
+        npu.register_dynamic_neuron_mapping(mem_b, area_m);
+
+        // Expressed inside {A, B}: a0->a1 (internal to A), a0->b0, a1->b1, b0->b1 (internal to B).
+        // Crossing out of {A, B}: b0->c0, c0->a0. Touching memory: a0->mem_a, mem_a->b0, mem_a->mem_b.
+        for (src, dst) in [
+            (a0, a1),
+            (a0, b0),
+            (a1, b1),
+            (b0, b1),
+            (b0, c0),
+            (c0, a0),
+            (a0, mem_a),
+            (mem_a, b0),
+            (mem_a, mem_b),
+        ] {
+            npu.add_synapse(
+                NeuronId(src),
+                NeuronId(dst),
+                SynapticWeight(1.0),
+                SynapticPsp(1.0),
+                SynapseType::Excitatory,
+                SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                1,
+            )
+            .unwrap();
+        }
+        assert_eq!(npu.get_synapse_count(), 9);
+        assert_eq!(npu.count_genome_synapses_within_areas(&[10, 20]), 4);
+        // Whole brain (memory area listed too): the two cross synapses now count, memory still not.
+        assert_eq!(npu.count_genome_synapses_within_areas(&[10, 20, 30, 40]), 6);
+        assert_eq!(npu.count_genome_synapses_within_areas(&[10]), 1);
+        assert_eq!(npu.count_genome_synapses_within_areas(&[]), 0);
+        // A duplicated index in the set does not double count.
+        assert_eq!(npu.count_genome_synapses_within_areas(&[10, 10, 20]), 4);
     }
 
     #[test]

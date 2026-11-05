@@ -117,6 +117,8 @@ impl From<ServiceError> for ApiError {
             ServiceError::NotImplemented(msg) => {
                 ApiError::new(msg).with_code(ApiErrorCode::NotImplemented)
             }
+            // The caller sees the original error; rollback is a state matter, not an error kind.
+            ServiceError::RolledBack(original) => ApiError::from(*original),
         }
     }
 }

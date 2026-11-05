@@ -22,5 +22,7 @@ thiserror = { workspace = true }  # For error types
 
 [dev-dependencies]
 # For tests only
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 

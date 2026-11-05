@@ -3551,6 +3551,230 @@ async fn test_connectome_upload_accepts_payload_larger_than_axum_default_body_li
     );
 }
 
+/// A brain whose genome has a blocking validator error (leak is a fraction, 150 is not)
+/// is saved and resumes in degraded mode: the upload answers 200 and `genome_validity`
+/// reads false.
+#[tokio::test]
+async fn test_connectome_upload_with_blocking_genome_error_imports_in_degraded_mode() {
+    use feagi_npu_neural::types::connectome::{
+        ConnectomeMetadata, ConnectomePersistMode, ConnectomeSnapshot, SerializableNeuronArray,
+        SerializableSynapseArray,
+    };
+
+    let _genome_state = GENOME_STATE_LOCK.lock().await;
+    let genome_json = json!({
+        "genome_schema_version": 7,
+        "genome_id": "degraded-brain",
+        "genome_title": "degraded-brain",
+        "genome_description": "",
+        "version": "2.0",
+        "blueprint": {
+            "_power": {
+                "cortical_name": "Power",
+                "block_boundaries": [1, 1, 1],
+                "relative_coordinate": [0, 0, 0],
+                "cortical_type": "CORE",
+                "leak_coefficient": 150
+            }
+        },
+        "brain_regions": {},
+        "neuron_morphologies": {},
+        "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+        "stats": { "innate_cortical_area_count": 1, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+        "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+        "timestamp": 0.0
+    })
+    .to_string();
+    let snapshot = ConnectomeSnapshot {
+        version: feagi_npu_neural::types::connectome::CONNECTOME_SNAPSHOT_SCHEMA_VERSION,
+        neurons: SerializableNeuronArray::default(),
+        synapses: SerializableSynapseArray::default(),
+        cortical_area_names: Default::default(),
+        burst_count: 0,
+        power_amount: 1.0,
+        fire_ledger_window: 20,
+        metadata: ConnectomeMetadata::default(),
+        persist_mode: ConnectomePersistMode::Lite,
+        genome_json: Some(genome_json),
+        memory_area_ids: Vec::new(),
+        plastic_mappings: Vec::new(),
+        brain_region_ids: Vec::new(),
+        long_term_memory_neurons: Vec::new(),
+        long_term_memory_replay_frames: Vec::new(),
+        lite_synapses: Vec::new(),
+    }
+    .to_lite_snapshot();
+    let artifact = feagi_services::connectome::save_connectome_to_bytes(&snapshot)
+        .expect("a brain with a blocking genome error must still be saved");
+
+    let app = create_test_server().await;
+    let boundary = "----FEAGIDegradedBoundary";
+    let request = Request::builder()
+        .uri("/v1/connectome/upload")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "degraded.connectome",
+            &artifact,
+        )))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "degraded import must succeed: {}",
+        String::from_utf8_lossy(&body_bytes)
+    );
+    assert_eq!(
+        feagi_state_manager::StateManager::instance()
+            .read()
+            .get_core_state()
+            .get_genome_validity(),
+        Some(false)
+    );
+}
+
+/// An import that fails after it began replacing the brain is rolled back. The previous
+/// brain is live, so health reports it loaded (not Error), the validity flag is the previous
+/// brain's, and the caller still gets the import's own error.
+#[tokio::test]
+async fn test_rolled_back_connectome_upload_keeps_health_loaded() {
+    use feagi_npu_neural::types::connectome::{
+        ConnectomeMetadata, ConnectomePersistMode, ConnectomeSnapshot, SerializableNeuronArray,
+        SerializableSynapseArray, CONNECTOME_SNAPSHOT_SCHEMA_VERSION,
+    };
+    use feagi_state_manager::{GenomeState, StateManager};
+
+    let _genome_state = GENOME_STATE_LOCK.lock().await;
+    let genome = |id: &str, regions: Value| {
+        json!({
+            "genome_schema_version": 7,
+            "genome_id": id,
+            "genome_title": id,
+            "genome_description": "",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": regions,
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 1, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        })
+        .to_string()
+    };
+    let artifact = |genome_json: String, mode: ConnectomePersistMode| {
+        let snapshot = ConnectomeSnapshot {
+            version: CONNECTOME_SNAPSHOT_SCHEMA_VERSION,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: ConnectomePersistMode::Lite,
+            genome_json: Some(genome_json),
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        let snapshot = match mode {
+            ConnectomePersistMode::Lite => snapshot.to_lite_snapshot(),
+            ConnectomePersistMode::Full => ConnectomeSnapshot {
+                persist_mode: ConnectomePersistMode::Full,
+                ..snapshot
+            },
+        };
+        feagi_services::connectome::save_connectome_to_bytes(&snapshot).expect("save artifact")
+    };
+    let upload = |app: axum::Router, bytes: Vec<u8>| async move {
+        let boundary = "----FEAGIRollbackBoundary";
+        let request = Request::builder()
+            .uri("/v1/connectome/upload")
+            .method("POST")
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(Body::from(multipart_file_body(
+                boundary,
+                "brain.connectome",
+                &bytes,
+            )))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, String::from_utf8_lossy(&body).to_string())
+    };
+
+    let app = create_test_server().await;
+    let (status, body) = upload(
+        app.clone(),
+        artifact(
+            genome("previous-brain", json!({})),
+            ConnectomePersistMode::Lite,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let state = StateManager::instance();
+    assert_eq!(state.read().get_genome_state(), GenomeState::Loaded);
+    let validity_before = state.read().get_core_state().get_genome_validity();
+
+    // Two regions naming each other as parent: the full import rejects the hierarchy after it
+    // has replaced the live areas.
+    let cyclic = json!({
+        "01a1a966-c1c3-7b53-8c89-4e91cabe3e92": {
+            "title": "a", "parent_region_id": "01a1a966-c1c3-7b53-8c89-4e91cabe3e93", "cortical_areas": []
+        },
+        "01a1a966-c1c3-7b53-8c89-4e91cabe3e93": {
+            "title": "b", "parent_region_id": "01a1a966-c1c3-7b53-8c89-4e91cabe3e92", "cortical_areas": []
+        }
+    });
+    let (status, body) = upload(
+        app,
+        artifact(genome("cyclic-brain", cyclic), ConnectomePersistMode::Full),
+    )
+    .await;
+
+    assert!(
+        status.as_u16() >= 400,
+        "the failing import still returns its error: {status} {body}"
+    );
+    assert_eq!(
+        state.read().get_genome_state(),
+        GenomeState::Loaded,
+        "health must not report Error for a rolled-back import"
+    );
+    assert_eq!(
+        state.read().get_core_state().get_genome_validity(),
+        validity_before
+    );
+}
+
 #[tokio::test]
 async fn test_genome_upload_file_accepts_payload_larger_than_axum_default_body_limit() {
     let app = create_test_server().await;
@@ -4486,7 +4710,10 @@ async fn test_burst_engine_fire_history_route_shape_and_limits() {
     assert_eq!(body["current_burst"], json!(42));
     assert_eq!(body["bursts"], json!(5));
     assert_eq!(body["max_bursts"], json!(2000));
-    assert_eq!(body["max_areas"], json!(16));
+    assert_eq!(
+        body["max_areas"],
+        json!(feagi_api::endpoints::burst_engine::FIRE_HISTORY_MAX_AREAS)
+    );
     assert_eq!(body["subscription_ttl_s"], json!(300));
     let area = &body["areas"][&area_id];
     assert_eq!(area["cortical_idx"], json!(cortical_idx));
@@ -4534,7 +4761,7 @@ async fn test_burst_engine_fire_history_route_shape_and_limits() {
         (
             format!(
                 "/v1/burst_engine/fire_history?areas={}",
-                (0..17)
+                (0..=feagi_api::endpoints::burst_engine::FIRE_HISTORY_MAX_AREAS)
                     .map(|i| format!("Y2ZpcmVoQ{i:02}"))
                     .collect::<Vec<_>>()
                     .join(",")

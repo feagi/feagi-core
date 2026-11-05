@@ -184,6 +184,43 @@ pub struct Neuroembryogenesis {
     start_time: std::time::Instant,
 }
 
+/// Order in which a genome's areas are registered: core areas first in reserved index order,
+/// then areas with a stored index in index order, then areas without one by id.
+///
+/// `genome.cortical_areas` is a `HashMap`, so iterating it registers areas in a different order
+/// on every load. That breaks the rule that core area `n` owns neuron `n` and gives the other
+/// areas different indices each time.
+pub fn registration_order_key(cortical_id: &CorticalID, area: &CorticalArea) -> (u8, u32, String) {
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+
+    const CORE_ORDER: [CoreCorticalType; 7] = [
+        CoreCorticalType::Death,
+        CoreCorticalType::Power,
+        CoreCorticalType::Fatigue,
+        CoreCorticalType::Pain,
+        CoreCorticalType::Pleasure,
+        CoreCorticalType::Fear,
+        CoreCorticalType::Hope,
+    ];
+    if let Some(position) = CORE_ORDER
+        .iter()
+        .position(|core| core.to_cortical_id() == *cortical_id)
+    {
+        return (0, position as u32, String::new());
+    }
+    if area.cortical_idx != 0 {
+        return (1, area.cortical_idx, cortical_id.as_base_64());
+    }
+    (2, 0, cortical_id.as_base_64())
+}
+
+/// The genome's areas in registration order (see [`registration_order_key`]).
+fn ordered_genome_areas(genome: &RuntimeGenome) -> Vec<(&CorticalID, &CorticalArea)> {
+    let mut areas: Vec<(&CorticalID, &CorticalArea)> = genome.cortical_areas.iter().collect();
+    areas.sort_by_key(|(cortical_id, area)| registration_order_key(cortical_id, area));
+    areas
+}
+
 impl Neuroembryogenesis {
     /// Create a new neuroembryogenesis instance
     pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager>>) -> Self {
@@ -522,7 +559,7 @@ impl Neuroembryogenesis {
         let total_areas = genome.cortical_areas.len();
 
         // CRITICAL: Minimize lock scope - only hold lock when actually adding areas
-        for (idx, (cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
+        for (idx, (cortical_id, area)) in ordered_genome_areas(genome).into_iter().enumerate() {
             // Add cortical area to connectome - lock held only during this operation
             {
                 let mut manager = self.connectome_manager.write();
@@ -1001,8 +1038,9 @@ impl Neuroembryogenesis {
             }
         }
 
-        // Sort core areas by their deterministic index (0..=6)
+        // Sort core areas by their deterministic index (0..=6); the rest in registration order
         core_areas.sort_by_key(|(idx, _, _)| *idx);
+        other_areas.sort_by_key(|(cortical_id, area)| registration_order_key(cortical_id, area));
 
         info!(target: "feagi-bdu","  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
 
@@ -1183,7 +1221,7 @@ impl Neuroembryogenesis {
         let expected_synapses = genome.stats.innate_synapse_count;
         info!(target: "feagi-bdu","  Expected innate synapses from genome: {}", expected_synapses);
 
-        self.rebuild_memory_twin_mappings_from_genome(genome)?;
+        self.rebuild_memory_twin_mappings()?;
         self.connectome_manager
             .write()
             .sync_modulators_from_genome(genome)?;
@@ -1388,137 +1426,19 @@ impl Neuroembryogenesis {
         Ok(())
     }
 
-    fn rebuild_memory_twin_mappings_from_genome(
-        &mut self,
-        genome: &RuntimeGenome,
-    ) -> BduResult<()> {
-        use feagi_structures::genomic::cortical_area::CorticalAreaType;
-        {
-            let mut manager = self.connectome_manager.write();
-            manager.purge_classifier_auto_twins()?;
-        }
-        let mut repaired = 0usize;
-
-        for (memory_id, memory_area) in genome.cortical_areas.iter() {
-            let is_memory = matches!(
-                memory_area.cortical_id.as_cortical_type(),
-                Ok(CorticalAreaType::Memory(_))
-            ) || memory_area
-                .properties
-                .get("is_mem_type")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-                || memory_area
-                    .properties
-                    .get("cortical_group")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|v| v.eq_ignore_ascii_case("MEMORY"));
-            if !is_memory {
-                continue;
-            }
-
-            let Some(dstmap) = memory_area
-                .properties
-                .get("cortical_mapping_dst")
-                .and_then(|v| v.as_object())
-            else {
-                continue;
-            };
-
-            for (dst_id_str, rules) in dstmap {
-                let Some(rule_array) = rules.as_array() else {
-                    continue;
-                };
-                let has_twin_recall = rule_array.iter().any(|rule| {
-                    matches!(
-                        rule.get("morphology_id").and_then(|v| v.as_str()),
-                        Some("memory_replay") | Some("episodic_memory")
-                    )
-                });
-                if !has_twin_recall {
-                    continue;
-                }
-
-                let dst_id = match CorticalID::try_from_base_64(dst_id_str) {
-                    Ok(id) => id,
-                    Err(_) => {
-                        warn!(
-                            target: "feagi-bdu",
-                            "Invalid twin cortical ID in memory_replay dstmap: {}",
-                            dst_id_str
-                        );
-                        continue;
-                    }
-                };
-
-                let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
-                    continue;
-                };
-                let owned_by_this_memory = ConnectomeManager::memory_owns_twin(
-                    memory_id,
-                    twin_area,
-                    &genome.cortical_areas,
-                );
-                let legacy_replay = rule_array.iter().any(|rule| {
-                    rule.get("morphology_id").and_then(|v| v.as_str()) == Some("memory_replay")
-                });
-                if !legacy_replay && !owned_by_this_memory {
-                    continue;
-                }
-                let Some(upstream_id_str) = twin_area
-                    .properties
-                    .get("memory_twin_of")
-                    .and_then(|v| v.as_str())
-                else {
-                    continue;
-                };
-                let upstream_id = match CorticalID::try_from_base_64(upstream_id_str) {
-                    Ok(id) => id,
-                    Err(_) => {
-                        warn!(
-                            target: "feagi-bdu",
-                            "Invalid memory_twin_of value on twin area {}: {}",
-                            dst_id.as_base_64(),
-                            upstream_id_str
-                        );
-                        continue;
-                    }
-                };
-
-                let mut manager = self.connectome_manager.write();
-                if manager.auto_memory_twin_forbidden(memory_id, Some(&dst_id)) {
-                    continue;
-                }
-                // Index the saved twin first so ensure_memory_twin_area reuses it.
-                if let Err(e) = manager.restore_memory_twin_index(memory_id, &upstream_id, &dst_id)
-                {
-                    warn!(
-                        target: "feagi-bdu",
-                        "Failed to restore memory twin index for memory {} twin {}: {}",
-                        memory_id.as_base_64(),
-                        dst_id.as_base_64(),
-                        e
-                    );
-                    continue;
-                }
-                if let Err(e) = manager.ensure_memory_twin_area(memory_id, &upstream_id) {
-                    warn!(
-                        target: "feagi-bdu",
-                        "Failed to rebuild memory twin mapping for memory {} upstream {}: {}",
-                        memory_id.as_base_64(),
-                        upstream_id.as_base_64(),
-                        e
-                    );
-                    continue;
-                }
-                repaired += 1;
-            }
-        }
-
+    /// Rebuild memory twins with the same job list the connectome import rebind uses
+    /// (`ConnectomeManager::rebuild_memory_twin_mappings`), so a genome load and an import of
+    /// its export hold the same areas. That includes creating the twin of an episodic
+    /// upstream-to-memory pair that has no saved twin. Errors propagate under one policy.
+    fn rebuild_memory_twin_mappings(&mut self) -> BduResult<()> {
+        let restored = self
+            .connectome_manager
+            .write()
+            .rebuild_memory_twin_mappings()?;
         info!(
             target: "feagi-bdu",
             "Rebuilt {} memory twin mapping(s) from genome",
-            repaired
+            restored
         );
         Ok(())
     }
@@ -1737,6 +1657,9 @@ mod tests {
 
     #[test]
     fn test_neuroembryogenesis_creation() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let manager = ConnectomeManager::instance();
         let neuro = Neuroembryogenesis::new(manager);
 
@@ -1828,6 +1751,9 @@ mod tests {
 
     #[test]
     fn test_development_from_minimal_genome() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing(); // Ensure clean state
         let manager = ConnectomeManager::instance();
         {
@@ -1881,10 +1807,221 @@ mod tests {
         println!("✅ Development completed in {}ms", progress.duration_ms);
     }
 
+    /// Core area `n` must own neuron `n` on every load, however the genome map iterates.
+    #[test]
+    fn core_neuron_ids_equal_area_index_on_every_load() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalAreaType, CustomCorticalType,
+        };
+
+        let core = [
+            CoreCorticalType::Death,
+            CoreCorticalType::Power,
+            CoreCorticalType::Fatigue,
+            CoreCorticalType::Pain,
+            CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
+        ];
+        for load in 0..12 {
+            let runtime = feagi_npu_runtime::StdRuntime;
+            let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+            let npu = feagi_npu_burst_engine::RustNPU::new(runtime, backend, 100_000, 100_000, 10)
+                .expect("Failed to create NPU");
+            let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+                feagi_npu_burst_engine::DynamicNPU::F32(npu),
+                "core-order-test-npu",
+            ));
+            let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+                npu.clone(),
+            )));
+            let mut neuro = Neuroembryogenesis::new(manager.clone());
+            let mut genome = create_genome_with_core_morphologies(
+                "core_order".to_string(),
+                "Core Order".to_string(),
+            );
+            for kind in core {
+                let id = kind.to_cortical_id();
+                let area = CorticalArea::new(
+                    id,
+                    0,
+                    format!("core-{id}"),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Core(kind),
+                )
+                .unwrap();
+                genome.cortical_areas.insert(id, area);
+            }
+            for n in 0..24u8 {
+                let id = CorticalID::try_from_bytes(&[
+                    b'c',
+                    b'o',
+                    b'r',
+                    b'd',
+                    b'0',
+                    b'0',
+                    b'0' + n / 10,
+                    b'0' + n % 10,
+                ])
+                .unwrap();
+                let area = CorticalArea::new(
+                    id,
+                    0,
+                    format!("other-{n}"),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (n as i32, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap();
+                genome.cortical_areas.insert(id, area);
+            }
+            neuro
+                .develop_from_genome(&genome)
+                .expect("development must succeed");
+
+            let npu = npu.lock().unwrap();
+            for index in 0..7u32 {
+                assert_eq!(
+                    npu.get_neurons_in_cortical_area(index),
+                    vec![index],
+                    "load {load}: core area {index} must own neuron {index}"
+                );
+            }
+        }
+    }
+
+    /// Other areas get the same indices on every load.
+    #[test]
+    fn registration_order_is_deterministic() {
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, CustomCorticalType};
+
+        let mut genome = create_genome_with_core_morphologies("o".to_string(), "o".to_string());
+        for n in 0..16u8 {
+            let id = CorticalID::try_from_bytes(&[
+                b'o',
+                b'r',
+                b'd',
+                b'0',
+                b'0',
+                b'0',
+                b'0' + n / 10,
+                b'0' + n % 10,
+            ])
+            .unwrap();
+            let area = CorticalArea::new(
+                id,
+                0,
+                format!("a{n}"),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            genome.cortical_areas.insert(id, area);
+        }
+        let expected: Vec<String> = ordered_genome_areas(&genome)
+            .iter()
+            .map(|(id, _)| id.as_base_64())
+            .collect();
+        let mut sorted = expected.clone();
+        sorted.sort();
+        assert_eq!(expected, sorted, "unindexed areas register by id");
+    }
+
+    /// Loading a genome creates the twin of an episodic upstream-to-memory pair that has no
+    /// saved twin, so the rebind after an import of its export has nothing left to add.
+    #[test]
+    fn genome_load_creates_missing_twins_like_the_import_rebind() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+
+        let runtime = feagi_npu_runtime::StdRuntime;
+        let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+        let npu = feagi_npu_burst_engine::RustNPU::new(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU");
+        let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "twin-load-test-npu",
+        ));
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu,
+        )));
+        let mut neuro = Neuroembryogenesis::new(manager.clone());
+        let mut genome =
+            create_genome_with_core_morphologies("twin_load".to_string(), "Twin Load".to_string());
+        let upstream_id = CorticalID::try_from_bytes(b"cupa0021").unwrap();
+        let memory_id = CorticalID::try_from_bytes(b"mmem0021").unwrap();
+        let mut upstream = CorticalArea::new(
+            upstream_id,
+            0,
+            "upstream".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        upstream.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ memory_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut memory = CorticalArea::new(
+            memory_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        genome.cortical_areas.insert(upstream_id, upstream);
+        genome.cortical_areas.insert(memory_id, memory);
+
+        neuro
+            .develop_from_genome(&genome)
+            .expect("development must succeed");
+
+        let area_count = || manager.read().get_cortical_area_ids().len();
+        let after_load = area_count();
+        let twin_id = {
+            let guard = manager.read();
+            guard
+                .get_cortical_area(&memory_id)
+                .and_then(|area| area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.get(upstream_id.as_base_64()))
+                .and_then(|value| value.as_str())
+                .and_then(|twin| CorticalID::try_from_base_64(twin).ok())
+                .expect("load must index the twin it created")
+        };
+        assert!(manager.read().has_cortical_area(&twin_id));
+        manager
+            .write()
+            .rebuild_memory_twin_mappings()
+            .expect("the import rebind must succeed");
+        assert_eq!(
+            area_count(),
+            after_load,
+            "the rebind adds no area after a load"
+        );
+    }
+
     /// Genome load must refresh a reward-trained classifier's stored eligibility: the mapping
     /// rules only exist once synaptogenesis has run.
     #[test]
     fn genome_load_refreshes_classifier_reward_eligibility() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_structures::genomic::classifiers::Classifier;
         use feagi_structures::genomic::cortical_area::{CorticalAreaType, MemoryCorticalType};
 

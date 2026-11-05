@@ -1,0 +1,840 @@
+{
+  "source_crates": [
+    "feagi-npu-burst-engine",
+    "feagi-structures"
+  ],
+  "functions": [
+    "ModulatorEngine::commit_burst",
+    "ModulatorEngine::transmission_factors",
+    "ModulatorEngine::reward_for_group",
+    "ModulatorEngine::learning_factor",
+    "SynapticPropagationEngine::propagate_delayed"
+  ],
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "gate_open_for_three_bursts",
+      "settings": {
+        "source_psp": 0.5,
+        "modulators": [
+          {
+            "kind": "synaptic.gate",
+            "magnitude_percent": 100.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              5,
+              6,
+              7
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 1,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 2,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 3,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 4,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 5,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 6,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 7,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 8,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 9,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 10,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 11,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 12,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 13,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 14,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 15,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        }
+      ]
+    },
+    {
+      "name": "gain_times_gate",
+      "settings": {
+        "source_psp": 0.5,
+        "modulators": [
+          {
+            "kind": "synaptic.transmission_gain",
+            "magnitude_percent": 50.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15
+            ]
+          },
+          {
+            "kind": "synaptic.gate",
+            "magnitude_percent": 100.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              4,
+              5,
+              6,
+              7,
+              8
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 1,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 2,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 3,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 4,
+          "driver_fired": [
+            true,
+            true
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 5,
+          "driver_fired": [
+            true,
+            true
+          ],
+          "transmission_factor": 1.5,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.75
+        },
+        {
+          "burst": 6,
+          "driver_fired": [
+            true,
+            true
+          ],
+          "transmission_factor": 1.5,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.75
+        },
+        {
+          "burst": 7,
+          "driver_fired": [
+            true,
+            true
+          ],
+          "transmission_factor": 1.5,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.75
+        },
+        {
+          "burst": 8,
+          "driver_fired": [
+            true,
+            true
+          ],
+          "transmission_factor": 1.5,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.75
+        },
+        {
+          "burst": 9,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 1.5,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.75
+        },
+        {
+          "burst": 10,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 11,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 12,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 13,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 14,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 15,
+          "driver_fired": [
+            true,
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        }
+      ]
+    },
+    {
+      "name": "graded_gate_follows_driver_potential",
+      "settings": {
+        "source_psp": 0.5,
+        "modulators": [
+          {
+            "kind": "synaptic.gate",
+            "magnitude_percent": 100.0,
+            "graded": true,
+            "full_scale_potential": 1.0,
+            "driver_potential": 0.25,
+            "fire_bursts": [
+              3,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 1,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 2,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 3,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 4,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 0.25,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.125
+        },
+        {
+          "burst": 5,
+          "driver_fired": [
+            true
+          ],
+          "transmission_factor": 0.25,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.125
+        },
+        {
+          "burst": 6,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.25,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.125
+        },
+        {
+          "burst": 7,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 8,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 9,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 10,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 11,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 12,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 13,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 14,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        },
+        {
+          "burst": 15,
+          "driver_fired": [
+            false
+          ],
+          "transmission_factor": 0.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.0
+        }
+      ]
+    },
+    {
+      "name": "reward_punishment_learning_rate",
+      "settings": {
+        "source_psp": 0.5,
+        "modulators": [
+          {
+            "kind": "synaptic.reward",
+            "magnitude_percent": 100.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              3,
+              9
+            ]
+          },
+          {
+            "kind": "synaptic.reward",
+            "magnitude_percent": -100.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              9,
+              12
+            ]
+          },
+          {
+            "kind": "synaptic.learning_rate",
+            "magnitude_percent": 50.0,
+            "graded": false,
+            "full_scale_potential": 1.0,
+            "driver_potential": 1.0,
+            "fire_bursts": [
+              9,
+              12
+            ]
+          }
+        ]
+      },
+      "rows": [
+        {
+          "burst": 0,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 1,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 2,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 3,
+          "driver_fired": [
+            true,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 4,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 1.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 5,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 6,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 7,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 8,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 9,
+          "driver_fired": [
+            true,
+            true,
+            true
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 10,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.5,
+          "contribution": 0.5
+        },
+        {
+          "burst": 11,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 12,
+          "driver_fired": [
+            false,
+            true,
+            true
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 13,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": -1.0,
+          "learning_factor": 1.5,
+          "contribution": 0.5
+        },
+        {
+          "burst": 14,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        },
+        {
+          "burst": 15,
+          "driver_fired": [
+            false,
+            false,
+            false
+          ],
+          "transmission_factor": 1.0,
+          "reward": 0.0,
+          "learning_factor": 1.0,
+          "contribution": 0.5
+        }
+      ]
+    }
+  ]
+}

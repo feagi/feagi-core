@@ -22,7 +22,9 @@ use crate::connectome::{
 };
 
 const BRAIN_ARTIFACT_MANIFEST_TAG: &str = "brain_artifact_manifest";
-const CURRENT_CONTRACT_VERSION: u32 = 1;
+/// Contract v2 records the embedded genome's blocking validator errors in the manifest.
+/// Contract v1 manifests carry none and still import.
+const CURRENT_CONTRACT_VERSION: u32 = 2;
 const CURRENT_CONNECTOME_SCHEMA_VERSION: u32 = CONNECTOME_SNAPSHOT_SCHEMA_VERSION;
 const CURRENT_CONTAINER_VERSION: u32 = 3;
 
@@ -36,6 +38,11 @@ pub struct BrainArtifactManifest {
     pub genome_sha256: Option<String>,
     pub producer_version: String,
     pub migration_steps: Vec<String>,
+    /// Blocking validator errors of the embedded genome when the artifact was written. An
+    /// artifact with errors is still saved and imports in degraded mode (`genome_validity`
+    /// false). Absent in contract v1 manifests.
+    #[serde(default)]
+    pub blocking_errors: Vec<String>,
 }
 
 /// Deterministic result of validating and migrating a brain artifact.
@@ -53,6 +60,10 @@ pub struct BrainArtifactMigrationReport {
     pub migration_steps: Vec<String>,
     pub identifier_remaps: BTreeMap<String, String>,
     pub warnings: Vec<String>,
+    /// Blocking validator errors of the embedded genome. The artifact stays importable in
+    /// degraded mode; this is the list behind `genome_validity=false`.
+    #[serde(default)]
+    pub blocking_errors: Vec<String>,
 }
 
 /// New artifact bytes and their validation/migration report.
@@ -64,6 +75,9 @@ pub struct BrainArtifactMigrationResult {
 }
 
 /// Embed a manifest when a newly exported snapshot already carries a current genome.
+///
+/// The manifest is always written, including for a genome with blocking validator errors:
+/// those errors are recorded in it so the brain can be saved and resumed in degraded mode.
 ///
 /// Historical snapshots are intentionally left unstamped so the migration path
 /// can preserve their true source versions.
@@ -79,6 +93,7 @@ pub(crate) fn embed_manifest_for_current_export(snapshot: &mut ConnectomeSnapsho
         return Ok(());
     }
 
+    let mut blocking_errors = Vec::new();
     let (genome_schema_version, genome_sha256) = match snapshot.genome_json.as_deref() {
         Some(genome_json) => {
             let (current_genome, report) = feagi_evolutionary::migrate_genome_json_to_current(
@@ -89,9 +104,7 @@ pub(crate) fn embed_manifest_for_current_export(snapshot: &mut ConnectomeSnapsho
                     "exported embedded genome is invalid: {error}"
                 ))
             })?;
-            if !report.is_blocking_clean() {
-                return Ok(());
-            }
+            blocking_errors = report.blocking_errors.clone();
             let canonical_genome = canonical_json_string(&current_genome)?;
             snapshot.genome_json = Some(canonical_genome.clone());
             (
@@ -113,6 +126,7 @@ pub(crate) fn embed_manifest_for_current_export(snapshot: &mut ConnectomeSnapsho
             genome_sha256,
             producer_version: env!("CARGO_PKG_VERSION").to_string(),
             migration_steps: Vec::new(),
+            blocking_errors,
         },
     )
 }
@@ -185,6 +199,7 @@ pub fn validate_and_migrate_brain_artifact(
     let mut source_genome_schema_version = None;
     let mut target_genome_schema_version = None;
     let mut genome_sha256 = None;
+    let mut blocking_errors = Vec::new();
 
     match snapshot.genome_json.clone() {
         Some(genome_json) => {
@@ -197,11 +212,14 @@ pub fn validate_and_migrate_brain_artifact(
                     },
                 )?;
 
-            if !chain_report.is_blocking_clean() {
-                return Err(ConnectomeError::BrainArtifact(format!(
-                    "embedded genome validation failed: {}",
-                    chain_report.blocking_errors.join("; ")
-                )));
+            // Blocking errors do not reject the artifact: it resumes in degraded mode. Only a
+            // genome that cannot produce a runtime genome (below) is a hard failure.
+            blocking_errors = chain_report.blocking_errors.clone();
+            if !blocking_errors.is_empty() {
+                warnings.push(format!(
+                    "embedded genome has {} blocking validator error(s); it will resume in degraded mode",
+                    blocking_errors.len()
+                ));
             }
 
             let migrated_genome_json =
@@ -292,6 +310,7 @@ pub fn validate_and_migrate_brain_artifact(
         genome_sha256: genome_sha256.clone(),
         producer_version: env!("CARGO_PKG_VERSION").to_string(),
         migration_steps: migration_steps.clone(),
+        blocking_errors: blocking_errors.clone(),
     };
     write_manifest(&mut snapshot, &manifest)?;
 
@@ -311,6 +330,7 @@ pub fn validate_and_migrate_brain_artifact(
             migration_steps,
             identifier_remaps,
             warnings,
+            blocking_errors,
         },
         manifest,
     })
@@ -592,6 +612,88 @@ mod tests {
             result.manifest.genome_sha256.as_deref().map(str::len),
             Some(64)
         );
+    }
+
+    /// A genome that loads but fails a blocking validator rule (leak is a fraction, 150 is not).
+    fn genome_with_blocking_error() -> String {
+        let mut genome: Value = serde_json::from_str(&both_membership_keys_genome())
+            .expect("fixture genome is valid JSON");
+        genome["blueprint"]["_power"]["leak_coefficient"] = json!(150);
+        genome.to_string()
+    }
+
+    #[test]
+    fn artifact_with_blocking_errors_is_saved_and_resumes_degraded() {
+        let source = snapshot(
+            ConnectomePersistMode::Lite,
+            Some(genome_with_blocking_error()),
+        );
+
+        let bytes = save_connectome_to_bytes(&source)
+            .expect("a genome with blocking errors must still be saved");
+        let result = validate_and_migrate_brain_artifact(&bytes)
+            .expect("a genome with blocking errors must still resume");
+
+        assert!(result.report.valid && result.report.compatible);
+        assert!(result
+            .report
+            .blocking_errors
+            .iter()
+            .any(|error| error.contains("leak_coefficient")));
+        assert_eq!(result.manifest.contract_version, 2);
+        assert_eq!(
+            result.manifest.blocking_errors,
+            result.report.blocking_errors
+        );
+        let saved = load_connectome_from_bytes(&bytes).expect("decode saved artifact");
+        let saved_manifest = read_manifest(&saved)
+            .expect("manifest reads")
+            .expect("manifest present");
+        assert!(!saved_manifest.blocking_errors.is_empty());
+    }
+
+    #[test]
+    fn artifact_without_blocking_errors_records_none() {
+        let source = snapshot(
+            ConnectomePersistMode::Lite,
+            Some(both_membership_keys_genome()),
+        );
+        let bytes = save_connectome_to_bytes(&source).expect("save clean artifact");
+        let result = validate_and_migrate_brain_artifact(&bytes).expect("clean artifact resumes");
+        assert!(result.report.blocking_errors.is_empty());
+        assert!(result.manifest.blocking_errors.is_empty());
+    }
+
+    #[test]
+    fn contract_v1_manifest_still_imports() {
+        let mut source = snapshot(ConnectomePersistMode::Full, None);
+        // Contract v1 had no `blocking_errors` field.
+        let v1_manifest = json!({
+            "contract_version": 1,
+            "container_format_version": CURRENT_CONTAINER_VERSION,
+            "connectome_schema_version": CURRENT_CONNECTOME_SCHEMA_VERSION,
+            "genome_schema_version": null,
+            "genome_sha256": null,
+            "producer_version": "0.0.1",
+            "migration_steps": []
+        });
+        source.metadata.tags.insert(
+            BRAIN_ARTIFACT_MANIFEST_TAG.to_string(),
+            v1_manifest.to_string(),
+        );
+        let bytes = save_connectome_to_bytes(&source).expect("save with a v1 manifest");
+
+        let result = validate_and_migrate_brain_artifact(&bytes).expect("v1 manifest imports");
+
+        assert_eq!(result.manifest.contract_version, CURRENT_CONTRACT_VERSION);
+        assert!(result.manifest.blocking_errors.is_empty());
+    }
+
+    #[test]
+    fn artifact_with_unparseable_genome_still_fails() {
+        let source = snapshot(ConnectomePersistMode::Lite, Some("{ not json".to_string()));
+        let bytes = legacy_v2_bytes(&source);
+        assert!(validate_and_migrate_brain_artifact(&bytes).is_err());
     }
 
     fn both_membership_keys_genome() -> String {

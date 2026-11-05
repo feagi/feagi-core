@@ -1000,6 +1000,17 @@ mod tests {
     }
 
     #[test]
+    fn essential_genome_passes_validation_with_no_errors() {
+        let genome = load_essential_genome().expect("Failed to load essential genome");
+        let result = crate::validator::validate_genome(&genome);
+        assert!(
+            result.errors.is_empty(),
+            "essential genome must validate cleanly: {:?}",
+            result.errors
+        );
+    }
+
+    #[test]
     fn test_load_barebones_genome_power_defaults() {
         let genome = load_barebones_genome().expect("Failed to load barebones genome");
         assert_power_has_zero_degeneration_and_psp_uniform(&genome);

@@ -474,6 +474,39 @@ pub struct GenomeStats {
     pub innate_synapse_count: usize,
 }
 
+impl GenomeStats {
+    /// Stats for what loading `genome` fresh produces.
+    ///
+    /// - Areas: every cortical area in the genome.
+    /// - Neurons: for every area (memory areas included) width x height x depth x
+    ///   `neurons_per_voxel` (property, 1 when absent or not a number).
+    /// - Synapses: `synapse_count`, which the caller counts from the live connectome with
+    ///   genome-expressed synapses only (no memory-neuron synapses, none leaving the genome's
+    ///   areas); learned synapses belong to connectomes.
+    pub fn from_genome(genome: &RuntimeGenome, synapse_count: usize) -> Self {
+        let innate_neuron_count = genome
+            .cortical_areas
+            .values()
+            .map(|area| {
+                let per_voxel = area
+                    .properties
+                    .get("neurons_per_voxel")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1) as usize;
+                area.dimensions.width as usize
+                    * area.dimensions.height as usize
+                    * area.dimensions.depth as usize
+                    * per_voxel
+            })
+            .sum();
+        Self {
+            innate_cortical_area_count: genome.cortical_areas.len(),
+            innate_neuron_count,
+            innate_synapse_count: synapse_count,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

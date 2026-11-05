@@ -893,6 +893,18 @@ impl GenomeServiceImpl {
     }
 }
 
+/// Genome-expressed synapse count among `cortical_ids` for a genome's `stats` block: one NPU
+/// scan, memory-neuron synapses and synapses leaving the set excluded. Without a live NPU
+/// there is nothing to count, so it logs and returns 0.
+fn genome_synapse_count(manager: &ConnectomeManager, cortical_ids: &[CorticalID]) -> usize {
+    manager
+        .count_genome_synapses_within(cortical_ids)
+        .unwrap_or_else(|| {
+            warn!(target: "feagi-services", "No NPU available to count genome synapses; stats record 0");
+            0
+        })
+}
+
 /// Merge a `rate_modulated_leak` update into the stored object. Object onto object: given
 /// keys override, absent keys are kept, a null key deletes it. A null update clears the whole
 /// setting; anything that is not an object (rejected later by validation) passes through.
@@ -947,6 +959,11 @@ impl GenomeService for GenomeServiceImpl {
         {
             let manager = self.connectome.read();
             sync_runtime_genome_from_connectome(&mut genome, &manager);
+            // Stats describe what a fresh load of this genome gives: recomputed on every save
+            // (never carried over from the loaded file), synapses counted live in one scan.
+            let all_areas: Vec<CorticalID> = genome.cortical_areas.keys().copied().collect();
+            let synapse_count = genome_synapse_count(&manager, &all_areas);
+            genome.stats = feagi_evolutionary::GenomeStats::from_genome(&genome, synapse_count);
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
@@ -964,18 +981,18 @@ impl GenomeService for GenomeServiceImpl {
                     .to_string(),
             )
         })?;
-        {
-            let manager = self.connectome.read();
-            sync_runtime_genome_from_connectome(&mut genome, &manager);
-        }
-        let subset =
-            feagi_evolutionary::subset_runtime_genome_for_region_branch(&genome, &region_id)
-                .map_err(|e| match e {
-                    feagi_evolutionary::EvoError::InvalidRegion(msg) => {
-                        ServiceError::InvalidInput(msg)
-                    }
-                    other => ServiceError::Internal(other.to_string()),
-                })?;
+        let manager = self.connectome.read();
+        sync_runtime_genome_from_connectome(&mut genome, &manager);
+        let subset = feagi_evolutionary::subset_runtime_genome_for_region_branch(
+            &genome,
+            &region_id,
+            |exported| genome_synapse_count(&manager, exported),
+        )
+        .map_err(|e| match e {
+            feagi_evolutionary::EvoError::InvalidRegion(msg) => ServiceError::InvalidInput(msg),
+            other => ServiceError::Internal(other.to_string()),
+        })?;
+        drop(manager);
         feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
             ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
         })
@@ -5977,6 +5994,70 @@ mod tests {
     /// `health_check` reads `genome_state` / `genome_validity` from the StateManager.
     /// Only the HTTP upload wrapper used to write `genome_state`, so a genome that
     /// reached the service by any other transport ran with `genome_state: "missing"`.
+    #[tokio::test]
+    async fn save_genome_recomputes_stats_instead_of_echoing_loaded_ones() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use crate::types::{LoadGenomeParams, SaveGenomeParams};
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use std::sync::Arc;
+
+        fn test_npu(name: &'static str) -> Arc<TracingMutex<DynamicNPU>> {
+            let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 10)
+                .expect("npu construct");
+            Arc::new(TracingMutex::new(DynamicNPU::F32(npu), name))
+        }
+
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
+        // Neuroembryogenesis develops into the process-wide ConnectomeManager, so the service
+        // must read that same manager for the saved areas to exist.
+        let manager = ConnectomeManager::instance();
+        {
+            let mut singleton = manager.write();
+            if singleton.get_npu().is_none() {
+                singleton.set_npu(test_npu("genome-stats-test-singleton-npu"));
+            }
+        }
+        let service = GenomeServiceImpl::new(manager);
+
+        let mut genome = feagi_evolutionary::templates::create_genome_with_core_areas(
+            "genome-stats-test".to_string(),
+            "genome-stats-test".to_string(),
+        );
+        // Stale stats in the file being loaded.
+        genome.stats = feagi_evolutionary::GenomeStats {
+            innate_cortical_area_count: 999,
+            innate_neuron_count: 999,
+            innate_synapse_count: 999,
+        };
+        let expected = feagi_evolutionary::GenomeStats::from_genome(&genome, 0);
+        assert!(expected.innate_cortical_area_count > 0);
+        let json_str = feagi_evolutionary::save_genome_to_json(&genome).expect("genome json");
+        service
+            .load_genome(LoadGenomeParams { json_str })
+            .await
+            .expect("load genome");
+
+        let saved = service
+            .save_genome(SaveGenomeParams {
+                genome_id: None,
+                genome_title: None,
+            })
+            .await
+            .expect("save genome");
+        let saved: serde_json::Value = serde_json::from_str(&saved).expect("saved json");
+        let stats = &saved["stats"];
+        assert_eq!(
+            stats["innate_cortical_area_count"],
+            expected.innate_cortical_area_count
+        );
+        assert_eq!(stats["innate_neuron_count"], expected.innate_neuron_count);
+        assert_eq!(stats["innate_synapse_count"], 0);
+    }
+
     #[tokio::test]
     async fn load_genome_marks_state_loaded_and_validity_known() {
         use super::GenomeServiceImpl;

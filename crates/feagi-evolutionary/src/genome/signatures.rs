@@ -16,7 +16,13 @@ Licensed under the Apache License, Version 2.0
 use crate::{EvoResult, GenomeSignatures};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+
+/// Key-sorted view of a section. A `HashMap` serializes in a per-instance random order,
+/// so signing it directly would give two loads of one genome different signatures.
+fn sorted(section: &HashMap<String, Value>) -> BTreeMap<&String, &Value> {
+    section.iter().collect()
+}
 
 /// Generate all genome signatures
 pub fn generate_signatures(
@@ -40,15 +46,15 @@ fn generate_genome_signature(
 ) -> EvoResult<String> {
     // Combine all sections into a single JSON value
     let mut combined = serde_json::json!({
-        "blueprint": blueprint,
-        "neuron_morphologies": morphologies,
+        "blueprint": sorted(blueprint),
+        "neuron_morphologies": sorted(morphologies),
     });
 
     if let Some(phys) = physiology {
         combined["physiology"] = phys.clone();
     }
 
-    // Serialize with deterministic ordering
+    // Keys are sorted, so the serialization is deterministic
     let json_str = serde_json::to_string(&combined)?;
 
     // Generate SHA-256 hash
@@ -57,7 +63,7 @@ fn generate_genome_signature(
 
 /// Generate blueprint signature
 fn generate_blueprint_signature(blueprint: &HashMap<String, Value>) -> EvoResult<String> {
-    let json_str = serde_json::to_string(blueprint)?;
+    let json_str = serde_json::to_string(&sorted(blueprint))?;
     Ok(hash_string(&json_str))
 }
 
@@ -74,7 +80,7 @@ fn generate_physiology_signature(physiology: &Option<Value>) -> EvoResult<String
 
 /// Generate morphologies signature
 fn generate_morphologies_signature(morphologies: &HashMap<String, Value>) -> EvoResult<String> {
-    let json_str = serde_json::to_string(morphologies)?;
+    let json_str = serde_json::to_string(&sorted(morphologies))?;
     Ok(hash_string(&json_str))
 }
 
@@ -91,6 +97,26 @@ fn hash_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signatures_do_not_depend_on_map_iteration_order() {
+        let build = || {
+            let mut blueprint = HashMap::new();
+            let mut morphologies = HashMap::new();
+            for i in 0..32 {
+                blueprint.insert(format!("area_{i}"), serde_json::json!({ "n": i }));
+                morphologies.insert(format!("morph_{i}"), serde_json::json!({ "n": i }));
+            }
+            generate_signatures(&blueprint, &morphologies, &None).unwrap()
+        };
+        let first = build();
+        for _ in 0..8 {
+            let again = build();
+            assert_eq!(again.genome, first.genome);
+            assert_eq!(again.blueprint, first.blueprint);
+            assert_eq!(again.morphologies, first.morphologies);
+        }
+    }
 
     #[test]
     fn test_hash_string() {

@@ -665,7 +665,7 @@ impl ConnectomeManager {
     }
 
     /// Compute hash for cortical mappings (cortical_mapping_dst).
-    fn compute_cortical_mappings_hash(&self) -> u64 {
+    pub fn compute_cortical_mappings_hash(&self) -> u64 {
         let mut hasher = Xxh64::new(DATA_HASH_SEED);
         let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
         areas.sort_by_key(|area| area.cortical_id.as_base_64());
@@ -827,6 +827,22 @@ impl ConnectomeManager {
     // ======================================================================
     // Cortical Area Management
     // ======================================================================
+
+    /// Seed the next free cortical index from the indices now in use.
+    ///
+    /// Indices 0..=6 stay reserved for the core areas. A full connectome import re-adds the
+    /// areas with the artifact's own indices, so the counter must follow those indices
+    /// instead of keeping a value left by the brain it replaced.
+    pub fn seed_next_cortical_idx_from_areas(&mut self) {
+        const FIRST_REGULAR_IDX: u32 = 7;
+        self.next_cortical_idx = self
+            .cortical_idx_to_id
+            .keys()
+            .map(|idx| idx + 1)
+            .max()
+            .unwrap_or(FIRST_REGULAR_IDX)
+            .max(FIRST_REGULAR_IDX);
+    }
 
     /// Add a new cortical area
     ///
@@ -1068,7 +1084,7 @@ impl ConnectomeManager {
                     e
                 ))
             })?;
-            npu_lock.register_cortical_area(cortical_idx, cortical_id.as_base_64());
+            self.register_area_in_npu(&mut npu_lock, cortical_idx, &cortical_id);
             trace!(
                 target: "feagi-bdu",
                 "Registered cortical area idx={} -> '{}' in NPU",
@@ -1259,7 +1275,7 @@ impl ConnectomeManager {
         if update_npu_registry {
             if let Some(ref npu) = self.npu {
                 if let Ok(mut npu_lock) = npu.lock() {
-                    npu_lock.register_cortical_area(cortical_idx, new_id.as_base_64());
+                    self.register_area_in_npu(&mut npu_lock, cortical_idx, &new_id);
                 }
             }
         }
@@ -2177,6 +2193,13 @@ impl ConnectomeManager {
         upstream_area_id: &CorticalID,
         memory_area_id: &CorticalID,
     ) -> BduResult<()> {
+        // A region must never list an area that does not exist.
+        if !self.cortical_areas.contains_key(twin_id) {
+            return Err(BduError::InvalidArea(format!(
+                "Twin area {} not found while assigning its region",
+                twin_id.as_base_64()
+            )));
+        }
         if let Some(root_id) = self.get_root_region_id() {
             if let Some(root) = self.get_brain_region_mut(&root_id) {
                 root.remove_area(twin_id);
@@ -3029,6 +3052,82 @@ impl ConnectomeManager {
         self.remove_cortical_area(&twin_id)?;
         self.refresh_cortical_mappings_hash();
         Ok(Some(twin_id))
+    }
+
+    /// Remove every generated replay twin whose `memory_twin_of` is `upstream_area_id`.
+    ///
+    /// Saved genomes carry `memory_twin_of` on the twin but not the owner's
+    /// `memory_twin_areas` index, so index-driven teardown misses twins of a reloaded brain.
+    /// The owner is read from `memory_twin_for`, or from the memory area whose recall mapping
+    /// targets the twin. The index is restored for that pair and the removal itself is done by
+    /// [`Self::teardown_owned_memory_twin_for_mapping`]. Classifier stamps are left to their
+    /// assembly. Returns the ids of the twins removed.
+    pub fn teardown_memory_twins_of_upstream(
+        &mut self,
+        upstream_area_id: &CorticalID,
+    ) -> BduResult<Vec<CorticalID>> {
+        let upstream_b64 = upstream_area_id.as_base_64();
+        let mut owned: Vec<(CorticalID, CorticalID)> = Vec::new();
+        for (twin_id, twin) in &self.cortical_areas {
+            let twin_of = twin
+                .properties
+                .get("memory_twin_of")
+                .and_then(|value| value.as_str());
+            if twin_of != Some(upstream_b64.as_str()) {
+                continue;
+            }
+            let twin_b64 = twin_id.as_base_64();
+            let declared_owner = twin
+                .properties
+                .get("memory_twin_for")
+                .and_then(|value| value.as_str())
+                .and_then(|owner_b64| CorticalID::try_from_base_64(owner_b64).ok());
+            let owner = declared_owner.or_else(|| {
+                self.cortical_areas
+                    .iter()
+                    .find(|(_, area)| {
+                        Self::area_is_memory(area)
+                            && area
+                                .properties
+                                .get("cortical_mapping_dst")
+                                .and_then(|value| value.as_object())
+                                .and_then(|dstmap| dstmap.get(&twin_b64))
+                                .is_some_and(Self::mapping_is_generated_twin_recall)
+                    })
+                    .map(|(memory_id, _)| *memory_id)
+            });
+            let Some(memory_id) = owner else {
+                continue;
+            };
+            if !self
+                .cortical_areas
+                .get(&memory_id)
+                .is_some_and(Self::area_is_memory)
+            {
+                continue;
+            }
+            owned.push((memory_id, *twin_id));
+        }
+
+        let mut removed = Vec::new();
+        for (memory_id, twin_id) in owned {
+            if self.twin_is_classifier_stamp(&twin_id) {
+                continue;
+            }
+            if let Some(twin) = self.cortical_areas.get_mut(&twin_id) {
+                twin.properties.insert(
+                    "memory_twin_for".to_string(),
+                    serde_json::json!(memory_id.as_base_64()),
+                );
+            }
+            self.set_memory_twin_mapping(&memory_id, upstream_area_id, &twin_id);
+            if let Some(twin_id) =
+                self.teardown_owned_memory_twin_for_mapping(&memory_id, upstream_area_id)?
+            {
+                removed.push(twin_id);
+            }
+        }
+        Ok(removed)
     }
 
     /// Remove an upstream cortical area from a target area's upstream list
@@ -6758,6 +6857,33 @@ impl ConnectomeManager {
             self.get_neuron_count(), self.get_synapse_count());
     }
 
+    /// Register a cortical area in the NPU and count any neuron the NPU creates for it.
+    ///
+    /// `register_cortical_area` creates the single neuron of each core area (indexes 0..=6)
+    /// itself, directly in NPU storage, so no add/subtract bookkeeping sees it. Every
+    /// registration goes through here so that the neuron total, the cached count and the
+    /// StateManager totals that health reads include those neurons. Re-registration of an
+    /// area that already has its neuron creates nothing and changes no count.
+    fn register_area_in_npu(
+        &self,
+        npu: &mut feagi_npu_burst_engine::DynamicNPU,
+        cortical_idx: u32,
+        cortical_id: &CorticalID,
+    ) {
+        let before = npu.get_neuron_count();
+        npu.register_cortical_area(cortical_idx, cortical_id.as_base_64());
+        let created = npu.get_neuron_count().saturating_sub(before);
+        if created > 0 {
+            self.cached_neuron_count
+                .fetch_add(created, Ordering::Relaxed);
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(created as u32);
+            core_state.add_regular_neuron_count(created as u32);
+        }
+    }
+
     /// Write every connectome cortical ID into the NPU name map.
     ///
     /// Sensory injection looks up areas in that map. An area that exists only
@@ -6771,8 +6897,11 @@ impl ConnectomeManager {
             BduError::Internal(format!("Failed to lock NPU for cortical ID sync: {}", e))
         })?;
         let count = self.cortical_id_to_idx.len();
-        for (cortical_id, cortical_idx) in &self.cortical_id_to_idx {
-            npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
+        // Ascending index: core area `n` must register before `n + 1` to own neuron `n`.
+        let mut entries: Vec<(&CorticalID, &u32)> = self.cortical_id_to_idx.iter().collect();
+        entries.sort_by_key(|(_, cortical_idx)| **cortical_idx);
+        for (cortical_id, cortical_idx) in entries {
+            self.register_area_in_npu(&mut npu_lock, *cortical_idx, cortical_id);
         }
         Ok(count)
     }
@@ -6984,6 +7113,10 @@ impl ConnectomeManager {
                 let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
                     continue;
                 };
+                // Classifier memory keeps only its detection stamps.
+                if self.auto_memory_twin_forbidden(memory_id, Some(&twin_id)) {
+                    continue;
+                }
                 let owned_by_this_memory =
                     Self::memory_owns_twin(memory_id, twin_area, &self.cortical_areas);
                 if Self::mapping_rules_use_morphology(rules, "episodic_memory")
@@ -7006,6 +7139,10 @@ impl ConnectomeManager {
                         error
                     ))
                 })?;
+                // Orphan twin: its upstream area no longer exists, so there is nothing to rebind.
+                if !self.cortical_areas.contains_key(&upstream_id) {
+                    continue;
+                }
                 if seen.insert((*memory_id, upstream_id)) {
                     jobs.push((*memory_id, upstream_id, Some(twin_id)));
                 }
@@ -8387,6 +8524,49 @@ impl ConnectomeManager {
         self.cached_synapse_count.load(Ordering::Relaxed)
     }
 
+    /// Set the neuron and synapse totals from what the runtime actually holds.
+    ///
+    /// For callers that replace NPU contents directly (connectome snapshot import), after
+    /// which the add/subtract bookkeeping of earlier builds no longer matches. Regular
+    /// neurons and synapses come from the NPU; memory neurons live in the plasticity memory
+    /// array, outside the NPU neuron storage, and are counted from its pool. The total
+    /// neuron count is regular plus memory, as in the incremental bookkeeping.
+    pub fn sync_totals_from_runtime(&self) -> BduResult<()> {
+        let (regular, synapses) = match self.npu.as_ref() {
+            Some(npu) => {
+                let npu_lock = npu
+                    .lock()
+                    .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+                (npu_lock.get_neuron_count(), npu_lock.get_synapse_count())
+            }
+            None => (0, 0),
+        };
+        #[cfg(feature = "plasticity")]
+        let memory = match self.plasticity_executor.as_ref() {
+            Some(executor) => executor
+                .lock()
+                .map_err(|_| BduError::Internal("Failed to lock PlasticityExecutor".to_string()))?
+                .memory_pool_snapshot()
+                .map(|pool| pool.pool_in_use)
+                .unwrap_or(0),
+            None => 0,
+        };
+        #[cfg(not(feature = "plasticity"))]
+        let memory = 0usize;
+
+        self.cached_neuron_count.store(regular, Ordering::Relaxed);
+        self.cached_synapse_count.store(synapses, Ordering::Relaxed);
+
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        core_state.set_regular_neuron_count(regular as u32);
+        core_state.set_memory_neuron_count(memory as u32);
+        core_state.set_neuron_count((regular + memory) as u32);
+        core_state.set_synapse_count(synapses as u32);
+        Ok(())
+    }
+
     /// Update the cached synapse count (explicit update)
     ///
     /// Use this if you want to force a cache update. Most callers should just
@@ -8746,6 +8926,22 @@ impl ConnectomeManager {
                 .get_cortical_area_stats(&cortical_id_b64)
                 .map(|stats| (stats.incoming_synapse_count, stats.outgoing_synapse_count)),
         }
+    }
+
+    /// Genome-expressed synapses among the given cortical areas, counted from the NPU's
+    /// synapse storage in one pass under one NPU lock (not the cached total, which can be
+    /// stale). A synapse counts only when its source and target are both regular neurons in
+    /// the set; synapses touching memory neurons and synapses leaving the set are excluded.
+    /// Areas without a cortical index are skipped. Returns `None` when no NPU is attached or
+    /// its lock is poisoned.
+    pub fn count_genome_synapses_within(&self, cortical_ids: &[CorticalID]) -> Option<usize> {
+        let indices: Vec<u32> = cortical_ids
+            .iter()
+            .filter_map(|id| self.cortical_id_to_idx.get(id).copied())
+            .collect();
+        let npu = self.npu.as_ref()?;
+        let npu = npu.lock().ok()?;
+        Some(npu.count_genome_synapses_within_areas(&indices))
     }
 
     /// Get total outgoing synapse count for a specific cortical area.
@@ -9251,6 +9447,24 @@ impl ConnectomeManager {
                 .reset_for_new_genome()
                 .map_err(|e| BduError::Internal(format!("Failed to reset NPU: {}", e)))?;
         }
+
+        // Zero the neuron/synapse totals. Build paths only add and subtract, so without
+        // this the totals of the previous genome would be added to those of the next one.
+        // This must run after the memory reset above, which subtracts from the same counters.
+        {
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.set_neuron_count(0);
+            core_state.set_regular_neuron_count(0);
+            core_state.set_memory_neuron_count(0);
+            core_state.set_synapse_count(0);
+            state_manager.clear_cortical_area_stats();
+        }
+        self.cached_neuron_count.store(0, Ordering::Relaxed);
+        self.cached_synapse_count.store(0, Ordering::Relaxed);
+        self.cached_neuron_counts_per_area.write().clear();
+        self.cached_synapse_counts_per_area.write().clear();
 
         info!(target: "feagi-bdu","✅ Connectome cleared and ready for new genome");
         Ok(())
@@ -10771,8 +10985,14 @@ impl std::fmt::Debug for ConnectomeManager {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// `prepare_for_new_genome` zeroes process-wide `StateManager` totals and stats, so
+    /// every test in this binary that calls it holds this lock. Tests that develop a genome
+    /// also move those totals, so they hold it too.
+    pub(crate) static PREPARE_FOR_NEW_GENOME_TEST_LOCK: std::sync::Mutex<()> =
+        std::sync::Mutex::new(());
     use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
     /// Genome load renumbers every non-core cortical index, so any memory neuron left
@@ -10781,6 +11001,9 @@ mod tests {
     #[cfg(feature = "plasticity")]
     #[test]
     fn prepare_for_new_genome_discards_memory_neurons_from_previous_brain() {
+        let _guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
         use feagi_npu_plasticity::executor::PlasticityExecutor;
         use feagi_npu_plasticity::{
@@ -10865,11 +11088,213 @@ mod tests {
         );
     }
 
+    /// Neuron and synapse totals feed the health check. They are only moved by add and
+    /// subtract during builds, so a genome load must zero them or the next genome's
+    /// totals would be added to the previous genome's.
+    ///
+    /// `StateManager` is a process-wide singleton shared with parallel tests, so the
+    /// shared totals are compared against their pre-reset values instead of against
+    /// zero; the manager's own caches and the per-area stats of this test's areas are
+    /// exact.
+    #[test]
+    fn prepare_for_new_genome_resets_neuron_and_synapse_totals() {
+        let _guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).expect("npu");
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "prepare-totals-test-npu",
+        ));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(npu);
+
+        let area_id = CorticalID::try_from_bytes(b"cst_tot_").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            0,
+            "totals area".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        manager.add_cortical_area(area).unwrap();
+        let n0 = manager
+            .add_neuron(
+                &area_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        let n1 = manager
+            .add_neuron(
+                &area_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        manager.create_synapse(n0, n1, 128.0, 64.0, 0).unwrap();
+        manager.update_cached_neuron_count();
+        manager.update_cached_synapse_count();
+
+        let area_key = area_id.as_base_64();
+        let (neurons_before, synapses_before) = {
+            let sm = StateManager::instance();
+            let sm = sm.read();
+            let cs = sm.get_core_state();
+            (cs.get_neuron_count(), cs.get_synapse_count())
+        };
+        assert!(neurons_before >= 2 && synapses_before >= 1);
+        assert!(manager.cached_neuron_count.load(Ordering::Relaxed) >= 2);
+        assert!(manager.cached_synapse_count.load(Ordering::Relaxed) >= 1);
+        assert!(StateManager::instance()
+            .read()
+            .get_cortical_area_stats(&area_key)
+            .is_some());
+
+        manager
+            .prepare_for_new_genome()
+            .expect("genome preparation must succeed");
+
+        assert_eq!(manager.cached_neuron_count.load(Ordering::Relaxed), 0);
+        assert_eq!(manager.cached_synapse_count.load(Ordering::Relaxed), 0);
+        assert!(manager.cached_neuron_counts_per_area.read().is_empty());
+        assert!(manager.cached_synapse_counts_per_area.read().is_empty());
+        let sm = StateManager::instance();
+        let sm = sm.read();
+        let cs = sm.get_core_state();
+        assert!(
+            cs.get_neuron_count() < neurons_before,
+            "neuron total must not carry over from the previous genome"
+        );
+        assert!(
+            cs.get_synapse_count() < synapses_before,
+            "synapse total must not carry over from the previous genome"
+        );
+        assert!(
+            sm.get_cortical_area_stats(&area_key).is_none(),
+            "per-area stats of the previous genome must be dropped"
+        );
+    }
+
+    /// Load a genome through the real development path and compare the StateManager neuron
+    /// totals that health reads with what the NPU holds. Core neurons are created by the NPU
+    /// itself when the area is registered, so they must be counted there.
+    fn load_and_compare_totals(extra_area: bool) {
+        let _guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use crate::neuroembryogenesis::Neuroembryogenesis;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalAreaDimensions, CorticalAreaType,
+            IOCorticalAreaConfigurationFlag,
+        };
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).expect("npu");
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "load-totals-test-npu",
+        ));
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+
+        let mut genome = feagi_evolutionary::create_genome_with_core_morphologies(
+            "totals_genome".to_string(),
+            "Totals Genome".to_string(),
+        );
+        let one = CorticalAreaDimensions::new(1, 1, 1).unwrap();
+        let mut expected = 0usize;
+        for core in [
+            CoreCorticalType::Death,
+            CoreCorticalType::Power,
+            CoreCorticalType::Fatigue,
+            CoreCorticalType::Pain,
+            CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
+        ] {
+            let id = core.to_cortical_id();
+            let area = CorticalArea::new(
+                id,
+                0,
+                format!("core {:?}", core),
+                one,
+                (0, 0, 0).into(),
+                CorticalAreaType::Core(core),
+            )
+            .unwrap();
+            genome.cortical_areas.insert(id, area);
+            expected += 1;
+        }
+        if extra_area {
+            let id = CorticalID::try_from_bytes(b"cst_tot2").unwrap();
+            let area = CorticalArea::new(
+                id,
+                0,
+                "extra area".to_string(),
+                CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            )
+            .unwrap();
+            genome.cortical_areas.insert(id, area);
+            expected += 4;
+        }
+
+        manager.write().prepare_for_new_genome().unwrap();
+        let before = {
+            let sm = StateManager::instance();
+            let sm = sm.read();
+            let cs = sm.get_core_state();
+            (cs.get_neuron_count(), cs.get_regular_neuron_count())
+        };
+        Neuroembryogenesis::new(manager.clone())
+            .develop_from_genome(&genome)
+            .expect("development must succeed");
+
+        let npu_count = npu.lock().unwrap().get_neuron_count();
+        assert_eq!(npu_count, expected, "NPU holds the genome's neurons");
+        let sm = StateManager::instance();
+        let sm = sm.read();
+        let cs = sm.get_core_state();
+        assert_eq!(
+            cs.get_neuron_count() - before.0,
+            npu_count as u32,
+            "StateManager neuron total must equal the NPU's neurons"
+        );
+        assert_eq!(
+            cs.get_regular_neuron_count() - before.1,
+            npu_count as u32,
+            "StateManager regular neuron total must equal the NPU's neurons"
+        );
+        assert_eq!(manager.read().get_neuron_count(), npu_count);
+    }
+
+    #[test]
+    fn genome_load_counts_core_neurons_in_totals_core_areas_only() {
+        load_and_compare_totals(false);
+    }
+
+    #[test]
+    fn genome_load_counts_core_neurons_in_totals_with_extra_area() {
+        load_and_compare_totals(true);
+    }
+
     /// Deleting a memory area must drop its plasticity registration. Otherwise the
     /// burst loop keeps injecting into an index that no longer has a cortical id.
     #[cfg(feature = "plasticity")]
     #[test]
     fn remove_cortical_area_unregisters_its_memory() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
         use feagi_npu_plasticity::executor::PlasticityExecutor;
         use feagi_npu_plasticity::{
@@ -10987,6 +11412,9 @@ mod tests {
 
     #[test]
     fn remove_cortical_area_clears_homeostat_registration() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let (mut manager, npu, area_id, idx) = homeostat_test_manager();
         npu.lock()
             .unwrap()
@@ -11005,6 +11433,9 @@ mod tests {
     /// asserted instead of the process-wide total that parallel tests also move.
     #[test]
     fn remove_cortical_area_deletes_its_neurons_and_lowers_the_counts() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let (mut manager, npu, area_id, idx) = homeostat_test_manager();
         let key = area_id.as_base_64();
         let before = StateManager::instance()
@@ -11039,6 +11470,9 @@ mod tests {
 
     #[test]
     fn neuron_state_columns_leak_and_rate_ema_for_registered_area() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::NeuronStateField as F;
         let (manager, npu, _area_id, idx) = homeostat_test_manager();
         let cols = manager
@@ -11057,6 +11491,9 @@ mod tests {
 
     #[test]
     fn reregister_rate_modulated_leak_rebuilds_registry_from_areas() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let (manager, npu, _area_id, idx) = homeostat_test_manager();
         npu.lock().unwrap().clear_rate_modulated_leak();
         assert!(!npu.lock().unwrap().has_rate_modulated_leak(idx));
@@ -11069,6 +11506,9 @@ mod tests {
 
     #[test]
     fn test_singleton_instance() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let instance1 = ConnectomeManager::instance();
         let instance2 = ConnectomeManager::instance();
 
@@ -11078,6 +11518,9 @@ mod tests {
 
     #[test]
     fn test_add_cortical_area() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11224,6 +11667,9 @@ mod tests {
 
     #[test]
     fn test_cortical_area_lookups() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11259,6 +11705,9 @@ mod tests {
 
     #[test]
     fn test_remove_cortical_area() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11310,6 +11759,9 @@ mod tests {
 
     #[test]
     fn test_duplicate_area_error() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11350,6 +11802,9 @@ mod tests {
 
     #[test]
     fn test_brain_region_management() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11373,6 +11828,9 @@ mod tests {
 
     #[test]
     fn test_update_brain_region_description_property() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         ConnectomeManager::reset_for_testing();
 
         let instance = ConnectomeManager::instance();
@@ -11408,6 +11866,9 @@ mod tests {
 
     #[test]
     fn test_synapse_operations() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::npu::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
         use std::sync::Arc;
@@ -11584,6 +12045,9 @@ mod tests {
 
     #[test]
     fn test_get_neuron_properties_always_includes_neuron_state_keys() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
@@ -11646,6 +12110,9 @@ mod tests {
 
     #[test]
     fn test_mapping_deletion_prunes_synapses_between_areas() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
@@ -11738,6 +12205,9 @@ mod tests {
 
     #[test]
     fn test_mapping_update_prunes_synapses_between_areas() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
@@ -11851,6 +12321,9 @@ mod tests {
 
     #[test]
     fn test_upstream_area_tracking() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         // Test that upstream_cortical_areas property is maintained correctly
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
@@ -11956,6 +12429,9 @@ mod tests {
 
     #[test]
     fn test_refresh_upstream_areas_for_associative_memory_pairs() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -12199,6 +12675,9 @@ mod tests {
 
     #[test]
     fn test_memory_twin_created_for_memory_mapping() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -12911,6 +13390,9 @@ mod tests {
 
     #[test]
     fn test_associative_memory_between_memory_areas_creates_synapses() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -13004,6 +13486,9 @@ mod tests {
 
     #[test]
     fn test_kernel_scan_twin_matches_the_class_input() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -13127,6 +13612,9 @@ mod tests {
 
     #[test]
     fn test_scan_twin_rejects_class_area_that_is_not_one_by_one_by_n() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -13199,6 +13687,9 @@ mod tests {
     /// The saved twin must still be indexed and bound for NPU replay.
     #[test]
     fn reloaded_twin_without_owner_field_is_bound_for_replay() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -13295,8 +13786,118 @@ mod tests {
         );
     }
 
+    /// A twin whose upstream area was deleted is an orphan. Rebuilding twin
+    /// mappings must skip it instead of failing with "Upstream area not found".
+    #[test]
+    fn rebuild_memory_twin_mappings_skips_twin_with_missing_upstream() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        let mem_id = CorticalID::try_from_bytes(b"mmem0010").unwrap();
+        let twin_id = CorticalID::try_from_bytes(b"ctwin010").unwrap();
+        // Never added to the manager: the upstream area is gone.
+        let missing_upstream_id = CorticalID::try_from_bytes(b"cgone010").unwrap();
+
+        let mut mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ twin_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut twin_area = CorticalArea::new(
+            twin_id,
+            0,
+            "orphan_twin".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        twin_area.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(missing_upstream_id.as_base_64()),
+        );
+        twin_area.properties.insert(
+            "memory_twin_for".to_string(),
+            serde_json::json!(mem_id.as_base_64()),
+        );
+        manager.add_cortical_area(mem_area).unwrap();
+        manager.add_cortical_area(twin_area).unwrap();
+
+        let restored = manager
+            .rebuild_memory_twin_mappings()
+            .expect("orphan twin must not fail the rebuild");
+        assert_eq!(
+            restored, 0,
+            "no twin mapping is rebuilt for a missing upstream"
+        );
+        assert!(
+            !manager
+                .get_cortical_area(&mem_id)
+                .unwrap()
+                .properties
+                .contains_key("memory_twin_areas"),
+            "no index entry may be created for a missing upstream"
+        );
+    }
+
+    /// Placing a twin that does not exist must fail, not skip: a region never lists a
+    /// missing area.
+    #[test]
+    fn assign_generated_twin_region_rejects_a_missing_twin() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let upstream_id = CorticalID::try_from_bytes(b"cupa0011").unwrap();
+        let memory_id = CorticalID::try_from_bytes(b"mmem0011").unwrap();
+        let missing_twin_id = CorticalID::try_from_bytes(b"ctwn0011").unwrap();
+        let area = CorticalArea::new(
+            upstream_id,
+            0,
+            "upstream".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        manager.add_cortical_area(area).unwrap();
+
+        let error = manager
+            .assign_generated_twin_region(&missing_twin_id, &upstream_id, &memory_id)
+            .expect_err("a missing twin must be an error");
+        assert!(error.to_string().contains("not found"), "{error}");
+        for region_id in manager.get_brain_region_ids() {
+            assert!(!manager
+                .get_brain_region(region_id)
+                .unwrap()
+                .contains_area(&missing_twin_id));
+        }
+    }
+
     #[test]
     fn test_memory_twin_repair_on_load_preserves_replay_mapping() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -14086,6 +14687,9 @@ mod tests {
 
     #[test]
     fn generated_memory_twin_edge_ignores_region_io_designation() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
         use feagi_structures::genomic::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
@@ -14240,6 +14844,9 @@ mod tests {
 
     #[test]
     fn regenerate_mapping_returns_error_when_memory_twin_cannot_be_created() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
@@ -14773,6 +15380,9 @@ mod tests {
 
     #[test]
     fn classifier_stamp_survives_field_mapping_delete() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
@@ -15681,6 +16291,9 @@ mod tests {
     /// must not stop the source area's other mappings from getting their synapses.
     #[test]
     fn a_failing_mapping_does_not_take_the_sources_other_mappings_down() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
         use feagi_npu_runtime::StdRuntime;

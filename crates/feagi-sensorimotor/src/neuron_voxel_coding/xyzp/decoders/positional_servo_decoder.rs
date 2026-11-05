@@ -3,7 +3,10 @@
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::{Percentage, Percentage2D};
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::decode_unsigned_percentage_from_linear_neurons;
+use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
+    decode_unsigned_percentage_from_fractional_exponential_neurons,
+    decode_unsigned_percentage_from_linear_neurons,
+};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -227,8 +230,14 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         target: &mut Percentage,
     ) {
         match interpolation {
-            PercentageNeuronPositioning::Linear | PercentageNeuronPositioning::Fractional => {
+            PercentageNeuronPositioning::Linear => {
                 decode_unsigned_percentage_from_linear_neurons(z_vector, z_depth, target);
+            }
+            PercentageNeuronPositioning::Fractional => {
+                decode_unsigned_percentage_from_fractional_exponential_neurons(
+                    &z_vector.to_vec(),
+                    target,
+                );
             }
         }
     }

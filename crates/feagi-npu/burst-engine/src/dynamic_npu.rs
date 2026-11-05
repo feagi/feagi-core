@@ -294,6 +294,12 @@ where
         dispatch!(self, get_cortical_area_synapse_counts(cortical_idx))
     }
 
+    /// Genome-expressed synapses with both ends in the given cortical areas; memory-neuron
+    /// synapses and synapses leaving the set are excluded.
+    pub fn count_genome_synapses_within_areas(&self, cortical_indices: &[u32]) -> usize {
+        dispatch!(self, count_genome_synapses_within_areas(cortical_indices))
+    }
+
     pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
         dispatch!(self, count_synapses_with_edge_flag_bits(mask))
     }

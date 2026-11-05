@@ -15,8 +15,10 @@ use crate::types::{BduResult, Position};
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
+/// How `tile` relates the two areas: fold a larger source into the destination tile, or
+/// replicate a smaller (or equal) source across the destination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TileMode {
+pub enum TileMode {
     FoldIntoDestination,
     ReplicateIntoDestination,
 }
@@ -47,13 +49,7 @@ pub fn apply_tile_morphology_with_dimensions(
         return Ok(0);
     }
 
-    let src_count = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
-    let dst_count = dst_dimensions.0 * dst_dimensions.1 * dst_dimensions.2;
-    let mode = if src_count > dst_count {
-        TileMode::FoldIntoDestination
-    } else {
-        TileMode::ReplicateIntoDestination
-    };
+    let mode = tile_mode(src_dimensions, dst_dimensions);
 
     let mut rng = get_rng();
     let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
@@ -100,7 +96,23 @@ pub fn apply_tile_morphology_with_dimensions(
     Ok(synapse_count)
 }
 
-fn tile_destinations(
+/// Pick the tile mode from the voxel counts: fold when the source has more voxels than the
+/// destination, replicate otherwise.
+pub fn tile_mode(
+    src_dimensions: (usize, usize, usize),
+    dst_dimensions: (usize, usize, usize),
+) -> TileMode {
+    let src_count = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+    let dst_count = dst_dimensions.0 * dst_dimensions.1 * dst_dimensions.2;
+    if src_count > dst_count {
+        TileMode::FoldIntoDestination
+    } else {
+        TileMode::ReplicateIntoDestination
+    }
+}
+
+/// Destination voxels one source voxel connects to under `tile`.
+pub fn tile_destinations(
     src_pos: Position,
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),

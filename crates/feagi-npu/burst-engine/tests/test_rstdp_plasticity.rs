@@ -778,8 +778,8 @@ fn test_rstdp_punishment_against_ltd_trace_never_potentiates() {
     }
 }
 
-/// `ltp_multiplier = 0` disables potentiation: with positive reward, co-firing builds no
-/// positive trace and one-sided firing may only depress, never raise, the weight.
+/// `ltp_multiplier = 0` disables potentiation: with positive reward, co-firing may not raise
+/// the weight (LTP step 0) and one-sided firing may only depress, never raise, it.
 #[test]
 fn test_rstdp_zero_ltp_multiplier_never_increases_weight() {
     let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
@@ -894,4 +894,107 @@ fn test_learned_memory_link_reward_does_not_leak_to_unrelated_link() {
         bc1_after, bc1_before,
         "link whose endpoints never fired must not change"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Event-count trace and sign-table commit: `w += eta * R * e * step`, with `e` counting events
+// (+1 co-firing, -1 one-sided firing) and `step` = LTP / LTD per the sign table. Exact numbers
+// use decay 0 (trace reset every burst), constant 1 and eta 1, so LTP step = ltp, LTD step = ltd.
+// ---------------------------------------------------------------------------------------------
+
+/// Fire `driver` alone in burst N (sets R for burst N+1), then co-fire src[0] and dst[0] in
+/// burst N+1. Returns the synapse weight change.
+fn drive_then_cofire(ltp: i8, ltd: i8, driver_is_pain: bool, associative: bool) -> f32 {
+    let (mut npu, src, dst, reward, pain) = create_rstdp_network();
+    let initial = 20.0_f32;
+    if associative {
+        npu.add_synapse(
+            src[0],
+            dst[0],
+            SynapticWeight(initial),
+            SynapticPsp(0.0),
+            SynapseType::Excitatory,
+            feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+    } else {
+        wire_test_synapse(&mut npu, src[0], dst[0], initial);
+    }
+    let mut params = rstdp_params(PlasticityMode::RStdp, 0);
+    params.plasticity_constant = 1;
+    params.ltp_multiplier = ltp;
+    params.ltd_multiplier = ltd;
+    params.associative_memory_mapping = associative;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let driver = if driver_is_pain { pain } else { reward };
+    npu.inject_sensory_with_potentials(&[(driver, 128.0)]);
+    npu.process_burst().unwrap();
+    assert_eq!(synapse_weight(&npu, src[0]), initial, "driver burst alone");
+
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+    npu.process_burst().unwrap();
+    synapse_weight(&npu, src[0]) - initial
+}
+
+#[test]
+fn test_rstdp_punished_cofiring_falls_by_ltd() {
+    assert_eq!(drive_then_cofire(2, 1, true, false), -1.0);
+}
+
+#[test]
+fn test_rstdp_punishment_works_with_ltp_zero() {
+    assert_eq!(drive_then_cofire(0, 1, true, false), -1.0);
+}
+
+#[test]
+fn test_rstdp_ltd_zero_disables_punishment() {
+    assert_eq!(drive_then_cofire(2, 0, true, false), 0.0);
+}
+
+#[test]
+fn test_rstdp_rewarded_cofiring_rises_by_ltp() {
+    assert_eq!(drive_then_cofire(2, 1, false, false), 2.0);
+}
+
+#[test]
+fn test_associative_punished_cofiring_falls_by_ltd() {
+    assert_eq!(drive_then_cofire(2, 1, true, true), -1.0);
+}
+
+#[test]
+fn test_associative_punishment_works_with_ltp_zero() {
+    assert_eq!(drive_then_cofire(0, 1, true, true), -1.0);
+}
+
+#[test]
+fn test_associative_ltd_zero_disables_punishment() {
+    assert_eq!(drive_then_cofire(2, 0, true, true), 0.0);
+}
+
+/// With decay > 0 and LTD > 0, a co-firing burst followed by a one-sided burst nearly cancels
+/// the event count (e = decay - 1, about -0.1 at 10 bursts), so a later reward commits only a
+/// tiny LTD step and never potentiates. Pins the known shift of the trace toward depression.
+#[test]
+fn test_rstdp_cofire_then_one_sided_leaves_no_potentiation_for_reward() {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.plasticity_constant = 1;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+    npu.process_burst().unwrap();
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0)]);
+    npu.process_burst().unwrap();
+    assert_eq!(synapse_weight(&npu, src[0]), 20.0, "no reward yet");
+
+    npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+    npu.process_burst().unwrap();
+    npu.process_burst().unwrap();
+    let delta = synapse_weight(&npu, src[0]) - 20.0;
+    assert!(delta <= 0.0, "reward must not potentiate, got {delta}");
+    assert!(delta > -0.2, "net event count is near zero, got {delta}");
 }

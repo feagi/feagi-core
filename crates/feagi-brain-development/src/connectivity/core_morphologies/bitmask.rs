@@ -98,7 +98,8 @@ pub fn apply_bitmask_morphology_with_dimensions(
     Ok(synapse_count)
 }
 
-fn map_positions_for_bitmask(
+/// Destination voxels one source voxel connects to under a bitmask encoder or decoder.
+pub fn map_positions_for_bitmask(
     src_pos: (u32, u32, u32),
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),

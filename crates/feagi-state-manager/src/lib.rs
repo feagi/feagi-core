@@ -194,6 +194,10 @@ impl CorticalAreaStatsRegistry {
         stats.insert(cortical_id.to_string(), CorticalAreaStats::new());
     }
 
+    fn clear_all(&self) {
+        self.stats.write().clear();
+    }
+
     fn set_neuron_count(&self, cortical_id: &str, count: usize) {
         let mut stats = self.stats.write();
         let entry = stats
@@ -541,6 +545,11 @@ impl StateManager {
     /// Initialize a cortical area stats entry with zeroed counts.
     pub fn init_cortical_area_stats(&self, cortical_id: &str) {
         self.cortical_area_stats.reset_area(cortical_id);
+    }
+
+    /// Drop every cortical area stats entry (used when the whole brain is replaced).
+    pub fn clear_cortical_area_stats(&self) {
+        self.cortical_area_stats.clear_all();
     }
 
     /// Set neuron count for a cortical area.

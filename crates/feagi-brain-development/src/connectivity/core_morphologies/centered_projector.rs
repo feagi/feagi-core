@@ -86,7 +86,9 @@ pub fn apply_centered_projector_morphology_with_dimensions(
     Ok(synapse_count)
 }
 
-fn calculate_centered_projection(
+/// Destination voxel one source voxel connects to under `centered_projector`, or `None` when it
+/// falls outside the destination.
+pub fn calculate_centered_projection(
     src_pos: Position,
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),

@@ -1,0 +1,581 @@
+{
+  "source_crates": [
+    "feagi-structures",
+    "feagi-npu-neural"
+  ],
+  "functions": [
+    "encode_class_potential",
+    "decode_class_potential",
+    "update_neuron_lif"
+  ],
+  "feagi_core_commit": "5656372bbfa95f8c91b19f698f6354f0bde85ab9",
+  "traces": [
+    {
+      "name": "class_map_4_classes",
+      "settings": {
+        "kind": "class_map",
+        "levels": 4,
+        "value_max": 1.0
+      },
+      "rows": [
+        {
+          "input": 0.0,
+          "potential": 0.25,
+          "decoded_class": 0,
+          "fired_bins": [
+            0
+          ]
+        },
+        {
+          "input": 1.0,
+          "potential": 0.5,
+          "decoded_class": 1,
+          "fired_bins": [
+            0,
+            1
+          ]
+        },
+        {
+          "input": 2.0,
+          "potential": 0.75,
+          "decoded_class": 2,
+          "fired_bins": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "input": 3.0,
+          "potential": 1.0,
+          "decoded_class": 3,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "class_map_19_classes",
+      "settings": {
+        "kind": "class_map",
+        "levels": 19,
+        "value_max": 1.0
+      },
+      "rows": [
+        {
+          "input": 0.0,
+          "potential": 0.05263158,
+          "decoded_class": 0,
+          "fired_bins": [
+            0
+          ]
+        },
+        {
+          "input": 1.0,
+          "potential": 0.10526316,
+          "decoded_class": 1,
+          "fired_bins": [
+            0,
+            1
+          ]
+        },
+        {
+          "input": 2.0,
+          "potential": 0.15789473,
+          "decoded_class": 2,
+          "fired_bins": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "input": 3.0,
+          "potential": 0.21052632,
+          "decoded_class": 3,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "input": 4.0,
+          "potential": 0.2631579,
+          "decoded_class": 4,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "input": 5.0,
+          "potential": 0.31578946,
+          "decoded_class": 5,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "input": 6.0,
+          "potential": 0.36842105,
+          "decoded_class": 6,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "input": 7.0,
+          "potential": 0.42105263,
+          "decoded_class": 7,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "input": 8.0,
+          "potential": 0.47368422,
+          "decoded_class": 8,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "input": 9.0,
+          "potential": 0.5263158,
+          "decoded_class": 9,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ]
+        },
+        {
+          "input": 10.0,
+          "potential": 0.57894737,
+          "decoded_class": 10,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        },
+        {
+          "input": 11.0,
+          "potential": 0.6315789,
+          "decoded_class": 11,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "input": 12.0,
+          "potential": 0.68421054,
+          "decoded_class": 12,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ]
+        },
+        {
+          "input": 13.0,
+          "potential": 0.7368421,
+          "decoded_class": 13,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ]
+        },
+        {
+          "input": 14.0,
+          "potential": 0.7894737,
+          "decoded_class": 14,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "input": 15.0,
+          "potential": 0.84210527,
+          "decoded_class": 15,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "input": 16.0,
+          "potential": 0.8947368,
+          "decoded_class": 16,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+          ]
+        },
+        {
+          "input": 17.0,
+          "potential": 0.94736844,
+          "decoded_class": 17,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ]
+        },
+        {
+          "input": 18.0,
+          "potential": 1.0,
+          "decoded_class": 18,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        }
+      ]
+    },
+    {
+      "name": "depth_8_levels",
+      "settings": {
+        "kind": "value",
+        "levels": 8,
+        "value_max": 1.0
+      },
+      "rows": [
+        {
+          "input": 0.0,
+          "potential": 0.0,
+          "decoded_class": null,
+          "fired_bins": []
+        },
+        {
+          "input": 0.125,
+          "potential": 0.125,
+          "decoded_class": null,
+          "fired_bins": [
+            0
+          ]
+        },
+        {
+          "input": 0.25,
+          "potential": 0.25,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1
+          ]
+        },
+        {
+          "input": 0.375,
+          "potential": 0.375,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "input": 0.5,
+          "potential": 0.5,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "input": 0.625,
+          "potential": 0.625,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "input": 0.75,
+          "potential": 0.75,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "input": 0.875,
+          "potential": 0.875,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "input": 1.0,
+          "potential": 1.0,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        }
+      ]
+    },
+    {
+      "name": "value_4_bins_arbitrary",
+      "settings": {
+        "kind": "value",
+        "levels": 4,
+        "value_max": 1.0
+      },
+      "rows": [
+        {
+          "input": 0.0,
+          "potential": 0.0,
+          "decoded_class": null,
+          "fired_bins": []
+        },
+        {
+          "input": 0.05,
+          "potential": 0.05,
+          "decoded_class": null,
+          "fired_bins": []
+        },
+        {
+          "input": 0.24,
+          "potential": 0.24,
+          "decoded_class": null,
+          "fired_bins": [
+            0
+          ]
+        },
+        {
+          "input": 0.26,
+          "potential": 0.26,
+          "decoded_class": null,
+          "fired_bins": [
+            0
+          ]
+        },
+        {
+          "input": 0.5,
+          "potential": 0.5,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1
+          ]
+        },
+        {
+          "input": 0.74,
+          "potential": 0.74,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "input": 0.76,
+          "potential": 0.76,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "input": 1.0,
+          "potential": 1.0,
+          "decoded_class": null,
+          "fired_bins": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ]
+}
