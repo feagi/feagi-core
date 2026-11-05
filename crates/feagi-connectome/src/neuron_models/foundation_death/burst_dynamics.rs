@@ -1,8 +1,8 @@
 use crate::neuron_models::foundation_death::data::NeuronModelFoundationDeath;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
-use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics};
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>(
     core::marker::PhantomData<(FIQ, NM)>,
 );
@@ -39,13 +39,13 @@ where
 
 
 #[cfg(feature = "burst-engine-cpu")]
-impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::CorticalCPUParallelDynamics<FIQ, NM>
+impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM>
 for FoundationDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModelFoundationDeath,
 {
-    fn process_model_cortical_dynamics(
+    fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
         _layout_context: &NeuronLayoutOf<NM, FIQ>,
         _cortical_data: (

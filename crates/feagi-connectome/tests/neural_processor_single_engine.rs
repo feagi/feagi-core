@@ -12,7 +12,7 @@ use feagi_connectome::neural_processors::singular::{
     NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder,
     NeuronProcessorSingleEngineWorkerBuilderError,
 };
-use feagi_connectome::quantization_levels::FeagiIndexQuantizationStandard;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
 use feagi_connectome_neural::neural_basis::visualization::VisualizationStructureChangeCounter;

@@ -1,4 +1,4 @@
-use crate::parallel_burst_engines::cortical_cpu_parallel_dynamics::CorticalCPUParallelDynamics;
+use crate::parallel_burst_engines::neural_cpu_parallel_dynamics::NeuronCPUParallelDynamics;
 use neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
 use neural_basis::neuron_model::NeuronModel;
 use neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -10,7 +10,7 @@ pub trait CpuCorticalAreaSpecVisitor<FIQ: FeagiIndexQuantization> {
     fn visit<NM, D>(self, spec: CorticalAreaSpec<FIQ, NM>) -> Self::Output
     where
         NM: NeuronModel,
-        D: CorticalCPUParallelDynamics<FIQ, NM>;
+        D: NeuronCPUParallelDynamics<FIQ, NM>;
 }
 
 /// Something that holds a cortical area spec and can give it, with its concrete neuron model and

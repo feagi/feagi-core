@@ -1,11 +1,24 @@
-use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::neuron_model::{NeuronLayoutOf, NeuronModel};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
+use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
 use core::fmt::Debug;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+
+/// Data used by all Neuron Models
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NeuronModelUniversalCorticalProperties<NM>
+where
+    NM: NeuronModel
+{
+    /// The psp to use on neuron fire if psp_using_neuron_potential is disabled
+    pub cortical_level_psp: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+    pub is_psp_uniform: bool,
+    pub is_psp_using_neuron_potential: bool
+}
+
 
 /// The cortical level data that should be exposed to genome developers. Not mutable during
 /// cortical processing
@@ -66,16 +79,4 @@ pub trait NeuronDataScratchSpecification<NM: NeuronModel>: Clone + Debug + Parti
 /// not saved to the connectome
 pub trait NeuronDataVarianceSpecification<NM: NeuronModel>: Clone + Debug + PartialEq + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
-}
-
-/// Data used by all Neuron Models
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NeuronModelUniversalCorticalProperties<NM>
-where
-    NM: NeuronModel
-{
-    /// The psp to use on neuron fire if psp_using_neuron_potential is disabled
-    pub cortical_level_psp: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-    pub is_psp_uniform: bool,
-    pub is_psp_using_neuron_potential: bool
 }

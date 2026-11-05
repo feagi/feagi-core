@@ -2,6 +2,7 @@
 
 use core::fmt::Debug;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 
 pub mod voxel;
@@ -59,6 +60,9 @@ pub trait NeuronLayout<
 pub trait NeuronLayoutTag {
     type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
+
+/// Returns the Neuron Layout of the given Neuron Model at the given index quantization
+pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutTag as NeuronLayoutTag>::Layout<FIQ>;
 
 
 /// May impose restrictions on the cortical level context

@@ -1,7 +1,7 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
-use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::cortical_area::{CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
+use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer};
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
     FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataScratch, FeagiAdvancedCorticalDataVariance,
     FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, NeuronModelFeagiAdvancedDefaultQuant, Period,
@@ -11,7 +11,7 @@ use feagi_connectome::neuron_models::neuron_model::foundation_power::{
     FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
     NeuronModelFoundationPowerFloat32,
 };
-use feagi_connectome::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_connectome::connectome_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuronLayoutOf, NeuronModel, NeuronModelTag};
 use feagi_connectome_neural::neural_basis::quantization_levels::MembranePotentialQuantization;
@@ -190,7 +190,7 @@ fn custom_neuron_init_runs_through_the_spec() {
 mod dispatch {
     use super::*;
     use feagi_basis::BurstIndex;
-    use feagi_connectome_neural::burst_engine_cpu::{CorticalCPUParallelDynamics, CpuCorticalAreaSpecDispatch, CpuCorticalAreaSpecVisitor};
+    use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaSpecDispatch, CpuCorticalAreaSpecVisitor};
     use feagi_connectome::neuron_models::neuron_model::feagi_advanced::BurstEngineDynamics;
     use feagi_connectome::neuron_models::neuron_model::NeuronModelEnum;
     use feagi_connectome::neuron_models::spec_dispatch::{CorticalAreaSpecContainer, CorticalAreaSpecEnum};
@@ -204,7 +204,7 @@ mod dispatch {
         fn visit<NM, D>(self, spec: CorticalAreaSpec<FIQ, NM>) -> Self::Output
         where
             NM: NeuronModel,
-            D: CorticalCPUParallelDynamics<FIQ, NM>,
+            D: NeuronCPUParallelDynamics<FIQ, NM>,
         {
             let mut neurons: Vec<_> = spec.iter().collect();
             let (internal, scratch, variance) = &mut neurons[0];
@@ -255,7 +255,7 @@ mod dispatch {
         /// Integrates the input, returns if the neuron fired and the potential it output
         fn burst(&mut self, incoming: f32) -> (bool, f32) {
             self.processing_buffer = CorticalAreaNeuronPotential::new(self.processing_buffer.dewrap() + incoming);
-            let is_firing = <BurstEngineDynamics<Fiq, Advanced> as CorticalCPUParallelDynamics<Fiq, Advanced>>::process_model_neuron_dynamics(
+            let is_firing = <BurstEngineDynamics<Fiq, Advanced> as NeuronCPUParallelDynamics<Fiq, Advanced>>::process_model_neuron_dynamics(
                 &mut self.processing_buffer,
                 &BurstIndex::QUANT_ZERO,
                 &voxel_layout([1, 1, 1, 1]),

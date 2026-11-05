@@ -1,6 +1,6 @@
-use crate::neuron_model::neuron_layout::NeuronLayout;
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use crate::neuron_model::model_data::{CorticalDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
-use crate::neuron_model::{NeuronLayoutOf, NeuronModel};
+use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
