@@ -1,11 +1,11 @@
-use feagi_basis::neurons::{DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
-use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
-use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 use crate::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
-use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
+use crate::connectivity_rule::{voxel_to_voxel, AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::neuron_model::neuron_layout::NeuronLayout;
 use crate::quantization_levels::FeagiIndexQuantization;
+use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
+use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
 
 // TODO bad name with this being type vector! We need a store backing and a better name
@@ -115,11 +115,11 @@ impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorVoxelToVoxel<FIQ> for
             .flat_map(move |element| {
                 (0..source_density).flat_map(move |source_d| {
                     let source = source_layout.neuron_coordinates_to_index(
-                        &neuron_coordinates::<FIQ>(&element.source, source_d),
+                        &voxel_to_voxel::neuron_coordinates::<FIQ>(&element.source, source_d),
                     );
                     (0..destination_density).map(move |destination_d| {
                         (source, destination_layout.neuron_coordinates_to_index(
-                            &neuron_coordinates::<FIQ>(&element.destination, destination_d),
+                            &voxel_to_voxel::neuron_coordinates::<FIQ>(&element.destination, destination_d),
                         ))
                     })
                 })
@@ -145,8 +145,8 @@ impl<FIQ: FeagiIndexQuantization> ConnectivityRuleVectorElement<FIQ> {
         source_dims: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
         destination_dims: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
     ) -> bool {
-        voxel_fits_within::<FIQ>(&self.source, source_dims)
-            && voxel_fits_within::<FIQ>(&self.destination, destination_dims)
+        voxel_to_voxel::voxel_fits_within::<FIQ>(&self.source, source_dims)
+            && voxel_to_voxel::voxel_fits_within::<FIQ>(&self.destination, destination_dims)
     }
 }
 
@@ -162,29 +162,6 @@ pub enum ConnectivityRuleError {
 pub enum ConnectivityGeneratorError {
     #[error("Number of synapses to generate exceeds the synapse index quantization")]
     TooManySynapses,
-}
-
-fn voxel_fits_within<FIQ: FeagiIndexQuantization>(
-    voxel: &CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
-    dims: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
-) -> bool {
-    // Zipping stops after XYZ, since voxels have no density axis
-    voxel.as_slice().iter().zip(dims.as_slice().iter())
-        .all(|(position, size)| position.quant_to_usize() < size.quant_to_usize())
-}
-
-/// Adds a density position to a voxel, giving the coordinates of one neuron within it
-fn neuron_coordinates<FIQ: FeagiIndexQuantization>(
-    voxel: &CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
-    density_position: usize,
-) -> DimensionalCorticalAreaNeuronCoordinates<FIQ::NeuronIndexQuant> {
-    let [x, y, z] = voxel.as_slice();
-    SpatialCoordinate::new_coordinate([
-        x.deref(),
-        y.deref(),
-        z.deref(),
-        FIQ::NeuronIndexQuant::quant_from_usize_unchecked(density_position),
-    ])
 }
 
 

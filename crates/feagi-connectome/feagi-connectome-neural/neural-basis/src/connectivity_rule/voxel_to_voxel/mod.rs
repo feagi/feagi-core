@@ -1,9 +1,14 @@
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions};
 use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::quantization_levels::FeagiIndexQuantization;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
+use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
+use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
 pub mod vector;
+pub mod all_to_voxel;
+pub mod voxel_to_all;
+pub mod single_voxel;
 
 /// Connectivity rule that connects a voxel layout area to a voxel layout area
 pub trait ConnectivityRuleVoxelToVoxel<FIQ: FeagiIndexQuantization>:
@@ -49,5 +54,25 @@ pub type LocalNeuronIndexPair<FIQ: FeagiIndexQuantization> = (
     CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
 );
 
+fn voxel_fits_within<FIQ: FeagiIndexQuantization>(
+    voxel: &CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
+    dims: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
+) -> bool {
+    // Zipping stops after XYZ, since voxels have no density axis
+    voxel.as_slice().iter().zip(dims.as_slice().iter())
+        .all(|(position, size)| position.quant_to_usize() < size.quant_to_usize())
+}
 
-
+/// Adds a density position to a voxel, giving the coordinates of one neuron within it
+fn neuron_coordinates<FIQ: FeagiIndexQuantization>(
+    voxel: &CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
+    density_position: usize,
+) -> DimensionalCorticalAreaNeuronCoordinates<FIQ::NeuronIndexQuant> {
+    let [x, y, z] = voxel.as_slice();
+    SpatialCoordinate::new_coordinate([
+        x.deref(),
+        y.deref(),
+        z.deref(),
+        FIQ::NeuronIndexQuant::quant_from_usize_unchecked(density_position),
+    ])
+}
