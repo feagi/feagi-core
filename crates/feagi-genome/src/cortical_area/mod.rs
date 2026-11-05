@@ -7,7 +7,7 @@ use feagi_connectome::family_macros::{define_cortical_type_family_template, expa
 #[cfg(feature = "std")]
 use feagi_connectome::family_macros::expand_cortical_area_map;
 use feagi_connectome::neuron_models::neuron_model;
-pub use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronLayoutType};
+pub use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronLayoutTag};
 pub use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::spec_dispatch::CorticalAreaSpecContainer;
 
@@ -31,7 +31,7 @@ impl CorticalAreaInnerID for [u8; 6] {}
 /// by implementing their `Uses{Model}` traits
 pub trait CorticalAreaType {
     /// What type of neuron layout this type uses
-    type NeuronLayout: NeuronLayoutType;
+    type NeuronLayout: NeuronLayoutTag;
 
     /// What the last 6 bytes of the cortical ID of this type hold
     type Inner: CorticalAreaInnerID;

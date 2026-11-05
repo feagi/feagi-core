@@ -1,8 +1,6 @@
+use crate::neuron_model::NeuronModel;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use crate::neuron_model::neuron_model::NeuronModel;
 
-
-pub mod neuron_reader;
 pub mod cortical_area_spec;
 pub mod editors;
 

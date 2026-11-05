@@ -2,7 +2,7 @@ use crate::neuron_models::feagi_simple::data::{NeuronModelFeagiSimple, Period};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
 use feagi_basis::BurstIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub struct FeagiSimpleBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>(core::marker::PhantomData<(FIQ, NM)>);

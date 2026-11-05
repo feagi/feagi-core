@@ -1,11 +1,11 @@
 //! The spec of a cortical area at any member of the `NeuronModel` family, and its dispatch to code
 //! needing the concrete neuron model
 
-
+use crate::neuron_models::family::{neuron_model, NeuronModelContainer, NeuronModelEnum};
 use core::marker::PhantomData;
 use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::neuron_models::family::{neuron_model, NeuronModel, NeuronModelContainer, NeuronModelEnum};
 
 /// Holds the [`CorticalAreaSpec`] of a cortical area
 pub struct CorticalAreaSpecContainer<FIQ>(PhantomData<fn() -> FIQ>);

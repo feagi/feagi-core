@@ -6,7 +6,7 @@ use feagi_basis::prelude::*;
 use neural_basis::neuron_model::cortical_indexing::{
     CorticalAreaEngineIndex, NeuronEngineIndex, NeuronModelCorticalQuantIndex, NeuronModelNeuronQuantIndex,
 };
-use neural_basis::neuron_model::neuron_model::NeuronModel;
+use neural_basis::neuron_model::NeuronModel;
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 //region Parallel Structs

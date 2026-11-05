@@ -1,6 +1,5 @@
 use crate::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::neuron_model::NeuronModel;
 
 /// For editing the genome properties in place, the most common type of editing
 pub struct CorticalAreaEditorCorticalGenomeProperties<NM>

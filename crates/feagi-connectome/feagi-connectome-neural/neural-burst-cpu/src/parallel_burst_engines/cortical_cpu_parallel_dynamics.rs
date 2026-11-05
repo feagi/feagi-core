@@ -1,9 +1,8 @@
+use crate::shared_structs::{CorticalAreaUbiquitousFlags, InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::BurstIndex;
-use neural_basis::neuron_model::neuron_model::NeuralBurstEngineDynamics;
-use neural_basis::neuron_model::neuron_model::{NeuronLayoutOf, NeuronModel};
+use neural_basis::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf, NeuronModel};
 use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::shared_structs::{CorticalAreaUbiquitousFlags, InverseOutgoingConnectionCount, PerNeuronUbiquitousFlags};
 
 pub trait CorticalCPUParallelDynamics<FIQ, NM>: NeuralBurstEngineDynamics<FIQ, NM>
 where

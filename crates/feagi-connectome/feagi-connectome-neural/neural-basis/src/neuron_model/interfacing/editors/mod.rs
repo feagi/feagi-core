@@ -4,11 +4,10 @@ pub mod genome_property_editing;
 //
 
 
-
-use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::neuron_model::neuron_model::{NeuronModel};
+use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
 
 

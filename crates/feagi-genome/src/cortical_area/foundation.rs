@@ -3,7 +3,7 @@
 use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFoundationDeath, UsesFoundationPower};
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTypeVoxel, NeuronLayoutVoxel};
+use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use feagi_connectome::cortical_area::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::neuron_models::neuron_model::foundation_death::{
@@ -21,7 +21,7 @@ use feagi_connectome::neuron_models::neuron_model::foundation_power::{
 pub struct Power;
 
 impl CorticalAreaType for Power {
-    type NeuronLayout = NeuronLayoutTypeVoxel;
+    type NeuronLayout = NeuronLayoutTagVoxel;
     type Inner = [u8; 6];
 }
 
@@ -52,7 +52,7 @@ impl UsesFoundationPower for Power {
 pub struct Death;
 
 impl CorticalAreaType for Death {
-    type NeuronLayout = NeuronLayoutTypeVoxel;
+    type NeuronLayout = NeuronLayoutTagVoxel;
     type Inner = [u8; 6];
 }
 

@@ -6,8 +6,8 @@ use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFeag
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
-use feagi_connectome::cortical_area::neuron_layout::single_stepped_dynamic::{NeuronLayoutSingleSteppedDynamic, NeuronLayoutTypeSingleSteppedDynamic};
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTypeVoxel, NeuronLayoutVoxel};
+use feagi_connectome::cortical_area::neuron_layout::single_stepped_dynamic::{NeuronLayoutSingleSteppedDynamic, NeuronLayoutTagSingleSteppedDynamic};
+use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use feagi_connectome::cortical_area::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
@@ -29,7 +29,7 @@ use feagi_connectome::neuron_models::neuron_model::memory_fire_hashing::{
 pub struct Interconnect;
 
 impl CorticalAreaType for Interconnect {
-    type NeuronLayout = NeuronLayoutTypeVoxel;
+    type NeuronLayout = NeuronLayoutTagVoxel;
     type Inner = [u8; 6];
 }
 
@@ -105,7 +105,7 @@ impl UsesFeagiSimple for Interconnect {
 pub struct Memory;
 
 impl CorticalAreaType for Memory {
-    type NeuronLayout = NeuronLayoutTypeSingleSteppedDynamic;
+    type NeuronLayout = NeuronLayoutTagSingleSteppedDynamic;
     type Inner = [u8; 6];
 }
 

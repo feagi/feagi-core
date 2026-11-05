@@ -4,7 +4,7 @@ use feagi_connectome::neuron_models::neuron_model::feagi_simple::NeuronModelFeag
 use feagi_connectome::neuron_models::neuron_model::foundation_death::NeuronModelFoundationDeathFloat64;
 use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64};
 use feagi_connectome::neuron_models::neuron_model::memory_fire_hashing::NeuronModelMemoryFireHashingDefaultQuant;
-use feagi_connectome::neuron_models::neuron_model::{FoundationPowerQuantKind, NeuronModel, NeuronModelContainer, NeuronModelKind, NeuronModelMember, NeuronModelSelectionError};
+use feagi_connectome::neuron_models::neuron_model::{FoundationPowerQuantKind, NeuronModelContainer, NeuronModelKind, NeuronModelMember, NeuronModelSelectionError};
 use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use feagi_connectome::{
     with_neuron_model_feagi_advanced, with_neuron_model_feagi_simple, with_neuron_model_foundation_death, with_neuron_model_foundation_power,
@@ -15,12 +15,13 @@ use feagi_genome::cortical_area::cortical_area_type::{
     CorticalAreaTypeEnum, CorticalAreaTypeKind, CorticalAreaTypeMember, CorticalAreaTypeMemberAt, CorticalAreaTypeSelectionError, FoundationPowerModelEnum, FoundationSuperTypeEnum,
     FoundationSuperTypeKind, MotorSuperTypeKind, ProcessingSuperTypeKind, SensorSuperTypeKind, TunableSuperTypeKind,
 };
-use feagi_genome::cortical_area::CorticalGenomicDataEnum;
 use feagi_genome::cortical_area::foundation::{Death, Power};
 use feagi_genome::cortical_area::motor::Led;
 use feagi_genome::cortical_area::processing::{Interconnect, Memory};
 use feagi_genome::cortical_area::sensor::Camera;
 use feagi_genome::cortical_area::tunable::BrightnessAdjust;
+use feagi_genome::cortical_area::CorticalGenomicDataEnum;
+use neural_basis::neuron_model::NeuronModel;
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Advanced = NeuronModelFeagiAdvancedDefaultQuant;

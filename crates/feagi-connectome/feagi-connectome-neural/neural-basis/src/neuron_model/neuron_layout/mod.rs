@@ -1,13 +1,11 @@
 //! Defines how neurons are laid out within a cortical area, in what pattern
 
-pub mod voxel;
-pub mod single_stepped_dynamic;
-
 use core::fmt::Debug;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use crate::neuron_model::neuron_layout::voxel::NeuronLayoutRestrictionVoxelError;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
+pub mod voxel;
+pub mod single_stepped_dynamic;
 
 
 /// Root trait for defining Neuron Layout, the struct that defines how the neurons are laid out
@@ -17,8 +15,10 @@ pub trait NeuronLayout<
 >: Clone + Copy + Debug + PartialEq + Sync + Send
 + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
 {
+    /// How and if the neuron layout can change on its own (cortical area grows)
     const CHANGE_POLICY: NeuronLayoutChangePolicy;
 
+    /// If the neurons is stored in a dense array or some sparse structure
     const SPARSITY: NeuronLayoutSparsity;
 
     /// What data describes the cortical context that summerizes the state of the whole area
@@ -29,7 +29,7 @@ pub trait NeuronLayout<
     type NeuronLevelContext;
 
 
-    fn validate_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res)
+    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res) 
         -> Result<Self, NeuronLayoutRestrictionError>
     where
         Res: NeuronLayoutRestrictor<FIQ, CorticalLevelContext=Self::CorticalLevelContext>
@@ -56,7 +56,7 @@ pub trait NeuronLayout<
 }
 
 /// Allows defining the Neuron Layout type without knowing the FIQ in the moment
-pub trait NeuronLayoutType {
+pub trait NeuronLayoutTag {
     type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
 
@@ -92,7 +92,7 @@ pub enum NeuronLayoutRestrictionError {
     #[error("Given Neuron layout would exceed current index quantization limits!")]
     ViolatesQuantizationMax,
     #[error("Invalid Voxel Dimensions")]
-    Voxel(#[from] NeuronLayoutRestrictionVoxelError),
+    Voxel(#[from] voxel::NeuronLayoutRestrictionVoxelError),
 
     // nothing for SingleSteppedDynamicSparse
 

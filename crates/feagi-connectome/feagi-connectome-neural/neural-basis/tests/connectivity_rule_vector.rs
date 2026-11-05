@@ -3,10 +3,10 @@
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
 use feagi_basis::prelude::SpatialCoordinate;
 use feagi_basis::voxels::{CorticalAreaVoxelCoordinateAxisPosition, CorticalAreaVoxelCoordinates};
-use neural_basis::connectivity_rule::dimensional_dimensional::vector::{
+use neural_basis::connectivity_rule::voxel_to_voxel::vector::{
     ConnectivityGeneratorError, ConnectivityRuleError, ConnectivityRuleVector, ConnectivityRuleVectorElement,
 };
-use neural_basis::connectivity_rule::dimensional_dimensional::{ConnectivityGeneratorDimDim, ConnectivityRuleDimDim};
+use neural_basis::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel};
 use neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use neural_basis::neuron_model::neuron_layout::NeuronLayout;
 use neural_basis::quantization_levels::feagi_index_quantization::{
@@ -161,7 +161,7 @@ fn one_rule_can_be_used_with_different_dimensions() {
 
 #[test]
 fn generic_code_can_reach_the_generator() {
-    fn pair_count<F: FeagiIndexQuantization, R: ConnectivityRuleDimDim<F>>(
+    fn pair_count<F: FeagiIndexQuantization, R: ConnectivityRuleVoxelToVoxel<F>>(
         rule: &R,
         source_dims: DimensionalCorticalAreaDimensions<F::NeuronIndexQuant>,
         destination_dims: DimensionalCorticalAreaDimensions<F::NeuronIndexQuant>,

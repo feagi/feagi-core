@@ -1,7 +1,7 @@
-use neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
-use neural_basis::neuron_model::neuron_model::NeuronModel;
-use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::parallel_burst_engines::cortical_cpu_parallel_dynamics::CorticalCPUParallelDynamics;
+use neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
+use neural_basis::neuron_model::NeuronModel;
+use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Something that wants a cortical area spec with its concrete neuron model, along with the CPU
 /// dynamics of that model

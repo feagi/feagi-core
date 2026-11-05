@@ -3,9 +3,8 @@ use feagi_basis::collections::spatial_helpers::axis_order::AxisOrderDecrementing
 use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHelper;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutType};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -50,10 +49,11 @@ for NeuronLayoutVoxel<FIQ> {
     }
 }
 
-/// Neuron Layout Type of Voxel
-pub struct NeuronLayoutTypeVoxel;
 
-impl NeuronLayoutType for NeuronLayoutTypeVoxel {
+/// Neuron Layout Type of Voxel
+pub struct NeuronLayoutTagVoxel;
+
+impl NeuronLayoutTag for NeuronLayoutTagVoxel {
     type Layout<FIQ: FeagiIndexQuantization> = NeuronLayoutVoxel<FIQ>;
 }
 

@@ -1,9 +1,10 @@
-use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::neuron_model::neuron_model::{CorticalDataVarianceSpecification, NeuronLayoutOf, NeuronModel};
+use crate::neuron_model::specifications::CorticalDataVarianceSpecification;
+use crate::neuron_model::{NeuronLayoutOf, NeuronModel};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
 /// Decides the data a neuron starts with, from where it is in its cortical area
 pub trait NeuronInitializer<NM: NeuronModel>: Clone + core::fmt::Debug + PartialEq + Send {

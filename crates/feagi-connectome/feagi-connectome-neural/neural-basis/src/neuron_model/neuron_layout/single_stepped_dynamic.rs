@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutType};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-
-
+/// General linear layout that can grow
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NeuronLayoutSingleSteppedDynamic<FIQ: FeagiIndexQuantization> {
     neuron_count: CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>
@@ -38,9 +37,9 @@ for NeuronLayoutSingleSteppedDynamic<FIQ> {
 
 
 /// Neuron Layout Type of SingleSteppedDynamic
-pub struct NeuronLayoutTypeSingleSteppedDynamic;
+pub struct NeuronLayoutTagSingleSteppedDynamic;
 
-impl NeuronLayoutType for NeuronLayoutTypeSingleSteppedDynamic {
+impl NeuronLayoutTag for NeuronLayoutTagSingleSteppedDynamic {
     type Layout<FIQ: FeagiIndexQuantization> = NeuronLayoutSingleSteppedDynamic<FIQ>;
 }
 

@@ -6,15 +6,15 @@ use crate::connectivity_rule::{AxonBundleSynapseLocalCount, AxonBundleSynapseLoc
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-
-pub trait ConnectivityRuleDimDim<FIQ: FeagiIndexQuantization>:
+/// Connectivity rule that connects a voxel layout area to a voxel layout area
+pub trait ConnectivityRuleVoxelToVoxel<FIQ: FeagiIndexQuantization>:
 ConnectivityRule<
     FIQ,
     MappingInputLayout=NeuronLayoutVoxel<FIQ>,
     MappingOutputLayout=NeuronLayoutVoxel<FIQ>
 >
 {
-    type Generator<'a>: ConnectivityGeneratorDimDim<FIQ> where Self: 'a;
+    type Generator<'a>: ConnectivityGeneratorVoxelToVoxel<FIQ> where Self: 'a;
 
     type ValidationError: core::error::Error;
 
@@ -28,7 +28,8 @@ ConnectivityRule<
     ) -> Result<Self::Generator<'_>, Self::ValidationError>;
 }
 
-pub trait ConnectivityGeneratorDimDim<FIQ: FeagiIndexQuantization> {
+/// Connectivity generator that connects a voxel layout area to a voxel layout area
+pub trait ConnectivityGeneratorVoxelToVoxel<FIQ: FeagiIndexQuantization> {
     fn source_dims(&self) -> &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
 
     fn destination_dims(&self) -> &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;

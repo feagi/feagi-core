@@ -1,4 +1,4 @@
-use crate::connectivity_rule::dimensional_dimensional::{ConnectivityGeneratorDimDim, ConnectivityRuleDimDim, LocalNeuronIndexPair};
+use crate::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
 use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::neuron_model::neuron_layout::NeuronLayout;
@@ -11,7 +11,8 @@ use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
 //region Rule
 
-
+/// Connectivity Rule (Voxel to Voxel) that contains a list of voxel coordinate pairs where the
+/// given source voxel connects to the destination voxel. All neurons in each voxel are connected.
 pub struct ConnectivityRuleVector<FIQ: FeagiIndexQuantization> {
     elements: Vec<ConnectivityRuleVectorElement<FIQ>>,
 }
@@ -37,7 +38,7 @@ impl<FIQ: FeagiIndexQuantization> ConnectivityRule<FIQ>
     type MappingOutputLayout = NeuronLayoutVoxel<FIQ>;
 }
 
-impl<FIQ: FeagiIndexQuantization> ConnectivityRuleDimDim<FIQ> for ConnectivityRuleVector<FIQ> {
+impl<FIQ: FeagiIndexQuantization> ConnectivityRuleVoxelToVoxel<FIQ> for ConnectivityRuleVector<FIQ> {
     type Generator<'a> = ConnectivityGeneratorVector<'a, FIQ>;
 
     type ValidationError = ConnectivityGeneratorError;
@@ -71,10 +72,10 @@ impl<FIQ: FeagiIndexQuantization> ConnectivityRuleDimDim<FIQ> for ConnectivityRu
 
 //endregion
 
-
 //region Generator
 
-
+/// Connectivity Generator (Voxel to Voxel) that contains a list of voxel coordinate pairs where the
+/// given source voxel connects to the destination voxel. All neurons in each voxel are connected.
 pub struct ConnectivityGeneratorVector<'a, FIQ: FeagiIndexQuantization> {
     source_dims: DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
     destination_dims: DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
@@ -83,7 +84,7 @@ pub struct ConnectivityGeneratorVector<'a, FIQ: FeagiIndexQuantization> {
     number_skipped: usize,
 }
 
-impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorDimDim<FIQ> for ConnectivityGeneratorVector<'a, FIQ> {
+impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorVoxelToVoxel<FIQ> for ConnectivityGeneratorVector<'a, FIQ> {
 
     fn source_dims(&self) -> &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant> {
         &self.source_dims
@@ -129,6 +130,7 @@ impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorDimDim<FIQ> for Conne
 
 //endregion
 
+//region Element
 pub struct ConnectivityRuleVectorElement<FIQ: FeagiIndexQuantization> {
     pub source: CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
     pub destination: CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
@@ -145,6 +147,20 @@ impl<FIQ: FeagiIndexQuantization> ConnectivityRuleVectorElement<FIQ> {
         voxel_fits_within::<FIQ>(&self.source, source_dims)
             && voxel_fits_within::<FIQ>(&self.destination, destination_dims)
     }
+}
+
+//endregion
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectivityRuleError {
+    #[error("Duplicate Mappings detected")]
+    DuplicateMappings
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectivityGeneratorError {
+    #[error("Number of synapses to generate exceeds the synapse index quantization")]
+    TooManySynapses,
 }
 
 fn voxel_fits_within<FIQ: FeagiIndexQuantization>(
@@ -170,14 +186,4 @@ fn neuron_coordinates<FIQ: FeagiIndexQuantization>(
     ])
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum ConnectivityRuleError {
-    #[error("Duplicate Mappings detected")]
-    DuplicateMappings
-}
 
-#[derive(Debug, thiserror::Error)]
-pub enum ConnectivityGeneratorError {
-    #[error("Number of synapses to generate exceeds the synapse index quantization")]
-    TooManySynapses,
-}

@@ -1,10 +1,11 @@
 use feagi_connectome::neuron_models::neuron_model;
-use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64};
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::NeuronModelFeagiAdvancedDefaultQuant;
+use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64};
 use feagi_connectome::neuron_models::neuron_model::{
-    FoundationPowerQuantEnum, FoundationPowerQuantKind, NeuronModel, NeuronModelContainer, NeuronModelEnum, NeuronModelKind,
+    FoundationPowerQuantEnum, FoundationPowerQuantKind, NeuronModelContainer, NeuronModelEnum, NeuronModelKind,
     NeuronModelMember, NeuronModelSelectionError,
 };
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 /// A container holding the name of the member it is held for
 struct Named;

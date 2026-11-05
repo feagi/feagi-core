@@ -6,7 +6,7 @@ use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFeag
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTypeVoxel, NeuronLayoutVoxel};
+use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use feagi_connectome::cortical_area::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
@@ -24,7 +24,7 @@ use feagi_connectome::neuron_models::neuron_model::feagi_simple::{
 pub struct Led;
 
 impl CorticalAreaType for Led {
-    type NeuronLayout = NeuronLayoutTypeVoxel;
+    type NeuronLayout = NeuronLayoutTagVoxel;
     type Inner = [u8; 6];
 }
 

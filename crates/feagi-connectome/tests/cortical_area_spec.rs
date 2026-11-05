@@ -1,5 +1,5 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTypeVoxel, NeuronLayoutVoxel};
+use feagi_connectome::cortical_area::neuron_layout::voxel::NeuronLayoutVoxel;
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use feagi_connectome::cortical_area::{CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
@@ -12,10 +12,8 @@ use feagi_connectome::neuron_models::neuron_model::foundation_power::{
     NeuronModelFoundationPowerFloat32,
 };
 use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_model::{
-    CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification,
-    NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronLayoutOf, NeuronModel, NeuronModelTag,
-};
+use feagi_connectome_neural::neural_basis::neuron_model::specifications::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
+use feagi_connectome_neural::neural_basis::neuron_model::{NeuronLayoutOf, NeuronModel, NeuronModelTag};
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 

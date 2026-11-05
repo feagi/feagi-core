@@ -113,7 +113,7 @@ fn universal<NM: feagi_connectome::cortical_area::NeuronModel>() -> NeuronModelU
 }
 
 fn container<CT: CorticalAreaTypeMember>(
-    layout_context: <<CT::NeuronLayout as feagi_genome::cortical_area::NeuronLayoutType>::Layout<Fiq> as feagi_connectome::cortical_area::neuron_layout::NeuronLayout<Fiq>>::CorticalLevelContext,
+    layout_context: <<CT::NeuronLayout as feagi_genome::cortical_area::NeuronLayoutTag>::Layout<Fiq> as feagi_connectome::cortical_area::neuron_layout::NeuronLayout<Fiq>>::CorticalLevelContext,
     neuron_model_data: CT::Models<feagi_genome::genome::containers::cortical_area::NeuronModelDataDesignerContainer<Fiq>>,
 ) -> CorticalAreaContainerDesigner<Fiq, CT> {
     CorticalAreaContainerDesigner {
