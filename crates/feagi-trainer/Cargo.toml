@@ -47,7 +47,7 @@ flate2 = "1"
 
 # Remote/ZMQ runtime path (optional; behind `remote-runtime`). The open crate stays a pure
 # ZMQ/`feagi-agent` client — no Composer/REST coupling (ADR-006).
-feagi-agent = { workspace = true, default-features = false, features = [
+feagi-agent = { workspace = true, features = [
     "platform-std",
     "agent-client",
     "agent-transport-zmq",
