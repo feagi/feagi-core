@@ -1,5 +1,8 @@
 //! A worker running a single burst engine at a target frequency
 
+use core::marker::PhantomData;
+use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
+use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
@@ -8,13 +11,10 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
-use std::time::Instant;
-use feagi_connectome_neural::neural_basis::engine::burst_engine::BurstEngine;
+use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use core::marker::PhantomData;
-use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
-use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use feagi_connectome_neural::neural_basis::visualization::BurstVisualizationData;
+use std::time::Instant;
 
 /// How many commands can be in queue on this worker at one time
 const COMMAND_QUEUE_LENGTH: usize = 8;
@@ -134,7 +134,8 @@ where
         let Self { initial_target_frequency, initial_visualization_frequency, engine_init_parameters } = self;
 
         let handle = spawner.spawn_worker(move || async move {
-            let engine = match Engine::init_burst_engine(engine_init_parameters, visualization_transmitter).await {
+            // Index will always be zero
+            let engine = match Engine::init_burst_engine(engine_init_parameters, BurstEngineIndex(0), visualization_transmitter).await {
                 Ok(engine) => {
                     // The builder only stops waiting by receiving, so this cannot fail
                     let _ = init_result_sender.send(Ok(()));

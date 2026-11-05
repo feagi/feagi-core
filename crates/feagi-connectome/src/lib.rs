@@ -5,10 +5,6 @@ pub mod neural_processors;
 
 pub use feagi_connectome_neural::neural_basis::quantization_levels;
 
-/// Burst engines running on the CPU
-#[cfg(feature = "burst-engine-cpu")]
-pub use feagi_connectome_neural::burst_engine_cpu;
-
 pub use feagi_connectome_neural::neural_basis::visualization;
 
 pub mod cortical_area {
@@ -16,11 +12,10 @@ pub mod cortical_area {
     pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout;
     pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutTag;
     pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-    pub use feagi_connectome_neural::neural_basis::neuron_model::cortical_indexing::CorticalAreaEngineIndex;
+    pub use feagi_connectome_neural::neural_basis::neuron_model::CorticalAreaEngineIndex;
     pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::{
         CorticalAreaSpec, CorticalAreaSpecError, NeuronInit, NeuronInitializer, NoCustomNeuronInit,
     };
-    pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
 }
 
 /// Macros for defining families of models, and families of cortical area types using them

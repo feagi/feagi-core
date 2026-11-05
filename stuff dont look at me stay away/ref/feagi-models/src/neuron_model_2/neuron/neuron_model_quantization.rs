@@ -2,7 +2,7 @@ use crate::neuron_model::neuron::neuron_model_quantization_level::NeuronModelQua
 use crate::neuron_model::neuron_model_implementations::generated_enums::{
     NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
 };
-use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::MembranePotentialQuantization;
 use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
