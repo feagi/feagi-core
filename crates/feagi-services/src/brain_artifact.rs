@@ -203,6 +203,15 @@ pub fn validate_and_migrate_brain_artifact(
 
     match snapshot.genome_json.clone() {
         Some(genome_json) => {
+            // The manifest digest covers the embedded genome exactly as stored at export,
+            // so it is verified before migration or normalization can rewrite any value.
+            if let Some(expected_digest) = previous_manifest
+                .as_ref()
+                .and_then(|manifest| manifest.genome_sha256.as_deref())
+            {
+                verify_stored_genome_digest(&genome_json, expected_digest)?;
+            }
+
             let (migrated_genome, chain_report) =
                 feagi_evolutionary::migrate_genome_json_to_current(&genome_json).map_err(
                     |error| {
@@ -264,18 +273,6 @@ pub fn validate_and_migrate_brain_artifact(
 
             let canonical_genome = canonical_json_string(&migrated_genome)?;
             genome_sha256 = Some(sha256_hex(canonical_genome.as_bytes()));
-            if chain_report.from_version == chain_report.to_version {
-                if let Some(expected_digest) = previous_manifest
-                    .as_ref()
-                    .and_then(|manifest| manifest.genome_sha256.as_deref())
-                {
-                    if genome_sha256.as_deref() != Some(expected_digest) {
-                        return Err(ConnectomeError::BrainArtifact(
-                            "embedded genome digest does not match manifest".to_string(),
-                        ));
-                    }
-                }
-            }
             snapshot.genome_json = Some(canonical_genome);
             snapshot.validate().map_err(|error| {
                 ConnectomeError::BrainArtifact(format!(
@@ -334,6 +331,23 @@ pub fn validate_and_migrate_brain_artifact(
         },
         manifest,
     })
+}
+
+/// Check the stored embedded genome against the manifest digest.
+///
+/// Export stores the canonical JSON of the genome and the sha256 of exactly those bytes, so
+/// the stored genome is canonicalized the same way and hashed before any migration runs.
+fn verify_stored_genome_digest(stored_genome_json: &str, expected_digest: &str) -> Result<()> {
+    let stored_genome: Value = serde_json::from_str(stored_genome_json).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!("embedded genome is not valid JSON: {error}"))
+    })?;
+    let canonical_stored = canonical_json_string(&stored_genome)?;
+    if sha256_hex(canonical_stored.as_bytes()) != expected_digest {
+        return Err(ConnectomeError::BrainArtifact(
+            "embedded genome digest does not match manifest".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn read_manifest(snapshot: &ConnectomeSnapshot) -> Result<Option<BrainArtifactManifest>> {
@@ -650,6 +664,96 @@ mod tests {
             .expect("manifest reads")
             .expect("manifest present");
         assert!(!saved_manifest.blocking_errors.is_empty());
+    }
+
+    /// A current-version (v7) genome holding a legacy-percent leak that `V7Normalizer` repairs.
+    fn v7_genome_with_repairable_leak() -> Value {
+        let mut genome: Value = serde_json::from_str(&both_membership_keys_genome())
+            .expect("fixture genome is valid JSON");
+        genome["genome_schema_version"] = json!(7);
+        genome["brain_regions"]["root"] = json!({
+            "title": "Root",
+            "cortical_areas": ["_power", "_death"]
+        });
+        genome["blueprint"]["_power"]["leak_coefficient"] = json!(50);
+        genome
+    }
+
+    /// Build a lite artifact whose manifest digest covers `stored_genome` (canonical) as-is.
+    fn artifact_with_digest_over(stored_genome: &Value, digest_genome: &Value) -> Vec<u8> {
+        let mut source = snapshot(
+            ConnectomePersistMode::Lite,
+            Some(canonical_json_string(stored_genome).expect("canonicalize stored genome")),
+        );
+        let digest_over = canonical_json_string(digest_genome).expect("canonicalize digest genome");
+        write_manifest(
+            &mut source,
+            &BrainArtifactManifest {
+                contract_version: CURRENT_CONTRACT_VERSION,
+                container_format_version: CURRENT_CONTAINER_VERSION,
+                connectome_schema_version: CURRENT_CONNECTOME_SCHEMA_VERSION,
+                genome_schema_version: Some(7),
+                genome_sha256: Some(sha256_hex(digest_over.as_bytes())),
+                producer_version: "0.0.1".to_string(),
+                migration_steps: Vec::new(),
+                blocking_errors: Vec::new(),
+            },
+        )
+        .expect("write manifest");
+        save_connectome_to_bytes(&source).expect("save artifact with a prebuilt manifest")
+    }
+
+    #[test]
+    fn stored_genome_repaired_by_v7_normalizer_still_imports() {
+        // Digest over the un-normalized stored genome, as written before V7Normalizer existed.
+        let stored = v7_genome_with_repairable_leak();
+        let bytes = artifact_with_digest_over(&stored, &stored);
+
+        let result = validate_and_migrate_brain_artifact(&bytes)
+            .expect("digest of the stored genome must verify before normalization");
+
+        assert_eq!(result.report.source_genome_schema_version, Some(7));
+        assert_eq!(result.report.target_genome_schema_version, Some(7));
+        let migrated_snapshot =
+            load_connectome_from_bytes(&result.artifact_bytes).expect("decode migrated artifact");
+        let migrated_genome: Value = serde_json::from_str(
+            migrated_snapshot
+                .genome_json
+                .as_deref()
+                .expect("migrated genome"),
+        )
+        .expect("parse migrated genome");
+        assert_eq!(
+            migrated_genome["blueprint"]["_power"]["leak_coefficient"],
+            json!(0.5)
+        );
+        // The rewritten manifest digests the normalized genome, so it re-imports cleanly.
+        let migrated_digest = sha256_hex(
+            canonical_json_string(&migrated_genome)
+                .expect("canonicalize migrated genome")
+                .as_bytes(),
+        );
+        assert_eq!(
+            result.manifest.genome_sha256.as_deref(),
+            Some(migrated_digest.as_str())
+        );
+        validate_and_migrate_brain_artifact(&result.artifact_bytes)
+            .expect("normalized artifact re-imports");
+    }
+
+    #[test]
+    fn tampered_stored_genome_is_rejected_by_digest() {
+        let stored = v7_genome_with_repairable_leak();
+        let mut tampered = stored.clone();
+        tampered["genome_title"] = json!("tampered after the digest was written");
+        let bytes = artifact_with_digest_over(&tampered, &stored);
+
+        let error = validate_and_migrate_brain_artifact(&bytes)
+            .expect_err("a genome that differs from the manifest digest must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("embedded genome digest does not match manifest"));
     }
 
     #[test]
