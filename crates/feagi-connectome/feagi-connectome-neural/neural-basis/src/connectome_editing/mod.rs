@@ -1,23 +1,19 @@
-use crate::engine::BurstEngineIndex;
 use crate::neuron_model::CorticalAreaEngineIndex;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::visualization::NeuronVisualizationWordIndex;
 
-
-
-
 macro_rules! _impl_connectome_edit_step_requirements {
     {$StepSpecificName:ident} => {
-        paste::paste!(
+        paste::paste! {
 
-            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepType<FIQ, CVDW>
-            for [<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW> {
+
+
+            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepType<FIQ, CVDW> for [<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW> {
                 type ConnectomeEditResultant = [<ConnectomeEditResultant $StepSpecificName>]<FIQ>;
-                type ConnectomeEditError = [<ConnectomeEditError $StepSpecificName>]<FIQ>;
+                type ConnectomeEditError = [<ConnectomeEditError $StepSpecificName>];
             }
 
-            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> From<[<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>>
-            for ConnectomeEditStepEnum<FIQ, CVDW> {
+            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> From<[<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>> for ConnectomeEditStepEnum<FIQ, CVDW> {
                 fn from(value: [<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>) -> Self {
                     ConnectomeEditStepEnum::$StepSpecificName(value)
                 }
@@ -30,15 +26,46 @@ macro_rules! _impl_connectome_edit_step_requirements {
                 }
             }
 
-            impl<FIQ: FeagiIndexQuantization> From<[<ConnectomeEditError $StepSpecificName>]<FIQ>> for ConnectomeEditResultantEnum<FIQ>
+            impl<FIQ: FeagiIndexQuantization> From<[<ConnectomeEditError $StepSpecificName>]> for ConnectomeEditResultantEnum<FIQ>
             {
-                fn from(value: [<ConnectomeEditError $StepSpecificName>]<FIQ>) -> Self {
+                fn from(value: [<ConnectomeEditError $StepSpecificName>]) -> Self {
                     ConnectomeEditResultantEnum::$StepSpecificName(Err(value))
                 }
             }
 
-        )
+
+
+        }
     };
+}
+
+macro_rules! create_step_and_result_enums {
+    {
+        $($StepSpecificName:ident, )+
+    } => {
+
+        paste::paste! {
+
+            pub enum ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
+                /// Used by GenomeEditStep to skip over edits that dont affect the connectome
+                Nothing,
+                $($StepSpecificName([<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>),)+
+            }
+
+
+            pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
+                /// Used by GenomeEditStep to skip over edits that dont affect the connectome
+                Nothing,
+                $($StepSpecificName(Result<[<ConnectomeEditResultant $StepSpecificName>]<FIQ>, [<ConnectomeEditError $StepSpecificName>]>),)+
+            }
+
+
+
+            $( _impl_connectome_edit_step_requirements!($StepSpecificName); )+
+
+        }
+
+    }
 }
 
 pub trait ConnectomeVisitorDispatchWrapper<FIQ: FeagiIndexQuantization> {
@@ -61,38 +88,13 @@ pub trait ConnectomeEditError: core::error::Error{
 }
 
 
-pub enum ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
-    /// Used by GenomeEditStep to skip over edits that dont affect the connectome
-    Nothing,
-    CorticalAreaAdd(ConnectomeEditStepCorticalAreaAdd<FIQ, CVDW>)
+/// Generate `ConnectomeEditStepEnum` and `ConnectomeEditResultantEnum`
+create_step_and_result_enums!{
+    CorticalAreaAdd,
 }
-
-
-pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
-    /// Used by GenomeEditStep to skip over edits that dont affect the connectome
-    Nothing,
-    CorticalAreaAdd(Result<ConnectomeEditResultantCorticalAreaAdd<FIQ>, ConnectomeEditErrorCorticalAreaAdd>),
-}
-
-/*
-#[derive(Debug, thiserror::Error)]
-pub enum ConnectomeEditError {
-    #[error("Invalid Burst Engine Index {0}!")]
-    UnknownBurstEngineIndex(BurstEngineIndex),
-    #[error("Invalid cortical area Index {0}!")]
-    UnknownCorticalAreaIndexSpecified(usize), // TODO arent usizes not allowed?
-    #[error("Connectome Editing had an unknown failure. Connectome Corruption assumed")]
-    UnknownFailure
-}
- */
-
 
 
 //region Cortical Areas
-
-
-
-_impl_connectome_edit_step_requirements!(CorticalAreaAdd);
 
 pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
     pub cortical_area_spec_dispatch: CVDW::CorticalAreaSpecDispatch,
@@ -124,3 +126,14 @@ impl ConnectomeEditError for ConnectomeEditErrorCorticalAreaAdd {
 //endregion
 
 
+/*
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectomeEditError {
+    #[error("Invalid Burst Engine Index {0}!")]
+    UnknownBurstEngineIndex(BurstEngineIndex),
+    #[error("Invalid cortical area Index {0}!")]
+    UnknownCorticalAreaIndexSpecified(usize), // TODO arent usizes not allowed?
+    #[error("Connectome Editing had an unknown failure. Connectome Corruption assumed")]
+    UnknownFailure
+}
+ */
