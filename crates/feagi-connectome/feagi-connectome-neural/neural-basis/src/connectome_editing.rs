@@ -1,4 +1,4 @@
-use crate::neuron_model::CorticalAreaEngineIndex;
+use crate::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::NeuronVisualizationWordIndex;
 

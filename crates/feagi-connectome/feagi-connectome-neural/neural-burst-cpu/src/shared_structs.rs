@@ -3,8 +3,8 @@ use feagi_basis::collections::quant_indexed::quant_indexed::QuantIndexedVector;
 use feagi_basis::feagi_basis_proc_common::bit_struct_builder;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_basis::prelude::*;
-
-use neural_basis::neuron_model::{CorticalAreaEngineIndex, NeuronEngineIndex, NeuronModel, NeuronModelCorticalQuantIndex, NeuronModelNeuronQuantIndex};
+use neural_basis::neuron_model::NeuronModel;
+use neural_basis::neuron_model::wrapped_indexing::{CorticalAreaEngineIndex, NeuronEngineIndex, NeuronModelCorticalQuantIndex, NeuronModelNeuronQuantIndex};
 use neural_basis::quantization_levels::FeagiIndexQuantization;
 
 //region Parallel Structs
