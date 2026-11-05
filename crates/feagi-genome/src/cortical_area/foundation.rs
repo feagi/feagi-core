@@ -1,6 +1,6 @@
 //! Cortical areas fundamental to the running of the brain
 
-use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFoundationDeath, UsesFoundationPower};
+use super::{CorticalAreaInit, CorticalAreaType, FeagiIndexQuantization, UsesFoundationDeath, UsesFoundationPower};
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
 use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
@@ -26,8 +26,8 @@ impl CorticalAreaType for Power {
 }
 
 impl UsesFoundationPower for Power {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -57,8 +57,8 @@ impl CorticalAreaType for Death {
 }
 
 impl UsesFoundationDeath for Death {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,

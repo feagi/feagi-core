@@ -2,7 +2,7 @@
 //!
 //! TODO the default values here are placeholders, chosen only to be valid at every quantization
 
-use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFeagiAdvanced, UsesFeagiSimple};
+use super::{CorticalAreaInit, CorticalAreaType, FeagiIndexQuantization, UsesFeagiAdvanced, UsesFeagiSimple};
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
@@ -29,8 +29,8 @@ impl CorticalAreaType for Led {
 }
 
 impl UsesFeagiAdvanced for Led {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -65,8 +65,8 @@ impl UsesFeagiAdvanced for Led {
 }
 
 impl UsesFeagiSimple for Led {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,

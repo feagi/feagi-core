@@ -181,11 +181,11 @@ fn serde_round_trip() {
 
 /// How many neurons a new area of this type and member starts with
 fn default_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>() -> usize {
-    <T as CorticalAreaTypeMemberAt<M>>::default_spec::<Fiq>().unwrap().iter().len()
+    <T as CorticalAreaTypeMemberAt<M>>::default_init::<Fiq>().unwrap().iter().len()
 }
 
 #[test]
-fn every_cortical_type_and_model_has_a_default_spec() {
+fn every_cortical_type_and_model_has_a_default_init() {
     assert_eq!(default_neuron_count::<Power, NeuronModelFoundationPowerFloat16>(), 1);
     assert_eq!(default_neuron_count::<Power, NeuronModelFoundationPowerFloat64>(), 1);
     assert_eq!(default_neuron_count::<Death, NeuronModelFoundationDeathFloat64>(), 1);
@@ -202,9 +202,9 @@ fn every_cortical_type_and_model_has_a_default_spec() {
 }
 
 #[test]
-fn genomic_data_holds_the_spec_of_a_cortical_type() {
-    let spec = <Interconnect as CorticalAreaTypeMemberAt<Simple>>::default_spec::<Fiq>().unwrap();
-    let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(spec);
+fn genomic_data_holds_the_init_of_a_cortical_type() {
+    let init = <Interconnect as CorticalAreaTypeMemberAt<Simple>>::default_init::<Fiq>().unwrap();
+    let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(init);
     assert_eq!(data.kind(), Interconnect::KIND);
     assert_eq!(data.neuron_model_kind(), Simple::KIND);
     assert!(data.try_as::<Interconnect, Simple>().is_ok());

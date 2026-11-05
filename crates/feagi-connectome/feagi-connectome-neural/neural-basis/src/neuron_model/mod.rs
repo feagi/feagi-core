@@ -1,4 +1,4 @@
-use crate::neuron_model::interfacing::cortical_area_spec::NeuronInitializer;
+use crate::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
 use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use model_data::{

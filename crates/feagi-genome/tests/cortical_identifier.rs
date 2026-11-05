@@ -111,7 +111,7 @@ fn json_round_trips_and_rejects_invalid_bytes() {
 mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
     use feagi_connectome::cortical_area::neuron_layout::voxel::NeuronLayoutTagVoxel;
-    use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronLayoutTag};
+    use feagi_connectome::cortical_area::{CorticalAreaInit, NeuronLayoutTag};
     use feagi_connectome::family_macros::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::neuron_models::neuron_model;
     use feagi_connectome::neuron_models::neuron_model::feagi_simple::NeuronModelFeagiSimple;
@@ -161,7 +161,7 @@ mod custom_inner {
         }
 
         impl UsesFeagiSimple for Thing {
-            fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
+            fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
                 unimplemented!()
             }
         }

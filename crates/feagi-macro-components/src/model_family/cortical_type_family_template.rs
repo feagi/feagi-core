@@ -48,7 +48,7 @@ mod kw {
 /// `NeuronLayout`, and a public module per super type named its snake case, holding a unit struct per
 /// cortical type named as in the template, such as `foundation::Power`, implementing the base trait.
 /// The module of the model family must also be in scope where this is expanded, as must
-/// `CorticalAreaSpec` and `FeagiIndexQuantization`. Every map keeps its template order
+/// `CorticalAreaInit` and `FeagiIndexQuantization`. Every map keeps its template order
 pub struct CorticalTypeFamilyTemplate {
     pub family_attributes: Vec<Attribute>,
     pub family_name: Ident,
@@ -785,9 +785,9 @@ impl CorticalTypeFamilyTemplate {
             quote! {
                 #[doc = #doc]
                 pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #tag_trait>::LayoutTag> {
-                    /// The spec a new cortical area of this type starts from, at quantization `NM`.
+                    /// How a new cortical area of this type starts, at quantization `NM`.
                     /// Returns an error if a decimal default becomes infinite or NaN at `NM`
-                    fn default_spec<FIQ: FeagiIndexQuantization, NM: #model_trait>() -> ::core::result::Result<CorticalAreaSpec<FIQ, NM>, #quantization_error>;
+                    fn default_init<FIQ: FeagiIndexQuantization, NM: #model_trait>() -> ::core::result::Result<CorticalAreaInit<FIQ, NM>, #quantization_error>;
                 }
             }
         });
@@ -881,8 +881,8 @@ impl CorticalTypeFamilyTemplate {
                             }
                         }
 
-                        fn default_spec<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaSpec<FIQ, M>, #quantization_error> {
-                            <Self as #uses_trait>::default_spec::<FIQ, M>()
+                        fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error> {
+                            <Self as #uses_trait>::default_init::<FIQ, M>()
                         }
                     }
                 }
@@ -919,7 +919,7 @@ impl CorticalTypeFamilyTemplate {
 
                 fn try_mut_family_enum<C: #container>(value: &mut #enum_name<C>) -> ::core::result::Result<&mut C::Of<M>, #error>;
 
-                fn default_spec<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaSpec<FIQ, M>, #quantization_error>;
+                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error>;
             }
 
             #( #via_impls )*
@@ -938,9 +938,9 @@ impl CorticalTypeFamilyTemplate {
                 /// The data held, if held for this cortical type and member
                 fn try_mut_family_enum<C: #container>(value: &mut #enum_name<C>) -> ::core::result::Result<&mut C::Of<M>, #error>;
 
-                /// The spec a new cortical area of this type and member starts from. Returns an error
+                /// How a new cortical area of this type and member starts. Returns an error
                 /// if a decimal default becomes infinite or NaN at this member
-                fn default_spec<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaSpec<FIQ, M>, #quantization_error>;
+                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error>;
             }
 
             impl<T, M> #at_trait<M> for T
@@ -964,8 +964,8 @@ impl CorticalTypeFamilyTemplate {
                     <T as #via_trait<M, <M as #model_member>::Tag>>::try_mut_family_enum::<C>(value)
                 }
 
-                fn default_spec<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaSpec<FIQ, M>, #quantization_error> {
-                    <T as #via_trait<M, <M as #model_member>::Tag>>::default_spec::<FIQ>()
+                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error> {
+                    <T as #via_trait<M, <M as #model_member>::Tag>>::default_init::<FIQ>()
                 }
             }
 

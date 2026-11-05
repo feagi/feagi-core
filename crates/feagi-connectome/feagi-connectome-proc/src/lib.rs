@@ -247,7 +247,7 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 /// Must be public where this is expanded: the base trait `{Family}`, with associated type
 /// `NeuronLayout`, and a module per super type named its snake case, holding a unit struct per
 /// cortical type named as in the template, such as `foundation::Power`. Must be in scope where this
-/// is expanded: the module of the model family, `CorticalAreaSpec`, and `FeagiIndexQuantization`. The
+/// is expanded: the module of the model family, `CorticalAreaInit`, and `FeagiIndexQuantization`. The
 /// crate must depend on `feagi_basis`, which serde is reached through
 #[proc_macro]
 pub fn expand_cortical_type_family(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

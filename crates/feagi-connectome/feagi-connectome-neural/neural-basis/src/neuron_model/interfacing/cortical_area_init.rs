@@ -67,7 +67,7 @@ impl<NM: NeuronModel> NeuronInitializer<NM> for NeuronInit<NM> {
 
 /// Every piece of data needed to spawn a new cortical area, at the given model quantization
 #[derive(Debug, Clone, PartialEq)] // No need to serialize this, this is transient
-pub struct CorticalAreaSpec<FIQ, NM>
+pub struct CorticalAreaInit<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
@@ -87,7 +87,7 @@ where
     neurons: NeuronInit<NM>,
 }
 
-impl<FIQ, NM> CorticalAreaSpec<FIQ, NM>
+impl<FIQ, NM> CorticalAreaInit<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
@@ -102,12 +102,12 @@ where
         cortical_scratch: NM::CorticalDataScratch,
         cortical_variance: NM::CorticalDataVariance,
         neurons: NeuronInit<NM>,
-    ) -> Result<Self, CorticalAreaSpecError> {
+    ) -> Result<Self, CorticalAreaInitError> {
         #[cfg(feature = "alloc")]
         if let NeuronInit::Stored { internal, scratch } = &neurons {
             let neuron_count = neuron_layout.get_number_neurons_to_allocate_for().quant_to_usize();
             if internal.len() != neuron_count || scratch.len() != neuron_count {
-                return Err(CorticalAreaSpecError::StoredNeuronCountMismatch);
+                return Err(CorticalAreaInitError::StoredNeuronCountMismatch);
             }
         }
         Ok(Self {
@@ -209,7 +209,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum CorticalAreaSpecError {
+pub enum CorticalAreaInitError {
     #[error("Stored neuron data does not hold exactly one element per neuron of the layout!")]
     StoredNeuronCountMismatch,
 }

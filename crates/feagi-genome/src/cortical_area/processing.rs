@@ -2,7 +2,7 @@
 //!
 //! TODO the default values here are placeholders, chosen only to be valid at every quantization
 
-use super::{CorticalAreaSpec, CorticalAreaType, FeagiIndexQuantization, UsesFeagiAdvanced, UsesFeagiSimple, UsesMemoryFireHashing};
+use super::{CorticalAreaInit, CorticalAreaType, FeagiIndexQuantization, UsesFeagiAdvanced, UsesFeagiSimple, UsesMemoryFireHashing};
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
@@ -34,8 +34,8 @@ impl CorticalAreaType for Interconnect {
 }
 
 impl UsesFeagiAdvanced for Interconnect {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -70,8 +70,8 @@ impl UsesFeagiAdvanced for Interconnect {
 }
 
 impl UsesFeagiSimple for Interconnect {
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -111,8 +111,8 @@ impl CorticalAreaType for Memory {
 
 impl UsesMemoryFireHashing for Memory {
     /// Starts without any neurons, as memory grows dynamically
-    fn default_spec<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing>() -> Result<CorticalAreaSpec<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaSpec::new_uniform(
+    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+        Ok(CorticalAreaInit::new_uniform(
             NeuronLayoutSingleSteppedDynamic::new(CorticalAreaNeuronCount::QUANT_ZERO),
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
