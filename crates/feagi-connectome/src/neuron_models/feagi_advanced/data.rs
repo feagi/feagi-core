@@ -6,13 +6,14 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLa
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuronLayoutOf, NeuronModel, NeuronModelTag};
 use feagi_connectome_neural::neural_basis::quantization_levels::MembranePotentialQuantization;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 
 define_cortical_dynamics_quantization_template! {
     /// Quantization For the Feagi Advanced type
     FeagiAdvanced
 
-    NeuronLayout: NeuronLayoutTypeVoxel
+    NeuronLayout: NeuronLayoutTagVoxel
 
     Quantizables: {
         /// For handling timing

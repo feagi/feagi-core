@@ -16,10 +16,10 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///     /// Quantization for the Feagi Advanced model
 ///     FeagiAdvanced
 ///
-///     // Optional, the NeuronLayoutType the model is restricted to. Either a single layout type as
-///     // here, or a bounded generic, such as `NeuronLayout: NL: NeuronLayoutType`. Defaults to any,
-///     // `NL: NeuronLayoutType`
-///     NeuronLayout: NeuronLayoutTypeVoxel
+///     // Optional, the NeuronLayoutTag the model is restricted to. Either a single layout type as
+///     // here, or a bounded generic, such as `NeuronLayout: NL: NeuronLayoutTag`. Defaults to any,
+///     // `NL: NeuronLayoutTag`
+///     NeuronLayout: NeuronLayoutTagVoxel
 ///
 ///     // Optional, a way of initializing neurons specific to this model. Defaults to
 ///     // `NoCustomNeuronInit`
@@ -65,7 +65,7 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 /// Expands a cortical dynamics quantization template, as given by its template macro. Generates:
 /// - A wrapper struct per quantizable, through `feagi_basis`'s `create_wrapped_quantized_*!`
 /// - The model's `NeuronModel{Model}` trait, a sub trait of `NeuronModel` fixing (or, for a
-///   generic layout, restricting) its `LayoutType` and fixing each of its data types to the
+///   generic layout, restricting) its `LayoutTag` and fixing each of its data types to the
 ///   model's data struct of that type, holding an associated type per quantizable
 /// - One `NeuronModel{Model}{Level}` marker struct per quantization level, implementing
 ///   `NeuronModel` and the model trait. For a generic layout, it is generic over the layout,
@@ -86,7 +86,7 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 /// Must be in scope where this is expanded: `NeuronModel`, `NeuronLayoutOf`, `MembranePotentialQuantization`, the seven
 /// data specification traits (such as `CorticalDataPropertiesSpecification`), `FeagiIndexQuantization`,
 /// `NoCustomNeuronInit` (when `CustomNeuronInit` is left as default), any types the data
-/// fields name, any traits or types the `NeuronLayout` names (`NeuronLayoutType` when it is left as default), and `NeuronModelTag`
+/// fields name, any traits or types the `NeuronLayout` names (`NeuronLayoutTag` when it is left as default), and `NeuronModelTag`
 /// (when `NeuronLayout` is a single layout type, which generates the tag `NeuronModel{Model}Tag` of the model). The crate must
 /// depend on `serde` and `half`, which the wrapper structs use
 #[proc_macro]

@@ -784,7 +784,7 @@ impl CorticalTypeFamilyTemplate {
             let doc = format!("A cortical type of the `{family_name}` family allowing the `{model}` model");
             quote! {
                 #[doc = #doc]
-                pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #tag_trait>::LayoutType> {
+                pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #tag_trait>::LayoutTag> {
                     /// The spec a new cortical area of this type starts from, at quantization `NM`.
                     /// Returns an error if a decimal default becomes infinite or NaN at `NM`
                     fn default_spec<FIQ: FeagiIndexQuantization, NM: #model_trait>() -> ::core::result::Result<CorticalAreaSpec<FIQ, NM>, #quantization_error>;

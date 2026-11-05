@@ -57,7 +57,7 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 /// /// Optional model description
 /// ModelName
 ///
-/// NeuronLayout: NeuronLayoutTypeVoxel
+/// NeuronLayout: NeuronLayoutTagVoxel
 ///
 /// CustomNeuronInit: SomeInitializer<Self>
 ///
@@ -81,8 +81,8 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 ///     }
 /// }
 /// ```
-/// The optional `NeuronLayout` entry sets the `NeuronLayoutType` the model is implemented for (see
-/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutType`. The optional
+/// The optional `NeuronLayout` entry sets the `NeuronLayoutTag` the model is implemented for (see
+/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutTag`. The optional
 /// `CustomNeuronInit` entry sets `NeuronModel::CustomNeuronInit` of every level, defaulting to
 /// `NoCustomNeuronInit`. The optional `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
@@ -104,13 +104,13 @@ pub struct CorticalDynamicsQuantizationTemplate {
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
 }
 
-/// The `NeuronLayoutType` a model is implemented for, which decides the generics of its
+/// The `NeuronLayoutTag` a model is implemented for, which decides the generics of its
 /// quantization level structs `NeuronModel{Model}{Level}`
 pub enum ModelLayoutTemplate {
-    /// `NeuronLayout: NeuronLayoutTypeVoxel`, a single layout type, which the model trait
+    /// `NeuronLayout: NeuronLayoutTagVoxel`, a single layout type, which the model trait
     /// `NeuronModel{Model}` fixes. The level structs are `NeuronModel{Model}{Level}`
     Fixed(Type),
-    /// `NeuronLayout: NL: NeuronLayoutType`, any layout type within the bounds, which the model
+    /// `NeuronLayout: NL: NeuronLayoutTag`, any layout type within the bounds, which the model
     /// trait `NeuronModel{Model}` restricts to. The level structs are `NeuronModel{Model}{Level}<NL>`
     Generic {
         name: Ident,
@@ -119,11 +119,11 @@ pub enum ModelLayoutTemplate {
 }
 
 impl Default for ModelLayoutTemplate {
-    /// Any layout type, `NL: NeuronLayoutType`
+    /// Any layout type, `NL: NeuronLayoutTag`
     fn default() -> Self {
         Self::Generic {
             name: format_ident!("NL"),
-            bounds: syn::parse_quote!(NeuronLayoutType),
+            bounds: syn::parse_quote!(NeuronLayoutTag),
         }
     }
 }
@@ -349,13 +349,13 @@ impl CorticalDynamicsQuantizationTemplate {
         // is a generic of every level
         let (layout_restriction, level_generics, level_struct_body, layout_definition) = match &self.layout {
             ModelLayoutTemplate::Fixed(layout) => (
-                quote!(LayoutType = #layout),
+                quote!(LayoutTag = #layout),
                 quote!(),
                 quote!(;),
                 quote!(#layout),
             ),
             ModelLayoutTemplate::Generic { name, bounds } => (
-                quote!(LayoutType: #bounds),
+                quote!(LayoutTag: #bounds),
                 quote!(<#name: #bounds>),
                 quote!((::core::marker::PhantomData<#name>);),
                 quote!(#name),
@@ -392,7 +392,7 @@ impl CorticalDynamicsQuantizationTemplate {
                 }
 
                 impl #level_generics NeuronModel for #struct_name #level_generic_names {
-                    type LayoutType = #layout_definition;
+                    type LayoutTag = #layout_definition;
                     #( type #model_data_names = #model_data_structs<Self>; )*
                     type CustomNeuronInit = #custom_neuron_init;
                 }
@@ -484,7 +484,7 @@ impl CorticalDynamicsQuantizationTemplate {
                     pub struct #tag_name;
 
                     impl NeuronModelTag for #tag_name {
-                        type LayoutType = #layout;
+                        type LayoutTag = #layout;
                     }
                 }
             }

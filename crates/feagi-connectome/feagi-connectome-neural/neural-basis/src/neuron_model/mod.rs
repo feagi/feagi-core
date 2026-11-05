@@ -12,7 +12,7 @@ pub mod model_data;
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
 /// as the data its dynamics use
 pub trait NeuronModel: MembranePotentialQuantization {
-    // This trait is to be expanded on per model, which may restrict `LayoutType` on its sub trait
+    // This trait is to be expanded on per model, which may restrict `LayoutTag` on its sub trait
 
     /// How the neurons of this model are laid out, for any [`FeagiIndexQuantization`]
     type LayoutTag: NeuronLayoutTag;
