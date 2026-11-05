@@ -19,7 +19,7 @@ define_model_family_template! {
             Float32,
             Float64,
         }
-        
+
         /// Kills the brain
         FoundationDeath: {
             Float16,
@@ -37,12 +37,12 @@ define_model_family_template! {
         FeagiAdvanced: {
             DefaultQuant,
         }
-        
+
         /// Gains Memories by the hash of incoming fire patterns
         MemoryFireHashing: {
             DefaultQuant,
         }
-        
+
     }
 }
 
