@@ -4,7 +4,7 @@ use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHel
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::FeagiIndexQuantization;
 
 pub struct VisualizationData<FIQ: FeagiIndexQuantization> {
 

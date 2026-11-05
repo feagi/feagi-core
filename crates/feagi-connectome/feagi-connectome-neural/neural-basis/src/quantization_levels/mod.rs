@@ -1,2 +1,9 @@
-pub mod feagi_index_quantization;
-pub mod membrane_potential_quantization;
+
+
+pub use feagi_index_quantization::*;
+pub use membrane_potential_quantization::*;
+
+mod feagi_index_quantization;
+mod membrane_potential_quantization;
+
+

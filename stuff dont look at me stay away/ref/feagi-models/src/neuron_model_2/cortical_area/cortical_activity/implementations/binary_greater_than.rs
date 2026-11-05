@@ -1,6 +1,6 @@
 use crate::neuron_model::cortical_area::cortical_activity::cortical_activity::CorticalActivity;
 use core::marker::PhantomData;
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::FeagiIndexQuantization;
 use feagi_data::feagi_data_quantization::values::quantizable::{PercentageUnsigned, QuantizedDecimalTrait};
 
 /// Returns 100 Percent Cortical Activity if the number is below / above a threshold, and

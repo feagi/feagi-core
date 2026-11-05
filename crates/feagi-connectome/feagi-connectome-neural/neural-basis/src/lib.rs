@@ -6,8 +6,8 @@ pub mod quantization_levels;
 pub mod engine;
 pub mod connectivity_rule;
 pub mod synapse_model;
-
-#[cfg(feature = "std")]
-pub mod connectome_editing;
 pub mod visualization;
+
+#[cfg(feature = "std")] // TODO some edits are perfectly fine on no-alloc
+pub mod connectome_editing;
 

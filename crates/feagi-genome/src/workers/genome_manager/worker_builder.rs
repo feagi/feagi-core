@@ -4,7 +4,7 @@ use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 use crate::workers::genome_manager::requests::categories::prelude::*;
 use crate::workers::genome_manager::requests::category_structs::{GenomeManagerRequesters, GenomeManagerResponders};
 

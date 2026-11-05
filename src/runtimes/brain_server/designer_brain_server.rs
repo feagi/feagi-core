@@ -17,7 +17,7 @@ use feagi_connectome::neural_processors::singular::{
     NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
     NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
 };
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_connectome::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_genome::workers::genome_manager::requests::category_structs::{GenomeManagerConfigurables, GenomeManagerRequesters};
 use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;

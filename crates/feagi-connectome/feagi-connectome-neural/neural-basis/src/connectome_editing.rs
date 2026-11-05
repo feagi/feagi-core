@@ -1,5 +1,5 @@
 use crate::neuron_model::CorticalAreaEngineIndex;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::NeuronVisualizationWordIndex;
 
 macro_rules! _impl_connectome_edit_step_requirements {
@@ -92,6 +92,9 @@ pub trait ConnectomeEditError: core::error::Error{
 create_step_and_result_enums!{
     CorticalAreaAdd,
 }
+
+// TODO -> Edit genome-prop-inplace, Variance,  Delete, Resize
+
 
 
 //region Cortical Areas

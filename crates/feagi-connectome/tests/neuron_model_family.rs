@@ -84,7 +84,7 @@ fn dispatch_macros() {
 
 #[test]
 fn dispatch_macros_alias_model_module() {
-    use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+    use feagi_connectome::quantization_levels::FeagiIndexQuantizationStandard;
 
     let foundation_power = named::<NeuronModelFoundationPowerFloat32>();
     let dynamics = feagi_connectome::with_neuron_model!(&foundation_power, <NM, Model> |_data| {

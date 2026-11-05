@@ -1,4 +1,4 @@
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 use crate::genome::genome_editing::genome_edit_steps::brain_region::GenomeEditStepBrainRegionEnum;
 use crate::genome::genome_editing::GenomeEditSequence;
 

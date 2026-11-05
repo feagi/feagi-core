@@ -5,7 +5,7 @@ use crate::neuron_models::family::{neuron_model, NeuronModelContainer, NeuronMod
 use core::marker::PhantomData;
 use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_spec::CorticalAreaSpec;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
 /// Holds the [`CorticalAreaSpec`] of a cortical area
 pub struct CorticalAreaSpecContainer<FIQ>(PhantomData<fn() -> FIQ>);

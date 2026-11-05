@@ -5,7 +5,7 @@ use feagi_connectome::neuron_models::neuron_model::foundation_death::NeuronModel
 use feagi_connectome::neuron_models::neuron_model::foundation_power::{NeuronModelFoundationPowerFloat16, NeuronModelFoundationPowerFloat32, NeuronModelFoundationPowerFloat64};
 use feagi_connectome::neuron_models::neuron_model::memory_fire_hashing::NeuronModelMemoryFireHashingDefaultQuant;
 use feagi_connectome::neuron_models::neuron_model::{FoundationPowerQuantKind, NeuronModelContainer, NeuronModelKind, NeuronModelMember, NeuronModelSelectionError};
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_connectome::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::{
     with_neuron_model_feagi_advanced, with_neuron_model_feagi_simple, with_neuron_model_foundation_death, with_neuron_model_foundation_power,
     with_neuron_model_memory_fire_hashing,

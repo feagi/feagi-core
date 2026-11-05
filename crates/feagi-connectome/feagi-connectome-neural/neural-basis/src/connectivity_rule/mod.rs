@@ -1,9 +1,8 @@
-pub mod voxel_to_voxel;
-
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutTag};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 
+pub mod voxel_to_voxel;
 
 /// A genome storable rule for how a source area connects its neurons to a destination area.
 pub trait ConnectivityRule<FIQ: FeagiIndexQuantization> {
@@ -14,7 +13,7 @@ pub trait ConnectivityRule<FIQ: FeagiIndexQuantization> {
 
 /// Gives an iterator of a known total length an exact size, for adapters such as `filter` and
 /// `flat_map` that cannot work out their own. `remaining` must match what `inner` will yield.
-pub struct ExactCountIterator<I: Iterator> {
+struct ExactCountIterator<I: Iterator> {
     inner: I,
     remaining: usize,
 }

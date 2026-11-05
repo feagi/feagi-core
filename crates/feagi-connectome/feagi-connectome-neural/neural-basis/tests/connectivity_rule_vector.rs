@@ -9,7 +9,7 @@ use neural_basis::connectivity_rule::voxel_to_voxel::vector::{
 use neural_basis::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel};
 use neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use neural_basis::neuron_model::neuron_layout::NeuronLayout;
-use neural_basis::quantization_levels::feagi_index_quantization::{
+use neural_basis::quantization_levels::{
     FeagiIndexQuantization, FeagiIndexQuantizationLow, FeagiIndexQuantizationStandard,
 };
 

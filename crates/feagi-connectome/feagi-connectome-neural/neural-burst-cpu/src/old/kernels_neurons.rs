@@ -1,4 +1,4 @@
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::FeagiIndexQuantization;
 use feagi_models::neuron_model::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::neuron_model::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;

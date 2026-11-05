@@ -3,7 +3,7 @@ use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPoten
 use feagi_basis::prelude::*;
 use feagi_basis::BurstIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
-use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
 pub struct MemoryFireHashingBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing>(core::marker::PhantomData<(FIQ, NM)>);
 

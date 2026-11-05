@@ -1,4 +1,4 @@
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::FeagiIndexQuantization;
 use feagi_data::feagi_data_quantization::values::quantizable::{DecimalQuantizationLevel, QuantizationLevelPacking};
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::generated_enums::SynapseModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, SynapseEngineIndex};

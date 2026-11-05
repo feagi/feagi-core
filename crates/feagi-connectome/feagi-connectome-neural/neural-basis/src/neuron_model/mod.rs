@@ -1,14 +1,13 @@
-use core::fmt::Debug;
 use crate::neuron_model::interfacing::cortical_area_spec::NeuronInitializer;
-use crate::neuron_model::neuron_layout::{NeuronLayoutTag};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use crate::neuron_model::neuron_layout::NeuronLayoutTag;
+use crate::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use core::fmt::Debug;
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
-use specifications::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
+use model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 
 pub mod interfacing;
 pub mod neuron_layout;
-pub mod specifications;
+pub mod model_data;
 
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
 /// as the data its dynamics use
@@ -102,3 +101,5 @@ where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {}
+
+

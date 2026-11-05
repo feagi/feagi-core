@@ -3,7 +3,7 @@ use crate::neuron_model::cortical_area::cortical_data::NeuronModelCorticalData;
 use crate::neuron_model::neuron::neuron_data::NeuronModelNeuronData;
 use crate::neuron_model::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::neuron_model::neuron::neuron_properties::NeuronProperties;
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use feagi_data::feagi_data_neuron::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_model::NeuronModel;
 

@@ -1,10 +1,9 @@
-use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-pub mod vector;
-
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
-use crate::connectivity_rule::{AxonBundleSynapseLocalCount, AxonBundleSynapseLocalIndex, ConnectivityRule, SynapseCount};
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions};
+use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
+
+pub mod vector;
 
 /// Connectivity rule that connects a voxel layout area to a voxel layout area
 pub trait ConnectivityRuleVoxelToVoxel<FIQ: FeagiIndexQuantization>:

@@ -10,7 +10,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::target_frequency::TargetFrequency;
 use std::time::Instant;
 use feagi_connectome_neural::neural_basis::engine::burst_engine::BurstEngine;
-use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use core::marker::PhantomData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;

@@ -1,4 +1,4 @@
-use crate::neuron_model::interfacing::NeuronModelUniversalCorticalProperties;
+use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::NeuronModel;
 
 /// For editing the genome properties in place, the most common type of editing

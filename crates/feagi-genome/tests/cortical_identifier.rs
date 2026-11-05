@@ -115,7 +115,7 @@ mod custom_inner {
     use feagi_connectome::family_macros::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::neuron_models::neuron_model;
     use feagi_connectome::neuron_models::neuron_model::feagi_simple::NeuronModelFeagiSimple;
-    use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+    use feagi_connectome::quantization_levels::FeagiIndexQuantization;
     use feagi_genome::cortical_area::CorticalAreaInnerID;
 
     pub trait TestType {

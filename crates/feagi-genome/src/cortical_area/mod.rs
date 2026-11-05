@@ -8,7 +8,7 @@ use feagi_connectome::family_macros::{define_cortical_type_family_template, expa
 use feagi_connectome::family_macros::expand_cortical_area_map;
 use feagi_connectome::neuron_models::neuron_model;
 pub use feagi_connectome::cortical_area::{CorticalAreaSpec, NeuronLayoutTag};
-pub use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+pub use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::spec_dispatch::CorticalAreaSpecContainer;
 
 pub mod cortical_identifier_base64;

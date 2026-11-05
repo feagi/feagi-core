@@ -11,8 +11,8 @@ use feagi_connectome::neuron_models::neuron_model::foundation_power::{
     FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
     NeuronModelFoundationPowerFloat32,
 };
-use feagi_connectome::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_connectome_neural::neural_basis::neuron_model::specifications::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
+use feagi_connectome::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuronLayoutOf, NeuronModel, NeuronModelTag};
 use feagi_connectome_neural::neural_basis::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 
 /// General linear layout that can grow
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

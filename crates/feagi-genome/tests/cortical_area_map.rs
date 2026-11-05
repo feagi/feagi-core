@@ -5,7 +5,7 @@ use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{self, FeagiA
 use feagi_connectome::neuron_models::neuron_model::feagi_simple::{self, FeagiSimpleCorticalDataProperties, FeagiSimpleCorticalDataVariance, NeuronModelFeagiSimpleDefaultQuant};
 use feagi_connectome::neuron_models::neuron_model::memory_fire_hashing::{self, MemoryFireHashingCorticalDataProperties, MemoryFireHashingCorticalDataVariance, NeuronModelMemoryFireHashingDefaultQuant};
 use feagi_connectome::neuron_models::neuron_model::{FeagiAdvancedQuantEnum, FeagiSimpleQuantEnum, MemoryFireHashingQuantEnum};
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use feagi_connectome::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_genome::basis::specifications::brain_regions::BrainRegionID;
 use feagi_genome::cortical_area::foundation::Power;
 use feagi_genome::cortical_area::motor::Led;
@@ -150,7 +150,7 @@ fn advanced_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiAdvancedDefau
     }
 }
 
-fn dimensions() -> DimensionalCorticalAreaDimensions<<Fiq as feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization>::NeuronIndexQuant> {
+fn dimensions() -> DimensionalCorticalAreaDimensions<<Fiq as feagi_connectome::quantization_levels::FeagiIndexQuantization>::NeuronIndexQuant> {
     DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()
 }
 

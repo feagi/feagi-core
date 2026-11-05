@@ -1,11 +1,12 @@
+use feagi_basis::neurons::{DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
+use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
+use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 use crate::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
 use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::neuron_model::neuron_layout::NeuronLayout;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_basis::neurons::{DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
-use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
-use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
+use crate::quantization_levels::FeagiIndexQuantization;
+
 
 // TODO bad name with this being type vector! We need a store backing and a better name
 

@@ -1,11 +1,10 @@
 use crate::parallel_burst_engines::rayon::errors::BurstEngineCPURayonInitError;
 use crate::shared_structs::{EnginePerCorticalData, EnginePerNeuronData};
-use feagi_basis::collections::bit_packed_bool::par_data::BitBatchParDataVector;
-use neural_basis::engine::burst_engine::BurstEngine;
-use neural_basis::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
-use neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use neural_basis::visualization::BurstVisualizationData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
+use neural_basis::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
+use neural_basis::engine::{BurstEngine, BurstEngineIndex};
+use neural_basis::quantization_levels::FeagiIndexQuantization;
+use neural_basis::visualization::BurstVisualizationData;
 
 pub struct BurstEngineCPURayon<FIQ, VisTx>
 where
@@ -27,7 +26,8 @@ where
     type VisualizationTransmitter = VisTx;
 
     async fn init_burst_engine(
-        _parameters: Self::InitParameters,
+        parameters: Self::InitParameters,
+        engine_index: BurstEngineIndex,
         visualization_transmitter: Self::VisualizationTransmitter,
     ) -> Result<Self, Self::InitError> {
         let engine = BurstEngineCPURayon {
@@ -39,7 +39,6 @@ where
     }
 
     async fn run_burst(&mut self, send_visualization: bool) {
-
         if send_visualization {
             // Full (the listener still holds both slots) or closed (nothing is listening) skips
             // this burst's visualization
@@ -68,8 +67,8 @@ struct NeuronPhase<FIQ: FeagiIndexQuantization> {
 impl<FIQ: FeagiIndexQuantization> NeuronPhase<FIQ> {
     pub fn new() -> Self {
         Self {
-            engine_per_cortical_data: EnginePerCorticalData::new(),
-            engine_per_neuron: EnginePerNeuronData::new(),
+            engine_per_cortical_data: EnginePerCorticalData::<FIQ>::new(),
+            engine_per_neuron: EnginePerNeuronData::<FIQ>::new(),
             visualizations: BurstVisualizationData::new(),
         }
     }

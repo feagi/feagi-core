@@ -1,7 +1,7 @@
 use crate::neuron_models::foundation_death::data::NeuronModelFoundationDeath;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics, NeuronLayoutOf};
-use feagi_connectome_neural::neural_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
 pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>(
     core::marker::PhantomData<(FIQ, NM)>,

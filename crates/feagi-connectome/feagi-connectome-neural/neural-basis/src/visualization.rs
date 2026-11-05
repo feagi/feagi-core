@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use feagi_basis::collections::bit_packed_bool::par_data::BitBatchParDataVector;
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 
 pub const VISUALIZATION_VERSION: u8 = 0;
 

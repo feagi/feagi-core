@@ -1,19 +1,14 @@
 pub mod genome_property_editing;
 
-// TODO editors:
-//
 
+/*
 
 use crate::neuron_model::neuron_layout::NeuronLayout;
 use crate::neuron_model::NeuronModel;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
 
-
-
-
-/*
 /// Contains the data and logic to edit a cortical area
 pub struct NeuronModelCorticalAreaEditor<FIQ, NM, NDG, >
 where

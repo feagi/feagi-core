@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::genome::genomes::designer_genome::DesignerGenome;
 use crate::workers::genome_manager::requests::categories::prelude::*;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 
 pub(crate) async fn cortical_area_response<FIQ: FeagiIndexQuantization>(
     responder: &FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,

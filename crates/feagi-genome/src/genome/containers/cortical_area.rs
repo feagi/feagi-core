@@ -5,7 +5,7 @@ use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
 use feagi_connectome::cortical_area::{CorticalAreaEngineIndex, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::neuron_models::family::NeuronModelContainer;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 use neural_basis::neuron_model::NeuronModel;
 use std::collections::HashSet;
 

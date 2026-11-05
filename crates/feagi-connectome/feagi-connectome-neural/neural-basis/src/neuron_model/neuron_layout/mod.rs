@@ -2,7 +2,7 @@
 
 use core::fmt::Debug;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 
 pub mod voxel;
 pub mod single_stepped_dynamic;
@@ -29,7 +29,7 @@ pub trait NeuronLayout<
     type NeuronLevelContext;
 
 
-    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res) 
+    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res)
         -> Result<Self, NeuronLayoutRestrictionError>
     where
         Res: NeuronLayoutRestrictor<FIQ, CorticalLevelContext=Self::CorticalLevelContext>

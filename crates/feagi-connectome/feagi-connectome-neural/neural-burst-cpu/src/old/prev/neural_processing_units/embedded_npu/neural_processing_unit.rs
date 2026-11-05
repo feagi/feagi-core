@@ -1,4 +1,4 @@
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_engines::burst_phases::RunBurstPhase;
 use feagi_npu_burst_engines::feagi_npu_burst_esp32::esp_32::ESP32BoardESP32Spawner;

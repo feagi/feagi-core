@@ -3,7 +3,7 @@ use crate::genome::genome_editing::GenomeEditSequence;
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::neuron_models::spec_dispatch::CorticalAreaSpecEnum;
-use feagi_connectome::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 
 pub struct GenomePlayWrightCorticalArea<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
 

@@ -1,11 +1,10 @@
 use std::fmt::Formatter;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
 use crate::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::BurstVisualizationData;
 
 pub mod engine_change_command;
-
 
 
 /// Some implementation meant to process neurons and synapses in real time. The point of FEAGI
