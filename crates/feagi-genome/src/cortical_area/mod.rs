@@ -5,7 +5,7 @@
 
 use feagi_connectome::connectome_basis::neuron_model::{
     self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInit, CorticalAreaInitContainer,
-    NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+    CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
 };
 #[cfg(feature = "std")]
 use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;

@@ -22,7 +22,7 @@ use feagi_genome::cortical_area::sensor::Camera;
 use feagi_genome::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::cortical_area::CorticalGenomicDataEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
-use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel};
+use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel, UniformNeuronInit};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};
 
 type Fiq = FeagiIndexQuantizationStandard;
@@ -181,19 +181,35 @@ fn serde_round_trip() {
     assert_eq!(serde_json::from_str::<CorticalAreaTypeEnum<Named>>(&json).unwrap(), value);
 }
 
-/// A new area of this type and member, generated from the defaults of the cortical type
-fn generate_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> CorticalAreaInit<Fiq, M> {
+/// Every neuron starting with the default neuron data of this type and member
+fn uniform_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>() -> UniformNeuronInit<M> {
+    UniformNeuronInit::new(
+        <T as CorticalAreaTypeMemberAt<M>>::neuron_internal().unwrap(),
+        <T as CorticalAreaTypeMemberAt<M>>::neuron_scratch().unwrap(),
+    )
+}
+
+/// A new area of this type and member, generated from the defaults of the cortical type, with
+/// every neuron starting with the default neuron data. Every model here lists `Uniform`
+fn generate_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> CorticalAreaInit<Fiq, M>
+where
+    M::NeuronInit: From<UniformNeuronInit<M>>,
+{
     <T as CorticalAreaTypeMemberAt<M>>::generate_init::<Fiq>(
         layout,
         <T as CorticalAreaTypeMemberAt<M>>::default_universal_properties().unwrap(),
         <T as CorticalAreaTypeMemberAt<M>>::default_cortical_properties().unwrap(),
         <T as CorticalAreaTypeMemberAt<M>>::default_cortical_variance().unwrap(),
+        uniform_from_defaults::<T, M>().into(),
     )
     .unwrap()
 }
 
 /// How many neurons a new area of this type and member starts with, generated from its defaults
-fn generated_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> usize {
+fn generated_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> usize
+where
+    M::NeuronInit: From<UniformNeuronInit<M>>,
+{
     generate_from_defaults::<T, M>(layout).iter().len()
 }
 
@@ -228,6 +244,7 @@ fn generated_init_uses_the_given_properties_and_the_fixed_data() {
         <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_universal_properties().unwrap(),
         properties.clone(),
         <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_cortical_variance().unwrap(),
+        uniform_from_defaults::<Interconnect, Advanced>().into(),
     )
     .unwrap();
     let (given_properties, internal, scratch) = init.get_cortical_level_data();

@@ -19,10 +19,10 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// How the neurons of this model are laid out, for any [`FeagiIndexQuantization`]
     type LayoutTag: NeuronLayoutTag;
 
-    /// A way of initializing neurons specific to this model. Use `NoCustomNeuronInit` if there is
-    /// none
-    type CustomNeuronInit: NeuronInitializer<Self>;
-    
+    /// Every way of initializing the neurons of this model, as one type. Generated per model from
+    /// the initializers it lists, each of which converts into it
+    type NeuronInit: NeuronInitializer<Self>;
+
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing

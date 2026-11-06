@@ -4,9 +4,22 @@ use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
+use feagi_basis::quantization::quantizable::DataValueQuantizationError;
 
-/// Decides the data a neuron starts with, from where it is in its cortical area
+/// Decides the data a neuron starts with, from where it is in its cortical area. Every way of
+/// initializing neurons implements this, and each neuron model lists the ones it supports, which
+/// together become its [`NeuronModel::NeuronInit`]. Implement it generically over the quantization
+/// levels of the models it serves, converting to the level as needed
 pub trait NeuronInitializer<NM: NeuronModel>: Clone + core::fmt::Debug + PartialEq + Send {
+    /// Why this initializer cannot initialize the neurons of some layout
+    type Error: core::error::Error;
+
+    /// Checks that this initializer can give data to every neuron of `layout`. Called once when a
+    /// [`CorticalAreaInit`] is created, so [`Self::neuron_data_at`] may assume it passed
+    fn check_against_layout<FIQ: FeagiIndexQuantization>(&self, _layout: &NeuronLayoutOf<NM, FIQ>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     /// What the neuron data should be at the given index
     fn neuron_data_at<FIQ: FeagiIndexQuantization>(
         &self,
@@ -15,55 +28,8 @@ pub trait NeuronInitializer<NM: NeuronModel>: Clone + core::fmt::Debug + Partial
     ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch);
 }
 
-/// The [`NeuronModel::CustomNeuronInit`] of models without a custom way to initialize neurons.
-/// Cannot be constructed, so [`NeuronInit::Custom`] is unreachable for them
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum NoCustomNeuronInit {}
-
-impl<NM: NeuronModel> NeuronInitializer<NM> for NoCustomNeuronInit {
-    fn neuron_data_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        _layout: &NeuronLayoutOf<NM, FIQ>,
-        _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
-        match *self {}
-    }
-}
-
-
-/// How the neurons of a new cortical area get their starting data. The neuron variance data is not
-/// part of this, as it is always derived from the cortical variance
-#[derive(Debug, Clone, PartialEq)]
-pub enum NeuronInit<NM: NeuronModel> {
-    /// Every neuron starts with the same data
-    Uniform {
-        internal: NM::NeuronDataInternal,
-        scratch: NM::NeuronDataScratch,
-    },
-    /// Every neuron has its own data, such as when loaded from a connectome
-    #[cfg(feature = "alloc")]
-    Stored {
-        internal: Vec<NM::NeuronDataInternal>,
-        scratch: Vec<NM::NeuronDataScratch>,
-    },
-    /// The way specific to the neuron model
-    Custom(NM::CustomNeuronInit),
-}
-
-impl<NM: NeuronModel> NeuronInitializer<NM> for NeuronInit<NM> {
-    fn neuron_data_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
-        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
-        match self {
-            Self::Uniform { internal, scratch } => (internal.clone(), scratch.clone()),
-            #[cfg(feature = "alloc")]
-            Self::Stored { internal, scratch } => (internal[index.quant_to_usize()].clone(), scratch[index.quant_to_usize()].clone()),
-            Self::Custom(custom) => custom.neuron_data_at::<FIQ>(layout, index),
-        }
-    }
-}
+/// Why the neuron initialization of model `NM` cannot initialize the neurons of some layout
+pub type NeuronInitErrorOf<NM> = <<NM as NeuronModel>::NeuronInit as NeuronInitializer<NM>>::Error;
 
 /// Every piece of data needed to spawn a new cortical area, at the given model quantization
 #[derive(Debug, Clone, PartialEq)] // No need to serialize this, this is transient
@@ -84,7 +50,9 @@ where
     cortical_scratch: NM::CorticalDataScratch,
     /// What the neuron variance data of the area is derived from
     cortical_variance: NM::CorticalDataVariance,
-    neurons: NeuronInit<NM>,
+    /// How the neurons get their starting data. The neuron variance data is not part of this, as
+    /// it is always derived from the cortical variance
+    neurons: NM::NeuronInit,
 }
 
 impl<FIQ, NM> CorticalAreaInit<FIQ, NM>
@@ -92,8 +60,8 @@ where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    /// Returns an error if [`NeuronInit::Stored`] does not hold exactly one element per neuron of
-    /// the layout
+    /// `neurons` is any of the initializers the model supports. Returns an error if it cannot
+    /// initialize the neurons of `neuron_layout`
     pub fn new(
         neuron_layout: NeuronLayoutOf<NM, FIQ>,
         universal_properties: NeuronModelUniversalCorticalProperties<NM>,
@@ -101,15 +69,10 @@ where
         cortical_internal: NM::CorticalDataInternal,
         cortical_scratch: NM::CorticalDataScratch,
         cortical_variance: NM::CorticalDataVariance,
-        neurons: NeuronInit<NM>,
-    ) -> Result<Self, CorticalAreaInitError> {
-        #[cfg(feature = "alloc")]
-        if let NeuronInit::Stored { internal, scratch } = &neurons {
-            let neuron_count = neuron_layout.get_number_neurons_to_allocate_for().quant_to_usize();
-            if internal.len() != neuron_count || scratch.len() != neuron_count {
-                return Err(CorticalAreaInitError::StoredNeuronCountMismatch);
-            }
-        }
+        neurons: impl Into<NM::NeuronInit>,
+    ) -> Result<Self, NeuronInitErrorOf<NM>> {
+        let neurons = neurons.into();
+        neurons.check_against_layout::<FIQ>(&neuron_layout)?;
         Ok(Self {
             neuron_layout,
             universal_properties,
@@ -119,28 +82,6 @@ where
             cortical_variance,
             neurons,
         })
-    }
-
-    /// Every neuron starts with the same data, which cannot fail
-    pub fn new_uniform(
-        neuron_layout: NeuronLayoutOf<NM, FIQ>,
-        universal_properties: NeuronModelUniversalCorticalProperties<NM>,
-        cortical_properties: NM::CorticalDataProperties,
-        cortical_internal: NM::CorticalDataInternal,
-        cortical_scratch: NM::CorticalDataScratch,
-        cortical_variance: NM::CorticalDataVariance,
-        neuron_internal: NM::NeuronDataInternal,
-        neuron_scratch: NM::NeuronDataScratch,
-    ) -> Self {
-        Self {
-            neuron_layout,
-            universal_properties,
-            cortical_properties,
-            cortical_internal,
-            cortical_scratch,
-            cortical_variance,
-            neurons: NeuronInit::Uniform { internal: neuron_internal, scratch: neuron_scratch },
-        }
     }
 
     /// Get the neuron layout that will be used
@@ -165,6 +106,11 @@ where
     /// Get what the neuron variance data of the area is derived from
     pub fn get_cortical_variance(&self) -> &NM::CorticalDataVariance {
         &self.cortical_variance
+    }
+
+    /// Get how the neurons get their starting data
+    pub fn get_neuron_init(&self) -> &NM::NeuronInit {
+        &self.neurons
     }
 
     /// Number of neurons needed in the cortical area
@@ -208,8 +154,13 @@ where
     // TODO parallel versions of the above
 }
 
+/// Why a cortical area init could not be generated from the defaults of its cortical type
 #[derive(Debug, thiserror::Error)]
-pub enum CorticalAreaInitError {
-    #[error("Stored neuron data does not hold exactly one element per neuron of the layout!")]
-    StoredNeuronCountMismatch,
+pub enum CorticalAreaInitGenerationError<NeuronInitError: core::error::Error> {
+    /// A default could not be converted to the quantization of the model
+    #[error(transparent)]
+    Quantization(#[from] DataValueQuantizationError),
+    /// The neuron initializer cannot initialize the neurons of the layout
+    #[error(transparent)]
+    NeuronInit(NeuronInitError),
 }

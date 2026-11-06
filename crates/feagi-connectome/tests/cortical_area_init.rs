@@ -1,15 +1,17 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
-use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, CorticalAreaInitError, NeuronInit, NeuronInitializer};
+use feagi_connectome::connectome_basis::neuron_model::{
+    CorticalAreaInit, NeuronInitErrorOf, NeuronInitializer, StoredNeuronInit, StoredNeuronInitError, UniformNeuronInit,
+};
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
     FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataScratch, FeagiAdvancedCorticalDataVariance,
     FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, NeuronModelFeagiAdvancedDefaultQuant, Period,
 };
 use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
     FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
-    FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
-    NeuronModelFoundationPowerFloat32,
+    FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance, FoundationPowerNeuronInit,
+    FoundationPowerNeuronInitError, NeuronModelFoundationPowerFloat32,
 };
 use feagi_connectome::connectome_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
@@ -72,16 +74,16 @@ fn runtime_variance_edits_do_not_compound() {
 
 #[test]
 fn init_writes_variance_alongside_neuron_data() {
-    let init = CorticalAreaInit::<Fiq, Advanced>::new_uniform(
+    let init = CorticalAreaInit::<Fiq, Advanced>::new(
         voxel_layout([2, 1, 1, 1]),
         universal(),
         FeagiAdvancedCorticalDataProperties::new(Period::QUANT_ONE, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
         FeagiAdvancedCorticalDataInternal::new(),
         FeagiAdvancedCorticalDataScratch::new(),
         advanced_variance(3.0, 0.0, 0.0),
-        FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO),
-        FeagiAdvancedNeuronDataScratch::new(),
-    );
+        UniformNeuronInit::new(FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO), FeagiAdvancedNeuronDataScratch::new()),
+    )
+    .unwrap();
     let mut internal = vec![FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO); 2];
     let mut scratch = vec![FeagiAdvancedNeuronDataScratch::new(); 2];
     let mut variance = vec![FeagiAdvancedNeuronDataVariance::new(-1.0); 2];
@@ -94,7 +96,7 @@ fn init_writes_variance_alongside_neuron_data() {
     assert_eq!(init.iter().map(|(_, _, neuron)| neuron).collect::<Vec<_>>(), variance);
 }
 
-fn power_init(neurons: NeuronInit<Power>) -> Result<CorticalAreaInit<Fiq, Power>, CorticalAreaInitError> {
+fn power_init(neurons: impl Into<FoundationPowerNeuronInit<Power>>) -> Result<CorticalAreaInit<Fiq, Power>, NeuronInitErrorOf<Power>> {
     CorticalAreaInit::new(
         voxel_layout([2, 2, 1, 1]),
         universal(),
@@ -108,22 +110,35 @@ fn power_init(neurons: NeuronInit<Power>) -> Result<CorticalAreaInit<Fiq, Power>
 
 #[test]
 fn stored_neuron_data_must_match_the_layout() {
-    let stored = |count| NeuronInit::Stored {
-        internal: vec![FoundationPowerNeuronDataInternal::new(); count],
-        scratch: vec![FoundationPowerNeuronDataScratch::new(); 4],
-    };
+    let stored = |count| StoredNeuronInit::<Power>::new(vec![FoundationPowerNeuronDataInternal::new(); count], vec![FoundationPowerNeuronDataScratch::new(); 4]);
     assert!(power_init(stored(4)).is_ok());
-    assert!(matches!(power_init(stored(3)), Err(CorticalAreaInitError::StoredNeuronCountMismatch)));
+    // The model's error says which initializer failed, and holds that initializer's own error
+    let error = power_init(stored(3)).unwrap_err();
+    assert!(matches!(
+        &error,
+        FoundationPowerNeuronInitError::Stored(StoredNeuronInitError::NeuronCountMismatch { expected: 4, internal: 3, scratch: 4 })
+    ));
+    assert_eq!(error.to_string(), "Stored neuron data holds 3 internal and 4 scratch elements, but the layout has 4 neurons");
+}
+
+/// The model's init enum is built from any of its initializers, and keeps which one it holds
+#[test]
+fn initializers_convert_into_the_model_init() {
+    let uniform = UniformNeuronInit::<Power>::new(FoundationPowerNeuronDataInternal::new(), FoundationPowerNeuronDataScratch::new());
+    let init: FoundationPowerNeuronInit<Power> = uniform.clone().into();
+    assert!(matches!(&init, FoundationPowerNeuronInit::Uniform(held) if *held == uniform));
+    assert_eq!(init.clone(), init);
+
+    let stored: FoundationPowerNeuronInit<Power> = StoredNeuronInit::new(vec![], vec![]).into();
+    assert!(matches!(stored, FoundationPowerNeuronInit::Stored(_)));
+    assert_ne!(stored, init);
 }
 
 /// A model without variance fields gets its variance generated, and holds no per neuron memory
 #[test]
 fn model_without_variance_generates_nothing() {
     assert_eq!(size_of::<FoundationPowerNeuronDataVariance<Power>>(), 0);
-    let init = power_init(NeuronInit::Uniform {
-        internal: FoundationPowerNeuronDataInternal::new(),
-        scratch: FoundationPowerNeuronDataScratch::new(),
-    }).unwrap();
+    let init = power_init(UniformNeuronInit::new(FoundationPowerNeuronDataInternal::new(), FoundationPowerNeuronDataScratch::new())).unwrap();
     assert_eq!(init.iter().len(), 4);
 }
 
@@ -139,7 +154,10 @@ define_cortical_dynamics_quantization_template! {
 
     NeuronLayout: NeuronLayoutTagVoxel
 
-    CustomNeuronInit: IndexAsValueInit
+    NeuronInitializers: {
+        /// The only initializer, which is specific to this model
+        IndexAsValue: IndexAsValueInit,
+    }
 
     QuantizationLevels: {
         Float32: {
@@ -156,14 +174,20 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_test_custom_template!(expand_cortical_dynamics_quantization);
 
-impl NeuronInitializer<NeuronModelTestCustomFloat32> for IndexAsValueInit {
+/// Generic over every quantization level of the model, converting the index to the level's
+/// membrane potential type
+impl<NM: NeuronModelTestCustom> NeuronInitializer<NM> for IndexAsValueInit {
+    /// Fits any layout
+    type Error = core::convert::Infallible;
+
     fn neuron_data_at<FIQ: FeagiIndexQuantization>(
         &self,
-        _layout: &NeuronLayoutOf<NeuronModelTestCustomFloat32, FIQ>,
+        _layout: &NeuronLayoutOf<NM, FIQ>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> (TestCustomNeuronDataInternal<NeuronModelTestCustomFloat32>, TestCustomNeuronDataScratch<NeuronModelTestCustomFloat32>) {
-        use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-        (TestCustomNeuronDataInternal::new(index.quant_to_usize() as f32), TestCustomNeuronDataScratch::new())
+    ) -> (TestCustomNeuronDataInternal<NM>, TestCustomNeuronDataScratch<NM>) {
+        use feagi_basis::prelude::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
+        let value = QuantizedDecimalTrait::from_quantization(index.quant_to_usize() as f32);
+        (TestCustomNeuronDataInternal::new(value), TestCustomNeuronDataScratch::new())
     }
 }
 
@@ -176,7 +200,7 @@ fn custom_neuron_init_runs_through_the_spec() {
         TestCustomCorticalDataInternal::new(),
         TestCustomCorticalDataScratch::new(),
         TestCustomCorticalDataVariance::new(),
-        NeuronInit::Custom(IndexAsValueInit),
+        IndexAsValueInit,
     ).unwrap();
     let values: Vec<f32> = init.iter().map(|(internal, _, _)| internal.value).collect();
     assert_eq!(values, [0.0, 1.0, 2.0]);
@@ -225,10 +249,7 @@ mod dispatch {
     #[test]
     fn init_enum_dispatches_to_the_dynamics_of_its_model() {
         let init: CorticalAreaInitEnum<Fiq> = NeuronModelEnum::<CorticalAreaInitContainer<Fiq>>::from_data::<Power>(
-            power_init(NeuronInit::Uniform {
-                internal: FoundationPowerNeuronDataInternal::new(),
-                scratch: FoundationPowerNeuronDataScratch::new(),
-            }).unwrap(),
+            power_init(UniformNeuronInit::new(FoundationPowerNeuronDataInternal::new(), FoundationPowerNeuronDataScratch::new())).unwrap(),
         );
         // The power model always fires
         assert_eq!(init.dispatch_cpu(FireFirstNeuron), (4, true));

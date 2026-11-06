@@ -1,5 +1,8 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::NoCustomNeuronInit;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
+use crate::neuron_models::initializers::UniformNeuronInit;
+#[cfg(feature = "alloc")]
+use crate::neuron_models::initializers::StoredNeuronInit;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuronModel, NeuronModelTag};
@@ -12,6 +15,14 @@ define_cortical_dynamics_quantization_template! {
     FeagiSimple
 
     NeuronLayout: NeuronLayoutTagVoxel
+
+    NeuronInitializers: {
+        /// Every neuron starts with the same data
+        Uniform: UniformNeuronInit<NM>,
+        /// Every neuron has its own data, such as when loaded from a connectome
+        #[cfg(feature = "alloc")]
+        Stored: StoredNeuronInit<NM>,
+    }
 
     Quantizables: {
         /// For handling timing

@@ -11,4 +11,5 @@ pub use family::neuron_model;
 #[macro_use]
 pub mod family;
 pub mod init_dispatch;
+pub mod initializers;
 

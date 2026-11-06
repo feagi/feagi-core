@@ -21,9 +21,17 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///     // `NL: NeuronLayoutTag`
 ///     NeuronLayout: NeuronLayoutTagVoxel
 ///
-///     // Optional, a way of initializing neurons specific to this model. Defaults to
-///     // `NoCustomNeuronInit`
-///     CustomNeuronInit: SomeInitializer<Self>
+///     // Required, every way of initializing the neurons of this model, at least one. Each is a
+///     // variant name and a type implementing `NeuronInitializer<NM>` for every quantization
+///     // level of the model, generically over `NM`. A `#[cfg]` on one applies to everything
+///     // generated for it
+///     NeuronInitializers: {
+///         /// Every neuron starts with the same data
+///         Uniform: UniformNeuronInit<NM>,
+///         #[cfg(feature = "alloc")]
+///         Stored: StoredNeuronInit<NM>,
+///         Custom: SomeInitializer,
+///     }
 ///
 ///     // Optional, each one of QDECIMAL, QUINT or QSINT
 ///     Quantizables: {
@@ -70,6 +78,9 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 /// - One `NeuronModel{Model}{Level}` marker struct per quantization level, implementing
 ///   `NeuronModel` and the model trait. For a generic layout, it is generic over the layout,
 ///   `NeuronModel{Model}{Level}<NL>`
+/// - `{Model}NeuronInit<NM>`, the `NeuronModel::NeuronInit` of every level, an enum with a variant
+///   per neuron initializer, `From` each of them, and `NeuronInitializer` forwarded to the one held.
+///   Its error `{Model}NeuronInitError<NM>` has a variant holding the error of each initializer
 /// - `CorticalDataVarianceSpecification` for `{Model}CorticalDataVariance`, if the model gives
 ///   fields for neither variance data type. Otherwise it must be implemented by hand
 /// - A `{Model}{DataType}<NM>` struct for every data type, such as
@@ -85,7 +96,7 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 ///
 /// Must be in scope where this is expanded: `NeuronModel`, `NeuronLayoutOf`, `MembranePotentialQuantization`, the seven
 /// data specification traits (such as `CorticalDataPropertiesSpecification`), `FeagiIndexQuantization`,
-/// `NoCustomNeuronInit` (when `CustomNeuronInit` is left as default), any types the data
+/// `NeuronInitializer`, the types of the `NeuronInitializers`, any types the data
 /// fields name, any traits or types the `NeuronLayout` names (`NeuronLayoutTag` when it is left as default), and `NeuronModelTag`
 /// (when `NeuronLayout` is a single layout type, which generates the tag `NeuronModel{Model}Tag` of the model). The crate must
 /// depend on `serde` and `half`, which the wrapper structs use
@@ -237,8 +248,9 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 ///   allowing it. Giving a cortical type a layout other than its model's is a compile error, as is
 ///   a cortical type listing a model without implementing this. A cortical type gives its defaults a
 ///   client may edit (universal properties, cortical properties, cortical variance) and the data it
-///   fixes (cortical internal and scratch, and the internal and scratch every neuron starts with).
-///   Its provided `generate_init` builds a new area from the editable parts plus the fixed ones
+///   fixes (cortical internal and scratch), along with default neuron internal and scratch data for
+///   a neuron initializer to be built from. Its provided `generate_init` builds a new area from the
+///   editable parts, the fixed ones, and a neuron initializer of the model, which it is always given
 /// - The trait `{Family}Member`, implemented for every cortical type, holding its kind and its model
 ///   enum as `type Models<C>`, and
 ///   `{Family}MemberAt<M>`, implemented for every cortical type at every member of the models it

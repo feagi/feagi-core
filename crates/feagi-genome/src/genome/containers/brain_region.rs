@@ -19,13 +19,47 @@ pub trait BrainRegionContainer {
 
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID;
 
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID;
+    // No mut implementation of ancestor
 }
 
 //region Runtime
 pub enum BrainRegionContainerRuntime {
     Root(BrainRegionContainerRootRuntime),
     Inner(BrainRegionContainerInnerRuntime),
+}
+
+impl BrainRegionContainerRuntime {
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
+        match self {
+            Self::Root(container) => container.get_contained_areas(),
+            Self::Inner(container) => container.get_contained_areas(),
+        }
+    }
+
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas_mut(&mut self) -> &mut HashSet<CorticalIdentifier> {
+        match self {
+            Self::Root(container) => container.get_contained_areas_mut(),
+            Self::Inner(container) => container.get_contained_areas_mut(),
+        }
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions(&self) -> &HashSet<BrainRegionID> {
+        match self {
+            Self::Root(container) => container.get_contained_regions(),
+            Self::Inner(container) => container.get_contained_regions(),
+        }
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions_mut(&mut self) -> &mut HashSet<BrainRegionID> {
+        match self {
+            Self::Root(container) => container.get_contained_regions_mut(),
+            Self::Inner(container) => container.get_contained_regions_mut(),
+        }
+    }
 }
 
 impl BrainRegionContainer for BrainRegionContainerRuntime {
@@ -70,13 +104,6 @@ impl BrainRegionContainer for BrainRegionContainerRuntime {
             Self::Inner(container) => container.get_ancestor_id(),
         }
     }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        match self {
-            Self::Root(container) => container.get_ancestor_id_mut(),
-            Self::Inner(container) => container.get_ancestor_id_mut(),
-        }
-    }
 }
 
 pub struct BrainRegionContainerRootRuntime {
@@ -85,6 +112,28 @@ pub struct BrainRegionContainerRootRuntime {
     pub ancestor_id: BrainRegionAncestryID,
     pub contained_areas: HashSet<CorticalIdentifier>,
     pub contained_regions: HashSet<BrainRegionID>
+}
+
+impl BrainRegionContainerRootRuntime {
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
+        &self.contained_areas
+    }
+
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas_mut(&mut self) -> &mut HashSet<CorticalIdentifier> {
+        &mut self.contained_areas
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions(&self) -> &HashSet<BrainRegionID> {
+        &self.contained_regions
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions_mut(&mut self) -> &mut HashSet<BrainRegionID> {
+        &mut self.contained_regions
+    }
 }
 
 impl BrainRegionContainer for BrainRegionContainerRootRuntime {
@@ -111,10 +160,6 @@ impl BrainRegionContainer for BrainRegionContainerRootRuntime {
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         &self.ancestor_id
     }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        &mut self.ancestor_id
-    }
 }
 
 pub struct BrainRegionContainerInnerRuntime {
@@ -124,6 +169,28 @@ pub struct BrainRegionContainerInnerRuntime {
     pub ancestor_id: BrainRegionAncestryID,
     pub contained_areas: HashSet<CorticalIdentifier>,
     pub contained_regions: HashSet<BrainRegionID>
+}
+
+impl BrainRegionContainerInnerRuntime {
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
+        &self.contained_areas
+    }
+
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas_mut(&mut self) -> &mut HashSet<CorticalIdentifier> {
+        &mut self.contained_areas
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions(&self) -> &HashSet<BrainRegionID> {
+        &self.contained_regions
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions_mut(&mut self) -> &mut HashSet<BrainRegionID> {
+        &mut self.contained_regions
+    }
 }
 
 impl BrainRegionContainer for BrainRegionContainerInnerRuntime {
@@ -149,10 +216,6 @@ impl BrainRegionContainer for BrainRegionContainerInnerRuntime {
 
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         &self.ancestor_id
-    }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        &mut self.ancestor_id
     }
 }
 
@@ -206,13 +269,6 @@ impl BrainRegionContainer for BrainRegionContainerStorage {
             Self::Inner(container) => container.get_ancestor_id(),
         }
     }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        match self {
-            Self::Root(container) => container.get_ancestor_id_mut(),
-            Self::Inner(container) => container.get_ancestor_id_mut(),
-        }
-    }
 }
 
 pub struct BrainRegionContainerRootStorage {
@@ -244,10 +300,6 @@ impl BrainRegionContainer for BrainRegionContainerRootStorage {
 
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         &self.ancestor_id
-    }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        &mut self.ancestor_id
     }
 }
 
@@ -282,12 +334,6 @@ impl BrainRegionContainer for BrainRegionContainerInnerStorage {
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         &self.ancestor_id
     }
-
-    fn get_ancestor_id_mut(&mut self) -> &mut BrainRegionAncestryID {
-        &mut self.ancestor_id
-    }
 }
 
 //endregion
-
-

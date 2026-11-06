@@ -42,8 +42,12 @@ pub mod connectome_basis {
             NeuronLayoutSingleSteppedDynamic, NeuronLayoutTagSingleSteppedDynamic,
         };
         pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::{
-            CorticalAreaInit, CorticalAreaInitError, NeuronInit, NeuronInitializer, NoCustomNeuronInit,
+            CorticalAreaInit, CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronInitializer,
         };
+        /// The neuron initializers commonly listed by neuron models
+        pub use crate::neuron_models::initializers::UniformNeuronInit;
+        #[cfg(feature = "alloc")]
+        pub use crate::neuron_models::initializers::{StoredNeuronInit, StoredNeuronInitError};
         pub use feagi_connectome_proc::{
             define_cortical_type_family_template, define_model_family_template, expand_cortical_area_map, expand_cortical_identifier, expand_cortical_type_family,
             expand_model_family,

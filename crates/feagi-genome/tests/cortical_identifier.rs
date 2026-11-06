@@ -111,7 +111,9 @@ fn json_round_trips_and_rejects_invalid_bytes() {
 mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
     use feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTagVoxel;
-    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties};
+    use feagi_connectome::connectome_basis::neuron_model::{
+        CorticalAreaInit, CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+    };
     use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model;
     use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NeuronModelFeagiSimple;
