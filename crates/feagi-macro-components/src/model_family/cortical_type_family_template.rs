@@ -940,10 +940,15 @@ impl CorticalTypeFamilyTemplate {
                     other => ::core::result::Result::Err(#error::IncorrectCorticalType { expected: <Self as #member_trait>::KIND, actual: other.kind() }),
                 };
                 let generator = forward_generator(quote!(<Self as #uses_trait>), quote!(M));
+                let model_enum = Self::model_enum_name(leaf.super_type, leaf.name);
                 quote! {
                     impl<M: #model_model_member> #via_trait<M, #tag> for #cortical_type {
                         fn into_family_enum<C: #container>(data: C::Of<M>) -> #enum_name<C> {
                             #wrap
+                        }
+
+                        fn into_models<C: #container>(data: C::Of<M>) -> <Self as #member_trait>::Models<C> {
+                            #model_enum::#model(<M as #model_model_member>::into_quant_enum(data))
                         }
 
                         #[allow(unreachable_patterns)]
@@ -1002,6 +1007,8 @@ impl CorticalTypeFamilyTemplate {
             pub trait #via_trait<M: #model_member, Tag>: #member_trait {
                 fn into_family_enum<C: #container>(data: C::Of<M>) -> #enum_name<C>;
 
+                fn into_models<C: #container>(data: C::Of<M>) -> <Self as #member_trait>::Models<C>;
+
                 fn try_from_family_enum<C: #container>(value: #enum_name<C>) -> ::core::result::Result<C::Of<M>, #error>;
 
                 fn try_ref_family_enum<C: #container>(value: &#enum_name<C>) -> ::core::result::Result<&C::Of<M>, #error>;
@@ -1019,6 +1026,10 @@ impl CorticalTypeFamilyTemplate {
             pub trait #at_trait<M: #model_member>: #member_trait {
                 /// Wraps data of this cortical type at this member
                 fn into_family_enum<C: #container>(data: C::Of<M>) -> #enum_name<C>;
+
+                /// Wraps data of this member in the model enum of this cortical type, as held for
+                /// this cortical type alone
+                fn into_models<C: #container>(data: C::Of<M>) -> <Self as #member_trait>::Models<C>;
 
                 /// Unwraps the data held, if held for this cortical type and member
                 fn try_from_family_enum<C: #container>(value: #enum_name<C>) -> ::core::result::Result<C::Of<M>, #error>;
@@ -1041,6 +1052,10 @@ impl CorticalTypeFamilyTemplate {
             {
                 fn into_family_enum<C: #container>(data: C::Of<M>) -> #enum_name<C> {
                     <T as #via_trait<M, <M as #model_member>::Tag>>::into_family_enum::<C>(data)
+                }
+
+                fn into_models<C: #container>(data: C::Of<M>) -> <T as #member_trait>::Models<C> {
+                    <T as #via_trait<M, <M as #model_member>::Tag>>::into_models::<C>(data)
                 }
 
                 fn try_from_family_enum<C: #container>(value: #enum_name<C>) -> ::core::result::Result<C::Of<M>, #error> {

@@ -1,4 +1,5 @@
-use crate::workers::genome_manager::worker_loop::{run_genome_manager, GenomeManagerCommandHandler};
+use crate::workers::genome_manager::worker_loop::{run_genome_manager, GenomeManagerCommandHandler, GenomeManagerRequest, GenomeManagerResponse};
+use crate::genome::genome_editing::NeuralProcessorRequester;
 use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
@@ -42,21 +43,26 @@ impl<FIQ: FeagiIndexQuantization> Default for GenomeManagerWorkerBuilder<FIQ> {
 // This is STD thread only for the time being
 impl<FIQ: FeagiIndexQuantization> FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder<FIQ> {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
-    type BuildInputs = GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>;
+    /// The responders of its request categories, from `spawn_related_channel_pairs`, and the command
+    /// channel of the neural processor whose connectome it edits
+    type BuildInputs = (GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>, NeuralProcessorRequester<FIQ>);
     type BuildOutputs = ();
     /// This defines the channels of the various categories of request this worker goes through
     type RequiredChannelPairs = (
         GenomeManagerRequesters<FeagiRequestResponseChannelsAllocBackend>,
         GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>,
     );
-    type WorkerCommandHandler = GenomeManagerCommandHandler; // TODO NPU launcher configuration
+    type WorkerCommandHandler = GenomeManagerCommandHandler<FIQ>;
     type WorkerStartError = GenomeManagerWorkerBuilderError;
 
-    fn build_worker(self, spawner: &FeagiStdThreadSpawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, (), ()>, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
-        
-        let (responders) = inputs;
+    fn build_worker(
+        self,
+        spawner: &FeagiStdThreadSpawner,
+        inputs: Self::BuildInputs,
+    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, GenomeManagerRequest<FIQ>, GenomeManagerResponse>, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
+        let (responders, neural_processor) = inputs;
         let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);
-        let handle = spawner.spawn_worker(move || run_genome_manager::<FIQ>(cmd_responder, responders)).unwrap(); // TODO actual error handling
+        let handle = spawner.spawn_worker(move || run_genome_manager::<FIQ>(cmd_responder, responders, neural_processor)).unwrap(); // TODO actual error handling
         Ok((FeagiWorker::new(cmd_requester, handle), ()))
     }
 

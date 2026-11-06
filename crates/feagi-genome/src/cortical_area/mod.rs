@@ -5,7 +5,11 @@
 
 use feagi_connectome::connectome_basis::neuron_model::{
     self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInit, CorticalAreaInitContainer,
-    NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+    NeuronLayoutOf, NeuronLayoutTag, NeuronModel, NeuronModelContainer, NeuronModelMember, NeuronModelUniversalCorticalProperties,
+};
+use feagi_connectome::{
+    with_neuron_model_feagi_advanced, with_neuron_model_feagi_simple, with_neuron_model_foundation_death, with_neuron_model_foundation_power,
+    with_neuron_model_memory_fire_hashing,
 };
 #[cfg(feature = "std")]
 use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;
@@ -90,3 +94,23 @@ cortical_area_type_family_template!(expand_cortical_area_map);
 
 /// The Genomic Data For a given Cortical Area
 pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaInitContainer<FIQ>>;
+
+/// Something that wants the data of a `CorticalAreaTypeEnum` at its concrete cortical type `T` and
+/// model member `NM`
+#[cfg(feature = "std")]
+pub(crate) trait CorticalAreaTypeVisitor<C: NeuronModelContainer> {
+    type Output;
+
+    fn visit<T, NM>(self, data: C::Of<NM>) -> Self::Output
+    where
+        T: CorticalAreaTypeMemberAt<NM> + CorticalAreaTypeMapMember + CorticalAreaType<NeuronLayout = <NM as NeuronModel>::LayoutTag> + 'static,
+        NM: NeuronModelMember + 'static;
+}
+
+#[cfg(feature = "std")]
+impl<C: NeuronModelContainer> CorticalAreaTypeEnum<C> {
+    /// Gives the data held to `visitor`, along with the cortical type and model member it is held for
+    pub(crate) fn visit<V: CorticalAreaTypeVisitor<C>>(self, visitor: V) -> V::Output {
+        with_cortical_area_type!(self, <T, NM> |data| visitor.visit::<T, NM>(data))
+    }
+}

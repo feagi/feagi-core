@@ -1,6 +1,7 @@
 use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
+use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance, NeuronModelFeagiAdvancedDefaultQuant};
@@ -139,6 +140,7 @@ fn simple_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiSimpleDefaultQu
         cortical_data_variance: FeagiSimpleCorticalDataVariance::new(),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
+        visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
     }
 }
 
@@ -149,6 +151,7 @@ fn advanced_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiAdvancedDefau
         cortical_data_variance: FeagiAdvancedCorticalDataVariance::new(0.0, 0.0, 0.0),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
+        visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
     }
 }
 
@@ -172,6 +175,7 @@ fn designer_containers_hold_only_what_their_cortical_type_allows() {
                 cortical_data_variance: MemoryFireHashingCorticalDataVariance::new(),
                 cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
                 burst_engine_index: BurstEngineIndex(0),
+                visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
             })),
         ),
     );
@@ -205,6 +209,10 @@ fn a_model_swap_replaces_the_data_in_place() {
 }
 
 #[test]
-fn designer_genome_builds_with_the_nested_map() {
-    let _genome = DesignerGenome::<Fiq>::new_genome_now("test".to_string());
+fn designer_genome_starts_with_only_its_root_brain_region() {
+    let genome = DesignerGenome::<Fiq>::init("test".to_string());
+    assert_eq!(genome.brain_regions().len(), 1);
+    let root = genome.brain_region(&genome.root_brain_region_id()).expect("the root brain region exists");
+    assert!(root.contained_areas().is_empty() && root.contained_regions().is_empty());
+    assert!(genome.cortical_areas().is_empty());
 }

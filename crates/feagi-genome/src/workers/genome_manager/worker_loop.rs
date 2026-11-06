@@ -10,33 +10,62 @@ use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use crate::basis::specifications::brain_regions::BrainRegionID;
+use crate::genome::genome_editing::{apply_genome_edit_sequence, GenomeEditError, GenomeEditSequence, GenomeEditStepResult, NeuralProcessorRequester};
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
 /// request is answered while idle
 const IDLE_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(1);
 
-pub struct GenomeManagerCommandHandler;
+/// Custom requests to the genome manager, through its command channel
+pub enum GenomeManagerRequest<FIQ: FeagiIndexQuantization> {
+    /// The ID of the root brain region, which every other is within
+    RootBrainRegion,
+    /// Apply a genome edit sequence, editing the connectome of the neural processor as needed
+    ApplyEditSequence(GenomeEditSequence<FIQ>),
+}
 
-impl FeagiWorkerCommandProcessor for GenomeManagerCommandHandler {
-    type CustomRequest = ();
-    type CustomResponse = ();
+/// Custom responses from the genome manager, one per kind of request
+pub enum GenomeManagerResponse {
+    RootBrainRegion(BrainRegionID),
+    /// What each step of the sequence did, in order, or why it was not applied
+    EditSequenceApplied(Result<Vec<GenomeEditStepResult>, GenomeEditError>),
+}
 
-    async fn on_custom(&mut self, _request: Self::CustomRequest) -> Self::CustomResponse {
-        // TODO custom command handling
+/// The state of the genome manager: the genome, and the command channel of the neural processor
+/// whose connectome it edits
+pub struct GenomeManagerCommandHandler<FIQ: FeagiIndexQuantization> {
+    genome: DesignerGenome<FIQ>,
+    neural_processor: NeuralProcessorRequester<FIQ>,
+}
+
+impl<FIQ: FeagiIndexQuantization> FeagiWorkerCommandProcessor for GenomeManagerCommandHandler<FIQ> {
+    type CustomRequest = GenomeManagerRequest<FIQ>;
+    type CustomResponse = GenomeManagerResponse;
+
+    async fn on_custom(&mut self, request: Self::CustomRequest) -> Self::CustomResponse {
+        match request {
+            GenomeManagerRequest::RootBrainRegion => GenomeManagerResponse::RootBrainRegion(self.genome.root_brain_region_id()),
+            GenomeManagerRequest::ApplyEditSequence(sequence) => {
+                GenomeManagerResponse::EditSequenceApplied(apply_genome_edit_sequence(&mut self.genome, &mut self.neural_processor, sequence).await)
+            }
+        }
     }
 }
 
 /// The actual genome manager loop. Listens for various requests on the state of the genome, or
 /// for edits, and then acts upon them
 pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
-    responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
-    genome_request_responders: GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>
+    responder: FeagiResponderAlloc<FeagiWorkerRequest<GenomeManagerRequest<FIQ>>, FeagiWorkerResponse<GenomeManagerResponse>>,
+    genome_request_responders: GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>,
+    neural_processor: NeuralProcessorRequester<FIQ>,
 )
 {
-
-    let mut graph = DesignerGenome::<FIQ>::new_genome_now("Genome Test Name".to_string());
-
-    let mut commands = FeagiWorkerPollingRouter::new(GenomeManagerCommandHandler, responder);
+    let handler = GenomeManagerCommandHandler {
+        genome: DesignerGenome::<FIQ>::init("Genome Test Name".to_string()),
+        neural_processor,
+    };
+    let mut commands = FeagiWorkerPollingRouter::new(handler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
 
     loop {
@@ -50,7 +79,7 @@ pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
         // implemented, so requesters don't wait forever
         busy |= burst_engine_response(&burst_engine).await;
         busy |= answer_not_implemented(&connectome).await;
-        busy |= cortical_area_response(&cortical_area, &mut graph).await;
+        busy |= cortical_area_response(&cortical_area, &mut commands.processor_mut().genome).await;
         busy |= answer_not_implemented(&cortical_mapping).await;
         busy |= answer_not_implemented(&genome).await;
         busy |= morphology_response(&morphology).await;

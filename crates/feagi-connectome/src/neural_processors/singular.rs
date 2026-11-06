@@ -3,7 +3,7 @@
 use core::marker::PhantomData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiRequesterAlloc, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
@@ -166,7 +166,12 @@ where
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     /// The visualization transmitter from `spawn_related_channel_pairs`, handed to the engine
     type BuildInputs = NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>;
-    type BuildOutputs = ();
+    /// A clone of the worker's command channel, for whatever else commands it directly (such as
+    /// the genome manager editing its connectome). The `FeagiWorker` stays the way to stop it
+    type BuildOutputs = FeagiRequesterAlloc<
+        FeagiWorkerRequest<NeuronProcessorSingleEngineRequest<FIQ>>,
+        FeagiWorkerResponse<NeuronProcessorSingleEngineResponse<FIQ>>,
+    >;
     /// The visualization channel. The receiver goes to whatever listens to visualization
     type RequiredChannelPairs = (
         NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>,
@@ -223,7 +228,10 @@ where
         })?;
 
         match init_result_receiver.recv() {
-            Ok(Ok(())) => Ok((FeagiWorker::new(cmd_requester, handle), ())),
+            Ok(Ok(())) => {
+                let command_requester = cmd_requester.clone();
+                Ok((FeagiWorker::new(cmd_requester, handle), command_requester))
+            }
             Ok(Err(error)) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::EngineInit(error))),
             // The thread exited (panicked) before reporting
             Err(_) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::WorkerExitedDuringInit)),

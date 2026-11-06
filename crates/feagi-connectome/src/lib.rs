@@ -13,7 +13,7 @@ pub mod connectome_basis {
         pub use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
         /// The burst engine running on the CPU, multithreaded through rayon
         #[cfg(feature = "burst-engine-cpu")]
-        pub use feagi_connectome_neural::burst_engine_cpu::BurstEngineCPURayon;
+        pub use feagi_connectome_neural::burst_engine_cpu::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
     }
 
     /// The edit steps sent to the connectome, and what each returns

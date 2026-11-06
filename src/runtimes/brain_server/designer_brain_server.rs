@@ -12,14 +12,26 @@ use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::target_frequency::TargetFrequency;
-use feagi_connectome::connectome_basis::engine::BurstEngineCPURayon;
+use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
+use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
+use feagi_connectome::connectome_basis::engine::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
+use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::NeuronModelFeagiAdvancedDefaultQuant;
+use feagi_connectome::connectome_basis::neuron_model::foundation_power::NeuronModelFoundationPowerFloat32;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::neural_processors::singular::{
     NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
     NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
 };
+use feagi_genome::basis::specifications::brain_regions::BrainRegionID;
+use feagi_genome::cortical_area::foundation::Power;
+use feagi_genome::cortical_area::processing::Interconnect;
+use feagi_genome::cortical_area::CorticalAreaTypeEnum;
+use feagi_genome::genome::containers::cortical_area::{CorticalAreaGenerator, CorticalAreaGeneratorEnum};
+use feagi_genome::genome::genome_editing::{GenomeEditSequence, GenomeEditStepResult};
+use feagi_genome::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use feagi_genome::workers::genome_manager::requests::category_structs::{GenomeManagerConfigurables, GenomeManagerRequesters};
 use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
+use feagi_genome::workers::genome_manager::worker_loop::{GenomeManagerRequest, GenomeManagerResponse};
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
 use feagi_interop::node::feagi_role::{FeagiRole, FeagiRoles};
 use feagi_interop::transport::rest::server::error::FeagiRestServerError;
@@ -38,6 +50,9 @@ type BurstEngine = BurstEngineCPURayon<FIQ, NeuronProcessorSingleEngineVisualiza
 
 /// The neural processor worker, running the burst engine
 type NeuralProcessorWorker = FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, NeuronProcessorSingleEngineRequest<FIQ>, NeuronProcessorSingleEngineResponse<FIQ>>;
+
+/// The genome manager worker, editing the neural processor's connectome
+type GenomeManagerWorker = FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, GenomeManagerRequest<FIQ>, GenomeManagerResponse>;
 
 /// The request categories the REST server serves: the genome manager's, and system, which the
 /// brain server worker answers itself
@@ -88,23 +103,24 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
     type WorkerStartError = DesignerBrainServerLaunchError;
 
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs) -> Result<(DesignerBrainServerWorker, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
-        // The genome manager makes the request channels of its categories, and keeps the responders
-        let genome_manager_builder = GenomeManagerWorkerBuilder::<FIQ>::default();
-        let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
-        let (genome_manager, ()) = genome_manager_builder
-            .build_worker(spawner, genome_manager_responders)
-            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
-
-        // Not connected to the genome manager yet, so its engine has no cortical areas. Its
-        // visualization receiver is held until it is wired to zenoh
+        // Starts with no cortical areas, which the genome manager adds. Its visualization receiver
+        // is held until it is wired to zenoh
         let neural_processor_builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, BurstEngine> {
             initial_target_frequency: TargetFrequency::new_from_frequency(INITIAL_BURST_FREQUENCY_HZ),
             initial_visualization_frequency: TargetFrequency::new_from_frequency(INITIAL_VISUALIZATION_FREQUENCY_HZ),
             engine_init_parameters: (),
         };
         let (visualization_transmitter, visualization_receiver) = neural_processor_builder.spawn_related_channel_pairs();
-        let (neural_processor, ()) = neural_processor_builder
+        let (neural_processor, neural_processor_commands) = neural_processor_builder
             .build_worker(spawner, visualization_transmitter)
+            .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
+
+        // The genome manager makes the request channels of its categories, and keeps the responders.
+        // It edits the neural processor's connectome through a clone of its command channel
+        let genome_manager_builder = GenomeManagerWorkerBuilder::<FIQ>::default();
+        let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_related_channel_pairs();
+        let (genome_manager, ()) = genome_manager_builder
+            .build_worker(spawner, (genome_manager_responders, neural_processor_commands))
             .map_err(|error| WorkerStartError::WorkerError(error.into()))?;
 
         // System requests are answered by the brain server worker itself, which keeps the responder
@@ -162,7 +178,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
 pub struct DesignerBrainServerCommandHandler {
     /// Taken when stopping, so system requests are no longer answered
     system: Option<FeagiCategoryResponder<SystemRequestCategory, ChannelBackend>>,
-    genome_manager: FeagiWorker<FeagiStdThreadSpawner, ChannelBackend, (), ()>,
+    genome_manager: GenomeManagerWorker,
     neural_processor: NeuralProcessorWorker,
     // TODO wire to zenoh as a publishing event. Until then nothing reads it, so the neural
     // processor skips visualization once its slots fill
@@ -258,8 +274,11 @@ fn system_response(request: &SystemRequests) -> SystemResponses {
 /// for the workers it runs to exit
 async fn server_runtime(
     command_responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
-    handler: DesignerBrainServerCommandHandler,
+    mut handler: DesignerBrainServerCommandHandler,
 ) {
+    // TODO placeholder until a genome is loaded or sent by a client
+    build_example_brain(&mut handler.genome_manager).await;
+
     let mut commands = FeagiWorkerPollingRouter::new(handler, command_responder);
     loop {
         let mut busy = match commands.try_handle_next().await {
@@ -286,6 +305,92 @@ async fn server_runtime(
     let _ = rest_server.join();
     let _ = neural_processor.join();
     let _ = genome_manager.join();
+}
+
+//endregion
+
+//region Example Brain
+
+/// TODO placeholder. Builds a small brain through the genome manager's command channel, one edit
+/// sequence at a time: a brain region under the root, a 1x1x1 power area in the root, and a
+/// 10x10x10 FEAGI advanced interconnect area in the new region. A step that fails is reported,
+/// and the steps relying on it are skipped
+async fn build_example_brain(genome_manager: &mut GenomeManagerWorker) {
+    let root = match genome_manager.make_request(GenomeManagerRequest::RootBrainRegion).await {
+        Ok(GenomeManagerResponse::RootBrainRegion(root)) => root,
+        _ => {
+            eprintln!("Example brain: could not read the root brain region");
+            return;
+        }
+    };
+
+    let mut sequence = GenomeEditSequence::new();
+    let _ = sequence.brain_region().add_now(root, example_metadata("Example Region"), example_position([0, 0, 0]));
+    let region = match apply_edit_sequence(genome_manager, sequence).await.as_deref() {
+        Ok([GenomeEditStepResult::BrainRegionAdded(region)]) => *region,
+        other => {
+            eprintln!("Example brain: could not add the brain region: {other:?}");
+            return;
+        }
+    };
+    println!("Example brain: added brain region {region:?} under the root brain region {root:?}");
+
+    // The defaults of each cortical type, only the dimensions differ
+    match CorticalAreaGenerator::<FIQ, NeuronModelFoundationPowerFloat32>::from_defaults::<Power>(example_voxels([1, 1, 1])) {
+        Ok(power) => {
+            let power: CorticalAreaGeneratorEnum<FIQ> = CorticalAreaTypeEnum::from_data::<Power, NeuronModelFoundationPowerFloat32>(power);
+            add_example_cortical_area(genome_manager, power, root, "Example Power", [0, 0, 0]).await
+        }
+        Err(error) => eprintln!("Example brain: could not make the power area: {error}"),
+    }
+    match CorticalAreaGenerator::<FIQ, NeuronModelFeagiAdvancedDefaultQuant>::from_defaults::<Interconnect>(example_voxels([10, 10, 10])) {
+        Ok(interconnect) => {
+            let interconnect: CorticalAreaGeneratorEnum<FIQ> = CorticalAreaTypeEnum::from_data::<Interconnect, NeuronModelFeagiAdvancedDefaultQuant>(interconnect);
+            add_example_cortical_area(genome_manager, interconnect, region, "Example Interconnect", [5, 0, 0]).await
+        }
+        Err(error) => eprintln!("Example brain: could not make the interconnect area: {error}"),
+    }
+}
+
+/// An area of `[x, y, z]` voxels, one neuron deep
+fn example_voxels([x, y, z]: [usize; 3]) -> DimensionalCorticalAreaDimensions<u32> {
+    DimensionalCorticalAreaDimensions::new_dimensions_from_usize([x, y, z, 1]).expect("example dimensions are valid")
+}
+
+async fn add_example_cortical_area(
+    genome_manager: &mut GenomeManagerWorker,
+    generator: CorticalAreaGeneratorEnum<FIQ>,
+    parent_region: BrainRegionID,
+    name: &str,
+    position: [i64; 3],
+) {
+    let mut sequence = GenomeEditSequence::new();
+    // Faux identifiers are not used yet
+    let _ = sequence.cortical_area().add(0, generator, parent_region, example_metadata(name), example_position(position));
+    match apply_edit_sequence(genome_manager, sequence).await.as_deref() {
+        Ok([GenomeEditStepResult::CorticalAreaAdded(area)]) => println!("Example brain: added cortical area '{name}' {area:?} in brain region {parent_region:?}"),
+        other => eprintln!("Example brain: could not add cortical area '{name}': {other:?}"),
+    }
+}
+
+async fn apply_edit_sequence(genome_manager: &mut GenomeManagerWorker, sequence: GenomeEditSequence<FIQ>) -> Result<Vec<GenomeEditStepResult>, String> {
+    match genome_manager.make_request(GenomeManagerRequest::ApplyEditSequence(sequence)).await {
+        Ok(GenomeManagerResponse::EditSequenceApplied(results)) => results.map_err(|error| error.to_string()),
+        Ok(_) => Err("the genome manager answered with an unexpected response".to_string()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn example_metadata(name: &str) -> GenomeObjectMetadata {
+    GenomeObjectMetadata { name: name.to_string(), description: String::new() }
+}
+
+fn example_position(position_3d: [i64; 3]) -> GenomeObjectPositioning {
+    let [x, y, _] = position_3d;
+    GenomeObjectPositioning {
+        position_2d: SignedIntegerSpatial::new_from_array([x, y]),
+        position_3d: SignedIntegerSpatial::new_from_array(position_3d),
+    }
 }
 
 //endregion

@@ -28,6 +28,38 @@ pub enum BrainRegionContainerRuntime {
     Inner(BrainRegionContainerInnerRuntime),
 }
 
+impl BrainRegionContainerRuntime {
+    /// The cortical areas directly within this region
+    pub fn contained_areas(&self) -> &HashSet<CorticalIdentifier> {
+        match self {
+            Self::Root(container) => &container.contained_areas,
+            Self::Inner(container) => &container.contained_areas,
+        }
+    }
+
+    /// The brain regions directly within this region
+    pub fn contained_regions(&self) -> &HashSet<BrainRegionID> {
+        match self {
+            Self::Root(container) => &container.contained_regions,
+            Self::Inner(container) => &container.contained_regions,
+        }
+    }
+
+    pub(crate) fn contained_areas_mut(&mut self) -> &mut HashSet<CorticalIdentifier> {
+        match self {
+            Self::Root(container) => &mut container.contained_areas,
+            Self::Inner(container) => &mut container.contained_areas,
+        }
+    }
+
+    pub(crate) fn contained_regions_mut(&mut self) -> &mut HashSet<BrainRegionID> {
+        match self {
+            Self::Root(container) => &mut container.contained_regions,
+            Self::Inner(container) => &mut container.contained_regions,
+        }
+    }
+}
+
 impl BrainRegionContainer for BrainRegionContainerRuntime {
     fn is_root(&self) -> bool {
         match self {

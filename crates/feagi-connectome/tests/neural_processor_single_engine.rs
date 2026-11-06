@@ -3,6 +3,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use feagi_basis::parallelism::block_on_thread;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
@@ -117,7 +118,7 @@ fn run_worker(target_frequency: f64, visualization_frequency: f64, run_for: std:
         true => (Some(listen(visualization_receiver)), None),
         false => (None, Some(visualization_receiver)),
     };
-    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+    let (mut worker, _command_requester) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
 
     block_on_thread(async {
         let response = worker
@@ -200,7 +201,7 @@ fn edit_batch_stops_at_first_failure() {
         engine_init_parameters: Some(Arc::new(Counts::default())),
     };
     let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
-    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+    let (mut worker, _command_requester) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
 
     block_on_thread(async {
         // The counting engine refuses every edit, so only the first step is attempted
@@ -227,7 +228,7 @@ fn paused_worker_does_not_burst_but_handles_commands() {
         engine_init_parameters: Some(counts.clone()),
     };
     let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
-    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+    let (mut worker, _command_requester) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
 
     block_on_thread(async {
         let response = worker.make_request(NeuronProcessorSingleEngineRequest::Pause).await.unwrap();
@@ -250,6 +251,27 @@ fn paused_worker_does_not_burst_but_handles_commands() {
 
         // Stop is still handled while paused
         worker.make_request(NeuronProcessorSingleEngineRequest::Pause).await.unwrap();
+        worker.stop().await.unwrap();
+    });
+    worker.join().unwrap();
+}
+
+#[test]
+fn command_requester_clone_reaches_the_worker() {
+    let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
+        initial_target_frequency: TargetFrequency::new_from_frequency(1000.0),
+        initial_visualization_frequency: TargetFrequency::new_from_frequency(1000.0),
+        engine_init_parameters: Some(Arc::new(Counts::default())),
+    };
+    let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
+    let (mut worker, mut command_requester) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+
+    block_on_thread(async {
+        let response = command_requester
+            .make_request(FeagiWorkerRequest::Custom(NeuronProcessorSingleEngineRequest::Pause))
+            .await
+            .unwrap();
+        assert!(matches!(response, FeagiWorkerResponse::Custom(NeuronProcessorSingleEngineResponse::Paused)));
         worker.stop().await.unwrap();
     });
     worker.join().unwrap();

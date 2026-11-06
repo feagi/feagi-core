@@ -15,6 +15,7 @@ description = "Various structures used to describe the structure and state of th
 std = [
     "alloc",
     "serde/std", "serde_json/std", "base64/std", "thiserror/std", "half/std", "uuid/std", "uuid/v7", "uuid/js",  # js for WASM support
+    "rand/std", "rand/thread_rng", # random cortical identifiers
     "feagi-basis/std", "feagi-connectome/std"
 ]
 
@@ -42,6 +43,8 @@ uuid = { workspace = true }
 rand = {workspace = true}
 
 [dev-dependencies]
+# The CPU burst engine, to edit a real connectome in tests
+feagi-connectome = {path = "../feagi-connectome", default-features = false, features = ["burst-engine-cpu"]}
 postcard = { workspace = true, features = ["alloc"] }
 
 [lints]
