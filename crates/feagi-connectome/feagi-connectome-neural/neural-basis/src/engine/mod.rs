@@ -1,6 +1,8 @@
 use std::fmt::Formatter;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
-use crate::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
+use feagi_basis::target_frequency::TargetFrequency;
+use crate::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeVisitorDispatchWrapper};
+use crate::engine::engine_change_command::EngineChangeCommandOtherError;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::BurstVisualizationData;
 
@@ -8,9 +10,11 @@ pub mod engine_change_command;
 
 
 /// Some implementation meant to process neurons and synapses in real time. The point of FEAGI
-pub trait BurstEngine<FIQ: FeagiIndexQuantization, Vis>: Sized
+pub trait BurstEngine<FIQ, CVDW, Vis>: Sized
 where
     FIQ: FeagiIndexQuantization,
+    CVDW: ConnectomeVisitorDispatchWrapper<FIQ>,
+    // Vis TODO
 {
     /// Whatever is needed for the burst engine to init
     type InitParameters: Send;
@@ -20,11 +24,15 @@ where
     type VisualizationTransmitter: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>;
 
     /// Init the burst engine, creating it in the process. The engine keeps
-    /// `visualization_transmitter` to publish visualization through
+    /// `visualization_transmitter` to publish visualization through. `burst_rate` and
+    /// `visualization_rate` are the rates it starts at, as later set by [`Self::set_burst_rate`]
+    /// and [`Self::set_visualization_rate`]
     async fn init_burst_engine(
         parameters: Self::InitParameters,
         engine_index: BurstEngineIndex,
         visualization_transmitter: Self::VisualizationTransmitter,
+        burst_rate: TargetFrequency,
+        visualization_rate: TargetFrequency,
     ) -> Result<Self, Self::InitError>;
 
     /// Run a full burst, from neuron firing to neurons getting their inputs combined. If
@@ -33,8 +41,17 @@ where
     /// burst never waits on visualization
     async fn run_burst(&mut self, send_visualization: bool);
 
-    async fn process_change_command(&mut self, command: EngineChangeCommand<FIQ>)
-                                    -> Result<EngineChangeCommandReturn<FIQ>, EngineChangeCommandError>;
+    /// Told the rate bursts are run at, for engines that keep their own timing. Engines told when
+    /// to burst can just accept it. Returning an error refuses the rate
+    async fn set_burst_rate(&mut self, burst_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError>;
+
+    /// Told the rate bursts send visualization at, for engines that keep their own timing. Engines
+    /// told when to send visualization can just accept it. Returning an error refuses the rate
+    async fn set_visualization_rate(&mut self, visualization_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError>;
+
+    /// Apply a single connectome edit step, between bursts
+    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ, CVDW>)
+                                     -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>;
 }
 
 // TODO designer trait with commands to add genome objects, channels, errors

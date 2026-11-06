@@ -61,6 +61,26 @@ macro_rules! create_step_and_result_enums {
 
 
 
+            impl<FIQ: FeagiIndexQuantization> ConnectomeEditResultantEnum<FIQ> {
+                /// True if the edit step failed. A failed step stops the rest of its batch
+                pub fn is_err(&self) -> bool {
+                    match self {
+                        ConnectomeEditResultantEnum::Nothing => false,
+                        $(ConnectomeEditResultantEnum::$StepSpecificName(result) => result.is_err(),)+
+                    }
+                }
+
+                /// True if the edit step failed in a way that likely left the connectome corrupted
+                pub fn is_connectome_corrupted(&self) -> bool {
+                    match self {
+                        ConnectomeEditResultantEnum::Nothing => false,
+                        $(ConnectomeEditResultantEnum::$StepSpecificName(result) => {
+                            result.as_ref().is_err_and(|error| error.is_connectome_corrupted())
+                        })+
+                    }
+                }
+            }
+
             $( _impl_connectome_edit_step_requirements!($StepSpecificName); )+
 
         }
@@ -102,6 +122,16 @@ create_step_and_result_enums!{
 pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
     pub cortical_area_init_dispatch: CVDW::CorticalAreaInitDispatch,
     _p: core::marker::PhantomData<FIQ>,
+}
+
+impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepCorticalAreaAdd<FIQ, CVDW> {
+    /// Adds a cortical area from its init, at whichever neuron model it uses
+    pub fn new(cortical_area_init_dispatch: CVDW::CorticalAreaInitDispatch) -> Self {
+        Self {
+            cortical_area_init_dispatch,
+            _p: core::marker::PhantomData,
+        }
+    }
 }
 
 pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization>

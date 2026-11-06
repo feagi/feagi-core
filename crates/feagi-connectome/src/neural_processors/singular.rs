@@ -11,6 +11,9 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
+use crate::neuron_models::init_dispatch::ConnectomeDispatch;
+use feagi_connectome_neural::neural_basis::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome_neural::neural_basis::visualization::BurstVisualizationData;
@@ -18,6 +21,10 @@ use std::time::Instant;
 
 /// How many commands can be in queue on this worker at one time
 const COMMAND_QUEUE_LENGTH: usize = 8;
+
+/// How long the worker sleeps between checks for a command while paused. Bounds how late a command
+/// is answered while paused
+const PAUSED_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(1);
 
 /// How many visualizations the visualization channel holds. One for the listener to read while the
 /// engine writes the other
@@ -35,46 +42,99 @@ pub type NeuronProcessorSingleEngineVisualizationReceiver<FIQ> =
 //region Commands
 
 /// Custom requests to the single engine neuron processor
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum NeuronProcessorSingleEngineRequest {
-    /// Set the rate the burst loop ticks at. Applies from the next tick
-    TargetFrequency(TargetFrequency),
-    /// Set the rate bursts send visualization at. Bursts never run faster than the target
-    /// frequency, so a visualization frequency above it means every burst sends visualization
-    VisualizationFrequency(TargetFrequency),
+pub enum NeuronProcessorSingleEngineRequest<FIQ: FeagiIndexQuantization> {
+    /// Set the rate the burst loop ticks at. Applies from the next tick, if the engine accepts it
+    BurstRate(TargetFrequency),
+    /// Set the rate bursts send visualization at, if the engine accepts it. Bursts never run faster
+    /// than the burst rate, so a visualization rate above it means every burst sends visualization
+    VisualizationRate(TargetFrequency),
+    /// Apply these connectome edit steps in order, all between the same two bursts. Stops at the
+    /// first step that fails
+    ConnectomeEdits(Vec<ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>>),
+    /// Stop bursting until resumed. While paused the worker only waits for and handles commands,
+    /// so its caller can edit the connectome and update its own state before bursting continues
+    Pause,
+    /// Continue bursting after a pause, from now rather than catching up on the bursts missed
+    Resume,
 }
 
-/// Custom responses from the single engine neuron processor
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum NeuronProcessorSingleEngineResponse {
-    /// The target frequency was applied
-    TargetFrequencyUpdated,
-    /// The visualization frequency was applied
-    VisualizationFrequencyUpdated,
+/// Custom responses from the single engine neuron processor, one per kind of request
+pub enum NeuronProcessorSingleEngineResponse<FIQ: FeagiIndexQuantization> {
+    /// Whether the engine accepted the burst rate. If it did not, the rate is unchanged
+    BurstRate(Result<(), EngineChangeCommandOtherError>),
+    /// Whether the engine accepted the visualization rate. If it did not, the rate is unchanged
+    VisualizationRate(Result<(), EngineChangeCommandOtherError>),
+    /// What each edit step that was attempted returned, in order. If the last one failed, the
+    /// steps after it were not attempted
+    ConnectomeEdits(Vec<Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>>),
+    /// Bursting is paused. Also the reply if it already was
+    Paused,
+    /// Bursting has resumed. Also the reply if it was not paused
+    Resumed,
 }
 
 /// The state of the single engine neuron processor, which its commands act upon
-pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ()>> {
+pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> {
     target_frequency: TargetFrequency,
     visualization_frequency: TargetFrequency,
+    /// While paused, no bursts run and the worker only waits for commands
+    paused: bool,
     engine: Engine,
     _fiq: PhantomData<fn() -> FIQ>,
 }
 
-impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ()>> FeagiWorkerCommandProcessor
-for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
-    type CustomRequest = NeuronProcessorSingleEngineRequest;
-    type CustomResponse = NeuronProcessorSingleEngineResponse;
+impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
+    /// Relays each edit step to the engine in order, stopping at the first that fails, whether or
+    /// not it corrupted the connectome. Deciding what to do about corruption is left to the caller
+    async fn apply_connectome_edits(
+        &mut self,
+        steps: Vec<ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>>,
+    ) -> Vec<Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>> {
+        let mut results = Vec::with_capacity(steps.len());
+        for step in steps {
+            let result = self.engine.process_connectome_edit(step).await;
+            let failed = result.as_ref().map_or(true, ConnectomeEditResultantEnum::is_err);
+            results.push(result);
+            if failed {
+                break;
+            }
+        }
+        results
+    }
+}
 
+impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> FeagiWorkerCommandProcessor
+for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
+    type CustomRequest = NeuronProcessorSingleEngineRequest<FIQ>;
+    type CustomResponse = NeuronProcessorSingleEngineResponse<FIQ>;
+
+    /// The burst loop is timed here, so a rate the engine accepts also applies from the next tick
     async fn on_custom(&mut self, request: Self::CustomRequest) -> Self::CustomResponse {
         match request {
-            NeuronProcessorSingleEngineRequest::TargetFrequency(target_frequency) => {
-                self.target_frequency = target_frequency;
-                NeuronProcessorSingleEngineResponse::TargetFrequencyUpdated
+            NeuronProcessorSingleEngineRequest::BurstRate(burst_rate) => {
+                let result = self.engine.set_burst_rate(burst_rate).await;
+                if result.is_ok() {
+                    self.target_frequency = burst_rate;
+                }
+                NeuronProcessorSingleEngineResponse::BurstRate(result)
             }
-            NeuronProcessorSingleEngineRequest::VisualizationFrequency(visualization_frequency) => {
-                self.visualization_frequency = visualization_frequency;
-                NeuronProcessorSingleEngineResponse::VisualizationFrequencyUpdated
+            NeuronProcessorSingleEngineRequest::VisualizationRate(visualization_rate) => {
+                let result = self.engine.set_visualization_rate(visualization_rate).await;
+                if result.is_ok() {
+                    self.visualization_frequency = visualization_rate;
+                }
+                NeuronProcessorSingleEngineResponse::VisualizationRate(result)
+            }
+            NeuronProcessorSingleEngineRequest::ConnectomeEdits(steps) => {
+                NeuronProcessorSingleEngineResponse::ConnectomeEdits(self.apply_connectome_edits(steps).await)
+            }
+            NeuronProcessorSingleEngineRequest::Pause => {
+                self.paused = true;
+                NeuronProcessorSingleEngineResponse::Paused
+            }
+            NeuronProcessorSingleEngineRequest::Resume => {
+                self.paused = false;
+                NeuronProcessorSingleEngineResponse::Resumed
             }
         }
     }
@@ -86,7 +146,7 @@ for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
 
 /// Responsible for spawning a neuron processor running a single burst engine. The engine is
 /// initialized on the worker's own thread, so only its init parameters need to be `Send`
-pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ()>> {
+pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> {
     /// The rate the burst loop starts ticking at
     pub initial_target_frequency: TargetFrequency,
     /// The rate bursts start sending visualization at
@@ -99,7 +159,7 @@ pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization,
 impl<FIQ, Engine> FeagiWorkerBuilder<FeagiStdThreadSpawner> for NeuronProcessorSingleEngineWorkerBuilder<FIQ, Engine>
 where
     FIQ: FeagiIndexQuantization,
-    Engine: BurstEngine<FIQ, (), VisualizationTransmitter = NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>>,
+    Engine: BurstEngine<FIQ, ConnectomeDispatch, (), VisualizationTransmitter = NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>>,
     Engine::InitParameters: 'static,
     Engine::InitError: core::error::Error + Send + 'static,
 {
@@ -124,7 +184,7 @@ where
         visualization_transmitter: Self::BuildInputs,
     ) -> Result<
         (
-            FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse>,
+            FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, NeuronProcessorSingleEngineRequest<FIQ>, NeuronProcessorSingleEngineResponse<FIQ>>,
             Self::BuildOutputs,
         ),
         WorkerStartError<Self::WorkerStartError>,
@@ -135,7 +195,13 @@ where
 
         let handle = spawner.spawn_worker(move || async move {
             // Index will always be zero
-            let engine = match Engine::init_burst_engine(engine_init_parameters, BurstEngineIndex(0), visualization_transmitter).await {
+            let engine = match Engine::init_burst_engine(
+                engine_init_parameters,
+                BurstEngineIndex(0),
+                visualization_transmitter,
+                initial_target_frequency,
+                initial_visualization_frequency,
+            ).await {
                 Ok(engine) => {
                     // The builder only stops waiting by receiving, so this cannot fail
                     let _ = init_result_sender.send(Ok(()));
@@ -149,6 +215,7 @@ where
             let handler = NeuronProcessorSingleEngineCommandHandler {
                 target_frequency: initial_target_frequency,
                 visualization_frequency: initial_visualization_frequency,
+                paused: false,
                 engine,
                 _fiq: PhantomData,
             };
@@ -182,11 +249,12 @@ pub enum NeuronProcessorSingleEngineWorkerBuilderError<InitError: core::error::E
 //region Loop
 
 /// The burst loop. Each tick: schedules the next tick, handles every queued command, runs the
-/// burst (sending visualization if it is due), then waits until the scheduled tick
-async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ()>>(
+/// burst (sending visualization if it is due), then waits until the scheduled tick. If a command
+/// paused it, it instead waits on and handles commands until resumed, then bursts
+async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>>(
     responder: FeagiResponderAlloc<
-        FeagiWorkerRequest<NeuronProcessorSingleEngineRequest>,
-        FeagiWorkerResponse<NeuronProcessorSingleEngineResponse>,
+        FeagiWorkerRequest<NeuronProcessorSingleEngineRequest<FIQ>>,
+        FeagiWorkerResponse<NeuronProcessorSingleEngineResponse<FIQ>>,
     >,
     handler: NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>,
 ) {
@@ -206,6 +274,20 @@ async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine:
                 FeagiWorkerStep::Idle => break,
                 FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => return,
             }
+        }
+
+        // While paused, nothing runs on the timer. Only commands are handled, as they arrive
+        if commands.processor_mut().paused {
+            while commands.processor_mut().paused {
+                match commands.try_handle_next().await {
+                    FeagiWorkerStep::Handled => {}
+                    FeagiWorkerStep::Idle => std::thread::sleep(PAUSED_POLL_INTERVAL),
+                    FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => return,
+                }
+            }
+            // Resumed. Burst now, and schedule the next tick from now rather than catching up
+            let tick_duration = commands.processor_mut().target_frequency.duration_between_ticks();
+            tick_time = Instant::now() + tick_duration;
         }
 
         // Visualization is scheduled the same way as ticks, but only checked once per burst

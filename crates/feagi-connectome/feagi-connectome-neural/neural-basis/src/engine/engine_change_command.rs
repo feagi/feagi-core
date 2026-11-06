@@ -1,13 +1,9 @@
-use crate::quantization_levels::FeagiIndexQuantization;
+// TODO feature gate alloc related things
 
-// TODO Edits???
-
-pub struct EngineChangeCommand<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
-
-pub struct EngineChangeCommandReturn<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
-
+/// Some other error occurred not obviously correlated to the command (possible backend hardware
+/// failure)
 #[derive(Debug, thiserror::Error)]
-pub enum EngineChangeCommandError {
+pub enum EngineChangeCommandOtherError {
     #[error("Unknown Error")]
     UnknownError
 }

@@ -10,6 +10,20 @@ pub mod connectome_basis {
 
     pub mod engine {
         pub use feagi_connectome_neural::neural_basis::engine::BurstEngineIndex;
+        pub use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
+        /// The burst engine running on the CPU, multithreaded through rayon
+        #[cfg(feature = "burst-engine-cpu")]
+        pub use feagi_connectome_neural::burst_engine_cpu::BurstEngineCPURayon;
+    }
+
+    /// The edit steps sent to the connectome, and what each returns
+    #[cfg(feature = "std")]
+    pub mod connectome_editing {
+        pub use crate::neuron_models::init_dispatch::ConnectomeDispatch;
+        pub use feagi_connectome_neural::neural_basis::connectome_editing::{
+            ConnectomeEditError, ConnectomeEditErrorCorticalAreaAdd, ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum,
+            ConnectomeEditStepCorticalAreaAdd, ConnectomeEditStepEnum,
+        };
     }
 
     pub mod neuron_model {

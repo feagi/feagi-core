@@ -9,12 +9,12 @@ use feagi_basis::target_frequency::TargetFrequency;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use feagi_connectome::neural_processors::singular::{
     NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
-    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder,
-    NeuronProcessorSingleEngineWorkerBuilderError,
+    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
 };
+use feagi_connectome::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
-use feagi_connectome_neural::neural_basis::engine::engine_change_command::{EngineChangeCommand, EngineChangeCommandError, EngineChangeCommandReturn};
+use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
 use feagi_connectome_neural::neural_basis::visualization::VisualizationStructureChangeCounter;
 
 type FIQ = FeagiIndexQuantizationStandard;
@@ -38,7 +38,7 @@ struct CountingEngine {
 #[error("Refused to init")]
 struct RefusedInit;
 
-impl BurstEngine<FIQ, ()> for CountingEngine {
+impl BurstEngine<FIQ, ConnectomeDispatch, ()> for CountingEngine {
     /// The burst counter, or `None` to fail init
     type InitParameters = Option<Arc<Counts>>;
     type InitError = RefusedInit;
@@ -48,6 +48,8 @@ impl BurstEngine<FIQ, ()> for CountingEngine {
         parameters: Self::InitParameters,
         _engine_index: BurstEngineIndex,
         visualization_transmitter: Self::VisualizationTransmitter,
+        _burst_rate: TargetFrequency,
+        _visualization_rate: TargetFrequency,
     ) -> Result<Self, Self::InitError> {
         let counts = parameters.ok_or(RefusedInit)?;
         Ok(CountingEngine { counts, bursts_run: 0, visualization_transmitter })
@@ -64,9 +66,18 @@ impl BurstEngine<FIQ, ()> for CountingEngine {
         }
     }
 
-    async fn process_change_command(&mut self, _command: EngineChangeCommand<FIQ>)
-        -> Result<EngineChangeCommandReturn<FIQ>, EngineChangeCommandError> {
-        Err(EngineChangeCommandError::UnknownError)
+    async fn set_burst_rate(&mut self, _burst_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
+        Ok(())
+    }
+
+    async fn set_visualization_rate(&mut self, _visualization_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
+        Ok(())
+    }
+
+    /// Refuses every connectome edit
+    async fn process_connectome_edit(&mut self, _step: ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>)
+        -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError> {
+        Err(EngineChangeCommandOtherError::UnknownError)
     }
 }
 
@@ -110,15 +121,15 @@ fn run_worker(target_frequency: f64, visualization_frequency: f64, run_for: std:
 
     block_on_thread(async {
         let response = worker
-            .make_request(NeuronProcessorSingleEngineRequest::TargetFrequency(TargetFrequency::new_from_frequency(target_frequency)))
+            .make_request(NeuronProcessorSingleEngineRequest::BurstRate(TargetFrequency::new_from_frequency(target_frequency)))
             .await
             .unwrap();
-        assert_eq!(response, NeuronProcessorSingleEngineResponse::TargetFrequencyUpdated);
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::BurstRate(Ok(()))));
         let response = worker
-            .make_request(NeuronProcessorSingleEngineRequest::VisualizationFrequency(TargetFrequency::new_from_frequency(visualization_frequency)))
+            .make_request(NeuronProcessorSingleEngineRequest::VisualizationRate(TargetFrequency::new_from_frequency(visualization_frequency)))
             .await
             .unwrap();
-        assert_eq!(response, NeuronProcessorSingleEngineResponse::VisualizationFrequencyUpdated);
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::VisualizationRate(Ok(()))));
         // Only count what runs at the requested frequencies
         counts.bursts.store(0, Ordering::SeqCst);
         counts.visualizations.store(0, Ordering::SeqCst);
@@ -179,4 +190,67 @@ fn engine_init_failure_is_returned() {
         Err(other) => panic!("unexpected error: {other}"),
         Ok(_) => panic!("worker started despite engine init failing"),
     }
+}
+
+#[test]
+fn edit_batch_stops_at_first_failure() {
+    let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
+        initial_target_frequency: TargetFrequency::new_from_frequency(1000.0),
+        initial_visualization_frequency: TargetFrequency::new_from_frequency(1000.0),
+        engine_init_parameters: Some(Arc::new(Counts::default())),
+    };
+    let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
+    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+
+    block_on_thread(async {
+        // The counting engine refuses every edit, so only the first step is attempted
+        let steps = vec![ConnectomeEditStepEnum::Nothing, ConnectomeEditStepEnum::Nothing];
+        let response = worker.make_request(NeuronProcessorSingleEngineRequest::ConnectomeEdits(steps)).await.unwrap();
+        match response {
+            NeuronProcessorSingleEngineResponse::ConnectomeEdits(results) => assert!(
+                matches!(results.as_slice(), [Err(EngineChangeCommandOtherError::UnknownError)]),
+                "steps after a failure should not be attempted"
+            ),
+            _ => panic!("edits answered with the wrong response"),
+        }
+        worker.stop().await.unwrap();
+    });
+    worker.join().unwrap();
+}
+
+#[test]
+fn paused_worker_does_not_burst_but_handles_commands() {
+    let counts = Arc::new(Counts::default());
+    let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
+        initial_target_frequency: TargetFrequency::new_from_frequency(500.0),
+        initial_visualization_frequency: TargetFrequency::new_from_frequency(500.0),
+        engine_init_parameters: Some(counts.clone()),
+    };
+    let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
+    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, visualization_transmitter).unwrap();
+
+    block_on_thread(async {
+        let response = worker.make_request(NeuronProcessorSingleEngineRequest::Pause).await.unwrap();
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::Paused));
+        // A burst may already have been underway when the pause arrived
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        counts.bursts.store(0, Ordering::SeqCst);
+
+        // Commands are still handled while paused
+        let steps = vec![ConnectomeEditStepEnum::Nothing];
+        let response = worker.make_request(NeuronProcessorSingleEngineRequest::ConnectomeEdits(steps)).await.unwrap();
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::ConnectomeEdits(_)));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(counts.bursts.load(Ordering::SeqCst), 0, "bursts ran while paused");
+
+        let response = worker.make_request(NeuronProcessorSingleEngineRequest::Resume).await.unwrap();
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::Resumed));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(counts.bursts.load(Ordering::SeqCst) >= 2, "bursting did not resume");
+
+        // Stop is still handled while paused
+        worker.make_request(NeuronProcessorSingleEngineRequest::Pause).await.unwrap();
+        worker.stop().await.unwrap();
+    });
+    worker.join().unwrap();
 }
