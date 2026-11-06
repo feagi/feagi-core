@@ -111,7 +111,7 @@ fn json_round_trips_and_rejects_invalid_bytes() {
 mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
     use feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTagVoxel;
-    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutTag};
+    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties};
     use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model;
     use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NeuronModelFeagiSimple;
@@ -160,8 +160,33 @@ mod custom_inner {
             type Inner = Channel;
         }
 
+        /// Never generated, only identified
         impl UsesFeagiSimple for Thing {
-            fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
+            fn default_universal_properties<NM: NeuronModelFeagiSimple>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn default_cortical_properties<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn default_cortical_variance<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn cortical_internal<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn cortical_scratch<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn neuron_internal<NM: NeuronModelFeagiSimple>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
+                unimplemented!()
+            }
+
+            fn neuron_scratch<NM: NeuronModelFeagiSimple>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
                 unimplemented!()
             }
         }

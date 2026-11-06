@@ -1,10 +1,9 @@
 //! Cortical areas fundamental to the running of the brain
 
 use super::{CorticalAreaType, UsesFoundationDeath, UsesFoundationPower};
-use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
-use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutTagVoxel, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties};
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::foundation_death::{
     FoundationDeathCorticalDataInternal, FoundationDeathCorticalDataProperties, FoundationDeathCorticalDataScratch, FoundationDeathCorticalDataVariance,
     FoundationDeathNeuronDataInternal, FoundationDeathNeuronDataScratch, NeuronModelFoundationDeath,
@@ -25,21 +24,36 @@ impl CorticalAreaType for Power {
 }
 
 impl UsesFoundationPower for Power {
-    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaInit::new_uniform(
-            NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
-            NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            FoundationPowerCorticalDataProperties::new(),
-            FoundationPowerCorticalDataInternal::new(),
-            FoundationPowerCorticalDataScratch::new(),
-            FoundationPowerCorticalDataVariance::new(),
-            FoundationPowerNeuronDataInternal::new(),
-            FoundationPowerNeuronDataScratch::new(),
-        ))
+    fn default_universal_properties<NM: NeuronModelFoundationPower>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
+        Ok(NeuronModelUniversalCorticalProperties {
+            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+            is_psp_uniform: false,
+            is_psp_using_neuron_potential: false,
+        })
+    }
+
+    fn default_cortical_properties<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
+        Ok(FoundationPowerCorticalDataProperties::new())
+    }
+
+    fn default_cortical_variance<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
+        Ok(FoundationPowerCorticalDataVariance::new())
+    }
+
+    fn cortical_internal<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
+        Ok(FoundationPowerCorticalDataInternal::new())
+    }
+
+    fn cortical_scratch<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
+        Ok(FoundationPowerCorticalDataScratch::new())
+    }
+
+    fn neuron_internal<NM: NeuronModelFoundationPower>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
+        Ok(FoundationPowerNeuronDataInternal::new())
+    }
+
+    fn neuron_scratch<NM: NeuronModelFoundationPower>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
+        Ok(FoundationPowerNeuronDataScratch::new())
     }
 }
 
@@ -56,21 +70,36 @@ impl CorticalAreaType for Death {
 }
 
 impl UsesFoundationDeath for Death {
-    fn default_init<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>() -> Result<CorticalAreaInit<FIQ, NM>, DataValueQuantizationError> {
-        Ok(CorticalAreaInit::new_uniform(
-            NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([1, 1, 1, 1]).unwrap()),
-            NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            FoundationDeathCorticalDataProperties::new(),
-            FoundationDeathCorticalDataInternal::new(),
-            FoundationDeathCorticalDataScratch::new(),
-            FoundationDeathCorticalDataVariance::new(),
-            FoundationDeathNeuronDataInternal::new(),
-            FoundationDeathNeuronDataScratch::new(),
-        ))
+    fn default_universal_properties<NM: NeuronModelFoundationDeath>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
+        Ok(NeuronModelUniversalCorticalProperties {
+            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+            is_psp_uniform: false,
+            is_psp_using_neuron_potential: false,
+        })
+    }
+
+    fn default_cortical_properties<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
+        Ok(FoundationDeathCorticalDataProperties::new())
+    }
+
+    fn default_cortical_variance<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
+        Ok(FoundationDeathCorticalDataVariance::new())
+    }
+
+    fn cortical_internal<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
+        Ok(FoundationDeathCorticalDataInternal::new())
+    }
+
+    fn cortical_scratch<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
+        Ok(FoundationDeathCorticalDataScratch::new())
+    }
+
+    fn neuron_internal<NM: NeuronModelFoundationDeath>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
+        Ok(FoundationDeathNeuronDataInternal::new())
+    }
+
+    fn neuron_scratch<NM: NeuronModelFoundationDeath>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
+        Ok(FoundationDeathNeuronDataScratch::new())
     }
 }
 

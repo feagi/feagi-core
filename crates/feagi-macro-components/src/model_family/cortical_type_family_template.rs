@@ -48,7 +48,8 @@ mod kw {
 /// `NeuronLayout`, and a public module per super type named its snake case, holding a unit struct per
 /// cortical type named as in the template, such as `foundation::Power`, implementing the base trait.
 /// The module of the model family must also be in scope where this is expanded, as must
-/// `CorticalAreaInit` and `FeagiIndexQuantization`. Every map keeps its template order
+/// `CorticalAreaInit`, `FeagiIndexQuantization`, `NeuronLayoutOf` and
+/// `NeuronModelUniversalCorticalProperties`. Every map keeps its template order
 pub struct CorticalTypeFamilyTemplate {
     pub family_attributes: Vec<Attribute>,
     pub family_name: Ident,
@@ -781,13 +782,56 @@ impl CorticalTypeFamilyTemplate {
             let uses_trait = Self::uses_trait_name(model);
             let model_trait = self.model_trait_path(model);
             let tag = self.model_tag_path(model);
-            let doc = format!("A cortical type of the `{family_name}` family allowing the `{model}` model");
+            let doc = format!(
+                "A cortical type of the `{family_name}` family allowing the `{model}` model. Gives the defaults a client may \
+                 edit before creating an area (universal properties, cortical properties, cortical variance), and the data \
+                 fixed by the cortical type (cortical internal and scratch, and the internal and scratch every neuron starts \
+                 with). Each returns an error if a decimal becomes infinite or NaN at quantization `NM`"
+            );
             quote! {
                 #[doc = #doc]
                 pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #tag_trait>::LayoutTag> {
-                    /// How a new cortical area of this type starts, at quantization `NM`.
-                    /// Returns an error if a decimal default becomes infinite or NaN at `NM`
-                    fn default_init<FIQ: FeagiIndexQuantization, NM: #model_trait>() -> ::core::result::Result<CorticalAreaInit<FIQ, NM>, #quantization_error>;
+                    /// The default universal properties of a new area of this type
+                    fn default_universal_properties<NM: #model_trait>() -> ::core::result::Result<NeuronModelUniversalCorticalProperties<NM>, #quantization_error>;
+
+                    /// The default cortical properties of a new area of this type
+                    fn default_cortical_properties<NM: #model_trait>() -> ::core::result::Result<NM::CorticalDataProperties, #quantization_error>;
+
+                    /// The default cortical variance of a new area of this type
+                    fn default_cortical_variance<NM: #model_trait>() -> ::core::result::Result<NM::CorticalDataVariance, #quantization_error>;
+
+                    /// The cortical internal data every new area of this type starts with
+                    fn cortical_internal<NM: #model_trait>() -> ::core::result::Result<NM::CorticalDataInternal, #quantization_error>;
+
+                    /// The cortical scratch data every new area of this type starts with
+                    fn cortical_scratch<NM: #model_trait>() -> ::core::result::Result<NM::CorticalDataScratch, #quantization_error>;
+
+                    /// The internal data every neuron of a new area of this type starts with
+                    fn neuron_internal<NM: #model_trait>() -> ::core::result::Result<NM::NeuronDataInternal, #quantization_error>;
+
+                    /// The scratch data every neuron of a new area of this type starts with
+                    fn neuron_scratch<NM: #model_trait>() -> ::core::result::Result<NM::NeuronDataScratch, #quantization_error>;
+
+                    /// How a new cortical area of this type starts, from what a client may edit. The
+                    /// data fixed by the cortical type is filled in here. Override only for a type
+                    /// whose areas start in some other way
+                    fn generate_init<FIQ: FeagiIndexQuantization, NM: #model_trait>(
+                        layout: NeuronLayoutOf<NM, FIQ>,
+                        universal_properties: NeuronModelUniversalCorticalProperties<NM>,
+                        cortical_properties: NM::CorticalDataProperties,
+                        cortical_variance: NM::CorticalDataVariance,
+                    ) -> ::core::result::Result<CorticalAreaInit<FIQ, NM>, #quantization_error> {
+                        ::core::result::Result::Ok(CorticalAreaInit::new_uniform(
+                            layout,
+                            universal_properties,
+                            cortical_properties,
+                            Self::cortical_internal::<NM>()?,
+                            Self::cortical_scratch::<NM>()?,
+                            cortical_variance,
+                            Self::neuron_internal::<NM>()?,
+                            Self::neuron_scratch::<NM>()?,
+                        ))
+                    }
                 }
             }
         });
@@ -823,6 +867,50 @@ impl CorticalTypeFamilyTemplate {
         let unqualified = quote!();
         let data = quote!(data);
 
+        // The defaults and fixed data of `Uses{Model}`, at member `M`: name, what it returns, and
+        // its doc
+        let generator_parts: Vec<(Ident, proc_macro2::TokenStream, &str)> = vec![
+            (format_ident!("default_universal_properties"), quote!(NeuronModelUniversalCorticalProperties<M>), "The default universal properties of a new area of this cortical type at this member"),
+            (format_ident!("default_cortical_properties"), quote!(M::CorticalDataProperties), "The default cortical properties of a new area of this cortical type at this member"),
+            (format_ident!("default_cortical_variance"), quote!(M::CorticalDataVariance), "The default cortical variance of a new area of this cortical type at this member"),
+            (format_ident!("cortical_internal"), quote!(M::CorticalDataInternal), "The cortical internal data every new area of this cortical type at this member starts with"),
+            (format_ident!("cortical_scratch"), quote!(M::CorticalDataScratch), "The cortical scratch data every new area of this cortical type at this member starts with"),
+            (format_ident!("neuron_internal"), quote!(M::NeuronDataInternal), "The internal data every neuron of a new area of this cortical type at this member starts with"),
+            (format_ident!("neuron_scratch"), quote!(M::NeuronDataScratch), "The scratch data every neuron of a new area of this cortical type at this member starts with"),
+        ];
+        let generator_sigs: Vec<proc_macro2::TokenStream> = generator_parts
+            .iter()
+            .map(|(name, returns, doc)| quote! {
+                #[doc = #doc]
+                fn #name() -> ::core::result::Result<#returns, #quantization_error>;
+            })
+            .collect();
+        let generate_init_sig = quote! {
+            /// How a new cortical area of this cortical type at this member starts, from what a
+            /// client may edit
+            fn generate_init<FIQ: FeagiIndexQuantization>(
+                layout: NeuronLayoutOf<M, FIQ>,
+                universal_properties: NeuronModelUniversalCorticalProperties<M>,
+                cortical_properties: M::CorticalDataProperties,
+                cortical_variance: M::CorticalDataVariance,
+            ) -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error>
+        };
+        // Forwards to `forward_to`, called with `generics`
+        let forward_generator = |forward_to: proc_macro2::TokenStream, generics: proc_macro2::TokenStream| {
+            let parts = generator_parts.iter().map(|(name, returns, _)| quote! {
+                fn #name() -> ::core::result::Result<#returns, #quantization_error> {
+                    #forward_to::#name::<#generics>()
+                }
+            });
+            quote! {
+                #( #parts )*
+
+                #generate_init_sig {
+                    #forward_to::generate_init::<FIQ, #generics>(layout, universal_properties, cortical_properties, cortical_variance)
+                }
+            }
+        };
+
         let member_impls = self.cortical_types().into_iter().map(|leaf| {
             let cortical_type = self.cortical_type_path(leaf.super_type, leaf.name);
             let kind_value = self.kind_value(leaf.super_type, leaf.name);
@@ -851,6 +939,7 @@ impl CorticalTypeFamilyTemplate {
                     })),
                     other => ::core::result::Result::Err(#error::IncorrectCorticalType { expected: <Self as #member_trait>::KIND, actual: other.kind() }),
                 };
+                let generator = forward_generator(quote!(<Self as #uses_trait>), quote!(M));
                 quote! {
                     impl<M: #model_model_member> #via_trait<M, #tag> for #cortical_type {
                         fn into_family_enum<C: #container>(data: C::Of<M>) -> #enum_name<C> {
@@ -881,13 +970,13 @@ impl CorticalTypeFamilyTemplate {
                             }
                         }
 
-                        fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error> {
-                            <Self as #uses_trait>::default_init::<FIQ, M>()
-                        }
+                        #generator
                     }
                 }
             })
         });
+
+        let forward_to_via = forward_generator(quote!(<T as #via_trait<M, <M as #model_member>::Tag>>), quote!());
 
         let member_doc = format!("A cortical type of the `{family_name}` family, a unit struct implemented by hand");
         let via_doc = format!(
@@ -919,7 +1008,9 @@ impl CorticalTypeFamilyTemplate {
 
                 fn try_mut_family_enum<C: #container>(value: &mut #enum_name<C>) -> ::core::result::Result<&mut C::Of<M>, #error>;
 
-                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error>;
+                #( #generator_sigs )*
+
+                #generate_init_sig;
             }
 
             #( #via_impls )*
@@ -938,9 +1029,9 @@ impl CorticalTypeFamilyTemplate {
                 /// The data held, if held for this cortical type and member
                 fn try_mut_family_enum<C: #container>(value: &mut #enum_name<C>) -> ::core::result::Result<&mut C::Of<M>, #error>;
 
-                /// How a new cortical area of this type and member starts. Returns an error
-                /// if a decimal default becomes infinite or NaN at this member
-                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error>;
+                #( #generator_sigs )*
+
+                #generate_init_sig;
             }
 
             impl<T, M> #at_trait<M> for T
@@ -964,9 +1055,7 @@ impl CorticalTypeFamilyTemplate {
                     <T as #via_trait<M, <M as #model_member>::Tag>>::try_mut_family_enum::<C>(value)
                 }
 
-                fn default_init<FIQ: FeagiIndexQuantization>() -> ::core::result::Result<CorticalAreaInit<FIQ, M>, #quantization_error> {
-                    <T as #via_trait<M, <M as #model_member>::Tag>>::default_init::<FIQ>()
-                }
+                #forward_to_via
             }
 
             impl<C: #container> #enum_name<C> {

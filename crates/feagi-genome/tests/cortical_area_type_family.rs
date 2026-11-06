@@ -22,6 +22,8 @@ use feagi_genome::cortical_area::sensor::Camera;
 use feagi_genome::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::cortical_area::CorticalGenomicDataEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
+use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel};
+use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Advanced = NeuronModelFeagiAdvancedDefaultQuant;
@@ -179,31 +181,66 @@ fn serde_round_trip() {
     assert_eq!(serde_json::from_str::<CorticalAreaTypeEnum<Named>>(&json).unwrap(), value);
 }
 
-/// How many neurons a new area of this type and member starts with
-fn default_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>() -> usize {
-    <T as CorticalAreaTypeMemberAt<M>>::default_init::<Fiq>().unwrap().iter().len()
+/// A new area of this type and member, generated from the defaults of the cortical type
+fn generate_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> CorticalAreaInit<Fiq, M> {
+    <T as CorticalAreaTypeMemberAt<M>>::generate_init::<Fiq>(
+        layout,
+        <T as CorticalAreaTypeMemberAt<M>>::default_universal_properties().unwrap(),
+        <T as CorticalAreaTypeMemberAt<M>>::default_cortical_properties().unwrap(),
+        <T as CorticalAreaTypeMemberAt<M>>::default_cortical_variance().unwrap(),
+    )
+    .unwrap()
+}
+
+/// How many neurons a new area of this type and member starts with, generated from its defaults
+fn generated_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> usize {
+    generate_from_defaults::<T, M>(layout).iter().len()
+}
+
+/// A voxel layout of 2 neurons
+fn two_voxels() -> NeuronLayoutVoxel<Fiq> {
+    NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([2, 1, 1, 1]).unwrap())
 }
 
 #[test]
-fn every_cortical_type_and_model_has_a_default_init() {
-    assert_eq!(default_neuron_count::<Power, NeuronModelFoundationPowerFloat16>(), 1);
-    assert_eq!(default_neuron_count::<Power, NeuronModelFoundationPowerFloat64>(), 1);
-    assert_eq!(default_neuron_count::<Death, NeuronModelFoundationDeathFloat64>(), 1);
-    assert_eq!(default_neuron_count::<Interconnect, Advanced>(), 1);
-    assert_eq!(default_neuron_count::<Interconnect, Simple>(), 1);
-    assert_eq!(default_neuron_count::<Camera, Advanced>(), 1);
-    assert_eq!(default_neuron_count::<Camera, Simple>(), 1);
-    assert_eq!(default_neuron_count::<Led, Advanced>(), 1);
-    assert_eq!(default_neuron_count::<Led, Simple>(), 1);
-    assert_eq!(default_neuron_count::<BrightnessAdjust, Advanced>(), 1);
-    assert_eq!(default_neuron_count::<BrightnessAdjust, Simple>(), 1);
+fn every_cortical_type_and_model_generates_from_its_defaults() {
+    assert_eq!(generated_neuron_count::<Power, NeuronModelFoundationPowerFloat16>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Power, NeuronModelFoundationPowerFloat64>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Death, NeuronModelFoundationDeathFloat64>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Interconnect, Advanced>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Interconnect, Simple>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Camera, Advanced>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Camera, Simple>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Led, Advanced>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<Led, Simple>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<BrightnessAdjust, Advanced>(two_voxels()), 2);
+    assert_eq!(generated_neuron_count::<BrightnessAdjust, Simple>(two_voxels()), 2);
     // Memory grows dynamically, so it starts empty
-    assert_eq!(default_neuron_count::<Memory, Hashing>(), 0);
+    assert_eq!(generated_neuron_count::<Memory, Hashing>(NeuronLayoutSingleSteppedDynamic::new(CorticalAreaNeuronCount::QUANT_ZERO)), 0);
+}
+
+#[test]
+fn generated_init_uses_the_given_properties_and_the_fixed_data() {
+    let mut properties = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_cortical_properties().unwrap();
+    properties.firing_threshold = 7.0;
+    let init = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::generate_init::<Fiq>(
+        two_voxels(),
+        <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_universal_properties().unwrap(),
+        properties.clone(),
+        <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_cortical_variance().unwrap(),
+    )
+    .unwrap();
+    let (given_properties, internal, scratch) = init.get_cortical_level_data();
+    assert_eq!(given_properties, &properties);
+    assert_eq!(internal, &<Interconnect as CorticalAreaTypeMemberAt<Advanced>>::cortical_internal().unwrap());
+    assert_eq!(scratch, &<Interconnect as CorticalAreaTypeMemberAt<Advanced>>::cortical_scratch().unwrap());
+    let neuron_internal = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::neuron_internal().unwrap();
+    assert!(init.iter().all(|(internal, _, _)| internal == neuron_internal));
 }
 
 #[test]
 fn genomic_data_holds_the_init_of_a_cortical_type() {
-    let init = <Interconnect as CorticalAreaTypeMemberAt<Simple>>::default_init::<Fiq>().unwrap();
+    let init = generate_from_defaults::<Interconnect, Simple>(two_voxels());
     let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(init);
     assert_eq!(data.kind(), Interconnect::KIND);
     assert_eq!(data.neuron_model_kind(), Simple::KIND);

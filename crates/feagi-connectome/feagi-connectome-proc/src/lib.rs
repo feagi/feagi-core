@@ -235,7 +235,10 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 ///   and the one above it
 /// - The trait `Uses{Model}` per allowed model, to be implemented by hand by each cortical type
 ///   allowing it. Giving a cortical type a layout other than its model's is a compile error, as is
-///   a cortical type listing a model without implementing this
+///   a cortical type listing a model without implementing this. A cortical type gives its defaults a
+///   client may edit (universal properties, cortical properties, cortical variance) and the data it
+///   fixes (cortical internal and scratch, and the internal and scratch every neuron starts with).
+///   Its provided `generate_init` builds a new area from the editable parts plus the fixed ones
 /// - The trait `{Family}Member`, implemented for every cortical type, holding its kind and its model
 ///   enum as `type Models<C>`, and
 ///   `{Family}MemberAt<M>`, implemented for every cortical type at every member of the models it
@@ -247,7 +250,8 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 /// Must be public where this is expanded: the base trait `{Family}`, with associated type
 /// `NeuronLayout`, and a module per super type named its snake case, holding a unit struct per
 /// cortical type named as in the template, such as `foundation::Power`. Must be in scope where this
-/// is expanded: the module of the model family, `CorticalAreaInit`, and `FeagiIndexQuantization`. The
+/// is expanded: the module of the model family, `CorticalAreaInit`, `FeagiIndexQuantization`,
+/// `NeuronLayoutOf`, and `NeuronModelUniversalCorticalProperties`. The
 /// crate must depend on `feagi_basis`, which serde is reached through
 #[proc_macro]
 pub fn expand_cortical_type_family(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
