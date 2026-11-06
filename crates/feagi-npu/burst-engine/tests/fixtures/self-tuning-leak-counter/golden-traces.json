@@ -1,0 +1,1420 @@
+{
+  "source_crate": "feagi-npu-burst-engine",
+  "functions": [
+    "RateModulatedLeakRegistry::apply_burstal",
+    "feagi_npu_neural::update_neuron_lif"
+  ],
+  "traces": [
+    {
+      "name": "counter_driven_neuron_settles_on_grid",
+      "base_leak": 0.1,
+      "drive": 0.4,
+      "leak_min": 0.0,
+      "leak_max": 0.6,
+      "leak_levels": 7,
+      "counter_timeout_bursts": 4,
+      "rows": [
+        {
+          "burst": 1,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.0,
+          "leak": 0.1
+        },
+        {
+          "burst": 2,
+          "fired": false,
+          "membrane_potential": 0.76,
+          "rate_ema": 0.0,
+          "leak": 0.1
+        },
+        {
+          "burst": 3,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.048770607,
+          "leak": 0.2
+        },
+        {
+          "burst": 4,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.046392035,
+          "leak": 0.2
+        },
+        {
+          "burst": 5,
+          "fired": false,
+          "membrane_potential": 0.72,
+          "rate_ema": 0.04412947,
+          "leak": 0.2
+        },
+        {
+          "burst": 6,
+          "fired": false,
+          "membrane_potential": 0.9760001,
+          "rate_ema": 0.04197725,
+          "leak": 0.2
+        },
+        {
+          "burst": 7,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.0887006,
+          "leak": 0.3
+        },
+        {
+          "burst": 8,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.08437462,
+          "leak": 0.3
+        },
+        {
+          "burst": 9,
+          "fired": false,
+          "membrane_potential": 0.68,
+          "rate_ema": 0.08025962,
+          "leak": 0.3
+        },
+        {
+          "burst": 10,
+          "fired": false,
+          "membrane_potential": 0.87600005,
+          "rate_ema": 0.07634531,
+          "leak": 0.3
+        },
+        {
+          "burst": 11,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.12139251,
+          "leak": 0.4
+        },
+        {
+          "burst": 12,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.11547212,
+          "leak": 0.4
+        },
+        {
+          "burst": 13,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.109840475,
+          "leak": 0.4
+        },
+        {
+          "burst": 14,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.104483485,
+          "leak": 0.4
+        },
+        {
+          "burst": 15,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.099387765,
+          "leak": 0.3
+        },
+        {
+          "burst": 16,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.14331117,
+          "leak": 0.4
+        },
+        {
+          "burst": 17,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.1363218,
+          "leak": 0.4
+        },
+        {
+          "burst": 18,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1296733,
+          "leak": 0.4
+        },
+        {
+          "burst": 19,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.123349056,
+          "leak": 0.4
+        },
+        {
+          "burst": 20,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.11733325,
+          "leak": 0.3
+        },
+        {
+          "burst": 21,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.16038144,
+          "leak": 0.4
+        },
+        {
+          "burst": 22,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.15255953,
+          "leak": 0.4
+        },
+        {
+          "burst": 23,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.14511912,
+          "leak": 0.4
+        },
+        {
+          "burst": 24,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.13804157,
+          "leak": 0.4
+        },
+        {
+          "burst": 25,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.1313092,
+          "leak": 0.3
+        },
+        {
+          "burst": 26,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.17367578,
+          "leak": 0.4
+        },
+        {
+          "burst": 27,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.16520551,
+          "leak": 0.4
+        },
+        {
+          "burst": 28,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.15714833,
+          "leak": 0.4
+        },
+        {
+          "burst": 29,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.14948411,
+          "leak": 0.4
+        },
+        {
+          "burst": 30,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.14219368,
+          "leak": 0.3
+        },
+        {
+          "burst": 31,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.18402942,
+          "leak": 0.4
+        },
+        {
+          "burst": 32,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.17505419,
+          "leak": 0.4
+        },
+        {
+          "burst": 33,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.16651669,
+          "leak": 0.4
+        },
+        {
+          "burst": 34,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.15839557,
+          "leak": 0.4
+        },
+        {
+          "burst": 35,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.15067053,
+          "leak": 0.3
+        },
+        {
+          "burst": 36,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.19209284,
+          "leak": 0.4
+        },
+        {
+          "burst": 37,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.18272436,
+          "leak": 0.4
+        },
+        {
+          "burst": 38,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.17381278,
+          "leak": 0.4
+        },
+        {
+          "burst": 39,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.16533582,
+          "leak": 0.4
+        },
+        {
+          "burst": 40,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.1572723,
+          "leak": 0.3
+        },
+        {
+          "burst": 41,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.19837263,
+          "leak": 0.4
+        },
+        {
+          "burst": 42,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.18869787,
+          "leak": 0.4
+        },
+        {
+          "burst": 43,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.17949496,
+          "leak": 0.4
+        },
+        {
+          "burst": 44,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.17074089,
+          "leak": 0.4
+        },
+        {
+          "burst": 45,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.16241375,
+          "leak": 0.3
+        },
+        {
+          "burst": 46,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.20326334,
+          "leak": 0.4
+        },
+        {
+          "burst": 47,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.19335006,
+          "leak": 0.4
+        },
+        {
+          "burst": 48,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.18392026,
+          "leak": 0.4
+        },
+        {
+          "burst": 49,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.17495036,
+          "leak": 0.4
+        },
+        {
+          "burst": 50,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.16641793,
+          "leak": 0.3
+        },
+        {
+          "burst": 51,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.20707223,
+          "leak": 0.4
+        },
+        {
+          "burst": 52,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.19697319,
+          "leak": 0.4
+        },
+        {
+          "burst": 53,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1873667,
+          "leak": 0.4
+        },
+        {
+          "burst": 54,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.1782287,
+          "leak": 0.4
+        },
+        {
+          "burst": 55,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.16953638,
+          "leak": 0.3
+        },
+        {
+          "burst": 56,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.2100386,
+          "leak": 0.4
+        },
+        {
+          "burst": 57,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.19979489,
+          "leak": 0.4
+        },
+        {
+          "burst": 58,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19005077,
+          "leak": 0.4
+        },
+        {
+          "burst": 59,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18078187,
+          "leak": 0.4
+        },
+        {
+          "burst": 60,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17196503,
+          "leak": 0.3
+        },
+        {
+          "burst": 61,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.2123488,
+          "leak": 0.4
+        },
+        {
+          "burst": 62,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20199242,
+          "leak": 0.4
+        },
+        {
+          "burst": 63,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19214113,
+          "leak": 0.4
+        },
+        {
+          "burst": 64,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.1827703,
+          "leak": 0.4
+        },
+        {
+          "burst": 65,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17385648,
+          "leak": 0.3
+        },
+        {
+          "burst": 66,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.214148,
+          "leak": 0.4
+        },
+        {
+          "burst": 67,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20370387,
+          "leak": 0.4
+        },
+        {
+          "burst": 68,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1937691,
+          "leak": 0.4
+        },
+        {
+          "burst": 69,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18431886,
+          "leak": 0.4
+        },
+        {
+          "burst": 70,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.1753295,
+          "leak": 0.3
+        },
+        {
+          "burst": 71,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21554919,
+          "leak": 0.4
+        },
+        {
+          "burst": 72,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20503671,
+          "leak": 0.4
+        },
+        {
+          "burst": 73,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19503695,
+          "leak": 0.4
+        },
+        {
+          "burst": 74,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18552488,
+          "leak": 0.4
+        },
+        {
+          "burst": 75,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17647672,
+          "leak": 0.3
+        },
+        {
+          "burst": 76,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21664044,
+          "leak": 0.4
+        },
+        {
+          "burst": 77,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20607476,
+          "leak": 0.4
+        },
+        {
+          "burst": 78,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19602437,
+          "leak": 0.4
+        },
+        {
+          "burst": 79,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18646415,
+          "leak": 0.4
+        },
+        {
+          "burst": 80,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17737018,
+          "leak": 0.3
+        },
+        {
+          "burst": 81,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21749033,
+          "leak": 0.4
+        },
+        {
+          "burst": 82,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20688319,
+          "leak": 0.4
+        },
+        {
+          "burst": 83,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19679338,
+          "leak": 0.4
+        },
+        {
+          "burst": 84,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18719564,
+          "leak": 0.4
+        },
+        {
+          "burst": 85,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.178066,
+          "leak": 0.3
+        },
+        {
+          "burst": 86,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21815223,
+          "leak": 0.4
+        },
+        {
+          "burst": 87,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20751281,
+          "leak": 0.4
+        },
+        {
+          "burst": 88,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19739228,
+          "leak": 0.4
+        },
+        {
+          "burst": 89,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18776534,
+          "leak": 0.4
+        },
+        {
+          "burst": 90,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17860791,
+          "leak": 0.3
+        },
+        {
+          "burst": 91,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.2186677,
+          "leak": 0.4
+        },
+        {
+          "burst": 92,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20800315,
+          "leak": 0.4
+        },
+        {
+          "burst": 93,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1978587,
+          "leak": 0.4
+        },
+        {
+          "burst": 94,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18820901,
+          "leak": 0.4
+        },
+        {
+          "burst": 95,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17902994,
+          "leak": 0.3
+        },
+        {
+          "burst": 96,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21906915,
+          "leak": 0.4
+        },
+        {
+          "burst": 97,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20838502,
+          "leak": 0.4
+        },
+        {
+          "burst": 98,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19822195,
+          "leak": 0.4
+        },
+        {
+          "burst": 99,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18855454,
+          "leak": 0.4
+        },
+        {
+          "burst": 100,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17935862,
+          "leak": 0.3
+        },
+        {
+          "burst": 101,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.2193818,
+          "leak": 0.4
+        },
+        {
+          "burst": 102,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20868242,
+          "leak": 0.4
+        },
+        {
+          "burst": 103,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19850485,
+          "leak": 0.4
+        },
+        {
+          "burst": 104,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18882366,
+          "leak": 0.4
+        },
+        {
+          "burst": 105,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17961462,
+          "leak": 0.3
+        },
+        {
+          "burst": 106,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21962531,
+          "leak": 0.4
+        },
+        {
+          "burst": 107,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20891406,
+          "leak": 0.4
+        },
+        {
+          "burst": 108,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1987252,
+          "leak": 0.4
+        },
+        {
+          "burst": 109,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18903324,
+          "leak": 0.4
+        },
+        {
+          "burst": 110,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17981398,
+          "leak": 0.3
+        },
+        {
+          "burst": 111,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21981496,
+          "leak": 0.4
+        },
+        {
+          "burst": 112,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20909445,
+          "leak": 0.4
+        },
+        {
+          "burst": 113,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19889678,
+          "leak": 0.4
+        },
+        {
+          "burst": 114,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18919647,
+          "leak": 0.4
+        },
+        {
+          "burst": 115,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.17996924,
+          "leak": 0.3
+        },
+        {
+          "burst": 116,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.21996263,
+          "leak": 0.4
+        },
+        {
+          "burst": 117,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20923492,
+          "leak": 0.4
+        },
+        {
+          "burst": 118,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19903041,
+          "leak": 0.4
+        },
+        {
+          "burst": 119,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18932357,
+          "leak": 0.4
+        },
+        {
+          "burst": 120,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18009014,
+          "leak": 0.3
+        },
+        {
+          "burst": 121,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22007765,
+          "leak": 0.4
+        },
+        {
+          "burst": 122,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20934433,
+          "leak": 0.4
+        },
+        {
+          "burst": 123,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19913448,
+          "leak": 0.4
+        },
+        {
+          "burst": 124,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18942258,
+          "leak": 0.4
+        },
+        {
+          "burst": 125,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18018432,
+          "leak": 0.3
+        },
+        {
+          "burst": 126,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22016723,
+          "leak": 0.4
+        },
+        {
+          "burst": 127,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20942955,
+          "leak": 0.4
+        },
+        {
+          "burst": 128,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19921555,
+          "leak": 0.4
+        },
+        {
+          "burst": 129,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18949968,
+          "leak": 0.4
+        },
+        {
+          "burst": 130,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18025766,
+          "leak": 0.3
+        },
+        {
+          "burst": 131,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22023699,
+          "leak": 0.4
+        },
+        {
+          "burst": 132,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.2094959,
+          "leak": 0.4
+        },
+        {
+          "burst": 133,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19927865,
+          "leak": 0.4
+        },
+        {
+          "burst": 134,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18955971,
+          "leak": 0.4
+        },
+        {
+          "burst": 135,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18031476,
+          "leak": 0.3
+        },
+        {
+          "burst": 136,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22029132,
+          "leak": 0.4
+        },
+        {
+          "burst": 137,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20954758,
+          "leak": 0.4
+        },
+        {
+          "burst": 138,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19932781,
+          "leak": 0.4
+        },
+        {
+          "burst": 139,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18960647,
+          "leak": 0.4
+        },
+        {
+          "burst": 140,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18035924,
+          "leak": 0.3
+        },
+        {
+          "burst": 141,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22033362,
+          "leak": 0.4
+        },
+        {
+          "burst": 142,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20958781,
+          "leak": 0.4
+        },
+        {
+          "burst": 143,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1993661,
+          "leak": 0.4
+        },
+        {
+          "burst": 144,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18964289,
+          "leak": 0.4
+        },
+        {
+          "burst": 145,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18039389,
+          "leak": 0.3
+        },
+        {
+          "burst": 146,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22036658,
+          "leak": 0.4
+        },
+        {
+          "burst": 147,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20961916,
+          "leak": 0.4
+        },
+        {
+          "burst": 148,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19939591,
+          "leak": 0.4
+        },
+        {
+          "burst": 149,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18967125,
+          "leak": 0.4
+        },
+        {
+          "burst": 150,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18042086,
+          "leak": 0.3
+        },
+        {
+          "burst": 151,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22039223,
+          "leak": 0.4
+        },
+        {
+          "burst": 152,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20964356,
+          "leak": 0.4
+        },
+        {
+          "burst": 153,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19941911,
+          "leak": 0.4
+        },
+        {
+          "burst": 154,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18969332,
+          "leak": 0.4
+        },
+        {
+          "burst": 155,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18044186,
+          "leak": 0.3
+        },
+        {
+          "burst": 156,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22041221,
+          "leak": 0.4
+        },
+        {
+          "burst": 157,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20966257,
+          "leak": 0.4
+        },
+        {
+          "burst": 158,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1994372,
+          "leak": 0.4
+        },
+        {
+          "burst": 159,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18971053,
+          "leak": 0.4
+        },
+        {
+          "burst": 160,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18045823,
+          "leak": 0.3
+        },
+        {
+          "burst": 161,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22042778,
+          "leak": 0.4
+        },
+        {
+          "burst": 162,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20967738,
+          "leak": 0.4
+        },
+        {
+          "burst": 163,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1994513,
+          "leak": 0.4
+        },
+        {
+          "burst": 164,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18972394,
+          "leak": 0.4
+        },
+        {
+          "burst": 165,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18047099,
+          "leak": 0.3
+        },
+        {
+          "burst": 166,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22043991,
+          "leak": 0.4
+        },
+        {
+          "burst": 167,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20968892,
+          "leak": 0.4
+        },
+        {
+          "burst": 168,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19946226,
+          "leak": 0.4
+        },
+        {
+          "burst": 169,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18973437,
+          "leak": 0.4
+        },
+        {
+          "burst": 170,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18048091,
+          "leak": 0.3
+        },
+        {
+          "burst": 171,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22044936,
+          "leak": 0.4
+        },
+        {
+          "burst": 172,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.2096979,
+          "leak": 0.4
+        },
+        {
+          "burst": 173,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.1994708,
+          "leak": 0.4
+        },
+        {
+          "burst": 174,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18974249,
+          "leak": 0.4
+        },
+        {
+          "burst": 175,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18048863,
+          "leak": 0.3
+        },
+        {
+          "burst": 176,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.2204567,
+          "leak": 0.4
+        },
+        {
+          "burst": 177,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20970489,
+          "leak": 0.4
+        },
+        {
+          "burst": 178,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19947745,
+          "leak": 0.4
+        },
+        {
+          "burst": 179,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18974881,
+          "leak": 0.4
+        },
+        {
+          "burst": 180,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18049465,
+          "leak": 0.3
+        },
+        {
+          "burst": 181,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22046243,
+          "leak": 0.4
+        },
+        {
+          "burst": 182,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20971034,
+          "leak": 0.4
+        },
+        {
+          "burst": 183,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19948265,
+          "leak": 0.4
+        },
+        {
+          "burst": 184,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18975376,
+          "leak": 0.4
+        },
+        {
+          "burst": 185,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18049935,
+          "leak": 0.3
+        },
+        {
+          "burst": 186,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22046688,
+          "leak": 0.4
+        },
+        {
+          "burst": 187,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20971458,
+          "leak": 0.4
+        },
+        {
+          "burst": 188,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19948667,
+          "leak": 0.4
+        },
+        {
+          "burst": 189,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18975759,
+          "leak": 0.4
+        },
+        {
+          "burst": 190,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.180503,
+          "leak": 0.3
+        },
+        {
+          "burst": 191,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22047037,
+          "leak": 0.4
+        },
+        {
+          "burst": 192,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.2097179,
+          "leak": 0.4
+        },
+        {
+          "burst": 193,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19948983,
+          "leak": 0.4
+        },
+        {
+          "burst": 194,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.1897606,
+          "leak": 0.4
+        },
+        {
+          "burst": 195,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18050586,
+          "leak": 0.3
+        },
+        {
+          "burst": 196,
+          "fired": true,
+          "membrane_potential": 0.0,
+          "rate_ema": 0.22047308,
+          "leak": 0.4
+        },
+        {
+          "burst": 197,
+          "fired": false,
+          "membrane_potential": 0.4,
+          "rate_ema": 0.20972048,
+          "leak": 0.4
+        },
+        {
+          "burst": 198,
+          "fired": false,
+          "membrane_potential": 0.64,
+          "rate_ema": 0.19949228,
+          "leak": 0.4
+        },
+        {
+          "burst": 199,
+          "fired": false,
+          "membrane_potential": 0.78400004,
+          "rate_ema": 0.18976292,
+          "leak": 0.4
+        },
+        {
+          "burst": 200,
+          "fired": false,
+          "membrane_potential": 0.8704001,
+          "rate_ema": 0.18050806,
+          "leak": 0.3
+        }
+      ]
+    }
+  ]
+}
