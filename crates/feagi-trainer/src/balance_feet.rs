@@ -3940,6 +3940,7 @@ pub fn balance_phase_scorecard(
             feagi_core_version: version.to_string(),
         },
         metrics: balance_phase_metrics(phase),
+        class_breakdown: Vec::new(),
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,

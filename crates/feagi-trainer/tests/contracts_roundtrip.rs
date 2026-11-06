@@ -151,6 +151,7 @@ fn iris_scorecard() -> Scorecard {
             feagi_core_version: "0.0.12".to_string(),
         },
         metrics,
+        class_breakdown: Vec::new(),
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,

@@ -3,7 +3,7 @@
 
 //! Shared registration helpers used across transports.
 
-use crate::common::ApiState;
+use crate::common::{ApiError, ApiState};
 use crate::v1::RegistrationAreaDiff;
 use feagi_config::load_config;
 use feagi_services::change_ledger::{
@@ -872,26 +872,6 @@ fn registration_per_device_dimensions(
     (per_x.max(1), expected_dimensions.1, expected_dimensions.2)
 }
 
-/// Geometry an existing area should have after a registration: the per-axis max of
-/// the live area and the declared total.
-///
-/// Re-registration (new agent id, same controller) must not shrink an area the user
-/// widened by hand (orientation IPU 8 -> 4 columns, gyro 6 -> 3 on every reconnect),
-/// while an area smaller than its registration still grows (xARM Servo encoder depth
-/// 10 -> 20). Returns the target and whether the live area exceeds the declared one
-/// on any axis, so the caller can log it.
-pub fn reconcile_registration_dimensions(
-    declared: (usize, usize, usize),
-    live: (usize, usize, usize),
-) -> ((usize, usize, usize), bool) {
-    let target = (
-        declared.0.max(live.0),
-        declared.1.max(live.1),
-        declared.2.max(live.2),
-    );
-    (target, target != declared)
-}
-
 /// Structural update payload so agent registration replaces leftover genome geometry.
 ///
 /// Localized rebuild scales totals from `cortical_dimensions_per_device` whenever
@@ -996,6 +976,47 @@ pub async fn diff_device_registrations(
     )
     .await;
     areas
+}
+
+/// Stable error code of the 409 returned when a registration's declared dimensions
+/// differ from an existing area's.
+pub const REGISTRATION_DEPTH_CONFLICT_CODE: &str = "registration_depth_conflict";
+
+/// True when an existing area's total dimensions differ from the declared ones on any
+/// axis, in either direction. A missing area never conflicts (it is created at the
+/// declared size).
+fn is_dimension_conflict(area: &RegistrationAreaDiff) -> bool {
+    area.live_dimensions
+        .is_some_and(|live| live != area.declared_dimensions)
+}
+
+/// Areas whose live dimensions differ from what the registration declares.
+///
+/// Read-only. Empty when the registration may proceed, and also when auto-create is
+/// disabled (that pass changes nothing, so there is nothing to conflict with).
+pub async fn registration_dimension_conflicts(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+) -> Vec<RegistrationAreaDiff> {
+    match load_config(None, None) {
+        Ok(config) if config.agent.auto_create_missing_cortical_areas => {}
+        _ => return Vec::new(),
+    }
+    diff_device_registrations(state, device_registrations)
+        .await
+        .into_iter()
+        .filter(is_dimension_conflict)
+        .collect()
+}
+
+/// The 409 error for a non-empty conflict list from [`registration_dimension_conflicts`].
+pub fn registration_conflict_error(conflicts: &[RegistrationAreaDiff]) -> ApiError {
+    ApiError::conflict(format!(
+        "Registration declares different dimensions than {} existing area(s); registration does not resize areas",
+        conflicts.len()
+    ))
+    .with_error_code(REGISTRATION_DEPTH_CONFLICT_CODE)
+    .with_conflicts(serde_json::to_value(conflicts).unwrap_or(serde_json::Value::Null))
 }
 
 pub async fn auto_create_cortical_areas_from_device_registrations(
@@ -1371,27 +1392,24 @@ async fn reconcile_device_registrations(
                             .and_then(|v| v.as_u64())
                             .map(|u| u as usize)
                             .or(current.dev_count);
-                        let (target_dimensions, live_exceeds_declared) =
-                            reconcile_registration_dimensions(
-                                expected_dimensions,
-                                current.dimensions,
-                            );
-                        if live_exceeds_declared {
+                        if current.dimensions != expected_dimensions {
+                            // Registration never resizes an existing area; the pre-check
+                            // reports this as a conflict, so only a concurrent edit lands here.
                             warn!(
-                                "[API] Motor area '{}' ({}) is larger than its registration: keeping live {:?} over declared {:?}",
+                                "[API] Area '{}' ({}) changed size during registration (live {:?}, declared {:?}); left untouched",
                                 current.name, cortical_id_b64, current.dimensions, expected_dimensions
                             );
+                            continue;
                         }
                         let expected_per_device =
-                            registration_per_device_dimensions(target_dimensions, device_count);
-                        let dimensions_mismatch = current.dimensions != target_dimensions;
+                            registration_per_device_dimensions(expected_dimensions, device_count);
                         let dev_count_mismatch = current_dev_count != Some(device_count);
                         let per_device_mismatch =
                             current.cortical_dimensions_per_device != Some(expected_per_device);
 
-                        if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
+                        if dev_count_mismatch || per_device_mismatch {
                             let changes =
-                                registration_dimension_changes(target_dimensions, device_count);
+                                registration_dimension_changes(expected_dimensions, device_count);
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
@@ -1403,7 +1421,7 @@ async fn reconcile_device_registrations(
                             } else {
                                 info!(
                                     "[API] Updated cortical area '{}' to {} channels (dimensions {:?})",
-                                    cortical_id_b64, device_count, target_dimensions
+                                    cortical_id_b64, device_count, expected_dimensions
                                 );
                             }
                         }
@@ -1819,26 +1837,23 @@ async fn reconcile_device_registrations(
                             .and_then(|v| v.as_u64())
                             .map(|u| u as usize)
                             .or(current.dev_count);
-                        let (target_dimensions, live_exceeds_declared) =
-                            reconcile_registration_dimensions(
-                                expected_dimensions,
-                                current.dimensions,
-                            );
-                        if live_exceeds_declared {
+                        if current.dimensions != expected_dimensions {
+                            // Registration never resizes an existing area; the pre-check
+                            // reports this as a conflict, so only a concurrent edit lands here.
                             warn!(
-                                "[API] Sensory area '{}' ({}) is larger than its registration: keeping live {:?} over declared {:?}",
+                                "[API] Area '{}' ({}) changed size during registration (live {:?}, declared {:?}); left untouched",
                                 current.name, cortical_id_b64, current.dimensions, expected_dimensions
                             );
+                            continue;
                         }
                         let expected_per_device =
-                            registration_per_device_dimensions(target_dimensions, device_count);
-                        let dimensions_mismatch = current.dimensions != target_dimensions;
+                            registration_per_device_dimensions(expected_dimensions, device_count);
                         let dev_count_mismatch = current_dev_count != Some(device_count);
                         let per_device_mismatch =
                             current.cortical_dimensions_per_device != Some(expected_per_device);
-                        if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
+                        if dev_count_mismatch || per_device_mismatch {
                             let changes =
-                                registration_dimension_changes(target_dimensions, device_count);
+                                registration_dimension_changes(expected_dimensions, device_count);
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
@@ -1850,7 +1865,7 @@ async fn reconcile_device_registrations(
                             } else {
                                 info!(
                                     "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {})",
-                                    cortical_id_b64, target_dimensions, device_count
+                                    cortical_id_b64, expected_dimensions, device_count
                                 );
                             }
                         }
@@ -2796,46 +2811,91 @@ mod sensory_dimension_extraction_tests {
 #[cfg(test)]
 mod registration_dimension_change_tests {
     use super::{
-        reconcile_registration_dimensions, registration_dimension_changes,
+        is_dimension_conflict, registration_conflict_error, registration_dimension_changes,
         registration_per_device_dimensions,
     };
+    use crate::v1::RegistrationAreaDiff;
     use serde_json::json;
 
+    fn area_diff(declared: [usize; 3], live: Option<[usize; 3]>) -> RegistrationAreaDiff {
+        RegistrationAreaDiff {
+            cortical_id: "id".to_string(),
+            name: "area".to_string(),
+            direction: "opu".to_string(),
+            declared_dimensions: declared,
+            declared_per_device_dimensions: declared,
+            declared_device_count: 1,
+            live_dimensions: live,
+            live_per_device_dimensions: live,
+            live_device_count: live.map(|_| 1),
+            matches: live == Some(declared),
+        }
+    }
+
     #[test]
-    fn existing_area_keeps_hand_widened_width_on_reregistration() {
-        // Orientation IPU widened from 4 to 8 columns by hand; controller re-registers 4.
-        let (target, live_exceeds) = reconcile_registration_dimensions((4, 1, 10), (8, 1, 10));
-        assert_eq!(target, (8, 1, 10));
-        assert!(live_exceeds);
-        let changes = registration_dimension_changes(target, 1);
+    fn growing_an_existing_area_conflicts() {
+        assert!(is_dimension_conflict(&area_diff(
+            [6, 1, 20],
+            Some([6, 1, 10])
+        )));
+    }
+
+    #[test]
+    fn shrinking_an_existing_area_conflicts() {
+        assert!(is_dimension_conflict(&area_diff(
+            [4, 1, 10],
+            Some([8, 1, 10])
+        )));
+        assert!(is_dimension_conflict(&area_diff(
+            [6, 1, 10],
+            Some([6, 1, 20])
+        )));
+    }
+
+    #[test]
+    fn mixed_axes_conflict() {
+        assert!(is_dimension_conflict(&area_diff(
+            [4, 1, 20],
+            Some([8, 1, 10])
+        )));
+    }
+
+    #[test]
+    fn equal_dimensions_pass() {
+        assert!(!is_dimension_conflict(&area_diff(
+            [3, 1, 100],
+            Some([3, 1, 100])
+        )));
+    }
+
+    #[test]
+    fn missing_area_is_created_not_a_conflict() {
+        assert!(!is_dimension_conflict(&area_diff([3, 1, 100], None)));
+    }
+
+    #[test]
+    fn conflict_error_is_409_with_code_and_areas() {
+        let error = registration_conflict_error(&[area_diff([6, 1, 20], Some([6, 1, 10]))]);
+        assert_eq!(error.code, 409);
+        assert_eq!(
+            error.error_code.as_deref(),
+            Some("registration_depth_conflict")
+        );
+        let conflicts = error.conflicts.expect("conflict list");
+        assert_eq!(conflicts[0]["declared_dimensions"], json!([6, 1, 20]));
+        assert_eq!(conflicts[0]["live_dimensions"], json!([6, 1, 10]));
+        assert_eq!(conflicts[0]["direction"], json!("opu"));
+    }
+
+    #[test]
+    fn dimension_changes_carry_total_and_per_device() {
+        let changes = registration_dimension_changes((8, 1, 10), 1);
         assert_eq!(changes.get("dimensions"), Some(&json!([8, 1, 10])));
         assert_eq!(
             changes.get("cortical_dimensions_per_device"),
             Some(&json!([8, 1, 10]))
         );
         assert_eq!(changes.get("dev_count"), Some(&json!(1)));
-    }
-
-    #[test]
-    fn existing_area_still_grows_to_declared_dimensions() {
-        // xARM Servo encoder: genome depth 10, registration depth 20 (PR #262).
-        let (target, live_exceeds) = reconcile_registration_dimensions((6, 1, 20), (6, 1, 10));
-        assert_eq!(target, (6, 1, 20));
-        assert!(!live_exceeds);
-    }
-
-    #[test]
-    fn equal_dimensions_are_unchanged() {
-        let (target, live_exceeds) = reconcile_registration_dimensions((3, 1, 100), (3, 1, 100));
-        assert_eq!(target, (3, 1, 100));
-        assert!(!live_exceeds);
-    }
-
-    #[test]
-    fn mixed_axes_take_the_per_axis_max() {
-        let (target, live_exceeds) = reconcile_registration_dimensions((4, 1, 20), (8, 1, 10));
-        assert_eq!(target, (8, 1, 20));
-        assert!(live_exceeds);
     }
 
     #[test]

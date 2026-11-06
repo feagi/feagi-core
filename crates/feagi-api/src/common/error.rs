@@ -38,6 +38,14 @@ pub struct ApiError {
     /// Optional error details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
+
+    /// Stable machine-readable error code (for example `registration_depth_conflict`)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub error_code: Option<String>,
+
+    /// Structured conflict list for errors that name the conflicting items
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub conflicts: Option<serde_json::Value>,
 }
 
 impl ApiError {
@@ -47,6 +55,8 @@ impl ApiError {
             code: ApiErrorCode::Internal as u16,
             message: message.into(),
             details: None,
+            error_code: None,
+            conflicts: None,
         }
     }
 
@@ -59,6 +69,18 @@ impl ApiError {
     /// Set error details
     pub fn with_details(mut self, details: impl Into<String>) -> Self {
         self.details = Some(details.into());
+        self
+    }
+
+    /// Set a stable machine-readable error code
+    pub fn with_error_code(mut self, error_code: impl Into<String>) -> Self {
+        self.error_code = Some(error_code.into());
+        self
+    }
+
+    /// Attach a structured conflict list
+    pub fn with_conflicts(mut self, conflicts: serde_json::Value) -> Self {
+        self.conflicts = Some(conflicts);
         self
     }
 

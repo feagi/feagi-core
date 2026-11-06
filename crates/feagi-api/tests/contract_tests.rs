@@ -2523,7 +2523,7 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
-async fn test_reregistration_keeps_hand_widened_area_dimensions() {
+async fn test_registration_conflicting_with_widened_area_returns_409_and_changes_nothing() {
     use feagi_api::endpoints::agent::get_registration_diff;
     use feagi_api::v1::RegistrationDiffQuery;
 
@@ -2534,15 +2534,33 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
         precreate_hand_widened_servo_area(&state, &registrations).await;
     assert!(widened.0 > declared.0);
 
-    // Two registrations with fresh agent ids, like a controller restarting twice.
+    // Registrations are refused for every fresh agent id, and nothing is stored or resized.
     for seed in [11u8, 12u8] {
         let agent_id = AgentID::new([seed; AgentID::NUMBER_BYTES]);
-        let _ = register_agent(
+        let error = register_agent(
             ApiStateExtract(state.clone()),
             ApiJson(registration_request_with(&agent_id, registrations.clone())),
         )
         .await
-        .expect("registration should succeed");
+        .err()
+        .expect("registration must conflict with the widened area");
+        assert_eq!(error.code, 409);
+        assert_eq!(
+            error.error_code.as_deref(),
+            Some("registration_depth_conflict")
+        );
+        let conflicts = error.conflicts.expect("conflict list");
+        assert_eq!(conflicts.as_array().map(|a| a.len()), Some(1));
+        assert_eq!(conflicts[0]["cortical_id"], json!(cortical_id));
+        assert_eq!(conflicts[0]["direction"], json!("ipu"));
+        assert_eq!(
+            conflicts[0]["declared_dimensions"],
+            json!([declared.0, declared.1, declared.2])
+        );
+        assert_eq!(
+            conflicts[0]["live_dimensions"],
+            json!([widened.0, widened.1, widened.2])
+        );
 
         let live = state
             .connectome_service
@@ -2551,47 +2569,13 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
             .expect("widened servo area must still exist");
         assert_eq!(
             live.dimensions, widened,
-            "re-registration must not shrink a hand-widened area back to the declared {:?}",
+            "registration must never resize an existing area (declared {:?})",
             declared
         );
         assert_eq!(live.dev_count, Some(3));
     }
 
-    // Diff route: declared < live, matches=false, for the last registered agent.
-    let last_agent = AgentID::new([12u8; AgentID::NUMBER_BYTES]).to_base64();
-    let diff = get_registration_diff(
-        ApiStateExtract(state.clone()),
-        feagi_api::common::Query(RegistrationDiffQuery {
-            agent_id: Some(last_agent.clone()),
-        }),
-    )
-    .await
-    .expect("registration diff should succeed")
-    .0;
-    assert_eq!(diff.agents.len(), 1);
-    assert_eq!(diff.agents[0].agent_id, last_agent);
-    let area = diff.agents[0]
-        .areas
-        .iter()
-        .find(|a| a.cortical_id == cortical_id)
-        .expect("diff must list the servo IPU");
-    assert_eq!(area.direction, "ipu");
-    assert_eq!(
-        area.declared_dimensions,
-        [declared.0, declared.1, declared.2]
-    );
-    assert_eq!(area.declared_device_count, 3);
-    let live_dims = area.live_dimensions.expect("live area exists");
-    assert!(
-        live_dims[0] > area.declared_dimensions[0],
-        "live width {} must exceed declared {}",
-        live_dims[0],
-        area.declared_dimensions[0]
-    );
-    assert_eq!(area.live_device_count, Some(3));
-    assert!(!area.matches);
-
-    // Without agent_id every stored agent is listed.
+    // Nothing was stored for the refused agents, so the diff route lists none.
     let all = get_registration_diff(
         ApiStateExtract(state.clone()),
         feagi_api::common::Query(RegistrationDiffQuery { agent_id: None }),
@@ -2599,7 +2583,19 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
     .await
     .expect("registration diff should succeed")
     .0;
-    assert_eq!(all.agents.len(), 2);
+    assert_eq!(all.agents.len(), 0);
+
+    // The diff of the declared registration still reports declared < live.
+    let diff =
+        feagi_api::common::agent_registration::diff_device_registrations(&state, &registrations)
+            .await;
+    let area = diff
+        .iter()
+        .find(|a| a.cortical_id == cortical_id)
+        .expect("diff must list the servo IPU");
+    assert_eq!(area.declared_device_count, 3);
+    assert_eq!(area.live_device_count, Some(3));
+    assert!(!area.matches);
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -2651,8 +2647,7 @@ async fn test_registration_against_existing_area_leaves_burst_frequency_unchange
         ApiStateExtract(state.clone()),
         ApiJson(registration_request_with(&agent_id, registrations)),
     )
-    .await
-    .expect("registration should succeed");
+    .await;
 
     let after = state
         .runtime_service

@@ -659,7 +659,7 @@ pub fn assemble_scorecard(
     metrics: &BTreeMap<String, f64>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
-    assemble_scorecard_inner(run_spec, metrics, None, None, provenance)
+    assemble_scorecard_inner(run_spec, metrics, None, None, provenance, Vec::new())
 }
 
 /// Assembles a [`Scorecard`] for an N-seed repeated run.
@@ -674,7 +674,14 @@ pub fn assemble_scorecard_with_stats(
     metric_stats: BTreeMap<String, crate::contracts::MetricStat>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
-    assemble_scorecard_inner(run_spec, metrics, Some(metric_stats), None, provenance)
+    assemble_scorecard_inner(
+        run_spec,
+        metrics,
+        Some(metric_stats),
+        None,
+        provenance,
+        Vec::new(),
+    )
 }
 
 /// Same as [`assemble_scorecard`] with skip facts when the operator ended the split early.
@@ -683,8 +690,9 @@ pub fn assemble_scorecard_with_skip(
     metrics: &BTreeMap<String, f64>,
     skip: Option<ScorecardSkip>,
     provenance: ScorecardProvenance,
+    class_breakdown: Vec<crate::contracts::ClassBreakdown>,
 ) -> Scorecard {
-    assemble_scorecard_inner(run_spec, metrics, None, skip, provenance)
+    assemble_scorecard_inner(run_spec, metrics, None, skip, provenance, class_breakdown)
 }
 
 /// Shared pure mapping for both the single-run and repeated-run scorecard assemblers.
@@ -694,6 +702,7 @@ fn assemble_scorecard_inner(
     metric_stats: Option<BTreeMap<String, crate::contracts::MetricStat>>,
     skip: Option<ScorecardSkip>,
     provenance: ScorecardProvenance,
+    class_breakdown: Vec<crate::contracts::ClassBreakdown>,
 ) -> Scorecard {
     Scorecard {
         schema_version: SCORECARD_SCHEMA_VERSION,
@@ -709,6 +718,7 @@ fn assemble_scorecard_inner(
         split_id: run_spec.split_id.clone(),
         backend_fingerprint: provenance.backend_fingerprint,
         metrics: metrics.clone(),
+        class_breakdown,
         metric_stats,
         status: provenance.status,
         visibility: provenance.visibility,
@@ -2186,8 +2196,20 @@ mod tests {
             samples_done: 8,
             evaluated_samples: 8,
         };
-        let card =
-            assemble_scorecard_with_skip(&run_spec, &metrics, Some(skip.clone()), provenance);
+        let rows = vec![crate::contracts::ClassBreakdown {
+            class_id: 0,
+            label: "setosa".to_string(),
+            correct: 2,
+            total: 4,
+        }];
+        let card = assemble_scorecard_with_skip(
+            &run_spec,
+            &metrics,
+            Some(skip.clone()),
+            provenance,
+            rows.clone(),
+        );
         assert_eq!(card.skip, Some(skip));
+        assert_eq!(card.class_breakdown, rows);
     }
 }

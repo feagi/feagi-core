@@ -3102,9 +3102,6 @@ pub async fn update_classifier(
         classifier.reward_modulator_ids = answer_modulators.to_vec();
         sources_changed = true;
     }
-    if request.reward_training.is_some() || sources_changed {
-        sync_classifier_reward_mapping(&state, &classifier, associative_window).await?;
-    }
     state
         .connectome_service
         .upsert_classifier(classifier.clone())
@@ -3133,6 +3130,11 @@ pub async fn update_classifier(
                     owned_id, e
                 ))
             })?;
+    }
+    // Area updates run first. The associative rule is written last, so a name or
+    // position save that also carries the reward list cannot leave that list off the mapping.
+    if request.reward_training.is_some() || sources_changed {
+        sync_classifier_reward_mapping(&state, &classifier, associative_window).await?;
     }
     Ok(Json(feagi_services::types::ClassifierInfo::from(
         classifier,

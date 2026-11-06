@@ -806,11 +806,19 @@ impl RunConfig {
 
         let provenance = self.scorecard_provenance(manifest);
         let scorecard_id = provenance.scorecard_id.clone();
+        let scored_targets: Vec<_> = outcome
+            .predictions
+            .iter()
+            .filter_map(|record| record.target.clone())
+            .collect();
+        let class_breakdown =
+            crate::executor::class_breakdown_event(&outcome.metric_result, &scored_targets);
         let scorecard = assemble_scorecard_with_skip(
             &self.run_spec,
             &outcome.summary.metrics,
             scorecard_skip_from_summary(&outcome.summary),
             provenance,
+            class_breakdown,
         );
 
         let mut summary = outcome.summary;

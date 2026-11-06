@@ -348,6 +348,19 @@ async fn load_genome_with_priority(
                 .collect()
         };
         for device_regs in device_regs_list {
+            let conflicts = crate::common::agent_registration::registration_dimension_conflicts(
+                state,
+                &device_regs,
+            )
+            .await;
+            if !conflicts.is_empty() {
+                // Registration never resizes areas: leave this agent's areas as the genome has them.
+                tracing::warn!(
+                    "[API] Skipping device-registration reconcile after genome load: {} area(s) differ from the declared dimensions",
+                    conflicts.len()
+                );
+                continue;
+            }
             crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations(
                 state,
                 &device_regs,

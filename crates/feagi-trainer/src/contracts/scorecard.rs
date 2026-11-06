@@ -24,6 +24,7 @@ use super::common::{
     GenomeVersionId, MetadataMap, PluginRef, QuantizationFingerprint, ScorecardId, SplitId,
 };
 use super::metric_stats::MetricStat;
+use super::run_event::ClassBreakdown;
 
 /// Wire/format version of the `Scorecard` contract.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -120,6 +121,13 @@ pub struct Scorecard {
     /// Computed metric values (deterministically ordered). For a multi-seed run these are the
     /// per-metric means (the point estimates); for a single run they are that run's values.
     pub metrics: BTreeMap<String, f64>,
+    /// Per-class correct counts for a single-label classification score.
+    ///
+    /// Empty for every other task. Older scorecards omit the field and load as empty
+    /// (additive, ADR-006). The results table reads this; it is not part of the
+    /// verification identity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub class_breakdown: Vec<ClassBreakdown>,
     /// Per-metric distribution across N-seed repeats (mean/stddev/confidence interval).
     ///
     /// Present only for multi-seed runs; omitted (and absent from the wire form) for single
@@ -182,6 +190,7 @@ mod tests {
                 feagi_core_version: "0.0.12".to_string(),
             },
             metrics,
+            class_breakdown: Vec::new(),
             metric_stats: None,
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
@@ -270,6 +279,27 @@ mod tests {
         assert!(json.contains("\"sample_draw_seed\":4000000007"));
         let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.sample_draw_seed, Some(4_000_000_007));
+    }
+
+    #[test]
+    fn class_breakdown_is_omitted_when_empty_and_round_trips_when_present() {
+        let card = iris_scorecard();
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(!json.contains("class_breakdown"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert!(restored.class_breakdown.is_empty());
+
+        let mut counted = card;
+        counted.class_breakdown = vec![ClassBreakdown {
+            class_id: 3,
+            label: "3".to_string(),
+            correct: 8,
+            total: 10,
+        }];
+        let counted_json = serde_json::to_string(&counted).expect("serialize");
+        assert!(counted_json.contains("\"class_breakdown\""));
+        let restored: Scorecard = serde_json::from_str(&counted_json).expect("deserialize");
+        assert_eq!(restored.class_breakdown, counted.class_breakdown);
     }
 
     #[test]
