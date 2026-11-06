@@ -67,6 +67,8 @@ pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantizati
     }
 }
 
+// TODO use Futures to delay instead, we dont want to std sleep in async
+
 /// How long before a tick `wait_until` stops sleeping and starts spinning. Uses normal
 /// OS sleep but swaps to hot-spin when the timing gets close
 const SPIN_MARGIN: Duration = Duration::from_millis(1);

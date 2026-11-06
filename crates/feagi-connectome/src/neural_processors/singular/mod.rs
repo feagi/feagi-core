@@ -11,7 +11,6 @@ use feagi_basis::parallelism::feagi_channel::base_channels::implementations::all
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
@@ -96,8 +95,6 @@ where
                 engine_init_parameters,
                 BurstEngineIndex(0),
                 visualization_transmitter,
-                initial_target_frequency,
-                initial_visualization_frequency,
             ).await {
                 Ok(engine) => {
                     // The builder only stops waiting by receiving, so this cannot fail

@@ -8,13 +8,13 @@ use std::marker::PhantomData;
 
 /// Custom requests to the single engine neuron processor
 pub enum NeuronProcessorSingleEngineRequest<FIQ: FeagiIndexQuantization> {
-    /// Set the rate the burst loop ticks at. Applies from the next tick, if the engine accepts it
+    /// Set the rate the burst loop ticks at. Applies from the next tick
     BurstRate(TargetFrequency),
-    /// Set the rate bursts send visualization at, if the engine accepts it. Bursts never run faster
-    /// than the burst rate, so a visualization rate above it means every burst sends visualization
+    /// Set the rate bursts send visualization at. Bursts never run faster than the burst rate, so
+    /// a visualization rate above it means every burst sends visualization
     VisualizationRate(TargetFrequency),
-    /// Apply these connectome edit steps in order, Stops at the first step that fails. Fails
-    /// if not paused.
+    /// Apply these connectome edit steps in order. Stops at the first step that fails. Pauses the
+    /// worker, which stays paused afterward, even if a step failed, until sent `Resume`
     ConnectomeEdits(Vec<ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>>),
     /// Stop bursting until resumed. While paused the worker only waits for and handles commands,
     /// so its caller can edit the connectome and update its own state before bursting continues
@@ -25,10 +25,10 @@ pub enum NeuronProcessorSingleEngineRequest<FIQ: FeagiIndexQuantization> {
 
 /// Custom responses from the single engine neuron processor, one per kind of request
 pub enum NeuronProcessorSingleEngineResponse<FIQ: FeagiIndexQuantization> {
-    /// Whether the engine accepted the burst rate. If it did not, the rate is unchanged
-    BurstRate(Result<(), EngineChangeCommandOtherError>),
-    /// Whether the engine accepted the visualization rate. If it did not, the rate is unchanged
-    VisualizationRate(Result<(), EngineChangeCommandOtherError>),
+    /// The burst rate was set
+    BurstRate,
+    /// The visualization rate was set
+    VisualizationRate,
     /// What each edit step that was attempted returned, in order. If the last one failed, the
     /// steps after it were not attempted
     ConnectomeEdits(Vec<Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>>),
@@ -58,24 +58,19 @@ for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>
     type CustomRequest = NeuronProcessorSingleEngineRequest<FIQ>;
     type CustomResponse = NeuronProcessorSingleEngineResponse<FIQ>;
 
-    /// The burst loop is timed here, so a rate the engine accepts also applies from the next tick
+    /// The burst loop reads both rates each tick, so a rate set here applies from the next tick
     async fn on_custom(&mut self, request: Self::CustomRequest) -> Self::CustomResponse {
         match request {
             NeuronProcessorSingleEngineRequest::BurstRate(burst_rate) => {
-                let result = self.engine.set_burst_rate(burst_rate).await;
-                if result.is_ok() {
-                    self.target_frequency = burst_rate;
-                }
-                NeuronProcessorSingleEngineResponse::BurstRate(result)
+                self.target_frequency = burst_rate;
+                NeuronProcessorSingleEngineResponse::BurstRate
             }
             NeuronProcessorSingleEngineRequest::VisualizationRate(visualization_rate) => {
-                let result = self.engine.set_visualization_rate(visualization_rate).await;
-                if result.is_ok() {
-                    self.visualization_frequency = visualization_rate;
-                }
-                NeuronProcessorSingleEngineResponse::VisualizationRate(result)
+                self.visualization_frequency = visualization_rate;
+                NeuronProcessorSingleEngineResponse::VisualizationRate
             }
             NeuronProcessorSingleEngineRequest::ConnectomeEdits(steps) => {
+                self.paused = true; // NOTE: System will pause when edits are submitted, and must be unpaused after
                 NeuronProcessorSingleEngineResponse::ConnectomeEdits(self.apply_connectome_edits(steps).await)
             }
             NeuronProcessorSingleEngineRequest::Pause => {

@@ -3,7 +3,6 @@ use crate::parallel_burst_engines::rayon::errors::BurstEngineCPURayonInitError;
 use crate::shared_structs::{EnginePerCorticalData, EnginePerNeuronData};
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use feagi_basis::target_frequency::TargetFrequency;
 use neural_basis::connectome_editing::{
     ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeVisitorDispatchWrapper,
 };
@@ -24,10 +23,6 @@ where
     neuron_phase: NeuronPhase<FIQ>,
     synapse_phase: SynapsePhase,
     visualization_transmitter: VisTx,
-    /// How long each burst is delayed for
-    burst_rate: TargetFrequency,
-    /// Stored only, nothing uses it yet
-    visualization_rate: TargetFrequency,
     /// TODO placeholder. The cortical index the next added cortical area gets
     next_cortical_index: usize,
     /// TODO placeholder. The visualization start index the next added cortical area gets
@@ -49,15 +44,11 @@ where
         parameters: Self::InitParameters,
         engine_index: BurstEngineIndex,
         visualization_transmitter: Self::VisualizationTransmitter,
-        burst_rate: TargetFrequency,
-        visualization_rate: TargetFrequency,
     ) -> Result<Self, Self::InitError> {
         let engine = BurstEngineCPURayon {
             neuron_phase: NeuronPhase::new(),
             synapse_phase: SynapsePhase {},
             visualization_transmitter,
-            burst_rate,
-            visualization_rate,
             next_cortical_index: 0,
             next_visualization_start_index: 0,
         };
@@ -73,17 +64,7 @@ where
                 // TODO write this burst's visualization into the slot. It is published on drop
             }
         }
-        std::thread::sleep(self.burst_rate.duration_between_ticks());
-    }
-
-    async fn set_burst_rate(&mut self, burst_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
-        self.burst_rate = burst_rate;
-        Ok(())
-    }
-
-    async fn set_visualization_rate(&mut self, visualization_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
-        self.visualization_rate = visualization_rate;
-        Ok(())
+        std::thread::sleep(std::time::Duration::from_millis(1)); 
     }
 
     /// TODO placeholder. Allocates nothing, only hands out the next indexes

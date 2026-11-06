@@ -20,6 +20,11 @@ use std::sync::Arc;
 
 type FIQ = FeagiIndexQuantizationStandard;
 
+/// A rate of `frequency` ticks per second. Every rate in these tests is valid
+fn hz(frequency: f64) -> TargetFrequency {
+    TargetFrequency::new_from_frequency(frequency).expect("test rates are valid")
+}
+
 /// How many bursts ran, and how many of those sent visualization
 #[derive(Default)]
 struct Counts {
@@ -49,8 +54,6 @@ impl BurstEngine<FIQ, ConnectomeDispatch, ()> for CountingEngine {
         parameters: Self::InitParameters,
         _engine_index: BurstEngineIndex,
         visualization_transmitter: Self::VisualizationTransmitter,
-        _burst_rate: TargetFrequency,
-        _visualization_rate: TargetFrequency,
     ) -> Result<Self, Self::InitError> {
         let counts = parameters.ok_or(RefusedInit)?;
         Ok(CountingEngine { counts, bursts_run: 0, visualization_transmitter })
@@ -65,14 +68,6 @@ impl BurstEngine<FIQ, ConnectomeDispatch, ()> for CountingEngine {
                 slot.change_counter = VisualizationStructureChangeCounter(self.bursts_run);
             }
         }
-    }
-
-    async fn set_burst_rate(&mut self, _burst_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
-        Ok(())
-    }
-
-    async fn set_visualization_rate(&mut self, _visualization_rate: TargetFrequency) -> Result<(), EngineChangeCommandOtherError> {
-        Ok(())
     }
 
     /// Refuses every connectome edit
@@ -108,8 +103,8 @@ fn listen(receiver: NeuronProcessorSingleEngineVisualizationReceiver<FIQ>) -> st
 fn run_worker(target_frequency: f64, visualization_frequency: f64, run_for: std::time::Duration, with_listener: bool) -> Run {
     let counts = Arc::new(Counts::default());
     let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
-        initial_target_frequency: TargetFrequency::new_from_frequency(1000.0),
-        initial_visualization_frequency: TargetFrequency::new_from_frequency(1000.0),
+        initial_target_frequency: hz(1000.0),
+        initial_visualization_frequency: hz(1000.0),
         engine_init_parameters: Some(counts.clone()),
     };
     let (visualization_transmitter, visualization_receiver) = builder.spawn_related_channel_pairs();
@@ -122,15 +117,15 @@ fn run_worker(target_frequency: f64, visualization_frequency: f64, run_for: std:
 
     block_on_thread(async {
         let response = worker
-            .make_request(NeuronProcessorSingleEngineRequest::BurstRate(TargetFrequency::new_from_frequency(target_frequency)))
+            .make_request(NeuronProcessorSingleEngineRequest::BurstRate(hz(target_frequency)))
             .await
             .unwrap();
-        assert!(matches!(response, NeuronProcessorSingleEngineResponse::BurstRate(Ok(()))));
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::BurstRate));
         let response = worker
-            .make_request(NeuronProcessorSingleEngineRequest::VisualizationRate(TargetFrequency::new_from_frequency(visualization_frequency)))
+            .make_request(NeuronProcessorSingleEngineRequest::VisualizationRate(hz(visualization_frequency)))
             .await
             .unwrap();
-        assert!(matches!(response, NeuronProcessorSingleEngineResponse::VisualizationRate(Ok(()))));
+        assert!(matches!(response, NeuronProcessorSingleEngineResponse::VisualizationRate));
         // Only count what runs at the requested frequencies
         counts.bursts.store(0, Ordering::SeqCst);
         counts.visualizations.store(0, Ordering::SeqCst);
@@ -181,8 +176,8 @@ fn listener_receives_visualizations() {
 #[test]
 fn engine_init_failure_is_returned() {
     let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
-        initial_target_frequency: TargetFrequency::new_from_frequency(1000.0),
-        initial_visualization_frequency: TargetFrequency::new_from_frequency(1000.0),
+        initial_target_frequency: hz(1000.0),
+        initial_visualization_frequency: hz(1000.0),
         engine_init_parameters: None,
     };
     let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
@@ -196,8 +191,8 @@ fn engine_init_failure_is_returned() {
 #[test]
 fn edit_batch_stops_at_first_failure() {
     let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
-        initial_target_frequency: TargetFrequency::new_from_frequency(1000.0),
-        initial_visualization_frequency: TargetFrequency::new_from_frequency(1000.0),
+        initial_target_frequency: hz(1000.0),
+        initial_visualization_frequency: hz(1000.0),
         engine_init_parameters: Some(Arc::new(Counts::default())),
     };
     let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();
@@ -223,8 +218,8 @@ fn edit_batch_stops_at_first_failure() {
 fn paused_worker_does_not_burst_but_handles_commands() {
     let counts = Arc::new(Counts::default());
     let builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, CountingEngine> {
-        initial_target_frequency: TargetFrequency::new_from_frequency(500.0),
-        initial_visualization_frequency: TargetFrequency::new_from_frequency(500.0),
+        initial_target_frequency: hz(500.0),
+        initial_visualization_frequency: hz(500.0),
         engine_init_parameters: Some(counts.clone()),
     };
     let (visualization_transmitter, _visualization_receiver) = builder.spawn_related_channel_pairs();

@@ -12,7 +12,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_basis::target_frequency::TargetFrequency;
+use feagi_basis::target_frequency::{TargetFrequency, TargetFrequencyError};
 use feagi_connectome::connectome_basis::engine::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
@@ -100,8 +100,10 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         // Not connected to the genome manager yet, so its engine has no cortical areas. Its
         // visualization receiver is held until it is wired to zenoh
         let neural_processor_builder = NeuronProcessorSingleEngineWorkerBuilder::<FIQ, BurstEngine> {
-            initial_target_frequency: TargetFrequency::new_from_frequency(INITIAL_BURST_FREQUENCY_HZ),
-            initial_visualization_frequency: TargetFrequency::new_from_frequency(INITIAL_VISUALIZATION_FREQUENCY_HZ),
+            initial_target_frequency: TargetFrequency::new_from_frequency(INITIAL_BURST_FREQUENCY_HZ)
+                .map_err(|error| WorkerStartError::WorkerError(error.into()))?,
+            initial_visualization_frequency: TargetFrequency::new_from_frequency(INITIAL_VISUALIZATION_FREQUENCY_HZ)
+                .map_err(|error| WorkerStartError::WorkerError(error.into()))?,
             engine_init_parameters: (),
         };
         let (visualization_transmitter, visualization_receiver) = neural_processor_builder.spawn_related_channel_pairs();
@@ -302,4 +304,6 @@ pub enum DesignerBrainServerLaunchError {
     Zenoh(#[from] WorkerStartError<FeagiBuildZenohWorkerError>),
     #[error("Brain server worker failed to start: {0}")]
     Spawn(#[from] FeagiWorkerSpawnError),
+    #[error("Neural processor rate is invalid: {0}")]
+    InvalidFrequency(#[from] TargetFrequencyError),
 }
