@@ -1,21 +1,22 @@
 #![cfg(feature = "std")]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use feagi_basis::parallelism::block_on_thread;
+use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
-use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelReceiver, FeagiChannelTransmitter};
-use feagi_connectome::neural_processors::singular::{
-    NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
-    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
-};
 use feagi_connectome::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
-use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
+use feagi_connectome::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
+use feagi_connectome::neural_processors::singular::{
+    NeuronProcessorSingleEngineVisualizationReceiver,
+    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
+};
 use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
+use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::visualization::VisualizationStructureChangeCounter;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 type FIQ = FeagiIndexQuantizationStandard;
 

@@ -67,7 +67,7 @@ where
     /// that resolve rapidly. If another branch wins while a command is being handled, the
     /// handling is cut short: the `FeagiWorker` receives `ResponderDroppedRequest`, and a cut
     /// short `on_stop` never finishes its cleanup
-    pub async fn handle_next(&mut self) -> ControlFlow<FeagiWorkerExit> {
+    pub async fn await_handle_next(&mut self) -> ControlFlow<FeagiWorkerExit> {
         let mut stopped = false;
         let result = self.responder.async_process_next(Self::route(&mut self.processor, &mut stopped)).await;
         Self::exit_from_result(result, stopped)
@@ -78,7 +78,7 @@ where
     /// exited
     pub async fn run_until_stopped(mut self) -> (CommandProcessor, FeagiWorkerExit) {
         loop {
-            if let ControlFlow::Break(exit) = self.handle_next().await {
+            if let ControlFlow::Break(exit) = self.await_handle_next().await {
                 return (self.processor, exit);
             }
         }

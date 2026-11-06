@@ -812,7 +812,7 @@ fn router_handle_next_reports_each_exit() {
     block_on_thread(async {
         let (response, exit) = futures_join(
             requester.make_request(FeagiWorkerRequest::Custom(5)),
-            commands.handle_next(),
+            commands.await_handle_next(),
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Custom(10)));
@@ -820,7 +820,7 @@ fn router_handle_next_reports_each_exit() {
 
         let (response, exit) = futures_join(
             requester.make_request(FeagiWorkerRequest::Stop),
-            commands.handle_next(),
+            commands.await_handle_next(),
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Acknowledged));
@@ -828,7 +828,7 @@ fn router_handle_next_reports_each_exit() {
     });
 
     drop(requester);
-    assert_eq!(block_on_thread(commands.handle_next()), ControlFlow::Break(FeagiWorkerExit::Disconnected));
+    assert_eq!(block_on_thread(commands.await_handle_next()), ControlFlow::Break(FeagiWorkerExit::Disconnected));
 }
 
 #[test]
