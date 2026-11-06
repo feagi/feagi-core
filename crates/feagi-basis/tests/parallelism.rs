@@ -1,6 +1,7 @@
 #![cfg(feature = "std")]
 
 use core::future::Future;
+use core::ops::ControlFlow;
 use core::pin::pin;
 use core::task::{Context, Poll, Waker};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -22,7 +23,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerAwaitingRouter, FeagiWorkerExit, FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerCommandRouter, FeagiWorkerExit};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 //region Helpers
@@ -96,7 +97,7 @@ impl FeagiWorkerCommandProcessor for DoublingHandler {
 
 /// Worker body that doubles custom requests and stops on `Stop`
 async fn doubling_worker(requests: WorkerResponder) {
-    FeagiWorkerAwaitingRouter::new(DoublingHandler, requests).run_until_stopped().await;
+    FeagiWorkerCommandRouter::new(DoublingHandler, requests).run_until_stopped().await;
 }
 
 /// Worker state that publishes each custom request onto an outgoing event channel, and echoes it
@@ -707,7 +708,7 @@ fn spawned_worker_can_send_to_additional_channels() {
     let (mut requester, responder) = worker_request_channel(1);
     let join_handle = FeagiStdThreadSpawner
         .spawn_worker(move || async move {
-            FeagiWorkerAwaitingRouter::new(EventHandler { event_sender }, responder).run_until_stopped().await;
+            FeagiWorkerCommandRouter::new(EventHandler { event_sender }, responder).run_until_stopped().await;
         })
         .unwrap();
 
@@ -758,7 +759,7 @@ fn spawned_worker_can_spawn_and_stop_a_child_worker() {
                 child_requester,
                 child_stopped: child_stopped_in_parent,
             };
-            FeagiWorkerAwaitingRouter::new(handler, parent_responder).run_until_stopped().await;
+            FeagiWorkerCommandRouter::new(handler, parent_responder).run_until_stopped().await;
             child_join_handle.join().unwrap();
         })
         .unwrap();
@@ -773,12 +774,12 @@ fn spawned_worker_can_spawn_and_stop_a_child_worker() {
 }
 
 #[test]
-fn polling_router_reports_each_step() {
+fn router_try_handle_next_reports_each_step() {
     let (mut requester, responder) = worker_request_channel(2);
-    let mut commands = FeagiWorkerPollingRouter::new(DoublingHandler, responder);
+    let mut commands = FeagiWorkerCommandRouter::new(DoublingHandler, responder);
 
     block_on_thread(async {
-        assert_eq!(commands.try_handle_next().await, FeagiWorkerStep::Idle);
+        assert_eq!(commands.try_handle_next().await, ControlFlow::Continue(false));
 
         // The requester waits for each reply, so the request is sent and handled concurrently.
         // `futures_join` polls the request first, so it is queued before `try_handle_next` checks
@@ -788,7 +789,7 @@ fn polling_router_reports_each_step() {
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Custom(10)));
-        assert_eq!(step, FeagiWorkerStep::Handled);
+        assert_eq!(step, ControlFlow::Continue(true));
 
         let (response, step) = futures_join(
             requester.make_request(FeagiWorkerRequest::Stop),
@@ -796,17 +797,17 @@ fn polling_router_reports_each_step() {
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Acknowledged));
-        assert_eq!(step, FeagiWorkerStep::Stopped);
+        assert_eq!(step, ControlFlow::Break(FeagiWorkerExit::Stopped));
     });
 
     drop(requester);
-    assert_eq!(block_on_thread(commands.try_handle_next()), FeagiWorkerStep::Disconnected);
+    assert_eq!(block_on_thread(commands.try_handle_next()), ControlFlow::Break(FeagiWorkerExit::Disconnected));
 }
 
 #[test]
-fn awaiting_router_reports_each_exit() {
+fn router_handle_next_reports_each_exit() {
     let (mut requester, responder) = worker_request_channel(2);
-    let mut commands = FeagiWorkerAwaitingRouter::new(DoublingHandler, responder);
+    let mut commands = FeagiWorkerCommandRouter::new(DoublingHandler, responder);
 
     block_on_thread(async {
         let (response, exit) = futures_join(
@@ -815,7 +816,7 @@ fn awaiting_router_reports_each_exit() {
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Custom(10)));
-        assert_eq!(exit, None);
+        assert_eq!(exit, ControlFlow::Continue(()));
 
         let (response, exit) = futures_join(
             requester.make_request(FeagiWorkerRequest::Stop),
@@ -823,18 +824,18 @@ fn awaiting_router_reports_each_exit() {
         )
         .await;
         assert!(matches!(response.unwrap(), FeagiWorkerResponse::Acknowledged));
-        assert_eq!(exit, Some(FeagiWorkerExit::Stopped));
+        assert_eq!(exit, ControlFlow::Break(FeagiWorkerExit::Stopped));
     });
 
     drop(requester);
-    assert_eq!(block_on_thread(commands.handle_next()), Some(FeagiWorkerExit::Disconnected));
+    assert_eq!(block_on_thread(commands.handle_next()), ControlFlow::Break(FeagiWorkerExit::Disconnected));
 }
 
 #[test]
-fn awaiting_router_gives_back_processor_when_disconnected() {
+fn router_gives_back_processor_when_disconnected() {
     let (requester, responder) = worker_request_channel(1);
     drop(requester);
-    let (DoublingHandler, exit) = block_on_thread(FeagiWorkerAwaitingRouter::new(DoublingHandler, responder).run_until_stopped());
+    let (DoublingHandler, exit) = block_on_thread(FeagiWorkerCommandRouter::new(DoublingHandler, responder).run_until_stopped());
     assert_eq!(exit, FeagiWorkerExit::Disconnected);
 }
 
@@ -919,7 +920,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
     ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, u32, u32>, Self::BuildOutputs), WorkerStartError<Self::WorkerStartError>> {
         let (requester, responder) = worker_request_channel(1);
         let handle = spawner.spawn_worker(move || async move {
-            FeagiWorkerAwaitingRouter::new(EventHandler { event_sender }, responder).run_until_stopped().await;
+            FeagiWorkerCommandRouter::new(EventHandler { event_sender }, responder).run_until_stopped().await;
         })?;
         Ok((FeagiWorker::new(requester, handle), ()))
     }

@@ -13,7 +13,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 //region Local Configs
@@ -142,12 +142,11 @@ async fn run_rest_server<Router: picoserve::routing::PathRouter>(
     router: picoserve::Router<Router>,
 ) {
     //let router = route_brain_visualizer_startup(router);
-    let mut commands = FeagiWorkerPollingRouter::new(RestServerCommandHandler, requests);
+    let mut commands = FeagiWorkerCommandRouter::new(RestServerCommandHandler, requests);
 
     loop {
-        match commands.try_handle_next().await {
-            FeagiWorkerStep::Handled | FeagiWorkerStep::Idle => {}
-            FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
+        if commands.try_handle_next().await.is_break() {
+            break;
         }
 
         let (stream, _peer) = match listener.accept() {

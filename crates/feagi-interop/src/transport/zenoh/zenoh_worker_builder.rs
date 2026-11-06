@@ -9,7 +9,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerAwaitingRouter;
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use zenoh::Wait;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
@@ -131,7 +131,7 @@ async fn run_zenoh_worker(
     token: zenoh::liveliness::LivelinessToken,
 ) {
     let handler = ZenohCommandHandler { session, token: Some(token) };
-    FeagiWorkerAwaitingRouter::new(handler, requests).run_until_stopped().await;
+    FeagiWorkerCommandRouter::new(handler, requests).run_until_stopped().await;
 }
 
 

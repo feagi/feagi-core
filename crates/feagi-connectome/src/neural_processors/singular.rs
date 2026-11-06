@@ -1,6 +1,7 @@
 //! A worker running a single burst engine at a target frequency
 
 use core::marker::PhantomData;
+use core::ops::ControlFlow;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
@@ -8,7 +9,7 @@ use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
 use crate::neuron_models::init_dispatch::ConnectomeDispatch;
@@ -21,10 +22,6 @@ use std::time::Instant;
 
 /// How many commands can be in queue on this worker at one time
 const COMMAND_QUEUE_LENGTH: usize = 8;
-
-/// How long the worker sleeps between checks for a command while paused. Bounds how late a command
-/// is answered while paused
-const PAUSED_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(1);
 
 /// How many visualizations the visualization channel holds. One for the listener to read while the
 /// engine writes the other
@@ -258,7 +255,7 @@ async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine:
     >,
     handler: NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>,
 ) {
-    let mut commands = FeagiWorkerPollingRouter::new(handler, responder);
+    let mut commands = FeagiWorkerCommandRouter::new(handler, responder);
     let mut tick_time = Instant::now();
     let mut visualization_time = Instant::now();
 
@@ -270,19 +267,18 @@ async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine:
 
         loop {
             match commands.try_handle_next().await {
-                FeagiWorkerStep::Handled => continue,
-                FeagiWorkerStep::Idle => break,
-                FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => return,
+                ControlFlow::Continue(true) => continue,
+                ControlFlow::Continue(false) => break,
+                ControlFlow::Break(_) => return,
             }
         }
 
-        // While paused, nothing runs on the timer. Only commands are handled, as they arrive
+        // While paused, nothing runs on the timer. The worker waits for commands and handles each
+        // one as it arrives, without spending time between them
         if commands.processor_mut().paused {
             while commands.processor_mut().paused {
-                match commands.try_handle_next().await {
-                    FeagiWorkerStep::Handled => {}
-                    FeagiWorkerStep::Idle => std::thread::sleep(PAUSED_POLL_INTERVAL),
-                    FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => return,
+                if commands.handle_next().await.is_break() {
+                    return;
                 }
             }
             // Resumed. Burst now, and schedule the next tick from now rather than catching up

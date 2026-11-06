@@ -9,7 +9,8 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
+use core::ops::ControlFlow;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::connectome_basis::engine::BurstEngineCPURayon;
@@ -260,12 +261,10 @@ async fn server_runtime(
     command_responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
     handler: DesignerBrainServerCommandHandler,
 ) {
-    let mut commands = FeagiWorkerPollingRouter::new(handler, command_responder);
+    let mut commands = FeagiWorkerCommandRouter::new(handler, command_responder);
     loop {
-        let mut busy = match commands.try_handle_next().await {
-            FeagiWorkerStep::Handled => true,
-            FeagiWorkerStep::Idle => false,
-            FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
+        let ControlFlow::Continue(mut busy) = commands.try_handle_next().await else {
+            break;
         };
 
         busy |= commands.processor_mut().answer_system_request().await;

@@ -8,7 +8,8 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
-use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
+use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
+use core::ops::ControlFlow;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
@@ -36,14 +37,12 @@ pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
 
     let mut graph = DesignerGenome::<FIQ>::new_genome_now("Genome Test Name".to_string());
 
-    let mut commands = FeagiWorkerPollingRouter::new(GenomeManagerCommandHandler, responder);
+    let mut commands = FeagiWorkerCommandRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
 
     loop {
-        let mut busy = match commands.try_handle_next().await {
-            FeagiWorkerStep::Handled => true,
-            FeagiWorkerStep::Idle => false,
-            FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
+        let ControlFlow::Continue(mut busy) = commands.try_handle_next().await else {
+            break;
         };
 
         // TODO actually handle requests. Until then the unhandled ones are answered as not
