@@ -399,3 +399,152 @@ fn area_mode_reports_area_target_and_regulated() {
         vec![1.0, 1.0]
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// BUG 1 regression tests: disable resets per-neuron leaks to area base_leak
+// ---------------------------------------------------------------------------------------
+
+/// Enable the homeostat, drive per-neuron leaks away from BASE_LEAK via `remove_rate_modulated_leak`,
+/// then verify every neuron's stored leak is reset to BASE_LEAK.
+#[test]
+fn disable_via_remove_resets_per_neuron_leaks_to_base_leak() {
+    let (mut npu, ids) = make_npu(3);
+    register(&mut npu, &ids, 0.0); // target 0: firing raises leak above BASE_LEAK
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+
+    // Drive leaks away from BASE_LEAK by firing for many bursts.
+    fire_bursts(&mut npu, &ids, 20);
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(
+            l > BASE_LEAK + 1e-4,
+            "pre-condition: leak should be above BASE_LEAK before disable, got {l}"
+        );
+    }
+
+    // Disable the homeostat.
+    npu.remove_rate_modulated_leak(AREA);
+    assert!(!npu.has_rate_modulated_leak(AREA));
+
+    // Every neuron must be back at BASE_LEAK immediately after disable.
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(
+            (l - BASE_LEAK).abs() < 1e-6,
+            "after remove_rate_modulated_leak: expected {BASE_LEAK}, got {l}"
+        );
+    }
+
+    // Additional bursts must not change the leak (homeostat is gone).
+    fire_bursts(&mut npu, &ids, 3);
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(
+            (l - BASE_LEAK).abs() < 1e-6,
+            "after post-disable bursts: expected {BASE_LEAK}, got {l}"
+        );
+    }
+}
+
+/// Same as above but via sync_rate_modulated_leak_from_cortical_property with `enabled: false`.
+#[test]
+fn disable_via_sync_disabled_config_resets_per_neuron_leaks_to_base_leak() {
+    let (mut npu, ids) = make_npu(3);
+    register(&mut npu, &ids, 0.0);
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+
+    fire_bursts(&mut npu, &ids, 20);
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(l > BASE_LEAK + 1e-4, "pre-condition failed: {l}");
+    }
+
+    // Disable via sync with enabled=false — the same path used by the service on restore.
+    let disabled_cfg = serde_json::json!({ "enabled": false });
+    npu.sync_rate_modulated_leak_from_cortical_property(
+        AREA,
+        &disabled_cfg,
+        BASE_LEAK,
+        ids.iter().map(|n| n.0 as usize).collect(),
+    );
+    assert!(!npu.has_rate_modulated_leak(AREA));
+
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(
+            (l - BASE_LEAK).abs() < 1e-6,
+            "after sync(disabled): expected {BASE_LEAK}, got {l}"
+        );
+    }
+}
+
+/// `gain: 0` keeps the homeostat REGISTERED (hold semantics): disabling it is not triggered,
+/// so per-neuron leaks are NOT reset to base. Only an explicit disable/remove resets them.
+#[test]
+fn gain_zero_holds_leaks_and_does_not_reset_to_base() {
+    let (mut npu, ids) = make_npu(2);
+    // Drive leaks away first with gain=1.
+    register(&mut npu, &ids, 0.0);
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+    fire_bursts(&mut npu, &ids, 20);
+    let driven_leak = leak_of(&npu, ids[0]);
+    assert!(
+        driven_leak > BASE_LEAK + 1e-4,
+        "pre-condition: {driven_leak}"
+    );
+
+    // Switch to gain=0 (hold): still registered, leaks frozen at their current values.
+    let hold_cfg = serde_json::json!({
+        "enabled": true,
+        "target_firing_per_burst": 0.0,
+        "rate_ema_tau_bursts": 1.0,
+        "gain": 0.0,
+        "leak_min": 0.02,
+        "leak_max": 0.5,
+    });
+    npu.sync_rate_modulated_leak_from_cortical_property(
+        AREA,
+        &hold_cfg,
+        BASE_LEAK,
+        ids.iter().map(|n| n.0 as usize).collect(),
+    );
+    assert!(
+        npu.has_rate_modulated_leak(AREA),
+        "gain=0 keeps the area registered"
+    );
+
+    // After gain=0 sync, per-neuron leaks are NOT reset to BASE_LEAK.
+    let after_hold = leak_of(&npu, ids[0]);
+    assert!(
+        (after_hold - driven_leak).abs() < 1e-5,
+        "gain=0 must not reset leaks: expected ~{driven_leak}, got {after_hold}"
+    );
+}
+
+/// Calling update_cortical_area_leak with the same value as the stored base_leak (the
+/// "restore to same value" case) correctly resets per-neuron leaks in storage even when
+/// they were previously adjusted by the homeostat.
+#[test]
+fn set_leak_same_value_rewrites_per_neuron_leaks_when_homeostat_active() {
+    let (mut npu, ids) = make_npu(3);
+    register(&mut npu, &ids, 0.0);
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+
+    fire_bursts(&mut npu, &ids, 20);
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(l > BASE_LEAK + 1e-4, "pre-condition: {l}");
+    }
+
+    // Write BASE_LEAK to all neurons even though it is the same as the area's base_leak.
+    let updated = npu.update_cortical_area_leak(AREA, BASE_LEAK);
+    assert_eq!(updated, 3, "all neurons must be updated");
+
+    for &id in &ids {
+        let l = leak_of(&npu, id);
+        assert!(
+            (l - BASE_LEAK).abs() < 1e-6,
+            "update_cortical_area_leak to same value must rewrite neuron storage: expected {BASE_LEAK}, got {l}"
+        );
+    }
+}

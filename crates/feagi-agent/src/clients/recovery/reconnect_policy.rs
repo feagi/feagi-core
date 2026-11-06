@@ -2,6 +2,15 @@
 //!
 //! Pure logic. Given a stream of [`RecoveryTrigger`] inputs and the current
 //! time/last-attempt state, the policy returns a [`ReconnectDecision`].
+//!
+//! Two kinds of trigger feed the policy. Health transitions and
+//! [`RecoveryTrigger::TransportSendFailed`] are edge-triggered: the call that
+//! observes one consumes it, so a later call with no new trigger returns
+//! [`ReconnectDecision::Skip`]. [`RecoveryTrigger::NotRegistered`] is
+//! level-triggered: the driver raises it on every tick while the client is not
+//! registered, so a failed or deferred attempt is asked about again on the next
+//! tick and the cooldown and max-failure rules below decide when it runs.
+//!
 //! There are no defaults: every threshold is supplied via
 //! [`ReconnectPolicyConfig`] by the caller, so the same logic applies
 //! identically across the Rust SDK, the PyO3 binding, and any future Java
@@ -18,10 +27,16 @@ use serde::{Deserialize, Serialize};
 /// The [`Self::TransportSendFailed`] trigger is supplied by the IO loop
 /// when a publish/heartbeat operation fails in a way that is not transient
 /// backpressure.
+///
+/// [`Self::NotRegistered`] is a level trigger: the driver supplies it on every
+/// tick while the client reports that it is not registered with FEAGI. It is
+/// always enabled (there is no configuration flag), because a client that is
+/// not registered has no session to keep and the only recovery is a rebuild.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecoveryTrigger {
     Health(HealthEvent),
     TransportSendFailed,
+    NotRegistered,
 }
 
 /// Caller-supplied configuration for [`ReconnectPolicy`].
@@ -118,6 +133,9 @@ impl ReconnectPolicy {
                     if self.config.trigger_on_transport_send_failed {
                         return Some("transport send failed".to_string());
                     }
+                }
+                RecoveryTrigger::NotRegistered => {
+                    return Some("client not registered".to_string());
                 }
             }
         }
@@ -317,6 +335,106 @@ mod tests {
         }
         let decision = p.decide(&[RecoveryTrigger::TransportSendFailed], 10_000);
         assert!(matches!(decision, ReconnectDecision::AttemptNow { .. }));
+    }
+
+    /// Drive the policy the way a level-triggered driver does: `NotRegistered`
+    /// is presented on every tick until an attempt succeeds. Returns the tick
+    /// times at which an attempt was started.
+    fn run_level_triggered(
+        p: &mut ReconnectPolicy,
+        tick_ms: &[u64],
+        attempt_outcomes: &mut Vec<bool>,
+    ) -> (Vec<u64>, Option<ReconnectDecision>) {
+        let mut attempts = Vec::new();
+        for &now in tick_ms {
+            match p.decide(&[RecoveryTrigger::NotRegistered], now) {
+                ReconnectDecision::AttemptNow { .. } => {
+                    attempts.push(now);
+                    if attempt_outcomes.remove(0) {
+                        p.record_attempt_succeeded();
+                        return (attempts, None);
+                    }
+                    p.record_attempt_failed();
+                }
+                give_up @ ReconnectDecision::GiveUp { .. } => return (attempts, Some(give_up)),
+                ReconnectDecision::Skip | ReconnectDecision::RetryAfter { .. } => {}
+            }
+        }
+        (attempts, None)
+    }
+
+    #[test]
+    fn not_registered_attempts_now_on_first_tick() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let decision = p.decide(&[RecoveryTrigger::NotRegistered], 0);
+        assert_eq!(
+            decision,
+            ReconnectDecision::AttemptNow {
+                reason: "client not registered".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn not_registered_is_deferred_inside_cooldown_and_retried_after_it() {
+        let mut p = ReconnectPolicy::new(cfg());
+        assert!(matches!(
+            p.decide(&[RecoveryTrigger::NotRegistered], 0),
+            ReconnectDecision::AttemptNow { .. }
+        ));
+        p.record_attempt_failed();
+        match p.decide(&[RecoveryTrigger::NotRegistered], 400) {
+            ReconnectDecision::RetryAfter { wait_ms, .. } => assert_eq!(wait_ms, 600),
+            other => panic!("expected RetryAfter inside cooldown, got {:?}", other),
+        }
+        // Nothing consumed the level: the next tick past the cooldown attempts again.
+        assert!(matches!(
+            p.decide(&[RecoveryTrigger::NotRegistered], 1_000),
+            ReconnectDecision::AttemptNow { .. }
+        ));
+    }
+
+    #[test]
+    fn not_registered_keeps_attempting_after_each_cooldown_until_success() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let ticks: Vec<u64> = (0..=10).map(|i| i * 500).collect();
+        // Attempts fail twice, then the third succeeds.
+        let mut outcomes = vec![false, false, true, true, true];
+        let (attempts, give_up) = run_level_triggered(&mut p, &ticks, &mut outcomes);
+        assert_eq!(attempts, vec![0, 1_000, 2_000]);
+        assert_eq!(give_up, None);
+        assert_eq!(p.consecutive_failures(), 0);
+    }
+
+    #[test]
+    fn not_registered_gives_up_at_max_consecutive_failures() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let ticks: Vec<u64> = (0..=20).map(|i| i * 1_000).collect();
+        let mut outcomes = vec![false; 20];
+        let (attempts, give_up) = run_level_triggered(&mut p, &ticks, &mut outcomes);
+        // max_consecutive_failures is 5 in cfg(): five attempts, then GiveUp.
+        assert_eq!(attempts.len(), 5);
+        assert_eq!(
+            give_up,
+            Some(ReconnectDecision::GiveUp {
+                consecutive_failures: 5
+            })
+        );
+    }
+
+    #[test]
+    fn not_registered_is_not_gated_by_edge_trigger_flags() {
+        let mut config = cfg();
+        config.trigger_on_transport_send_failed = false;
+        config.trigger_on_session_changed = false;
+        config.trigger_on_genome_changed = false;
+        config.trigger_on_genome_load_completed = false;
+        config.trigger_on_back_online = false;
+        let mut p = ReconnectPolicy::new(config);
+        assert!(matches!(
+            p.decide(&[RecoveryTrigger::NotRegistered], 0),
+            ReconnectDecision::AttemptNow { .. }
+        ));
     }
 
     #[test]

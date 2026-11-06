@@ -47,6 +47,29 @@ pub struct RateModulatedLeakConfig {
     /// `per_neuron` only: how neurons armed below `min_target_firing_per_burst` are handled.
     #[serde(default)]
     pub silent_neurons: SilentNeurons,
+    /// How the leak follows the firing record (default `proportional`: unchanged behaviour).
+    #[serde(default)]
+    pub update_rule: UpdateRule,
+    /// `counter` only (required): number of leak codes on the grid between `leak_min` and
+    /// `leak_max` (>= 2).
+    #[serde(default)]
+    pub leak_levels: Option<u32>,
+    /// `counter` only (required): silent bursts that cost one down-step (>= 1).
+    #[serde(default)]
+    pub counter_timeout_bursts: Option<u32>,
+}
+
+/// Leak update rule.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateRule {
+    /// Leak moves by `gain * (rate_ema - target)` (every `update_every_n_bursts`).
+    #[default]
+    Proportional,
+    /// Integer leak code on a grid of `leak_levels`: a spike steps it up, a window of
+    /// `counter_timeout_bursts` silent bursts steps it down (every burst; `update_every_n_bursts`,
+    /// `gain` and the targets are ignored).
+    Counter,
 }
 
 /// Handling of neurons whose armed target is below `min_target_firing_per_burst`.
@@ -139,9 +162,61 @@ struct AreaState {
     one_sided: Vec<bool>,
     /// Next `apply_burstal` writes `base_leak` into every neuron's leak slot (fresh arming).
     reset_leaks_pending: bool,
+    // --- counter rule ---
+    /// Leak-grid index per neuron (counter rule only; empty otherwise).
+    level: Vec<u32>,
+    /// Bursts since the neuron's last spike or down-step (counter rule only).
+    since_spike: Vec<u32>,
+}
+
+/// Leak value of grid level `i` of `levels` between `lo` and `hi`.
+fn grid_leak(lo: f32, hi: f32, levels: u32, i: u32) -> f32 {
+    let steps = levels.saturating_sub(1).max(1) as f32;
+    (lo + (i as f32) * (hi - lo) / steps).clamp(0.0, 1.0)
+}
+
+/// Grid level nearest to `leak`.
+fn nearest_level(lo: f32, hi: f32, levels: u32, leak: f32) -> u32 {
+    let top = levels.saturating_sub(1);
+    if hi <= lo || top == 0 {
+        return 0;
+    }
+    let i = ((leak - lo) / (hi - lo) * top as f32).round();
+    if i.is_finite() {
+        (i.max(0.0) as u32).min(top)
+    } else {
+        0
+    }
 }
 
 impl AreaState {
+    fn is_counter(&self) -> bool {
+        self.config.update_rule == UpdateRule::Counter
+    }
+
+    /// Counter rule: grid level nearest the area's base leak.
+    fn base_level(&self) -> u32 {
+        let l = self.config.leak_levels.unwrap_or(2);
+        nearest_level(
+            self.config.leak_min,
+            self.config.leak_max,
+            l,
+            self.base_leak,
+        )
+    }
+
+    /// Counter rule: every neuron back to the base-leak level with a zero counter.
+    fn reset_counter_state(&mut self) {
+        if self.is_counter() {
+            let b = self.base_level();
+            self.level = vec![b; self.neuron_idx.len()];
+            self.since_spike = vec![0; self.neuron_idx.len()];
+        } else {
+            self.level = Vec::new();
+            self.since_spike = Vec::new();
+        }
+    }
+
     /// Decide, from the frozen targets, which neurons are regulated two-sided, one-sided or not.
     fn classify_targets(&mut self) {
         let min_t = self.config.min_target_firing_per_burst;
@@ -196,8 +271,46 @@ impl RateModulatedLeakConfig {
                 }
             }
         }
+        if let Some(rule) = obj.get("update_rule") {
+            match rule.as_str() {
+                Some("proportional") | Some("counter") => {}
+                _ => {
+                    return Err(format!(
+                        "rate_modulated_leak.update_rule must be \"proportional\" or \"counter\" (got {rule})"
+                    ))
+                }
+            }
+        }
         let cfg: Self = serde_json::from_value(value.clone())
             .map_err(|e| format!("rate_modulated_leak has invalid field types: {e}"))?;
+        if let Some(l) = cfg.leak_levels {
+            if l < 2 {
+                return Err(format!(
+                    "rate_modulated_leak.leak_levels must be >= 2 (got {l})"
+                ));
+            }
+        }
+        if let Some(c) = cfg.counter_timeout_bursts {
+            if c < 1 {
+                return Err(format!(
+                    "rate_modulated_leak.counter_timeout_bursts must be >= 1 (got {c})"
+                ));
+            }
+        }
+        if cfg.update_rule == UpdateRule::Counter {
+            if cfg.leak_levels.is_none() {
+                return Err(
+                    "rate_modulated_leak.leak_levels is required when update_rule is \"counter\""
+                        .to_string(),
+                );
+            }
+            if cfg.counter_timeout_bursts.is_none() {
+                return Err(
+                    "rate_modulated_leak.counter_timeout_bursts is required when update_rule is \"counter\""
+                        .to_string(),
+                );
+            }
+        }
         if !cfg.rate_ema_tau_bursts.is_finite() || cfg.rate_ema_tau_bursts <= 0.0 {
             return Err(format!(
                 "rate_modulated_leak.rate_ema_tau_bursts must be finite and > 0 (got {})",
@@ -346,6 +459,13 @@ impl RateModulatedLeakRegistry {
         self.leak_changes.clear();
     }
 
+    /// The area's stored `base_leak` (the area's `leak_coefficient` at last sync or reseed),
+    /// or `None` when the area is not registered. Used by callers that need to reset per-neuron
+    /// leaks in storage before de-registering the area.
+    pub fn base_leak(&self, cortical_idx: u32) -> Option<f32> {
+        self.areas.get(&cortical_idx).map(|st| st.base_leak)
+    }
+
     /// Restart the homeostat for an area from `leak` after an explicit leak edit.
     /// Keeps the rate EMA; the next update step moves from this value.
     pub fn reseed_leak(&mut self, cortical_idx: u32, leak: f32) {
@@ -356,6 +476,7 @@ impl RateModulatedLeakRegistry {
             let g = leak.clamp(0.0, 1.0);
             st.g_leak.iter_mut().for_each(|x| *x = g);
             st.base_leak = g;
+            st.reset_counter_state();
         }
     }
 
@@ -388,8 +509,15 @@ impl RateModulatedLeakRegistry {
                 && prev.config.arm_bursts == cfg.arm_bursts
                 && prev.neuron_idx == neuron_global_indices
             {
+                let counter_changed = prev.config.update_rule != cfg.update_rule
+                    || prev.config.leak_levels != cfg.leak_levels
+                    || prev.config.leak_min != cfg.leak_min
+                    || prev.config.leak_max != cfg.leak_max;
                 prev.config = cfg;
                 prev.base_leak = g0;
+                if counter_changed {
+                    prev.reset_counter_state();
+                }
                 if prev.arm_remaining == 0 {
                     prev.classify_targets();
                 }
@@ -397,23 +525,24 @@ impl RateModulatedLeakRegistry {
             }
         }
         let arm_remaining = if per_neuron { cfg.arm_bursts } else { 0 };
-        self.areas.insert(
-            cortical_idx,
-            AreaState {
-                config: cfg,
-                neuron_idx: neuron_global_indices,
-                r_ema: vec![0.0; n],
-                g_leak: vec![g0; n],
-                base_leak: g0,
-                arm_remaining,
-                arm_n: 0,
-                arm_ema: vec![0.0; n],
-                target: vec![0.0; n],
-                regulated: vec![false; n],
-                one_sided: vec![false; n],
-                reset_leaks_pending: per_neuron,
-            },
-        );
+        let mut state = AreaState {
+            config: cfg,
+            neuron_idx: neuron_global_indices,
+            r_ema: vec![0.0; n],
+            g_leak: vec![g0; n],
+            base_leak: g0,
+            arm_remaining,
+            arm_n: 0,
+            arm_ema: vec![0.0; n],
+            target: vec![0.0; n],
+            regulated: vec![false; n],
+            one_sided: vec![false; n],
+            reset_leaks_pending: per_neuron,
+            level: Vec::new(),
+            since_spike: Vec::new(),
+        };
+        state.reset_counter_state();
+        self.areas.insert(cortical_idx, state);
     }
 
     /// @cursor:critical-path — call after the fire ledger is archived for `burst_count`.
@@ -474,6 +603,13 @@ impl RateModulatedLeakRegistry {
                 None => continue,
             };
             let arming = per_neuron && st.arm_remaining > 0;
+            let counter = st.is_counter();
+            let levels = st.config.leak_levels.unwrap_or(2).max(2);
+            let timeout = st.config.counter_timeout_bursts.unwrap_or(1).max(1);
+            let base_level = st.base_level();
+            if counter && st.level.len() != st.neuron_idx.len() {
+                st.reset_counter_state();
+            }
             for (j, &idx) in st.neuron_idx.iter().enumerate() {
                 if idx >= storage_leaks.len() {
                     continue;
@@ -502,6 +638,34 @@ impl RateModulatedLeakRegistry {
                 } else {
                     t
                 };
+                if counter {
+                    // Counter rule: every burst, independent of the cadence. A spike steps the
+                    // leak code up; a full silent window steps it down once. Floor: base level
+                    // for one-sided (silent-armed) neurons, else level 0 (area mode: always 0).
+                    let floor = if one_sided { base_level } else { 0 };
+                    let top = levels - 1;
+                    let mut lv = st.level[j].min(top);
+                    if fired > 0.5 {
+                        lv = (lv + 1).min(top);
+                        st.since_spike[j] = 0;
+                    } else {
+                        st.since_spike[j] += 1;
+                        if st.since_spike[j] >= timeout {
+                            lv = lv.saturating_sub(1).max(floor.min(top));
+                            st.since_spike[j] = 0;
+                        }
+                    }
+                    st.level[j] = lv;
+                    let g = grid_leak(g_min, g_max, levels, lv);
+                    st.g_leak[j] = g;
+                    if let Some(slot) = storage_leaks.get_mut(idx) {
+                        if *slot != g {
+                            leak_changes.push((idx, *slot));
+                        }
+                        *slot = g;
+                    }
+                    continue;
+                }
                 if !leak_step_due {
                     continue;
                 }
@@ -1497,5 +1661,227 @@ mod tests {
         let s = reg.neuron_state_by_neuron(32).unwrap();
         assert_eq!(s[&2].rate_target, 0.3);
         assert!(s[&3].regulated);
+    }
+
+    // ---- counter rule ----
+
+    fn counter_cfg(extra: Value) -> Value {
+        let mut o = json!({
+            "enabled": true, "update_rule": "counter", "leak_min": 0.0, "leak_max": 0.6,
+            "leak_levels": 7, "counter_timeout_bursts": 3, "rate_ema_tau_bursts": 5.0,
+        });
+        for (k, v) in extra.as_object().unwrap() {
+            o[k] = v.clone();
+        }
+        o
+    }
+
+    /// One burst: archive fires (or silence), run the pass, return the neuron's leak.
+    fn counter_burst(
+        reg: &mut RateModulatedLeakRegistry,
+        ledger: &mut FireLedger,
+        cortical: u32,
+        t: u64,
+        fire: &[u32],
+        leaks: &mut [f32],
+    ) {
+        if fire.is_empty() {
+            archive_burst_silent(ledger, t);
+        } else {
+            archive_burst_fires(ledger, t, cortical, fire);
+        }
+        reg.apply_burstal(t, ledger, leaks);
+    }
+
+    fn counter_setup(
+        cfg: Value,
+        base: f32,
+        n: usize,
+    ) -> (RateModulatedLeakRegistry, FireLedger, Vec<f32>) {
+        let mut reg = RateModulatedLeakRegistry::default();
+        reg.sync_cortical(40, &cfg, base, (0..n).collect());
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(40, 16).unwrap();
+        (reg, ledger, vec![base; 8])
+    }
+
+    #[test]
+    fn counter_grid_mapping_and_init_at_nearest_level() {
+        assert!((grid_leak(0.0, 0.6, 7, 0) - 0.0).abs() < 1e-7);
+        assert!((grid_leak(0.0, 0.6, 7, 3) - 0.3).abs() < 1e-6);
+        assert!((grid_leak(0.0, 0.6, 7, 6) - 0.6).abs() < 1e-6);
+        assert_eq!(nearest_level(0.0, 0.6, 7, 0.31), 3);
+        assert_eq!(nearest_level(0.0, 0.6, 7, 9.0), 6);
+        assert_eq!(nearest_level(0.0, 0.6, 7, -1.0), 0);
+        // Base 0.24 sits nearest level 2 (0.2): the first pass writes the grid value.
+        let (mut reg, mut ledger, mut leaks) = counter_setup(counter_cfg(json!({})), 0.24, 1);
+        counter_burst(&mut reg, &mut ledger, 40, 1, &[], &mut leaks);
+        assert!((leaks[0] - 0.2).abs() < 1e-6, "{}", leaks[0]);
+    }
+
+    #[test]
+    fn counter_spike_steps_up_and_clamps_at_top() {
+        let (mut reg, mut ledger, mut leaks) = counter_setup(counter_cfg(json!({})), 0.3, 1);
+        // Level 3 (0.3). Each spike is one up-step, even though update_every_n_bursts = 4.
+        let mut reg2 = RateModulatedLeakRegistry::default();
+        reg2.sync_cortical(
+            40,
+            &counter_cfg(json!({"update_every_n_bursts": 4})),
+            0.3,
+            vec![0],
+        );
+        let mut ledger2 = FireLedger::new(16);
+        ledger2.track_area(40, 16).unwrap();
+        let mut leaks2 = vec![0.3_f32; 8];
+        for (i, expect) in [0.4_f32, 0.5, 0.6, 0.6, 0.6].iter().enumerate() {
+            counter_burst(&mut reg, &mut ledger, 40, i as u64 + 1, &[0], &mut leaks);
+            counter_burst(&mut reg2, &mut ledger2, 40, i as u64 + 1, &[0], &mut leaks2);
+            assert!(
+                (leaks[0] - expect).abs() < 1e-6,
+                "burst {}: {}",
+                i + 1,
+                leaks[0]
+            );
+            assert_eq!(leaks[0], leaks2[0], "cadence must be ignored");
+        }
+    }
+
+    #[test]
+    fn counter_timeout_steps_down_once_per_window_and_spike_resets_counter() {
+        let (mut reg, mut ledger, mut leaks) = counter_setup(counter_cfg(json!({})), 0.3, 1);
+        let mut t = 0u64;
+        let mut step = |reg: &mut RateModulatedLeakRegistry, fire: &[u32], leaks: &mut Vec<f32>| {
+            t += 1;
+            counter_burst(reg, &mut ledger, 40, t, fire, leaks);
+            leaks[0]
+        };
+        // timeout 3: two silent bursts do nothing, the third steps down one level (0.3 -> 0.2).
+        assert!((step(&mut reg, &[], &mut leaks) - 0.3).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.3).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.2).abs() < 1e-6);
+        // Counter restarted: another full window is needed for the next step.
+        assert!((step(&mut reg, &[], &mut leaks) - 0.2).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.2).abs() < 1e-6);
+        // A spike resets the counter and steps up (0.2 -> 0.3).
+        assert!((step(&mut reg, &[0], &mut leaks) - 0.3).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.3).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.3).abs() < 1e-6);
+        assert!((step(&mut reg, &[], &mut leaks) - 0.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn counter_area_mode_floors_at_level_zero_and_pushes_leak_changes() {
+        let (mut reg, mut ledger, mut leaks) =
+            counter_setup(counter_cfg(json!({"counter_timeout_bursts": 1})), 0.3, 1);
+        let mut seen = Vec::new();
+        for t in 1..=6u64 {
+            counter_burst(&mut reg, &mut ledger, 40, t, &[], &mut leaks);
+            reg.drain_leak_changes(|idx, old| seen.push((idx, old)));
+        }
+        assert_eq!(leaks[0], 0.0, "area mode has no base floor");
+        // Area mode (not per_neuron) still reports every slot change for the lazy leak decay.
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        assert!((seen[0].1 - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn counter_one_sided_floors_at_base_active_floors_at_zero() {
+        let cfg = counter_cfg(json!({
+            "target_mode": "per_neuron", "arm_bursts": 40, "arm_tau_bursts": 10.0,
+            "min_target_firing_per_burst": 0.05, "counter_timeout_bursts": 1,
+        }));
+        let (mut reg, mut ledger, mut leaks) = counter_setup(cfg.clone(), 0.3, 2);
+        for t in 1..=40u64 {
+            // Neuron 0 fires every other burst (active), neuron 1 never (silent-armed).
+            let fire: &[u32] = if t % 2 == 0 { &[0] } else { &[] };
+            counter_burst(&mut reg, &mut ledger, 40, t, fire, &mut leaks);
+        }
+        let s = reg.neuron_state_by_neuron(40).unwrap();
+        assert!(!s[&0].one_sided && s[&1].one_sided);
+        for t in 41..=60u64 {
+            counter_burst(&mut reg, &mut ledger, 40, t, &[], &mut leaks);
+        }
+        assert!(
+            (leaks[1] - 0.3).abs() < 1e-6,
+            "one-sided floor = base: {}",
+            leaks[1]
+        );
+        assert_eq!(leaks[0], 0.0, "active floor = 0");
+        // Same area, silent_neurons "unregulated": the silent neuron is left alone.
+        let mut cfg2 = cfg;
+        cfg2["silent_neurons"] = json!("unregulated");
+        let (mut reg, mut ledger, mut leaks) = counter_setup(cfg2, 0.3, 2);
+        for t in 1..=60u64 {
+            let fire: &[u32] = if t <= 40 && t % 2 == 0 { &[0] } else { &[] };
+            counter_burst(&mut reg, &mut ledger, 40, t, fire, &mut leaks);
+        }
+        assert!((leaks[1] - 0.3).abs() < 1e-6);
+        assert_eq!(leaks[0], 0.0);
+    }
+
+    #[test]
+    fn counter_arm_epoch_change_reinitialises_levels() {
+        let cfg = counter_cfg(
+            json!({"target_mode": "per_neuron", "arm_bursts": 5, "counter_timeout_bursts": 1}),
+        );
+        let (mut reg, mut ledger, mut leaks) = counter_setup(cfg.clone(), 0.3, 1);
+        for t in 1..=12u64 {
+            counter_burst(&mut reg, &mut ledger, 40, t, &[0], &mut leaks);
+        }
+        assert!((leaks[0] - 0.6).abs() < 1e-6, "{}", leaks[0]);
+        let mut cfg2 = cfg;
+        cfg2["arm_epoch"] = json!(1);
+        reg.sync_cortical(40, &cfg2, 0.3, vec![0]);
+        // Fresh arming: the base leak is restored on the next pass, then the counter restarts
+        // at the base level.
+        counter_burst(&mut reg, &mut ledger, 40, 13, &[], &mut leaks);
+        assert!((leaks[0] - 0.3).abs() < 1e-6, "{}", leaks[0]);
+    }
+
+    #[test]
+    fn counter_keeps_computing_rate_ema() {
+        let (mut reg, mut ledger, mut leaks) = counter_setup(counter_cfg(json!({})), 0.3, 1);
+        for t in 1..=10u64 {
+            counter_burst(&mut reg, &mut ledger, 40, t, &[0], &mut leaks);
+        }
+        assert!(reg.neuron_state_by_neuron(40).unwrap()[&0].rate_ema > 0.5);
+    }
+
+    #[test]
+    fn counter_validation_errors_name_the_field() {
+        let cases = [
+            (json!({"update_rule": "bogus"}), "update_rule"),
+            (json!({"update_rule": 3}), "update_rule"),
+            (counter_cfg(json!({"leak_levels": 1})), "leak_levels"),
+            (
+                counter_cfg(json!({"counter_timeout_bursts": 0})),
+                "counter_timeout_bursts",
+            ),
+            (
+                json!({"enabled": true, "update_rule": "counter", "counter_timeout_bursts": 3}),
+                "leak_levels",
+            ),
+            (
+                json!({"enabled": true, "update_rule": "counter", "leak_levels": 4}),
+                "counter_timeout_bursts",
+            ),
+        ];
+        for (extra, field) in cases {
+            let mut v = json!({"enabled": true});
+            for (k, x) in extra.as_object().unwrap() {
+                v[k] = x.clone();
+            }
+            let err = RateModulatedLeakConfig::validate(&v).unwrap_err();
+            assert!(err.contains(field), "{err}");
+        }
+        let ok = RateModulatedLeakConfig::validate(&counter_cfg(json!({})))
+            .unwrap()
+            .unwrap();
+        assert_eq!(ok.update_rule, UpdateRule::Counter);
+        // Default rule is proportional and needs no counter fields.
+        let d = RateModulatedLeakConfig::validate(&json!({"enabled": true}))
+            .unwrap()
+            .unwrap();
+        assert_eq!(d.update_rule, UpdateRule::Proportional);
     }
 }

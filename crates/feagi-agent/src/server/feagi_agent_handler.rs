@@ -25,8 +25,9 @@ type CommandServerIndex = usize;
 
 /// Server-side liveness configuration for command/control sessions.
 ///
-/// `heartbeat_timeout` defines when a client is considered stale if no
-/// command/control messages are received.
+/// `heartbeat_timeout` defines when a client is considered stale if FEAGI
+/// receives nothing from it (no command/control message and no sensory data).
+/// Data FEAGI pushes to the client never counts as client activity.
 /// `stale_check_interval` controls how often stale scans run during polling.
 #[derive(Debug, Clone)]
 pub struct AgentLivenessConfig {
@@ -53,9 +54,11 @@ pub struct AgentLivenessRecord {
     pub agent_id: AgentID,
     pub descriptor: AgentDescriptor,
     pub capabilities: Vec<AgentCapabilities>,
-    /// Time since anything touched this agent: inbound command/control messages as
-    /// well as outbound motor/visualization pushes. This is the value
-    /// [`FeagiAgentHandler::try_prune_stale_agents`] compares against the timeout.
+    /// Time since the agent last sent anything to FEAGI: a command/control message
+    /// or a sensory payload. Outbound motor/visualization pushes from FEAGI do not
+    /// count, so a client that is gone but still receives pushes keeps climbing. This
+    /// is the value [`FeagiAgentHandler::try_prune_stale_agents`] compares against
+    /// the timeout.
     /// `None` means the handler holds no activity entry for a registered agent, which
     /// is an internal inconsistency rather than a fresh agent, and is reported as such
     /// instead of being rendered as zero age.
@@ -74,7 +77,11 @@ pub struct FeagiAgentHandler {
 
     all_registered_agents: HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
     agent_mapping_to_command_control_server_index: HashMap<AgentID, CommandServerIndex>,
-    last_activity_by_agent: HashMap<AgentID, Instant>,
+    /// Last time FEAGI received anything from the agent: any command/control
+    /// message or any sensory payload (and the registration itself). Outbound
+    /// motor/visualization pushes never refresh it. This is the clock the stale
+    /// pruner compares against `heartbeat_timeout`.
+    last_inbound_activity_by_agent: HashMap<AgentID, Instant>,
     /// Last inbound command/control activity from the agent (heartbeats,
     /// device registration payloads, etc.). **Not** updated when FEAGI pushes
     /// motor/visualization/sensor traffic, so it does not spuriously reset the
@@ -120,7 +127,7 @@ impl FeagiAgentHandler {
     /// live agent session.
     ///
     /// Uses [`Self::last_command_control_activity_by_agent`] (not
-    /// [`Self::last_activity_by_agent`]) so outbound motor/visualization traffic
+    /// [`Self::last_inbound_activity_by_agent`]) so outbound motor/visualization traffic
     /// from FEAGI does not keep a dead client's descriptor session stuck inside
     /// the duplicate guard forever.
     #[allow(dead_code)]
@@ -164,7 +171,7 @@ impl FeagiAgentHandler {
             command_control_servers: Vec::new(),
             all_registered_agents: HashMap::new(),
             agent_mapping_to_command_control_server_index: HashMap::new(),
-            last_activity_by_agent: HashMap::new(),
+            last_inbound_activity_by_agent: HashMap::new(),
             last_command_control_activity_by_agent: HashMap::new(),
             sensors: Default::default(),
             motors: Default::default(),
@@ -214,7 +221,7 @@ impl FeagiAgentHandler {
                     descriptor: descriptor.clone(),
                     capabilities: capabilities.clone(),
                     last_activity_age: self
-                        .last_activity_by_agent
+                        .last_inbound_activity_by_agent
                         .get(agent_id)
                         .map(|seen| now.saturating_duration_since(*seen)),
                     last_command_control_age: self
@@ -253,7 +260,7 @@ impl FeagiAgentHandler {
         self.all_registered_agents
             .insert(agent_id, (descriptor, capabilities));
         let now = Instant::now();
-        self.last_activity_by_agent.insert(agent_id, now);
+        self.last_inbound_activity_by_agent.insert(agent_id, now);
         self.last_command_control_activity_by_agent
             .insert(agent_id, now);
     }
@@ -505,7 +512,6 @@ impl FeagiAgentHandler {
             .get_mut(&agent_id)
             .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
         motor_translator.poll_and_send_buffered_motor_data(data)?;
-        self.refresh_agent_activity(agent_id);
         Ok(())
     }
 
@@ -519,7 +525,6 @@ impl FeagiAgentHandler {
             .get_mut(&agent_id)
             .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
         visualization_translator.poll_and_send_visualization_data(data)?;
-        self.refresh_agent_activity(agent_id);
         Ok(())
     }
 
@@ -548,7 +553,7 @@ impl FeagiAgentHandler {
 
             if let Some(data) = polled_data {
                 self.sensor_poll_cursor = (idx + 1) % count;
-                self.refresh_agent_activity(agent_id);
+                self.refresh_inbound_activity(agent_id);
                 return Ok(Some(data));
             }
         }
@@ -580,7 +585,6 @@ impl FeagiAgentHandler {
         match embodiment_option {
             Some(embodiment) => {
                 embodiment.poll_and_send_buffered_motor_data(motor_data)?;
-                self.refresh_agent_activity(agent_id);
                 Ok(())
             }
             None => Err(FeagiAgentError::UnableToSendData(
@@ -599,7 +603,6 @@ impl FeagiAgentHandler {
         match embodiment_option {
             Some(embodiment) => {
                 embodiment.poll_and_send_visualization_data(viz_data)?;
-                self.refresh_agent_activity(agent_id);
                 Ok(())
             }
             None => Err(FeagiAgentError::UnableToSendData(
@@ -862,7 +865,7 @@ impl FeagiAgentHandler {
         agent_id: AgentID,
         message: FeagiMessage,
     ) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
-        self.refresh_agent_activity(agent_id);
+        self.refresh_inbound_activity(agent_id);
         self.refresh_command_control_activity(agent_id);
         match &message {
             FeagiMessage::AgentRegistration(register_message) => {
@@ -1052,19 +1055,21 @@ impl FeagiAgentHandler {
         self.agent_mapping_to_command_control_server_index
             .insert(agent_id, command_server_index);
         let now = Instant::now();
-        self.last_activity_by_agent.insert(agent_id, now);
+        self.last_inbound_activity_by_agent.insert(agent_id, now);
         self.last_command_control_activity_by_agent
             .insert(agent_id, now);
 
         Ok(endpoint_mappings)
     }
 
-    /// Refresh liveness for a known agent based on command/control activity.
+    /// Refresh liveness for a known agent because FEAGI received something from it.
     ///
-    /// FEAGI treats any valid command/control message as proof of liveness
-    /// (not just explicit heartbeat packets).
-    fn refresh_agent_activity(&mut self, agent_id: AgentID) {
-        self.last_activity_by_agent.insert(agent_id, Instant::now());
+    /// FEAGI treats any valid inbound message as proof of liveness: a
+    /// command/control message (not just explicit heartbeat packets) or a sensory
+    /// payload. Never call this for data FEAGI pushes to the agent.
+    fn refresh_inbound_activity(&mut self, agent_id: AgentID) {
+        self.last_inbound_activity_by_agent
+            .insert(agent_id, Instant::now());
     }
 
     /// Record inbound command/control traffic from a registered agent (exclusive
@@ -1095,7 +1100,7 @@ impl FeagiAgentHandler {
         self.last_stale_check_at = Instant::now();
 
         let stale_ids: Vec<AgentID> = self
-            .last_activity_by_agent
+            .last_inbound_activity_by_agent
             .iter()
             .filter_map(|(agent_id, last_seen)| {
                 if last_seen.elapsed() > self.liveness_config.heartbeat_timeout {
@@ -1120,7 +1125,7 @@ impl FeagiAgentHandler {
     /// This is the single teardown path used by both voluntary and forced
     /// deregistration.
     fn deregister_agent_internal(&mut self, agent_id: AgentID, reason: &str) {
-        self.last_activity_by_agent.remove(&agent_id);
+        self.last_inbound_activity_by_agent.remove(&agent_id);
         self.last_command_control_activity_by_agent
             .remove(&agent_id);
         self.agent_mapping_to_command_control_server_index

@@ -16,6 +16,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::contracts::{RunEvent, RunEventKind, RunStatus, RunSummary};
 use crate::error::TrainerError;
@@ -115,6 +116,30 @@ impl CancelToken {
                 .wait(guard)
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
         }
+    }
+
+    /// Waits up to `duration`, waking at once when the run is cancelled. Returns whether the
+    /// run is cancelled. Pause, resume and skip do not end the wait.
+    pub fn wait_cancelled(&self, duration: Duration) -> bool {
+        let deadline = Instant::now() + duration;
+        let mut guard = self
+            .0
+            .park
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while !self.is_cancelled() {
+            let now = Instant::now();
+            if now >= deadline {
+                break;
+            }
+            guard = self
+                .0
+                .cv
+                .wait_timeout(guard, deadline - now)
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .0;
+        }
+        self.is_cancelled()
     }
 
     /// Parks while paused, then fails if cancellation was requested.
@@ -359,6 +384,34 @@ mod tests {
         });
         token.resume();
         assert!(handle.join().expect("waiter"));
+    }
+
+    #[test]
+    fn wait_cancelled_runs_the_full_interval_when_not_cancelled() {
+        let token = CancelToken::new();
+        let started = Instant::now();
+        assert!(!token.wait_cancelled(Duration::from_millis(20)));
+        assert!(started.elapsed() >= Duration::from_millis(20));
+        // Pause and resume do not end the wait early or flip the answer.
+        token.pause();
+        assert!(!token.wait_cancelled(Duration::from_millis(1)));
+    }
+
+    #[test]
+    fn wait_cancelled_wakes_at_once_on_cancel() {
+        let token = CancelToken::new();
+        let waiter = token.clone();
+        let handle = std::thread::spawn(move || {
+            let started = Instant::now();
+            let cancelled = waiter.wait_cancelled(Duration::from_secs(60));
+            (cancelled, started.elapsed())
+        });
+        // A cancel that lands before or during the wait both end it.
+        token.cancel();
+        let (cancelled, waited) = handle.join().expect("waiter");
+        assert!(cancelled);
+        assert!(waited < Duration::from_secs(30), "waited {waited:?}");
+        assert!(token.wait_cancelled(Duration::from_secs(60)));
     }
 
     #[test]

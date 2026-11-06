@@ -38,6 +38,12 @@ pub enum TrainerError {
     #[error("runtime error: {0}")]
     Runtime(String),
 
+    /// A call failed in a way that may succeed when repeated: the peer reported a retryable
+    /// error, or its connection dropped before any response byte (a restart). A caller with a
+    /// recovery budget discards the work in flight and tries again; with none, it fails.
+    #[error("transient error: {0}")]
+    Transient(String),
+
     /// The run was cooperatively cancelled via its control token before completing.
     #[error("run cancelled: {0}")]
     Cancelled(String),

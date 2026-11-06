@@ -14,6 +14,10 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::balance_recovery::{
+    AttemptSlot, AttemptVerdict, AttemptWatch, BurstClock, DiscardedAttempt, LinkReading,
+    RecoveryConfig, RecoveryState,
+};
 use crate::binding::reward::{AffectChannel, RewardSignal};
 use crate::contracts::{
     AttemptStand, BackendFingerprint, BackendKind, ConnectomeHash, ContentHash, DatasetAssetId,
@@ -1227,8 +1231,9 @@ impl DeviationAssist {
     }
 }
 
-/// Collects the 1 Hz deviation and assistance timeline of a train phase.
-#[derive(Debug, Default)]
+/// Collects the 1 Hz deviation and assistance timeline of a train phase. Cloned before an
+/// attempt so a discarded attempt leaves no trace in it.
+#[derive(Debug, Default, Clone)]
 struct DeviationAssistRun {
     timeline: Vec<DeviationAssistPoint>,
     phase_t_s: f64,
@@ -1845,6 +1850,18 @@ pub struct Measurement {
     /// requested and supported by the controller.
     #[serde(default)]
     pub actuator_force: BTreeMap<String, f64>,
+    /// The controller's FEAGI link at the time of the reading. Required: a reply without it is
+    /// an error, because without it the attempt cannot be judged.
+    pub link: LinkReading,
+}
+
+/// A `reset_episode` reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResetReply {
+    /// Id of the episode the reset started.
+    pub episode_id: u64,
+    /// The controller's FEAGI link at the time of the reset (required in the reply).
+    pub link: LinkReading,
 }
 
 fn named_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
@@ -3374,6 +3391,10 @@ pub struct BalancePhaseReport {
     /// Adaptive assist state at the end of the phase, to resume a later train run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive_state_next: Option<AdaptiveAssistState>,
+    /// Attempts thrown away because the controller's FEAGI link (or a call to it) failed. Each
+    /// was re-run with the same seed; none counts in `attempts` or in any score above.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub discarded_attempts: Vec<DiscardedAttempt>,
 }
 
 /// Result of one unassisted probe attempt.
@@ -3653,6 +3674,7 @@ impl BalancePhaseReport {
             assist_timeline: Vec::new(),
             deviation_assist: None,
             adaptive_state_next: None,
+            discarded_attempts: Vec::new(),
         })
     }
 
@@ -3966,8 +3988,8 @@ pub trait BalanceController {
     fn model_info(&mut self) -> Result<ModelInfo, TrainerError>;
 
     /// `reset_episode`: reset to `keyframe` (or the model default), clear springs and pulses,
-    /// start a new episode. Returns the episode id.
-    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError>;
+    /// start a new episode. Returns the episode id and the controller's FEAGI link.
+    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<ResetReply, TrainerError>;
 
     /// `set_body_spring`: capture the body's current pose as the reference and apply the spring.
     fn set_body_spring(
@@ -4002,6 +4024,10 @@ pub trait BalanceController {
 
     /// `measure`: one reading of bodies, contact sets and springs.
     fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError>;
+
+    /// `status`: the controller's FEAGI link right now, read while waiting for an outage to
+    /// end.
+    fn link_status(&mut self) -> Result<LinkReading, TrainerError>;
 }
 
 /// Callback that delivers affect signals into the brain (e.g. `runtime.submit_reward`).
@@ -4033,6 +4059,12 @@ pub struct BalancePhaseRun<'a> {
     /// Applies the criterion's scheduled events. Required when the criterion has any; a test
     /// phase refuses events.
     pub apply_event: Option<ApplyEvent<'a>>,
+    /// Limits for riding out a lost or restarting controller link. Required: the caller sets
+    /// every value, and an invalid one fails the phase before its first attempt.
+    pub recovery: &'a RecoveryConfig,
+    /// The FEAGI burst engine, read at attempt boundaries (paused?) and during attempts (is the
+    /// burst counter rising?). Required: FEAGI is outside this crate, so the caller supplies it.
+    pub burst: &'a dyn BurstClock,
 }
 
 /// Per-phase state: model facts and the gains sized once from the first reset.
@@ -4060,6 +4092,9 @@ pub fn run_balance_phase(
         ));
     }
     run.criterion.validate()?;
+    run.recovery.validate()?;
+    run.recovery
+        .validate_for_burst_period(run.criterion.burst_period_s)?;
     if run.seeds.is_empty() {
         return Err(TrainerError::Config(format!(
             "{} seeds must contain at least one seed",
@@ -4249,39 +4284,58 @@ fn run_phase_attempts(
         sink.declare_table(&attempts_table_spec(criterion.walk.is_some()));
         sink.event(EventTime::default(), "phase_start", run.phase);
     }
+    let mut recovery = RecoveryState::new(run.recovery)?;
     for seed in run.seeds {
-        if cancel.is_cancelled() {
-            return Err(TrainerError::Cancelled(
-                "balance-on-feet run cancelled".to_string(),
-            ));
-        }
         let level = match (&adaptive_run, mode) {
             (Some(adaptive), _) => adaptive.assist.level(),
             (None, SupportMode::Fixed(level)) => level,
             (None, _) => schedule.current_level(),
         };
-        let record = run_balance_attempt(
-            *seed,
-            criterion,
-            level,
-            brain_only,
-            controller,
-            &mut session,
-            present_goal,
-            &mut run.deliver_reward,
-            run.reward_policy,
-            adaptive_run.as_mut(),
-            dev_assist.as_mut(),
-            AttemptHooks {
-                data: &mut run.data,
-                steps: &mut steps_table,
-                apply_event: &mut run.apply_event,
-                phase: run.phase,
+        // An attempt whose controller link failed is discarded and re-run with the same seed;
+        // the state it touched is put back so it leaves no trace in the scores.
+        let record = loop {
+            // Attempt boundary: the only place a pause or a paused burst engine parks the
+            // phase and a cancel is honored between attempts. Mid-attempt only cancel is
+            // checked.
+            recovery.boundary(run.burst, cancel)?;
+            let saved = (adaptive_run.clone(), dev_assist.clone());
+            let mut watch = recovery.watch(run.burst);
+            let result = run_balance_attempt(
+                *seed,
+                criterion,
+                level,
+                brain_only,
+                controller,
+                &mut session,
+                present_goal,
+                &mut run.deliver_reward,
+                run.reward_policy,
+                adaptive_run.as_mut(),
+                dev_assist.as_mut(),
+                AttemptHooks {
+                    data: &mut run.data,
+                    steps: &mut steps_table,
+                    apply_event: &mut run.apply_event,
+                    phase: run.phase,
+                    attempt_index: attempts.len(),
+                    probe: false,
+                },
+                &mut watch,
+                cancel,
+            );
+            let slot = AttemptSlot {
                 attempt_index: attempts.len(),
+                seed: *seed,
                 probe: false,
-            },
-            cancel,
-        )?;
+            };
+            match RecoveryState::classify(result, &watch, slot)? {
+                AttemptVerdict::Completed(record) => break record,
+                AttemptVerdict::Discard(discard) => {
+                    (adaptive_run, dev_assist) = saved;
+                    recovery.recover(discard, controller, cancel, run.data.as_deref_mut())?;
+                }
+            }
+        };
         let stand = AttemptStand {
             balanced_s: record.balanced_s,
             support_level: record.support_level,
@@ -4311,49 +4365,66 @@ fn run_phase_attempts(
         if probe_every == 0 || !train_done.is_multiple_of(probe_every) {
             continue;
         }
-        // Freeze learning, run one unassisted attempt, restore on every exit path.
-        let frozen = match run.plasticity.as_deref_mut() {
-            Some(control) => {
-                control.freeze()?;
-                true
-            }
-            None => false,
-        };
-        probes_frozen &= frozen;
-        let mut no_reward: Option<DeliverReward<'_>> = None;
-        let probed = run_balance_attempt(
-            *seed,
-            &probe_criterion,
-            0.0,
-            true,
-            controller,
-            &mut session,
-            present_goal,
-            &mut no_reward,
-            run.reward_policy,
-            None,
-            None,
-            AttemptHooks {
-                data: &mut run.data,
-                steps: &mut steps_table,
-                apply_event: &mut None,
-                phase: run.phase,
-                attempt_index: attempts.len(),
-                probe: true,
-            },
-            cancel,
-        );
-        if frozen {
-            if let Some(control) = run.plasticity.as_deref_mut() {
-                let restored = control.restore();
-                if let Err(error) = restored {
-                    return Err(TrainerError::Runtime(format!(
-                        "probe finished but learning stayed frozen: {error}"
-                    )));
+        // Freeze learning, run one unassisted attempt, restore on every exit path. A discarded
+        // probe restores learning before the link wait, then freezes again for the re-run.
+        let mut record = loop {
+            // Attempt boundary, before learning is frozen so a pause never holds it frozen.
+            recovery.boundary(run.burst, cancel)?;
+            let frozen = match run.plasticity.as_deref_mut() {
+                Some(control) => {
+                    control.freeze()?;
+                    true
+                }
+                None => false,
+            };
+            probes_frozen &= frozen;
+            let mut no_reward: Option<DeliverReward<'_>> = None;
+            let mut watch = recovery.watch(run.burst);
+            let probed = run_balance_attempt(
+                *seed,
+                &probe_criterion,
+                0.0,
+                true,
+                controller,
+                &mut session,
+                present_goal,
+                &mut no_reward,
+                run.reward_policy,
+                None,
+                None,
+                AttemptHooks {
+                    data: &mut run.data,
+                    steps: &mut steps_table,
+                    apply_event: &mut None,
+                    phase: run.phase,
+                    attempt_index: attempts.len(),
+                    probe: true,
+                },
+                &mut watch,
+                cancel,
+            );
+            if frozen {
+                if let Some(control) = run.plasticity.as_deref_mut() {
+                    let restored = control.restore();
+                    if let Err(error) = restored {
+                        return Err(TrainerError::Runtime(format!(
+                            "probe finished but learning stayed frozen: {error}"
+                        )));
+                    }
                 }
             }
-        }
-        let mut record = probed?;
+            let slot = AttemptSlot {
+                attempt_index: attempts.len(),
+                seed: *seed,
+                probe: true,
+            };
+            match RecoveryState::classify(probed, &watch, slot)? {
+                AttemptVerdict::Completed(record) => break record,
+                AttemptVerdict::Discard(discard) => {
+                    recovery.recover(discard, controller, cancel, run.data.as_deref_mut())?;
+                }
+            }
+        };
         record.probe = true;
         record.train_attempts_before = Some(train_done);
         let stand = AttemptStand {
@@ -4394,6 +4465,7 @@ fn run_phase_attempts(
     }
     let mut report = BalancePhaseReport::from_attempts_with(attempts, support)?;
     report.assess_over_support(criterion);
+    report.discarded_attempts = recovery.into_discarded();
     report.probe_plasticity_frozen = (probes_run > 0).then_some(probes_frozen);
     // A brain-only test applies no spring (zero gains), so there are no sized gains to report.
     report.spring_gains = if brain_only {
@@ -4507,15 +4579,19 @@ fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
     }
 }
 
-/// One `measure` call. An older controller that does not know `a_except` fails the call; say so
-/// plainly instead of surfacing its raw error.
+/// One `measure` call, with its link reading judged by `watch`. An older controller that does
+/// not know `a_except` fails the call; say so plainly instead of surfacing its raw error.
 fn measure_checked(
     controller: &mut dyn BalanceController,
     request: &MeasureRequest,
+    watch: &mut AttemptWatch<'_>,
 ) -> Result<Measurement, TrainerError> {
-    controller.measure(request).map_err(|error| {
+    let reading = controller.measure(request).map_err(|error| {
         let text = error.to_string();
-        if !request.contacts_except.is_empty() && text.to_lowercase().contains("contact") {
+        // A transient failure is the controller's state, never a statement about the request.
+        if matches!(error, TrainerError::Transient(_)) {
+            error
+        } else if !request.contacts_except.is_empty() && text.to_lowercase().contains("contact") {
             TrainerError::Runtime(format!(
                 "the controller rejected the \"every other body\" contact set (a_except): \
                  restart or update the controller, or turn off only_contacts_touch. \
@@ -4524,7 +4600,11 @@ fn measure_checked(
         } else {
             error
         }
-    })
+    })?;
+    watch.observe(reading.link)?;
+    // One look at the burst counter per measure, i.e. per burst of the attempt.
+    watch.observe_bursts()?;
+    Ok(reading)
 }
 
 /// Small deterministic generator (splitmix64) so perturbation schedules repeat per seed.
@@ -4620,7 +4700,9 @@ fn applied_settle_s(criterion: &BalanceFeetCriterion, brain_only: bool) -> f64 {
 }
 
 /// Adaptive assist state of one phase: the assist itself (kept across attempts), the 1 Hz
-/// timeline and the scored time that places its points.
+/// timeline and the scored time that places its points. Cloned before an attempt so a
+/// discarded attempt leaves no trace in it.
+#[derive(Clone)]
 struct AdaptiveRun {
     assist: AdaptiveAssist,
     timeline: Vec<AssistPoint>,
@@ -5134,13 +5216,17 @@ fn run_balance_attempt(
     mut adaptive: Option<&mut AdaptiveRun>,
     mut dev_assist: Option<&mut DeviationAssistRun>,
     mut hooks: AttemptHooks<'_, '_>,
+    watch: &mut AttemptWatch<'_>,
     cancel: &CancelToken,
 ) -> Result<BalanceAttemptRecord, TrainerError> {
     let torso = criterion.torso_body.trim().to_string();
     let keyframe = Some(criterion.reset_keyframe.trim()).filter(|name| !name.is_empty());
-    controller.reset_episode(keyframe)?;
+    // The link at the reset is the attempt's baseline; any later response that differs, or is
+    // not `linked`, ends the attempt with a transient error and the phase discards it.
+    let reset = controller.reset_episode(keyframe)?;
+    watch.observe(reset.link)?;
     let request = measure_request(criterion);
-    let first = measure_checked(controller, &request)?;
+    let first = measure_checked(controller, &request, watch)?;
     hooks.marker(first.sim_time_s, "attempt_start", &format!("seed {seed}"));
     let (sizing, gains) = match session.sizing {
         Some(sized) => sized,
@@ -5273,7 +5359,7 @@ fn run_balance_attempt(
             ));
         }
         present_goal(features)?;
-        let reading = measure_checked(controller, &request)?;
+        let reading = measure_checked(controller, &request, watch)?;
         let elapsed_s = reading.sim_time_s - t0;
         last_sim_time_s = reading.sim_time_s;
         let settling = !past_settle && elapsed_s + 1.0e-9 < settle_s;
@@ -5553,6 +5639,11 @@ pub fn model_info_request() -> serde_json::Value {
     serde_json::json!({"action": "get_model_info"})
 }
 
+/// JSON body of `status`, whose reply carries the controller's FEAGI link.
+pub fn status_request() -> serde_json::Value {
+    serde_json::json!({"action": "status"})
+}
+
 /// JSON body of `reset_episode`.
 pub fn reset_episode_request(keyframe: Option<&str>) -> serde_json::Value {
     let mut body = serde_json::json!({"action": "reset_episode"});
@@ -5690,7 +5781,7 @@ impl HttpBalanceController {
                 TrainerError::Runtime(format!("balance control address {address} did not resolve"))
             })?;
         let stream = TcpStream::connect_timeout(&socket, self.timeout).map_err(|error| {
-            TrainerError::Runtime(format!("balance control connect failed: {error}"))
+            io_failure(&error, format!("balance control connect failed: {error}"))
         })?;
         stream
             .set_read_timeout(Some(self.timeout))
@@ -5709,7 +5800,7 @@ impl HttpBalanceController {
     ) -> Result<HttpReply, (TrainerError, bool)> {
         let early = |error: std::io::Error, what: &str| {
             (
-                TrainerError::Runtime(format!("balance control {what} failed: {error}")),
+                io_failure(&error, format!("balance control {what} failed: {error}")),
                 true,
             )
         };
@@ -5723,7 +5814,9 @@ impl HttpBalanceController {
             .map_err(|error| early(error, "read"))?;
         if read == 0 {
             return Err((
-                TrainerError::Runtime("balance control closed the connection".to_string()),
+                TrainerError::Transient(
+                    "balance control closed the connection before any response".to_string(),
+                ),
                 true,
             ));
         }
@@ -5837,14 +5930,23 @@ impl BalanceController for HttpBalanceController {
         self.command_as(&model_info_request(), "model info")
     }
 
-    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError> {
+    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<ResetReply, TrainerError> {
         let result = self.command(&reset_episode_request(keyframe))?;
-        result
+        let episode_id = result
             .get("episode_id")
             .and_then(serde_json::Value::as_u64)
             .ok_or_else(|| {
                 TrainerError::Runtime("reset_episode reply has no episode_id".to_string())
-            })
+            })?;
+        Ok(ResetReply {
+            episode_id,
+            link: link_of(&result, "reset_episode")?,
+        })
+    }
+
+    fn link_status(&mut self) -> Result<LinkReading, TrainerError> {
+        let result = self.command(&status_request())?;
+        link_of(&result, "status")
     }
 
     fn set_body_spring(
@@ -5890,7 +5992,12 @@ impl BalanceController for HttpBalanceController {
     }
 
     fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
-        self.command_as(&measure_request_body(request), "measure")
+        let result = self.command(&measure_request_body(request))?;
+        // Name a missing `link` before the generic decode can fail on it.
+        link_of(&result, "measure")?;
+        serde_json::from_value(result).map_err(|error| {
+            TrainerError::Runtime(format!("balance measure decode failed: {error}"))
+        })
     }
 }
 
@@ -5917,6 +6024,48 @@ fn split_http_base(base_url: &str) -> Result<(String, u16), TrainerError> {
     Ok((host.to_string(), port))
 }
 
+/// Whether an I/O failure means the peer was gone before it answered: the connection was
+/// refused or reset, or ended before any byte (a controller that is restarting).
+fn peer_gone(kind: std::io::ErrorKind) -> bool {
+    use std::io::ErrorKind;
+    matches!(
+        kind,
+        ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset | ErrorKind::UnexpectedEof
+    )
+}
+
+/// An I/O failure as a trainer error: [`TrainerError::Transient`] when the peer was gone,
+/// [`TrainerError::Runtime`] for anything else (a timeout, a bad address, a broken socket).
+fn io_failure(error: &std::io::Error, message: String) -> TrainerError {
+    if peer_gone(error.kind()) {
+        TrainerError::Transient(message)
+    } else {
+        TrainerError::Runtime(message)
+    }
+}
+
+/// The `link: {state, epoch}` of a controller result. It is required: a reply with no `link`, a
+/// `null` one, or one that is not `{state, epoch}` is an error naming the field and the action.
+fn link_of(result: &serde_json::Value, what: &str) -> Result<LinkReading, TrainerError> {
+    match result.get("link") {
+        None | Some(serde_json::Value::Null) => Err(TrainerError::Runtime(format!(
+            "{what} reply has no `link` ({{state, epoch}} is required in every physics reply; \
+             update the controller)"
+        ))),
+        Some(link) => serde_json::from_value(link.clone()).map_err(|error| {
+            TrainerError::Runtime(format!("{what} reply `link` decode failed: {error}"))
+        }),
+    }
+}
+
+/// Whether an error envelope says the same command may succeed when sent again.
+fn envelope_is_retryable(envelope: Option<&serde_json::Value>) -> bool {
+    envelope
+        .and_then(|value| value.get("retryable"))
+        .and_then(serde_json::Value::as_bool)
+        == Some(true)
+}
+
 fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, TrainerError> {
     let envelope: Option<serde_json::Value> = serde_json::from_str(body.trim()).ok();
     if status != 200 {
@@ -5925,9 +6074,14 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
             .and_then(|value| value.get("error"))
             .and_then(serde_json::Value::as_str)
             .unwrap_or("");
-        return Err(TrainerError::Runtime(format!(
-            "balance control HTTP failed: status {status} {detail}"
-        )));
+        let message = format!("balance control HTTP failed: status {status} {detail}");
+        // Only an envelope that says `retryable: true` is transient (the controller's physics
+        // loop was busy); every other non-200 is a rejected or failed command.
+        return Err(if envelope_is_retryable(envelope.as_ref()) {
+            TrainerError::Transient(message)
+        } else {
+            TrainerError::Runtime(message)
+        });
     }
     let envelope = envelope
         .ok_or_else(|| TrainerError::Runtime("balance control response is not JSON".to_string()))?;
@@ -5942,7 +6096,11 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
             .get("error")
             .and_then(|value| value.as_str())
             .unwrap_or("balance control command failed");
-        return Err(TrainerError::Runtime(message.to_string()));
+        return Err(if envelope_is_retryable(Some(&envelope)) {
+            TrainerError::Transient(message.to_string())
+        } else {
+            TrainerError::Runtime(message.to_string())
+        });
     }
     envelope
         .get("result")
@@ -7015,6 +7173,82 @@ mod tests {
         /// The torso CoM moves along +X at this speed, m/s, from the reset.
         torso_speed_x: f64,
         torso_yaw_rad: f64,
+        /// The link the controller reports: `(kind, n)` with kind `reset`, `measure` or
+        /// `status` and `n` the 0-based count of calls of that kind. A feed that returns `None`
+        /// (or no feed) reports `linked` at epoch 1.
+        link_feed: Option<LinkFeed>,
+        /// Fails a call when it returns an error: `(kind, n)` as for `link_feed`.
+        failures: Option<Failures>,
+        /// Calls so far by kind (`reset`, `measure`, `status`).
+        call_counts: BTreeMap<&'static str, u32>,
+    }
+
+    type LinkFeed = Box<dyn FnMut(&str, u32) -> Option<LinkReading>>;
+    type Failures = Box<dyn FnMut(&str, u32) -> Option<TrainerError>>;
+
+    /// Recovery limits for tests that never exercise recovery.
+    const TEST_RECOVERY: RecoveryConfig = RecoveryConfig {
+        max_outage_s: 2.0,
+        max_discarded_attempts: 3,
+        link_poll_s: 0.005,
+        boundary_poll_s: 0.005,
+        burst_stall_s: 5.0,
+    };
+
+    /// Burst clock for tests where FEAGI is not the subject: always running, and the counter
+    /// rises on every read, so nothing ever stalls.
+    struct RunningClock(std::sync::atomic::AtomicU64);
+
+    impl BurstClock for RunningClock {
+        fn burst_count(&self) -> Result<u64, TrainerError> {
+            Ok(self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1)
+        }
+
+        fn engine_paused(&self) -> Result<bool, TrainerError> {
+            Ok(false)
+        }
+    }
+
+    static RUNNING_CLOCK: RunningClock = RunningClock(std::sync::atomic::AtomicU64::new(0));
+
+    /// Burst clock with a scripted pause and a counter that freezes for a window of reads.
+    struct ScriptedBurstClock {
+        /// The first this many `engine_paused` reads say paused.
+        paused_for: u32,
+        /// `burst_count` reads (0-based) in this range return the previous value.
+        frozen_reads: std::ops::Range<u32>,
+        count_reads: std::cell::Cell<u32>,
+        paused_reads: std::cell::Cell<u32>,
+        value: std::cell::Cell<u64>,
+    }
+
+    impl ScriptedBurstClock {
+        fn new(paused_for: u32, frozen_reads: std::ops::Range<u32>) -> Self {
+            Self {
+                paused_for,
+                frozen_reads,
+                count_reads: std::cell::Cell::new(0),
+                paused_reads: std::cell::Cell::new(0),
+                value: std::cell::Cell::new(0),
+            }
+        }
+    }
+
+    impl BurstClock for ScriptedBurstClock {
+        fn burst_count(&self) -> Result<u64, TrainerError> {
+            let read = self.count_reads.get();
+            self.count_reads.set(read + 1);
+            if !self.frozen_reads.contains(&read) {
+                self.value.set(self.value.get() + 1);
+            }
+            Ok(self.value.get())
+        }
+
+        fn engine_paused(&self) -> Result<bool, TrainerError> {
+            let read = self.paused_reads.get();
+            self.paused_reads.set(read + 1);
+            Ok(read < self.paused_for)
+        }
     }
 
     /// Generic test body: the free root "base" carries the whole 1 kg; "torso" is a child body
@@ -7068,7 +7302,27 @@ mod tests {
                 steps: 0,
                 torso_speed_x: 0.0,
                 torso_yaw_rad: 0.0,
+                link_feed: None,
+                failures: None,
+                call_counts: BTreeMap::new(),
             }
+        }
+
+        /// Counts a call of `kind`, then returns the scripted failure for it, if any, and the
+        /// link to report with it.
+        fn tick(&mut self, kind: &'static str) -> (Option<TrainerError>, LinkReading) {
+            let n = *self.call_counts.get(kind).unwrap_or(&0);
+            self.call_counts.insert(kind, n + 1);
+            let failure = self.failures.as_mut().and_then(|f| f(kind, n));
+            let link = self
+                .link_feed
+                .as_mut()
+                .and_then(|f| f(kind, n))
+                .unwrap_or(LinkReading {
+                    state: crate::balance_recovery::LinkState::Linked,
+                    epoch: 1,
+                });
+            (failure, link)
         }
 
         fn seconds(&self) -> f64 {
@@ -7086,13 +7340,29 @@ mod tests {
             Ok(self.info.clone())
         }
 
-        fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError> {
+        fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<ResetReply, TrainerError> {
             self.calls.push("reset_episode".to_string());
+            let (failure, link) = self.tick("reset");
+            if let Some(error) = failure {
+                return Err(error);
+            }
             self.resets.push(keyframe.map(str::to_string));
             self.k = 0;
             self.fresh = true;
             self.spring_level = None;
-            Ok(self.resets.len() as u64)
+            Ok(ResetReply {
+                episode_id: self.resets.len() as u64,
+                link,
+            })
+        }
+
+        fn link_status(&mut self) -> Result<LinkReading, TrainerError> {
+            self.calls.push("status".to_string());
+            let (failure, link) = self.tick("status");
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(link),
+            }
         }
 
         fn set_body_spring(
@@ -7147,6 +7417,10 @@ mod tests {
         fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
             self.calls.push("measure".to_string());
             self.measure_requests.push(request.clone());
+            let (failure, link) = self.tick("measure");
+            if let Some(error) = failure {
+                return Err(error);
+            }
             if self.rejects_a_except && !request.contacts_except.is_empty() {
                 return Err(TrainerError::Runtime(
                     "unknown contact key a_except".to_string(),
@@ -7223,6 +7497,7 @@ mod tests {
                 } else {
                     BTreeMap::new()
                 },
+                link,
             })
         }
     }
@@ -7259,6 +7534,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Affect,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         run_balance_phase(
             &mut run,
@@ -7620,6 +7897,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Affect,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         let report = run_balance_phase(
             &mut run,
@@ -8002,6 +8281,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Affect,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         run_balance_phase(
             &mut run,
@@ -8098,6 +8379,8 @@ mod tests {
                 reward_policy: BalanceRewardPolicy::Affect,
                 data: None,
                 apply_event: None,
+                recovery: &TEST_RECOVERY,
+                burst: &RUNNING_CLOCK,
             };
             run_balance_phase(
                 &mut run,
@@ -8168,6 +8451,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Affect,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         let error = run_balance_phase(
             &mut run,
@@ -8216,6 +8501,8 @@ mod tests {
                 reward_policy: BalanceRewardPolicy::Affect,
                 data: None,
                 apply_event: None,
+                recovery: &TEST_RECOVERY,
+                burst: &RUNNING_CLOCK,
             };
             run_balance_phase(
                 &mut run,
@@ -8296,6 +8583,8 @@ mod tests {
                 reward_policy: BalanceRewardPolicy::Affect,
                 data: None,
                 apply_event: None,
+                recovery: &TEST_RECOVERY,
+                burst: &RUNNING_CLOCK,
             };
             run_balance_phase(
                 &mut run,
@@ -8432,9 +8721,11 @@ mod tests {
             "bodies": {"torso": {"tilt_rad": 0.1, "ang_vel": [0.0, 0.2, 0.0],
                                  "subtree_com": [0.0, 0.0, 0.124]}},
             "contacts": [{"touching": true, "points": [[0.0, 0.0, 0.01]]}, {"touching": false}],
-            "springs": {"torso": {"wrench_norm_torque": 0.4, "wrench_norm_force": 7.0}}
+            "springs": {"torso": {"wrench_norm_torque": 0.4, "wrench_norm_force": 7.0}},
+            "link": {"state": "linked", "epoch": 3}
         });
         let m: Measurement = serde_json::from_value(object).expect("object form");
+        assert_eq!(m.link.epoch, 3);
         assert_eq!(m.terminal, Some(BalanceTerminal::Death));
         assert_eq!(m.bodies["torso"].tilt_rad, 0.1);
         assert_eq!(m.mean_contact_height(), Some(0.01));
@@ -8442,9 +8733,14 @@ mod tests {
         let array = serde_json::json!({
             "sim_time_s": 0.0, "physics_steps": 0,
             "bodies": [{"name": "torso", "tilt_rad": 0.0}],
-            "contacts": [], "springs": [{"body": "torso", "wrench_norm_torque": 0.0, "wrench_norm_force": 0.0}]
+            "contacts": [], "springs": [{"body": "torso", "wrench_norm_torque": 0.0, "wrench_norm_force": 0.0}],
+            "link": {"state": "linked", "epoch": 0}
         });
-        let m: Measurement = serde_json::from_value(array).expect("array form");
+        let m: Measurement = serde_json::from_value(array.clone()).expect("array form");
+        // `link` is required: the same reply without it does not parse.
+        let mut without = array;
+        without.as_object_mut().expect("object").remove("link");
+        assert!(serde_json::from_value::<Measurement>(without).is_err());
         assert!(m.bodies.contains_key("torso") && m.springs.contains_key("torso"));
         assert_eq!(m.terminal, None);
         let info: ModelInfo = serde_json::from_value(serde_json::json!({
@@ -8496,7 +8792,7 @@ mod tests {
                         if reader.read_exact(&mut body).is_err() {
                             return;
                         }
-                        let payload = br#"{"ok":true,"result":{"episode_id":5}}"#;
+                        let payload = br#"{"ok":true,"result":{"episode_id":5,"link":{"state":"linked","epoch":1}}}"#;
                         let connection = if close_each { "close" } else { "keep-alive" };
                         let head = format!(
                             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: {connection}\r\n\r\n",
@@ -8525,7 +8821,7 @@ mod tests {
             HttpBalanceController::new(&format!("http://127.0.0.1:{port}"), Duration::from_secs(5))
                 .expect("client");
         for _ in 0..25 {
-            assert_eq!(http.reset_episode(None).expect("reset"), 5);
+            assert_eq!(http.reset_episode(None).expect("reset").episode_id, 5);
         }
         assert_eq!(http.connections_opened(), 1);
         assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -8535,7 +8831,10 @@ mod tests {
             HttpBalanceController::new(&format!("http://127.0.0.1:{port}"), Duration::from_secs(5))
                 .expect("client");
         for _ in 0..3 {
-            assert_eq!(http.reset_episode(Some("stand")).expect("reset"), 5);
+            assert_eq!(
+                http.reset_episode(Some("stand")).expect("reset").episode_id,
+                5
+            );
         }
         assert_eq!(http.connections_opened(), 3);
         assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 3);
@@ -8554,6 +8853,862 @@ mod tests {
             .to_string();
         assert!(error.contains("500") && error.contains("boom"), "{error}");
         assert!(decode_envelope(200, r#"{"ok":true,"result":{"a":1}}"#).is_ok());
+    }
+
+    // ---- controller link recovery ----
+
+    /// What a scripted server does with its next connection.
+    enum Canned {
+        /// Reads the request and answers `(status, body)`, then closes.
+        Reply(u16, &'static str),
+        /// Reads the request and closes without sending a byte.
+        CloseSilently,
+        /// Sends a status line and headers promising a body, then closes.
+        CutShort,
+    }
+
+    /// Local server that serves one connection per entry of `script`, in order.
+    fn serve_canned(script: Vec<Canned>) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        std::thread::spawn(move || {
+            for canned in script {
+                let Ok((stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut reader = BufReader::new(stream);
+                let mut length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    if !matches!(reader.read_line(&mut line), Ok(n) if n > 0) {
+                        return;
+                    }
+                    let lower = line.trim_end().to_ascii_lowercase();
+                    if let Some(value) = lower.strip_prefix("content-length:") {
+                        length = value.trim().parse().unwrap_or(0);
+                    }
+                    if lower.is_empty() {
+                        break;
+                    }
+                }
+                let mut body = vec![0u8; length];
+                if reader.read_exact(&mut body).is_err() {
+                    return;
+                }
+                let socket = reader.get_mut();
+                match canned {
+                    Canned::Reply(status, payload) => {
+                        let head = format!(
+                            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            payload.len()
+                        );
+                        let _ = socket.write_all(head.as_bytes());
+                        let _ = socket.write_all(payload.as_bytes());
+                    }
+                    Canned::CloseSilently => {}
+                    Canned::CutShort => {
+                        let _ = socket.write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n{\"ok\"",
+                        );
+                    }
+                }
+            }
+        });
+        port
+    }
+
+    fn http_to(port: u16) -> HttpBalanceController {
+        HttpBalanceController::new(&format!("http://127.0.0.1:{port}"), Duration::from_secs(5))
+            .expect("client")
+    }
+
+    #[test]
+    fn a_retryable_503_is_transient_and_every_other_failure_stays_runtime() {
+        let port = serve_canned(vec![
+            Canned::Reply(
+                503,
+                r#"{"ok":false,"retryable":true,"error":"physics loop busy"}"#,
+            ),
+            Canned::Reply(400, r#"{"ok":false,"error":"unknown action"}"#),
+            Canned::Reply(503, r#"{"ok":false,"error":"down for maintenance"}"#),
+            Canned::Reply(
+                502,
+                r#"{"ok":false,"retryable":false,"error":"unexpected"}"#,
+            ),
+            Canned::Reply(400, r#"{"error":"invalid JSON body"}"#),
+            Canned::Reply(
+                200,
+                r#"{"ok":false,"retryable":true,"error":"busy in an envelope"}"#,
+            ),
+            Canned::Reply(200, r#"{"ok":false,"error":"keyframe missing"}"#),
+        ]);
+        let mut http = http_to(port);
+        let busy = http.reset_episode(None).unwrap_err();
+        assert!(
+            matches!(&busy, TrainerError::Transient(m) if m.contains("503") && m.contains("physics loop busy")),
+            "{busy}"
+        );
+        for expected in [
+            "unknown action",
+            "down for maintenance",
+            "unexpected",
+            "invalid JSON body",
+        ] {
+            let error = http.reset_episode(None).unwrap_err();
+            assert!(
+                matches!(&error, TrainerError::Runtime(m) if m.contains(expected)),
+                "{expected}: {error}"
+            );
+        }
+        let envelope = http.reset_episode(None).unwrap_err();
+        assert!(matches!(envelope, TrainerError::Transient(_)), "{envelope}");
+        let rejected = http.reset_episode(None).unwrap_err();
+        assert!(matches!(rejected, TrainerError::Runtime(_)), "{rejected}");
+    }
+
+    #[test]
+    fn a_refused_connection_is_transient() {
+        // Bind, note the port, drop the listener: nothing listens there any more.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("bind")
+            .local_addr()
+            .expect("addr")
+            .port();
+        let mut http = http_to(port);
+        let error = http.reset_episode(None).unwrap_err();
+        assert!(
+            matches!(&error, TrainerError::Transient(m) if m.contains("connect failed")),
+            "{error}"
+        );
+        assert!(matches!(
+            http.link_status(),
+            Err(TrainerError::Transient(_))
+        ));
+    }
+
+    #[test]
+    fn a_connection_closed_before_any_response_byte_is_transient_a_cut_reply_is_not() {
+        let port = serve_canned(vec![Canned::CloseSilently, Canned::CutShort]);
+        let mut http = http_to(port);
+        let silent = http.reset_episode(None).unwrap_err();
+        assert!(
+            matches!(&silent, TrainerError::Transient(m) if m.contains("before any response")),
+            "{silent}"
+        );
+        // Bytes arrived, then the connection ended: the controller answered, so this is not a
+        // restart signature and stays Runtime.
+        let cut = http.reset_episode(None).unwrap_err();
+        assert!(matches!(cut, TrainerError::Runtime(_)), "{cut}");
+    }
+
+    #[test]
+    fn link_blocks_parse_from_reset_status_and_measure_replies() {
+        let port = serve_canned(vec![
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"episode_id":4,"link":{"state":"linked","epoch":6}}}"#,
+            ),
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"link":{"state":"reconnecting","epoch":7}}}"#,
+            ),
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"link":{"state":"gone","epoch":1}}}"#,
+            ),
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"sim_time_s":1.0,"physics_steps":5,"bodies":{"torso":{"tilt_rad":0.0}},"contacts":[],"link":{"state":"given_up","epoch":9}}}"#,
+            ),
+        ]);
+        let mut http = http_to(port);
+        let reset = http.reset_episode(None).expect("reset");
+        assert_eq!(reset.episode_id, 4);
+        assert_eq!(
+            reset.link,
+            LinkReading {
+                state: crate::balance_recovery::LinkState::Linked,
+                epoch: 6
+            }
+        );
+        let status = http.link_status().expect("status");
+        assert_eq!(
+            (status.state, status.epoch),
+            (crate::balance_recovery::LinkState::Reconnecting, 7)
+        );
+        let bad = http.link_status().unwrap_err();
+        assert!(
+            matches!(&bad, TrainerError::Runtime(m) if m.contains("`link` decode failed")),
+            "{bad}"
+        );
+        let measured = http.measure(&any_measure_request()).expect("measure");
+        assert_eq!(
+            (measured.link.state, measured.link.epoch),
+            (crate::balance_recovery::LinkState::GivenUp, 9)
+        );
+        assert_eq!(status_request()["action"], "status");
+    }
+
+    fn any_measure_request() -> MeasureRequest {
+        MeasureRequest {
+            bodies: vec!["torso".to_string()],
+            contacts: Vec::new(),
+            contacts_except: Vec::new(),
+            actuators: false,
+            actuator_force: false,
+        }
+    }
+
+    #[test]
+    fn a_reply_without_link_is_a_runtime_error_naming_the_field_and_the_action() {
+        // Missing and null, for each of the three actions that must carry it.
+        let port = serve_canned(vec![
+            Canned::Reply(200, r#"{"ok":true,"result":{"episode_id":1}}"#),
+            Canned::Reply(200, r#"{"ok":true,"result":{"episode_id":1,"link":null}}"#),
+            Canned::Reply(200, r#"{"ok":true,"result":{}}"#),
+            Canned::Reply(200, r#"{"ok":true,"result":{"link":null}}"#),
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"sim_time_s":1.0,"physics_steps":5,"bodies":{"torso":{"tilt_rad":0.0}},"contacts":[]}}"#,
+            ),
+            Canned::Reply(
+                200,
+                r#"{"ok":true,"result":{"sim_time_s":1.0,"physics_steps":5,"bodies":{"torso":{"tilt_rad":0.0}},"contacts":[],"link":null}}"#,
+            ),
+        ]);
+        let mut http = http_to(port);
+        let errors = [
+            ("reset_episode", http.reset_episode(None).unwrap_err()),
+            ("reset_episode", http.reset_episode(None).unwrap_err()),
+            ("status", http.link_status().unwrap_err()),
+            ("status", http.link_status().unwrap_err()),
+            ("measure", http.measure(&any_measure_request()).unwrap_err()),
+            ("measure", http.measure(&any_measure_request()).unwrap_err()),
+        ];
+        for (action, error) in errors {
+            assert!(
+                matches!(&error, TrainerError::Runtime(m)
+                    if m.contains("`link`") && m.contains(action)),
+                "{action}: {error}"
+            );
+        }
+    }
+
+    /// Criterion whose attempt ends after 10 upright bursts (hold 0.5 s at 0.05 s a burst).
+    fn recovery_criterion() -> BalanceFeetCriterion {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        c.probe_every = 0;
+        c
+    }
+
+    /// Limits with a stall window that clears the burst period of `recovery_criterion` (0.05 s)
+    /// by the validator's multiple.
+    fn recovery(max_outage_s: f64, max_discarded_attempts: u32) -> RecoveryConfig {
+        RecoveryConfig::new(max_outage_s, max_discarded_attempts, 0.005, 0.005, 0.5)
+            .expect("recovery")
+    }
+
+    fn link(state: crate::balance_recovery::LinkState, epoch: u64) -> Option<LinkReading> {
+        Some(LinkReading { state, epoch })
+    }
+
+    fn linked_at(epoch: u64) -> Option<LinkReading> {
+        link(crate::balance_recovery::LinkState::Linked, epoch)
+    }
+
+    /// One phase with a recovery budget and an inspectable data sink.
+    #[allow(clippy::too_many_arguments)]
+    fn run_recoverable<'a>(
+        c: &'a BalanceFeetCriterion,
+        mock: &mut MockController,
+        seeds: &'a [u64],
+        config: &'a RecoveryConfig,
+        clock: &'a dyn BurstClock,
+        cancel: &CancelToken,
+        events: &mut dyn RunEventSink,
+        data: Option<&'a mut (dyn RunDataSink + 'a)>,
+        plasticity: Option<&'a mut (dyn PlasticityControl + 'a)>,
+        present: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        let run_id = RunId("recovery-test".to_string());
+        let mut run = BalancePhaseRun {
+            phase: "train",
+            seeds,
+            criterion: c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: None,
+            // `as` shortens the trait-object lifetime to the run's.
+            plasticity: plasticity.map(|p| p as &mut dyn PlasticityControl),
+            reward_policy: BalanceRewardPolicy::Affect,
+            data: data.map(|d| d as &mut dyn RunDataSink),
+            apply_event: None,
+            recovery: config,
+            burst: clock,
+        };
+        run_balance_phase(&mut run, mock, present, events, cancel)
+    }
+
+    /// `run_recoverable` with no plasticity, sink or presenter work.
+    fn recover_run(
+        c: &BalanceFeetCriterion,
+        mock: &mut MockController,
+        seeds: &[u64],
+        config: &RecoveryConfig,
+        tape: &mut RecordingRunDataSink,
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        run_recoverable(
+            c,
+            mock,
+            seeds,
+            config,
+            &RUNNING_CLOCK,
+            &CancelToken::new(),
+            &mut CollectingEventSink::default(),
+            Some(tape),
+            None,
+            &mut |_| Ok(()),
+        )
+    }
+
+    /// A mock whose link follows a shared value that the feed may change at chosen calls.
+    fn mock_with_link(
+        start: Option<LinkReading>,
+        mut change: impl FnMut(&str, u32) -> Option<Option<LinkReading>> + 'static,
+    ) -> MockController {
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let current = std::cell::Cell::new(start);
+        mock.link_feed = Some(Box::new(move |kind, n| {
+            if let Some(next) = change(kind, n) {
+                current.set(next);
+            }
+            current.get()
+        }));
+        mock
+    }
+
+    #[test]
+    fn an_epoch_change_mid_attempt_discards_it_and_reruns_the_same_seed() {
+        let c = recovery_criterion();
+        // The epoch moves on the 5th measure (inside the first attempt); the link is linked
+        // before and after, so only the epoch gives it away.
+        let mut mock = mock_with_link(linked_at(1), |kind, n| {
+            (kind == "measure" && n == 4).then(|| linked_at(2))
+        });
+        let mut tape = RecordingRunDataSink::default();
+        let report =
+            recover_run(&c, &mut mock, &[10, 20], &recovery(2.0, 3), &mut tape).expect("phase");
+
+        // Scored: exactly the two seeds, once each, in order; the discard is not among them.
+        let seeds: Vec<u64> = report.attempts.iter().map(|a| a.seed).collect();
+        assert_eq!(seeds, [10, 20]);
+        assert_eq!(report.success_rate, 1.0);
+        assert!(report.attempts.iter().all(|a| a.bursts == 10));
+        assert_eq!(tape.rows_of(ATTEMPTS_TABLE).len(), 2);
+        // The seed ran three times in total: discarded, re-run, then the next seed.
+        assert_eq!(mock.resets.len(), 3);
+        // Recorded with seed, reason and the epochs before and after.
+        assert_eq!(report.discarded_attempts.len(), 1);
+        let discard = &report.discarded_attempts[0];
+        assert_eq!(
+            (discard.seed, discard.attempt_index, discard.probe),
+            (10, 0, false)
+        );
+        assert_eq!(
+            discard.reason,
+            crate::balance_recovery::DiscardReason::LinkEpochChanged
+        );
+        assert_eq!(
+            (discard.link_epoch_before, discard.link_epoch_after),
+            (Some(1), Some(2))
+        );
+        assert_eq!(
+            tape.event_kinds()
+                .iter()
+                .filter(|k| **k == crate::balance_recovery::ATTEMPT_DISCARDED_EVENT)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn an_outage_shorter_than_max_outage_recovers_and_the_phase_completes() {
+        let c = recovery_criterion();
+        let mut mock = mock_with_link(linked_at(1), |kind, n| match (kind, n) {
+            ("measure", 4) => Some(link(crate::balance_recovery::LinkState::Reconnecting, 2)),
+            ("status", 3) => Some(linked_at(3)),
+            _ => None,
+        });
+        let mut tape = RecordingRunDataSink::default();
+        let report =
+            recover_run(&c, &mut mock, &[1, 2], &recovery(5.0, 3), &mut tape).expect("phase");
+        // Three status reads saw it reconnecting, the fourth saw it linked.
+        assert_eq!(mock.count("status"), 4);
+        assert_eq!(report.attempts.len(), 2);
+        assert_eq!(report.discarded_attempts.len(), 1);
+        let discard = &report.discarded_attempts[0];
+        assert_eq!(
+            discard.reason,
+            crate::balance_recovery::DiscardReason::LinkNotLinked
+        );
+        assert_eq!(
+            discard.link_state_after,
+            Some(crate::balance_recovery::LinkState::Reconnecting)
+        );
+        assert_eq!(
+            (discard.link_epoch_before, discard.link_epoch_after),
+            (Some(1), Some(2))
+        );
+    }
+
+    #[test]
+    fn an_outage_longer_than_max_outage_fails_the_phase_naming_the_limit() {
+        let c = recovery_criterion();
+        let mut mock = mock_with_link(linked_at(1), |kind, n| {
+            (kind == "measure" && n == 4)
+                .then(|| link(crate::balance_recovery::LinkState::Reconnecting, 2))
+        });
+        let mut tape = RecordingRunDataSink::default();
+        let error = recover_run(&c, &mut mock, &[1, 2], &recovery(0.05, 3), &mut tape).unwrap_err();
+        let TrainerError::Runtime(message) = &error else {
+            panic!("expected Runtime, got {error}");
+        };
+        assert!(
+            message.contains("max_outage_s (0.05)") && message.contains("reconnecting"),
+            "{message}"
+        );
+        // The discard is in the run record even though the phase failed.
+        assert!(tape
+            .event_kinds()
+            .contains(&crate::balance_recovery::ATTEMPT_DISCARDED_EVENT));
+    }
+
+    #[test]
+    fn more_discards_than_max_discarded_attempts_fails_the_phase() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        // Every attempt hits a busy controller on its 4th measure.
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "measure" && n % 4 == 3)
+                .then(|| TrainerError::Transient("HTTP 503 busy".to_string()))
+        }));
+        let mut tape = RecordingRunDataSink::default();
+        let error = recover_run(&c, &mut mock, &[1, 2], &recovery(5.0, 2), &mut tape).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            matches!(error, TrainerError::Runtime(_))
+                && message.contains("max_discarded_attempts (2)")
+                && message.contains("3 discarded"),
+            "{message}"
+        );
+        // The third discard failed the phase before another attempt started.
+        assert_eq!(mock.resets.len(), 3);
+    }
+
+    #[test]
+    fn a_given_up_link_fails_the_phase_at_once_without_waiting() {
+        let c = recovery_criterion();
+        let mut mock = mock_with_link(linked_at(1), |kind, n| {
+            (kind == "measure" && n == 3)
+                .then(|| link(crate::balance_recovery::LinkState::GivenUp, 2))
+        });
+        let mut tape = RecordingRunDataSink::default();
+        let error = recover_run(&c, &mut mock, &[1, 2], &recovery(5.0, 3), &mut tape).unwrap_err();
+        assert!(
+            matches!(&error, TrainerError::Runtime(m) if m.contains("given_up")),
+            "{error}"
+        );
+        assert_eq!(
+            mock.count("status"),
+            0,
+            "no wait for a link that will not return"
+        );
+        assert_eq!(mock.resets.len(), 1);
+        assert!(tape
+            .event_kinds()
+            .contains(&crate::balance_recovery::ATTEMPT_DISCARDED_EVENT));
+    }
+
+    #[test]
+    fn a_transient_error_mid_attempt_discards_it_and_a_runtime_error_fails_the_phase() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "measure" && n == 4)
+                .then(|| TrainerError::Transient("HTTP 503 busy".to_string()))
+        }));
+        let mut tape = RecordingRunDataSink::default();
+        let report =
+            recover_run(&c, &mut mock, &[1, 2], &recovery(5.0, 3), &mut tape).expect("phase");
+        assert_eq!(report.attempts.len(), 2);
+        let discard = &report.discarded_attempts[0];
+        assert_eq!(
+            discard.reason,
+            crate::balance_recovery::DiscardReason::TransientError
+        );
+        assert!(discard.detail.contains("503"), "{}", discard.detail);
+        assert_eq!(
+            (discard.link_epoch_before, discard.link_epoch_after),
+            (Some(1), Some(1)),
+            "the busy reply carried no link, so the epochs are those of the last good reply"
+        );
+
+        // A rejected command is not transient: the phase fails, nothing is retried.
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "measure" && n == 2)
+                .then(|| TrainerError::Runtime("command rejected".to_string()))
+        }));
+        let error = recover_run(
+            &c,
+            &mut mock,
+            &[1, 2],
+            &recovery(5.0, 3),
+            &mut RecordingRunDataSink::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(&error, TrainerError::Runtime(m) if m == "command rejected"));
+        assert_eq!((mock.resets.len(), mock.count("status")), (1, 0));
+    }
+
+    #[test]
+    fn a_refused_reset_is_transient_and_the_seed_is_rerun() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        // The controller restarts while the second seed begins.
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "reset" && n == 1)
+                .then(|| TrainerError::Transient("connection refused".to_string()))
+        }));
+        let mut tape = RecordingRunDataSink::default();
+        let report =
+            recover_run(&c, &mut mock, &[1, 2], &recovery(5.0, 3), &mut tape).expect("phase");
+        let seeds: Vec<u64> = report.attempts.iter().map(|a| a.seed).collect();
+        assert_eq!(seeds, [1, 2]);
+        assert_eq!(report.discarded_attempts.len(), 1);
+        assert_eq!(
+            (
+                report.discarded_attempts[0].seed,
+                report.discarded_attempts[0].attempt_index
+            ),
+            (2, 1)
+        );
+        assert_eq!(
+            mock.resets.len(),
+            2,
+            "two resets succeeded; the refused one never started"
+        );
+    }
+
+    #[test]
+    fn a_discarded_probe_restores_learning_before_the_wait_and_reruns_frozen() {
+        let mut c = recovery_criterion();
+        c.probe_every = 3;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        // Resets 0..=2 are the three train attempts; reset 3 is the first probe.
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "reset" && n == 3)
+                .then(|| TrainerError::Transient("connection reset".to_string()))
+        }));
+        let mut plasticity = MockPlasticity::default();
+        let frozen = plasticity.frozen.clone();
+        let mut tape = RecordingRunDataSink::default();
+        let config = recovery(5.0, 3);
+        let report = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2, 3],
+            &config,
+            &RUNNING_CLOCK,
+            &CancelToken::new(),
+            &mut CollectingEventSink::default(),
+            Some(&mut tape),
+            Some(&mut plasticity),
+            &mut |_| Ok(()),
+        )
+        .expect("phase");
+        assert_eq!(report.attempts.len(), 4);
+        assert_eq!(report.probe_attempts, 1);
+        assert_eq!(report.discarded_attempts.len(), 1);
+        assert!(report.discarded_attempts[0].probe);
+        assert_eq!(report.discarded_attempts[0].attempt_index, 3);
+        // Frozen for the failed probe and again for its re-run, restored after each.
+        assert_eq!((plasticity.freezes, plasticity.restores), (2, 2));
+        assert!(!frozen.get());
+        assert_eq!(report.probe_plasticity_frozen, Some(true));
+    }
+
+    #[test]
+    fn a_discarded_adaptive_attempt_leaves_no_trace_in_the_assist_state() {
+        let c = quick_adaptive();
+        let seeds = [1u64, 2];
+        let config = recovery(5.0, 3);
+        let mut reference_mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let reference = recover_run(
+            &c,
+            &mut reference_mock,
+            &seeds,
+            &config,
+            &mut RecordingRunDataSink::default(),
+        )
+        .expect("reference");
+
+        // The same phase, with the first attempt cut off 30 bursts in (assist already faded).
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "measure" && n == 30)
+                .then(|| TrainerError::Transient("HTTP 503 busy".to_string()))
+        }));
+        let report = recover_run(
+            &c,
+            &mut mock,
+            &seeds,
+            &config,
+            &mut RecordingRunDataSink::default(),
+        )
+        .expect("with a discard");
+        assert_eq!(report.discarded_attempts.len(), 1);
+        assert_eq!(report.attempts, reference.attempts);
+        assert_eq!(report.adaptive_state_next, reference.adaptive_state_next);
+        assert_eq!(report.support_level_next, reference.support_level_next);
+        assert_eq!(report.assist_timeline, reference.assist_timeline);
+        assert_eq!(report.deviation_assist, reference.deviation_assist);
+    }
+
+    /// Sends the number of resets seen so far each time an attempt finishes.
+    struct BoundarySink {
+        finished: std::sync::mpsc::Sender<u32>,
+        resets_seen: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    impl RunEventSink for BoundarySink {
+        fn emit(&mut self, event: RunEvent) {
+            if matches!(event.kind, RunEventKind::Progress { .. }) {
+                let seen = self.resets_seen.load(std::sync::atomic::Ordering::SeqCst);
+                let _ = self.finished.send(seen);
+            }
+        }
+    }
+
+    #[test]
+    fn a_pause_parks_at_the_attempt_boundary_never_mid_attempt_and_resumes() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::{mpsc, Arc};
+        let c = recovery_criterion();
+        let resets_seen = Arc::new(AtomicU32::new(0));
+        let counter = resets_seen.clone();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.link_feed = Some(Box::new(move |kind, _| {
+            if kind == "reset" {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }
+            None
+        }));
+        let cancel = CancelToken::new();
+        let (tx, rx) = mpsc::channel();
+        let resumer = cancel.clone();
+        let watcher_seen = resets_seen.clone();
+        let watcher = std::thread::spawn(move || {
+            // The first attempt finished: the phase now reaches its boundary and must park.
+            let at_boundary = rx.recv_timeout(Duration::from_secs(20)).ok();
+            // While paused, the second attempt must not start.
+            std::thread::sleep(Duration::from_millis(150));
+            let while_paused = watcher_seen.load(Ordering::SeqCst);
+            resumer.resume();
+            (at_boundary, while_paused)
+        });
+        let mut sink = BoundarySink {
+            finished: tx,
+            resets_seen: resets_seen.clone(),
+        };
+        let pauser = cancel.clone();
+        let mut first_burst = true;
+        let config = recovery(5.0, 3);
+        let report = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2],
+            &config,
+            &RUNNING_CLOCK,
+            &cancel,
+            &mut sink,
+            None,
+            None,
+            // The pause arrives in the middle of the first attempt.
+            &mut |_| {
+                if first_burst {
+                    first_burst = false;
+                    pauser.pause();
+                }
+                Ok(())
+            },
+        )
+        .expect("phase");
+        let (at_boundary, while_paused) = watcher.join().expect("watcher");
+        // Mid-attempt the pause parked nothing: the first attempt ran to its end (10 bursts).
+        assert_eq!(
+            at_boundary,
+            Some(1),
+            "the first attempt finished before any park"
+        );
+        assert_eq!(report.attempts[0].bursts, 10);
+        // At the boundary it parked: no second reset while paused; after resume it finished.
+        assert_eq!(while_paused, 1);
+        assert_eq!(report.attempts.len(), 2);
+        assert_eq!(resets_seen.load(Ordering::SeqCst), 2);
+        assert!(!cancel.is_paused());
+    }
+
+    #[test]
+    fn a_burst_stall_mid_attempt_discards_it_and_reruns_the_same_seed() {
+        // A 5 ms burst: the burst presenter below takes one burst period per burst, as a live
+        // run's wall-clock step does.
+        let mut c = criterion_for(2, 0.005);
+        c.settle_s = 0.0;
+        c.hold_s = 0.05;
+        c.attempt_cap_s = 0.5;
+        c.probe_every = 0;
+        let config = RecoveryConfig::new(5.0, 3, 0.005, 0.005, 0.02).expect("recovery");
+        // The counter freezes for reads 3..=8: inside the first attempt, and long enough to
+        // trip the 20 ms window. It runs again before the re-run could stall in turn.
+        let clock = ScriptedBurstClock::new(0, 3..9);
+        let mut mock = MockController::new(0.005, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        let report = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2],
+            &config,
+            &clock,
+            &CancelToken::new(),
+            &mut CollectingEventSink::default(),
+            Some(&mut tape),
+            None,
+            &mut |_| {
+                std::thread::sleep(Duration::from_millis(5));
+                Ok(())
+            },
+        )
+        .expect("phase");
+        let seeds: Vec<u64> = report.attempts.iter().map(|a| a.seed).collect();
+        assert_eq!(seeds, [1, 2]);
+        assert_eq!(report.success_rate, 1.0);
+        assert_eq!(report.discarded_attempts.len(), 1);
+        let discard = &report.discarded_attempts[0];
+        assert_eq!(
+            discard.reason,
+            crate::balance_recovery::DiscardReason::BurstStall
+        );
+        assert_eq!((discard.seed, discard.attempt_index), (1, 0));
+        assert!(discard.detail.contains("stuck at 3"), "{}", discard.detail);
+        // Seed 1 ran twice, seed 2 once; the link was healthy throughout.
+        assert_eq!(mock.resets.len(), 3);
+        assert_eq!(discard.link_epoch_before, discard.link_epoch_after);
+        assert_eq!(tape.rows_of(ATTEMPTS_TABLE).len(), 2);
+    }
+
+    #[test]
+    fn a_paused_engine_parks_the_phase_at_the_boundary_and_resumes() {
+        let c = recovery_criterion();
+        // The engine reads paused four times, then runs.
+        let clock = ScriptedBurstClock::new(4, 0..0);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let config = recovery(5.0, 3);
+        let report = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2],
+            &config,
+            &clock,
+            &CancelToken::new(),
+            &mut CollectingEventSink::default(),
+            None,
+            None,
+            &mut |_| Ok(()),
+        )
+        .expect("phase");
+        assert_eq!(report.attempts.len(), 2);
+        assert!(report.discarded_attempts.is_empty());
+        // 4 paused reads and 1 running read at the first boundary, 1 at the second; none inside
+        // an attempt.
+        assert_eq!(clock.paused_reads.get(), 6);
+        assert_eq!(mock.resets.len(), 2);
+    }
+
+    #[test]
+    fn a_paused_engine_beyond_max_outage_fails_the_phase_naming_the_reason() {
+        let c = recovery_criterion();
+        let clock = ScriptedBurstClock::new(u32::MAX, 0..0);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let config = recovery(0.05, 3);
+        let error = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2],
+            &config,
+            &clock,
+            &CancelToken::new(),
+            &mut CollectingEventSink::default(),
+            None,
+            None,
+            &mut |_| Ok(()),
+        )
+        .unwrap_err();
+        let TrainerError::Runtime(message) = &error else {
+            panic!("expected Runtime, got {error}");
+        };
+        assert!(
+            message.contains("burst engine paused") && message.contains("max_outage_s (0.05)"),
+            "{message}"
+        );
+        assert!(message.contains("burst count"), "{message}");
+        assert!(mock.resets.is_empty(), "no attempt started");
+    }
+
+    #[test]
+    fn a_burst_stall_window_below_a_few_burst_periods_fails_before_any_call() {
+        let c = recovery_criterion(); // 0.05 s bursts: the window must be at least 0.15 s
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let config = RecoveryConfig::new(5.0, 3, 0.005, 0.005, 0.1).expect("valid on its own");
+        let error = recover_run(
+            &c,
+            &mut mock,
+            &[1],
+            &config,
+            &mut RecordingRunDataSink::default(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&error, TrainerError::Config(m) if m.contains("burst_period_s")),
+            "{error}"
+        );
+        assert!(mock.calls.is_empty());
+    }
+
+    #[test]
+    fn an_invalid_recovery_config_fails_before_any_call() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let bad = RecoveryConfig {
+            max_outage_s: 0.0,
+            max_discarded_attempts: 3,
+            link_poll_s: 0.1,
+            boundary_poll_s: 0.1,
+            burst_stall_s: 1.0,
+        };
+        let error = recover_run(
+            &c,
+            &mut mock,
+            &[1],
+            &bad,
+            &mut RecordingRunDataSink::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(&error, TrainerError::Config(m) if m.contains("max_outage_s")));
+        assert!(mock.calls.is_empty());
     }
 
     fn probe_train_run(
@@ -8585,6 +9740,8 @@ mod tests {
                 reward_policy: BalanceRewardPolicy::Affect,
                 data: None,
                 apply_event: None,
+                recovery: &TEST_RECOVERY,
+                burst: &RUNNING_CLOCK,
             };
             run_balance_phase(
                 &mut run,
@@ -9310,6 +10467,8 @@ mod tests {
             reward_policy: policy,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         run_balance_phase(
             &mut run,
@@ -9879,6 +11038,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Contribution,
             data: None,
             apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         run_balance_phase(
             &mut run,
@@ -10349,6 +11510,8 @@ mod tests {
             reward_policy: BalanceRewardPolicy::Affect,
             data,
             apply_event,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
         };
         run_balance_phase(
             &mut run,
@@ -10640,7 +11803,7 @@ mod tests {
         assert_eq!(body["actuator_force"], serde_json::json!(true));
         let parsed: Measurement = serde_json::from_value(serde_json::json!({
             "sim_time_s": 0.1, "physics_steps": 5, "actuators": {"joint_a": 0.25},
-            "actuator_force": {"joint_a": 3.5}
+            "actuator_force": {"joint_a": 3.5}, "link": {"state": "linked", "epoch": 1}
         }))
         .expect("parse");
         assert_eq!(parsed.actuators["joint_a"], 0.25);

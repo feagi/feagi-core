@@ -89,9 +89,8 @@ fn liveness_ages_grow_while_an_agent_stays_quiet() {
     sleep(quiet_period);
     let record = handler.get_agent_liveness().remove(0);
 
-    // Both clocks advance because nothing refreshed either one. An agent held alive purely by
-    // FEAGI's outbound traffic is distinguishable precisely because only the command/control
-    // clock keeps climbing.
+    // Both clocks advance because the agent sent nothing. Outbound pushes from FEAGI refresh
+    // neither clock, so an agent that only receives traffic keeps aging toward the prune.
     assert!(record.last_activity_age.expect("activity age recorded") >= quiet_period);
     assert!(
         record

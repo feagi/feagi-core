@@ -63,10 +63,40 @@ Neurons are skipped when their storage index is above the memory neuron band or 
 | `min_target_firing_per_burst` | f32 | `per_neuron`: neurons with a lower armed target are not regulated; in `[0,1]`, default 0.001. |
 | `arm_epoch` | u32 | `per_neuron`: change it to re-arm; default 0. |
 | `silent_neurons` | string | `per_neuron`: `"one_sided"` (default) or `"unregulated"`; handling of neurons armed below `min_target_firing_per_burst`. Changing it with the same `arm_epoch` keeps the armed targets and reclassifies the neurons. |
+| `update_rule` | string | `"proportional"` (default, unchanged) or `"counter"`; see Counter mode. |
+| `leak_levels` | u32 | `counter`: number of leak codes, >= 2, required. |
+| `counter_timeout_bursts` | u32 | `counter`: silent bursts per down-step, >= 1, required. |
 
 ## Validation
 
-`RateModulatedLeakConfig::validate(&Value) -> Result<Option<Config>, String>` is the single check. A disabled config (`enabled` false or absent) is `Ok(None)`. An enabled config is rejected, naming the field, when: `rate_ema_tau_bursts` is not finite or <= 0; `gain` is not finite or < 0; `target_firing_per_burst`, `leak_min` or `leak_max` is outside `[0,1]` or not finite; `leak_min > leak_max`; `target_mode` is not `"area"` or `"per_neuron"`; `arm_bursts` is 0; `arm_tau_bursts` is not finite or <= 0; `min_target_firing_per_burst` is outside `[0,1]`; `silent_neurons` is not `"one_sided"` or `"unregulated"`; or the JSON is not an object / a field has the wrong type. `parse_from_cortical_property` uses it and returns `None` on any `Err`. The cortical-area update endpoint calls it first and returns `InvalidInput` before anything is applied (`null` is accepted and clears the setting).
+`RateModulatedLeakConfig::validate(&Value) -> Result<Option<Config>, String>` is the single check. A disabled config (`enabled` false or absent) is `Ok(None)`. An enabled config is rejected, naming the field, when: `rate_ema_tau_bursts` is not finite or <= 0; `gain` is not finite or < 0; `target_firing_per_burst`, `leak_min` or `leak_max` is outside `[0,1]` or not finite; `leak_min > leak_max`; `target_mode` is not `"area"` or `"per_neuron"`; `arm_bursts` is 0; `arm_tau_bursts` is not finite or <= 0; `min_target_firing_per_burst` is outside `[0,1]`; `silent_neurons` is not `"one_sided"` or `"unregulated"`; `update_rule` is not `"proportional"` or `"counter"`; `leak_levels` < 2 or `counter_timeout_bursts` < 1; `update_rule` is `"counter"` and either of those two is missing; or the JSON is not an object / a field has the wrong type. `parse_from_cortical_property` uses it and returns `None` on any `Err`. The cortical-area update endpoint calls it first and returns `InvalidInput` before anything is applied (`null` is accepted and clears the setting).
+
+## Counter mode (hardware LEAK<3:0> analogue)
+
+`update_rule: "counter"` replaces the proportional step with an integer leak code, like a
+chip's 4-bit leak register. Default is `"proportional"` (unchanged; existing genomes behave as
+before). Fields (counter only):
+
+- `leak_levels` (integer, >= 2, required): number of leak codes. Level `i` maps to
+  `leak_min + i * (leak_max - leak_min) / (leak_levels - 1)`.
+- `counter_timeout_bursts` (integer, >= 1, required): silent bursts that cost one down-step.
+
+Rule, per neuron, every burst (`update_every_n_bursts` is ignored; so are `gain` and the
+targets): a spike steps the level up by one (clamped at `leak_levels - 1`) and zeroes the
+silent counter; a silent burst adds 1 to the counter and when it reaches the timeout the level
+steps down by one and the counter restarts (one down-step per window). The level starts at the
+grid level nearest the area's base leak and restarts on a new `arm_epoch`. The stored leak is
+always a grid value once the rule runs. `rate_ema`, `rate_target` and `homeostat_regulated`
+still read out as before.
+
+Floors: `target_mode: "area"` floors every neuron at level 0 (no base floor, chip-faithful).
+`per_neuron` after arming: active neurons floor at level 0; silent-armed neurons floor at the
+base level with `silent_neurons: "one_sided"`; with `"unregulated"` they are left at the base
+leak and not stepped.
+
+The equilibrium firing rate is about `1 / counter_timeout_bursts` per burst (up-steps and
+down-steps balance when one spike arrives per timeout window). Older builds ignore unknown
+fields silently (the area then runs with its static leak), so confirm the rule is live from `leak_coefficient` on the neuron-state read. The leak changes are pushed to the lazy-decay catch-up whenever a slot changes, in either `target_mode`.
 
 ## Leak edits, delete and import
 

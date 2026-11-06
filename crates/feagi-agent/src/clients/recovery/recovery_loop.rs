@@ -45,6 +45,11 @@ pub struct RecoveryTickReport {
 /// `transport_send_failed` is a one-shot trigger the caller passes when
 /// its IO loop saw a non-transient transport send failure since the last
 /// tick. The flag is cleared by being consumed inside the policy.
+///
+/// `not_registered` is a level trigger: the caller passes `true` on every
+/// tick while its client reports that it is not registered, so a failed
+/// rebuild is asked about again on the next tick (the policy's cooldown and
+/// max-failure rules still apply).
 #[cfg(feature = "agent-client-asynchelper-tokio")]
 pub fn run_recovery_tick_blocking<S: RebuildableSession>(
     session: &mut S,
@@ -52,6 +57,7 @@ pub fn run_recovery_tick_blocking<S: RebuildableSession>(
     policy: &mut ReconnectPolicy,
     fetch_config: &HealthFetchConfig,
     transport_send_failed: bool,
+    not_registered: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
     let snapshot_result =
@@ -62,6 +68,7 @@ pub fn run_recovery_tick_blocking<S: RebuildableSession>(
         policy,
         snapshot_result,
         transport_send_failed,
+        not_registered,
         now_ms,
     )
 }
@@ -74,6 +81,7 @@ pub async fn run_recovery_tick<S: RebuildableSession>(
     policy: &mut ReconnectPolicy,
     fetch_config: &HealthFetchConfig,
     transport_send_failed: bool,
+    not_registered: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
     let snapshot_result =
@@ -84,6 +92,7 @@ pub async fn run_recovery_tick<S: RebuildableSession>(
         policy,
         snapshot_result,
         transport_send_failed,
+        not_registered,
         now_ms,
     )
 }
@@ -103,6 +112,7 @@ pub fn run_recovery_tick_with_snapshot<S: RebuildableSession>(
         FeagiAgentError,
     >,
     transport_send_failed: bool,
+    not_registered: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
     let health_events = match snapshot_result {
@@ -117,6 +127,9 @@ pub fn run_recovery_tick_with_snapshot<S: RebuildableSession>(
         .collect();
     if transport_send_failed {
         triggers.push(RecoveryTrigger::TransportSendFailed);
+    }
+    if not_registered {
+        triggers.push(RecoveryTrigger::NotRegistered);
     }
 
     let decision = policy.decide(&triggers, now_ms);
@@ -221,6 +234,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
             false,
+            false,
             0,
         );
         assert!(report.health_events.is_empty());
@@ -240,6 +254,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), true)),
             false,
+            false,
             0,
         );
         let report = run_recovery_tick_with_snapshot(
@@ -247,6 +262,7 @@ mod tests {
             &mut watcher,
             &mut policy,
             Ok(snapshot(Some(1), Some(2), false)),
+            false,
             false,
             10,
         );
@@ -265,6 +281,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
             false,
+            false,
             0,
         );
         let report = run_recovery_tick_with_snapshot(
@@ -273,6 +290,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
             true,
+            false,
             10,
         );
         assert!(report.rebuild_succeeded);
@@ -290,6 +308,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
             false,
+            false,
             0,
         );
         let _ = run_recovery_tick_with_snapshot(
@@ -298,6 +317,7 @@ mod tests {
             &mut policy,
             Err(FeagiAgentError::ConnectionFailed("down".to_string())),
             false,
+            false,
             10,
         );
         let report = run_recovery_tick_with_snapshot(
@@ -305,6 +325,7 @@ mod tests {
             &mut watcher,
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
+            false,
             false,
             20,
         );
@@ -326,6 +347,7 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(1), Some(1), false)),
             false,
+            false,
             0,
         );
         let _ = run_recovery_tick_with_snapshot(
@@ -333,6 +355,7 @@ mod tests {
             &mut watcher,
             &mut policy,
             Ok(snapshot(Some(2), Some(1), false)),
+            false,
             false,
             10,
         );
@@ -343,8 +366,63 @@ mod tests {
             &mut policy,
             Ok(snapshot(Some(3), Some(1), false)),
             false,
+            false,
             2_000,
         );
         assert_eq!(policy.consecutive_failures(), 2);
+    }
+
+    #[test]
+    fn not_registered_retries_each_tick_after_cooldown_until_rebuild_succeeds() {
+        let mut session = FakeSession::with_results(vec![
+            Err(FeagiAgentError::ConnectionFailed("a".to_string())),
+            Err(FeagiAgentError::ConnectionFailed("b".to_string())),
+            Ok(()),
+        ]);
+        let mut watcher = HealthWatcher::new();
+        let mut policy = ReconnectPolicy::new(cfg());
+        let mut reports = Vec::new();
+        // Steady health snapshot: no edge trigger ever fires, only the level trigger.
+        for now_ms in [0u64, 500, 1_000, 1_500, 2_000, 2_500] {
+            reports.push(run_recovery_tick_with_snapshot(
+                &mut session,
+                &mut watcher,
+                &mut policy,
+                Ok(snapshot(Some(1), Some(1), false)),
+                false,
+                true,
+                now_ms,
+            ));
+        }
+        assert_eq!(session.rebuilds.len(), 3);
+        assert!(session
+            .rebuilds
+            .iter()
+            .all(|reason| reason == "client not registered"));
+        assert!(reports[0].rebuild_error.is_some());
+        assert!(matches!(
+            reports[1].decision,
+            ReconnectDecision::RetryAfter { .. }
+        ));
+        assert!(reports[4].rebuild_succeeded);
+        assert_eq!(policy.consecutive_failures(), 0);
+    }
+
+    #[test]
+    fn registered_client_raises_no_level_trigger() {
+        let mut session = FakeSession::always_ok();
+        let mut watcher = HealthWatcher::new();
+        let mut policy = ReconnectPolicy::new(cfg());
+        let report = run_recovery_tick_with_snapshot(
+            &mut session,
+            &mut watcher,
+            &mut policy,
+            Ok(snapshot(Some(1), Some(1), false)),
+            false,
+            false,
+            0,
+        );
+        assert_eq!(report.decision, ReconnectDecision::Skip);
+        assert!(session.rebuilds.is_empty());
     }
 }

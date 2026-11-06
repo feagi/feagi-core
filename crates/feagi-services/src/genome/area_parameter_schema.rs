@@ -193,6 +193,12 @@ fn rate_modulated_leak_fields() -> Vec<AreaParameterSchemaEntry> {
             .default_value(json!(0)),
         E::new("silent_neurons", "Silent neurons", "enum", "per_neuron only: how neurons armed below the minimum target are handled. one_sided regulates them toward 0 with the leak floored at the base leak; unregulated leaves them at the base leak.")
             .values(&["one_sided", "unregulated"]).default_value(json!("one_sided")),
+        E::new("update_rule", "Update rule", "enum", "How the leak follows the firing record. proportional moves it by gain times the rate error; counter keeps an integer leak code on a grid (a spike steps it up, a silent window of counter_timeout_bursts steps it down) and ignores gain, the targets and update_every_n_bursts.")
+            .values(&["proportional", "counter"]).default_value(json!("proportional")),
+        E::new("leak_levels", "Leak levels", "integer", "counter only (required): number of leak codes on the grid from leak_min to leak_max; level i maps linearly.")
+            .unit("levels").hard(Some(2.0), None).nullable(),
+        E::new("counter_timeout_bursts", "Counter timeout", "integer", "counter only (required): silent bursts that cost one down-step of the leak code. The equilibrium firing rate is about 1 / this value per burst.")
+            .unit("bursts").hard(Some(1.0), None).nullable(),
     ]
 }
 
@@ -697,6 +703,10 @@ mod tests {
         };
         let build = |field: &str, v: Value| {
             let mut o = json!({"enabled": true, "leak_min": 0.0, "leak_max": 1.0});
+            // The counter rule's companions, so each counter field is checked in a valid object.
+            o["update_rule"] = json!("counter");
+            o["leak_levels"] = json!(4);
+            o["counter_timeout_bursts"] = json!(5);
             o[field] = v;
             o
         };

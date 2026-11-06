@@ -102,6 +102,13 @@ fn rt<E: Display>(error: E) -> TrainerError {
     TrainerError::Runtime(error.to_string())
 }
 
+/// Maps a transport failure toward FEAGI (heartbeat or sensory publish) onto a
+/// [`TrainerError::Transient`]: the link may come back, so the caller can discard the work in
+/// flight and try again.
+fn transient<E: Display>(error: E) -> TrainerError {
+    TrainerError::Transient(error.to_string())
+}
+
 /// Waits `ticks` burst periods, re-publishing `held` at the start of every burst after the
 /// first (the first burst's copy was published by `submit_sensory`). With no held frame the
 /// step only waits.
@@ -240,14 +247,14 @@ impl RemoteFeagiRuntime {
         match self.sensory_pusher.poll() {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {}
             other => {
-                return Err(TrainerError::Runtime(format!(
+                return Err(TrainerError::Transient(format!(
                     "sensory pusher is not ready to send (state: {other:?})"
                 )));
             }
         }
         self.sensory_pusher
             .publish_data(self.send_buffer.get_byte_ref())
-            .map_err(rt)
+            .map_err(transient)
     }
 
     /// Deregisters and tears down the command/control socket. Best-effort; errors are returned so
@@ -297,7 +304,7 @@ impl FeagiRuntime for RemoteFeagiRuntime {
         // window proportional to the requested ticks (Option A). FEAGI consumes a sensory frame
         // in one burst, so the submitted frame is re-published every burst of this step; a
         // following step (silence gap) publishes nothing.
-        self.command_agent.send_heartbeat().map_err(rt)?;
+        self.command_agent.send_heartbeat().map_err(transient)?;
         let held = self.held_sensory.take();
         let burst_period = self.burst_period;
         present_held_frame(
@@ -398,6 +405,15 @@ mod tests {
     #[test]
     fn zero_ticks_does_nothing() {
         assert_eq!(events(Some(&1), 0), "");
+    }
+
+    #[test]
+    fn transport_failures_toward_feagi_are_transient_and_other_errors_are_not() {
+        assert!(matches!(
+            transient("socket closed"),
+            TrainerError::Transient(message) if message == "socket closed"
+        ));
+        assert!(matches!(rt("bad frame"), TrainerError::Runtime(_)));
     }
 
     #[test]

@@ -4736,6 +4736,10 @@ impl<
     }
 
     /// (Re)register or clear rate-modulated leak for a cortical area. See `neural/docs/rate_modulated_leak.md`.
+    ///
+    /// When the new config disables the homeostat (or is invalid) the area is de-registered.
+    /// If it was previously registered this resets every neuron's leak to `base_leak` so that
+    /// per-neuron adjustments from the homeostat do not persist after it is disabled.
     pub fn sync_rate_modulated_leak_from_cortical_property(
         &mut self,
         cortical_idx: u32,
@@ -4743,6 +4747,12 @@ impl<
         base_leak: f32,
         neuron_global_indices: Vec<usize>,
     ) {
+        let was_registered = self
+            .rate_modulated_leak
+            .lock()
+            .map(|g| g.contains(cortical_idx))
+            .unwrap_or(false);
+
         let registered = match self.rate_modulated_leak.lock() {
             Ok(mut g) => {
                 g.sync_cortical(cortical_idx, value, base_leak, neuron_global_indices);
@@ -4750,6 +4760,12 @@ impl<
             }
             Err(_) => false,
         };
+
+        // If the area was registered before and is now de-registered, reset per-neuron leaks
+        // to the area's base leak so the homeostat's last adjustments do not persist.
+        if was_registered && !registered {
+            self.update_cortical_area_leak(cortical_idx, base_leak);
+        }
         // The homeostat reads firing from the main fire ledger, so the area must be tracked.
         // Registry lock is released first: the burst path locks fire_structures, then the registry.
         if registered {
@@ -4886,7 +4902,26 @@ impl<
     }
 
     /// Remove a cortical area from the rate-modulated leak homeostat.
+    ///
+    /// Before de-registering the area this resets every neuron's leak in storage to the area's
+    /// `base_leak` (its `leak_coefficient` at last sync/reseed), so per-neuron adjustments
+    /// written by the homeostat do not persist after the homeostat is disabled.
+    /// Note: `gain: 0` keeps the area registered and must be used when the caller wants to hold
+    /// the current per-neuron leaks in place rather than resetting them.
     pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
+        // Read the stored base_leak before dropping the registry entry.
+        let base = self
+            .rate_modulated_leak
+            .lock()
+            .ok()
+            .and_then(|g| g.base_leak(cortical_idx));
+        if let Some(leak) = base {
+            // Reset all per-neuron leaks to the area's base leak.
+            // update_cortical_area_leak also calls reseed_leak (no-op for the entry we are
+            // about to remove), and must be called before the remove so reseed_leak finds
+            // the entry and can update base_leak (harmless, since we remove immediately after).
+            self.update_cortical_area_leak(cortical_idx, leak);
+        }
         if let Ok(mut g) = self.rate_modulated_leak.lock() {
             g.remove(cortical_idx);
         }

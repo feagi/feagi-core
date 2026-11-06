@@ -12,6 +12,7 @@
 
 pub mod adapters;
 pub mod balance_feet;
+pub mod balance_recovery;
 pub mod binding;
 pub mod contracts;
 pub mod control;

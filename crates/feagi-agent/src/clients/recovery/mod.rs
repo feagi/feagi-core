@@ -22,7 +22,7 @@
 //! |---|---|---|
 //! | Snapshot input | [`HealthSnapshot`] | constructor with all fields |
 //! | Watcher | [`HealthWatcher`] | `observe(snapshot) -> events`, `observe_unreachable() -> events`, `has_baseline()`, `is_reachable()` |
-//! | Trigger | [`RecoveryTrigger`] | factories `health(event)` and `transport_send_failed()` |
+//! | Trigger | [`RecoveryTrigger`] | factories `health(event)`, `transport_send_failed()` and `not_registered()` |
 //! | Policy config | [`ReconnectPolicyConfig`] | constructor with all fields, no defaults |
 //! | Policy | [`ReconnectPolicy`] | `decide(triggers, now_ms)`, `record_attempt_succeeded()`, `record_attempt_failed()`, `reset()` |
 //! | Decision | [`ReconnectDecision`] | discriminator + reason / wait_ms / consecutive_failures accessors |
@@ -33,7 +33,8 @@
 //! (Python: `feagi.pns.health_monitor.FeagiHealthMonitor`; Java: TODO -
 //! see `NativeFeagiAgentClient`) that composes a fetcher + watcher +
 //! policy in the documented order: fetch -> observe (or
-//! observe_unreachable on fetch error) -> decide -> on `AttemptNow`,
+//! observe_unreachable on fetch error) -> raise the level trigger
+//! `NotRegistered` while the client is not registered -> decide -> on `AttemptNow`,
 //! call `reconnect()` and feed the outcome back into the policy.
 //! No SDK may add its own decision logic on top of these primitives.
 //!
