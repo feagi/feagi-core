@@ -2542,8 +2542,7 @@ async fn test_registration_conflicting_with_widened_area_returns_409_and_changes
             ApiJson(registration_request_with(&agent_id, registrations.clone())),
         )
         .await
-        .err()
-        .expect("registration must conflict with the widened area");
+        .expect_err("registration must conflict with the widened area");
         assert_eq!(error.code, 409);
         assert_eq!(
             error.error_code.as_deref(),
