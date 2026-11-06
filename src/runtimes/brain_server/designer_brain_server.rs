@@ -13,7 +13,7 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use core::ops::ControlFlow;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::target_frequency::TargetFrequency;
-use feagi_connectome::connectome_basis::engine::BurstEngineCPURayon;
+use feagi_connectome::connectome_basis::engine::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::neural_processors::singular::{
     NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse, NeuronProcessorSingleEngineVisualizationReceiver,
