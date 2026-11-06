@@ -1,7 +1,7 @@
 use crate::cortical_area::CorticalAreaTypeMap;
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
 use std::collections::HashMap;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::genome::containers::brain_region::BrainRegionContainerRuntime;
 use crate::genome::containers::cortical_area::CorticalAreaContainersDesigner;
 

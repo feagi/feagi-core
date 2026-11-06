@@ -1,7 +1,7 @@
 use crate::cortical_area::CorticalIdentifier;
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::visualization::NeuronVisualizationWordIndex;
 use serde::{Deserialize, Serialize};
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GenomeVisualizationContext<FIQ: FeagiIndexQuantization> {

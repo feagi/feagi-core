@@ -1,16 +1,15 @@
 //! Cortical areas fundamental to the running of the brain
 
-use super::{CorticalAreaInit, CorticalAreaType, FeagiIndexQuantization, UsesFoundationDeath, UsesFoundationPower};
+use super::{CorticalAreaType, UsesFoundationDeath, UsesFoundationPower};
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
-use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::cortical_area::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::neuron_models::neuron_model::foundation_death::{
+use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutTagVoxel, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::neuron_model::foundation_death::{
     FoundationDeathCorticalDataInternal, FoundationDeathCorticalDataProperties, FoundationDeathCorticalDataScratch, FoundationDeathCorticalDataVariance,
     FoundationDeathNeuronDataInternal, FoundationDeathNeuronDataScratch, NeuronModelFoundationDeath,
 };
-use feagi_connectome::neuron_models::neuron_model::foundation_power::{
+use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
     FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
     FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, NeuronModelFoundationPower,
 };

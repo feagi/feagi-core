@@ -1,8 +1,8 @@
 //! The `NeuronModel` model family, of every neuron model at each of its quantization levels. Its
 //! items are reached through [`super::neuron_model`]
 
-pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModelTag;
+pub(super) use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+pub(super) use feagi_connectome_neural::neural_basis::neuron_model::NeuronModelTag;
 use feagi_connectome_proc::{define_model_family_template, expand_model_family};
 
 

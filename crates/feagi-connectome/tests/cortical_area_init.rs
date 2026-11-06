@@ -2,11 +2,11 @@ use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPoten
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, CorticalAreaInitError, NeuronInit, NeuronInitializer};
-use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
+use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
     FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataScratch, FeagiAdvancedCorticalDataVariance,
     FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, NeuronModelFeagiAdvancedDefaultQuant, Period,
 };
-use feagi_connectome::neuron_models::neuron_model::foundation_power::{
+use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
     FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
     FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, FoundationPowerNeuronDataVariance,
     NeuronModelFoundationPowerFloat32,
@@ -191,9 +191,9 @@ mod dispatch {
     use super::*;
     use feagi_basis::BurstIndex;
     use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaInitDispatch, CpuCorticalAreaInitVisitor};
-    use feagi_connectome::neuron_models::neuron_model::feagi_advanced::BurstEngineDynamics;
-    use feagi_connectome::neuron_models::neuron_model::NeuronModelEnum;
-    use feagi_connectome::neuron_models::init_dispatch::{CorticalAreaInitContainer, CorticalAreaInitEnum};
+    use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::BurstEngineDynamics;
+    use feagi_connectome::connectome_basis::neuron_model::NeuronModelEnum;
+    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInitContainer, CorticalAreaInitEnum};
 
     /// Builds the neurons of the init, then runs the first through the dynamics the dispatch chose
     struct FireFirstNeuron;

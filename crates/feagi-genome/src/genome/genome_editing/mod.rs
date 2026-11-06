@@ -2,7 +2,7 @@ pub mod items;
 pub mod genome_edit_step;
 pub mod genome_edit_steps;
 
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::genome::genome_editing::genome_edit_steps::brain_region::GenomeEditStepBrainRegionBuilder;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepEnum;
 

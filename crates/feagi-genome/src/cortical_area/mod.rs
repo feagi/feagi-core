@@ -3,13 +3,13 @@
 //! name: its marker struct, [`CorticalAreaType`] implementation, and a `Uses{Model}` implementation
 //! per neuron model it allows. Generated items are also reached through `cortical_area_type`
 
-use feagi_connectome::neuron_models::family::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
+use feagi_connectome::connectome_basis::neuron_model::{
+    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInit, CorticalAreaInitContainer,
+    NeuronLayoutTag,
+};
 #[cfg(feature = "std")]
-use feagi_connectome::family_macros::expand_cortical_area_map;
-use feagi_connectome::neuron_models::neuron_model;
-pub use feagi_connectome::cortical_area::{CorticalAreaInit, NeuronLayoutTag};
-pub use feagi_connectome::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::init_dispatch::CorticalAreaInitContainer;
+use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 
 pub mod cortical_identifier_base64;
 pub mod foundation;

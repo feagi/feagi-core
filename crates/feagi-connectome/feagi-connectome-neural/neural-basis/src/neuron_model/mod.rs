@@ -1,10 +1,11 @@
 use crate::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
 use crate::neuron_model::neuron_layout::NeuronLayoutTag;
-use crate::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::quantization_levels::{FeagiIndexQuantization};
 use model_data::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification,
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification,
 };
+use crate::quantization_levels::MembranePotentialQuantization;
 
 pub mod interfacing;
 pub mod model_data;

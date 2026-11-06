@@ -1,9 +1,9 @@
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::specifications::brain_regions::BrainRegionID;
 use crate::genome::genome_editing::GenomeEditSequence;
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
-use feagi_connectome::neuron_models::init_dispatch::CorticalAreaInitEnum;
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::neuron_model::CorticalAreaInitEnum;
 
 pub struct GenomePlayWrightCorticalArea<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
 

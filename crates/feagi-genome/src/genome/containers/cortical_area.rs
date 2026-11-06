@@ -1,13 +1,12 @@
 use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::cortical_area::{CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalIdentifier, NeuronLayoutTag};
+use crate::cortical_area::{CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalIdentifier};
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
-use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::cortical_area::{CorticalAreaEngineIndex, NeuronModelUniversalCorticalProperties};
-use feagi_connectome::neuron_models::family::NeuronModelContainer;
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
-use neural_basis::neuron_model::NeuronModel;
 use std::collections::HashSet;
+use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
+use feagi_connectome::connectome_basis::neuron_model::{NeuronLayout, NeuronLayoutTag, NeuronModel, NeuronModelContainer, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 
 /// What the designer genome holds for each cortical area, whichever its cortical type
 pub struct CorticalAreaContainersDesigner<FIQ>(core::marker::PhantomData<fn() -> FIQ>);

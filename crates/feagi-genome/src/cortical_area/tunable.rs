@@ -2,18 +2,18 @@
 //!
 //! TODO the default values here are placeholders, chosen only to be valid at every quantization
 
-use super::{CorticalAreaInit, CorticalAreaType, FeagiIndexQuantization, UsesFeagiAdvanced, UsesFeagiSimple};
+use super::{CorticalAreaType, UsesFeagiAdvanced, UsesFeagiSimple};
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
-use feagi_connectome::cortical_area::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
-use feagi_connectome::cortical_area::neuron_layout::NeuronLayout;
-use feagi_connectome::cortical_area::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::neuron_models::neuron_model::feagi_advanced::{
+use feagi_connectome::connectome_basis::neuron_model::CorticalAreaInit;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::neuron_model::{NeuronLayout, NeuronLayoutTagVoxel, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
     self, FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataScratch, FeagiAdvancedCorticalDataVariance,
     FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, NeuronModelFeagiAdvanced,
 };
-use feagi_connectome::neuron_models::neuron_model::feagi_simple::{
+use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{
     self, FeagiSimpleCorticalDataInternal, FeagiSimpleCorticalDataProperties, FeagiSimpleCorticalDataScratch, FeagiSimpleCorticalDataVariance,
     FeagiSimpleNeuronDataInternal, FeagiSimpleNeuronDataScratch, NeuronModelFeagiSimple,
 };

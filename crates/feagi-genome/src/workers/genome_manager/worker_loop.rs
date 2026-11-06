@@ -9,8 +9,7 @@ use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::{FeagiWorkerPollingRouter, FeagiWorkerStep};
-use feagi_connectome::quantization_levels::FeagiIndexQuantization;
-
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
 /// request is answered while idle
