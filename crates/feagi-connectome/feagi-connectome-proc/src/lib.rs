@@ -33,6 +33,11 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///         Custom: SomeInitializer,
 ///     }
 ///
+///     // Required, what the neuron init of this model converts into to be stored in a genome.
+///     // Implements `NeuronInitializer<NM>` and `GenomeNeuronInitializer`, and the genome level
+///     // type of every initializer above must convert `Into` it
+///     GenomeNeuronInit: UniformNeuronInit<NM>
+///
 ///     // Optional, each one of QDECIMAL, QUINT or QSINT
 ///     Quantizables: {
 ///         /// How long till the neuron can fire again
@@ -80,7 +85,9 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 ///   `NeuronModel{Model}{Level}<NL>`
 /// - `{Model}NeuronInit<NM>`, the `NeuronModel::NeuronInit` of every level, an enum with a variant
 ///   per neuron initializer, `From` each of them, and `NeuronInitializer` forwarded to the one held.
-///   Its error `{Model}NeuronInitError<NM>` has a variant holding the error of each initializer
+///   Its genome level form is the `GenomeNeuronInit` type, converted into from the genome level
+///   form of the held initializer. Its error `{Model}NeuronInitError<NM>` has a variant holding the
+///   error of each initializer
 /// - `CorticalDataVarianceSpecification` for `{Model}CorticalDataVariance`, if the model gives
 ///   fields for neither variance data type. Otherwise it must be implemented by hand
 /// - A `{Model}{DataType}<NM>` struct for every data type, such as

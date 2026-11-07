@@ -1,4 +1,4 @@
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
+use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use crate::neuron_model::model_data::{CorticalDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
 use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
@@ -14,6 +14,11 @@ pub trait NeuronInitializer<NM: NeuronModel>: Clone + core::fmt::Debug + Partial
     /// Why this initializer cannot initialize the neurons of some layout
     type Error: core::error::Error;
 
+    /// All neuron initializers must be able to "decompose" into a type of neuron initializer that
+    /// can be stored in a genome. For many neuron initializers, that would be this itself and thus
+    /// can just be self. Notablly
+    type GenomeLevelNeuronIntoType: NeuronInitializer<NM> + GenomeNeuronInitializer;
+
     /// Checks that this initializer can give data to every neuron of `layout`. Called once when a
     /// [`CorticalAreaInit`] is created, so [`Self::neuron_data_at`] may assume it passed
     fn check_against_layout<FIQ: FeagiIndexQuantization>(&self, _layout: &NeuronLayoutOf<NM, FIQ>) -> Result<(), Self::Error> {
@@ -26,7 +31,18 @@ pub trait NeuronInitializer<NM: NeuronModel>: Clone + core::fmt::Debug + Partial
         layout: &NeuronLayoutOf<NM, FIQ>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch);
+
+    /// Return a copy of a neuron initializer that can be stored in the genome. An initializer that
+    /// is its own [`Self::GenomeLevelNeuronIntoType`] returns `self.clone()`
+    // Required rather than provided: a default could only apply when the genome level type is
+    // `Self`, and bounding the method on that would stop every other initializer, and any generic
+    // code, from calling it
+    fn as_genome_level_neuron_initializer(&self) -> Self::GenomeLevelNeuronIntoType;
 }
+
+/// A marker trait for any neuron initializer that is small enough to be stored in a genome
+/// directly
+pub trait GenomeNeuronInitializer {}
 
 /// Why the neuron initialization of model `NM` cannot initialize the neurons of some layout
 pub type NeuronInitErrorOf<NM> = <<NM as NeuronModel>::NeuronInit as NeuronInitializer<NM>>::Error;

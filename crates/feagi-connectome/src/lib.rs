@@ -36,13 +36,13 @@ pub mod connectome_basis {
         pub use crate::neuron_models::init_dispatch::{CorticalAreaInitContainer, CorticalAreaInitEnum};
         pub use feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing;
         pub use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-        pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf, NeuronLayoutTag};
+        pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf, NeuronLayoutTag};
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::{
             NeuronLayoutSingleSteppedDynamic, NeuronLayoutTagSingleSteppedDynamic,
         };
         pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::{
-            CorticalAreaInit, CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronInitializer,
+            CorticalAreaInit, CorticalAreaInitGenerationError, GenomeNeuronInitializer, NeuronInitErrorOf, NeuronInitializer,
         };
         /// The neuron initializers commonly listed by neuron models
         pub use crate::neuron_models::initializers::UniformNeuronInit;

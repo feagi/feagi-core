@@ -11,7 +11,7 @@ pub mod single_stepped_dynamic;
 
 /// Root trait for defining Neuron Layout, the struct that defines how the neurons are laid out
 /// in a cortical area
-pub trait NeuronLayout<
+pub trait NeuronLayoutData<
     FIQ: FeagiIndexQuantization,
 >: Clone + Copy + Debug + PartialEq + Sync + Send
 + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
@@ -57,12 +57,12 @@ pub trait NeuronLayout<
 }
 
 /// Allows defining the Neuron Layout type without knowing the FIQ in the moment
-pub trait NeuronLayoutTag {
-    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
+pub trait NeuronLayoutTag: Clone + Debug {
+    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayoutData<FIQ>;
 }
 
 /// Returns the Neuron Layout of the given Neuron Model at the given index quantization
-pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::LayoutTag as NeuronLayoutTag>::Layout<FIQ>;
+pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>;
 
 
 /// May impose restrictions on the cortical level context

@@ -4,7 +4,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_a
 use crate::neuron_models::initializers::UniformNeuronInit;
 #[cfg(feature = "alloc")]
 use crate::neuron_models::initializers::StoredNeuronInit;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuronModel, NeuronModelTag};
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
@@ -24,6 +24,9 @@ define_cortical_dynamics_quantization_template! {
         #[cfg(feature = "alloc")]
         Stored: StoredNeuronInit<NM>,
     }
+
+    // Stored in a genome as every neuron starting with the same data
+    GenomeNeuronInit: UniformNeuronInit<NM>
 
     Quantizables: {
         /// For handling timing

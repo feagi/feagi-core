@@ -1,27 +1,30 @@
-use crate::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
+use crate::neuron_model::neurogenesis::NeurogenesisDefaults;
 use crate::neuron_model::neuron_layout::NeuronLayoutTag;
-use crate::quantization_levels::{FeagiIndexQuantization};
+use crate::quantization_levels::MembranePotentialQuantization;
+use crate::quantization_levels::FeagiIndexQuantization;
 use model_data::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification,
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification,
 };
-use crate::quantization_levels::MembranePotentialQuantization;
+use neurogenesis::by_generator::NeurogenesisByGenerator;
 
-pub mod interfacing;
+//pub mod interfacing;
 pub mod model_data;
 pub mod neuron_layout;
+pub mod neurogenesis;
 
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
-/// as the data its dynamics use
+/// as the data its dynamics use and the neuron layout it expects. Note that this trait
+/// is extended to a certain models trait before being implemented, this is not implemented
+/// directly
 pub trait NeuronModel: MembranePotentialQuantization {
-    // This trait is to be expanded on per model, which may restrict `LayoutTag` on its sub trait
+    
+    /// What neuron layout this neuron model expects
+    type NeuronLayoutTag: NeuronLayoutTag;
+    
+    type NeurogenesisDefaults<FIQ: FeagiIndexQuantization>: NeurogenesisDefaults<FIQ, Self>;
 
-    /// How the neurons of this model are laid out, for any [`FeagiIndexQuantization`]
-    type LayoutTag: NeuronLayoutTag;
-
-    /// Every way of initializing the neurons of this model, as one type. Generated per model from
-    /// the initializers it lists, each of which converts into it
-    type NeuronInit: NeuronInitializer<Self>;
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisByGenerator<FIQ, Self>;
 
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during
@@ -52,14 +55,6 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// dynamics and never saved, as it can be generated again
     type NeuronDataVariance: NeuronDataVarianceSpecification<Self>;
     
-}
-
-
-/// Names one neuron model as a whole, across its quantization levels, and the layout it is fixed
-/// to. Lets something differ per model, without needing to name each quantization level
-pub trait NeuronModelTag {
-    /// How the neurons of this model are laid out
-    type LayoutTag: NeuronLayoutTag;
 }
 
 

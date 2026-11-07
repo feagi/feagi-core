@@ -1,12 +1,13 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome::connectome_basis::neuron_model::{
-    CorticalAreaInit, NeuronInitErrorOf, NeuronInitializer, StoredNeuronInit, StoredNeuronInitError, UniformNeuronInit,
+    CorticalAreaInit, GenomeNeuronInitializer, NeuronInitErrorOf, NeuronInitializer, StoredNeuronInit, StoredNeuronInitError, UniformNeuronInit,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
     FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataScratch, FeagiAdvancedCorticalDataVariance,
-    FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, NeuronModelFeagiAdvancedDefaultQuant, Period,
+    FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, FeagiAdvancedNeuronInit, NeuronModelFeagiAdvancedDefaultQuant,
+    Period,
 };
 use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
     FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
@@ -110,7 +111,13 @@ fn power_init(neurons: impl Into<FoundationPowerNeuronInit<Power>>) -> Result<Co
 
 #[test]
 fn stored_neuron_data_must_match_the_layout() {
-    let stored = |count| StoredNeuronInit::<Power>::new(vec![FoundationPowerNeuronDataInternal::new(); count], vec![FoundationPowerNeuronDataScratch::new(); 4]);
+    let stored = |count| {
+        StoredNeuronInit::<Power>::new(
+            vec![FoundationPowerNeuronDataInternal::new(); count],
+            vec![FoundationPowerNeuronDataScratch::new(); 4],
+            (FoundationPowerNeuronDataInternal::new(), FoundationPowerNeuronDataScratch::new()),
+        )
+    };
     assert!(power_init(stored(4)).is_ok());
     // The model's error says which initializer failed, and holds that initializer's own error
     let error = power_init(stored(3)).unwrap_err();
@@ -129,9 +136,39 @@ fn initializers_convert_into_the_model_init() {
     assert!(matches!(&init, FoundationPowerNeuronInit::Uniform(held) if *held == uniform));
     assert_eq!(init.clone(), init);
 
-    let stored: FoundationPowerNeuronInit<Power> = StoredNeuronInit::new(vec![], vec![]).into();
+    let stored: FoundationPowerNeuronInit<Power> =
+        StoredNeuronInit::new(vec![], vec![], (FoundationPowerNeuronDataInternal::new(), FoundationPowerNeuronDataScratch::new())).into();
     assert!(matches!(stored, FoundationPowerNeuronInit::Stored(_)));
     assert_ne!(stored, init);
+}
+
+/// The model's init converts into its `GenomeNeuronInit` type through whichever initializer it
+/// holds: uniform stays as it is, stored becomes uniform at its default neuron
+#[test]
+fn model_init_converts_to_its_genome_level_form() {
+    let neuron = |countdown: f32| FeagiAdvancedNeuronDataInternal::<Advanced>::new(Period::new(countdown));
+
+    let uniform = UniformNeuronInit::<Advanced>::new(neuron(1.0), FeagiAdvancedNeuronDataScratch::new());
+    let init: FeagiAdvancedNeuronInit<Advanced> = uniform.clone().into();
+    let genome_level: UniformNeuronInit<Advanced> = init.as_genome_level_neuron_initializer();
+    assert_eq!(genome_level, uniform);
+
+    let stored: FeagiAdvancedNeuronInit<Advanced> = StoredNeuronInit::new(
+        vec![neuron(2.0), neuron(3.0)],
+        vec![FeagiAdvancedNeuronDataScratch::new(); 2],
+        (neuron(5.0), FeagiAdvancedNeuronDataScratch::new()),
+    )
+    .into();
+    let genome_level = stored.as_genome_level_neuron_initializer();
+    assert_eq!(genome_level, UniformNeuronInit::new(neuron(5.0), FeagiAdvancedNeuronDataScratch::new()));
+}
+
+/// The genome level form of a model's init is something the genome can hold
+#[test]
+fn genome_level_form_is_a_genome_neuron_initializer() {
+    fn is_genome_neuron_initializer<T: GenomeNeuronInitializer>() {}
+    is_genome_neuron_initializer::<<FeagiAdvancedNeuronInit<Advanced> as NeuronInitializer<Advanced>>::GenomeLevelNeuronIntoType>();
+    is_genome_neuron_initializer::<<TestCustomNeuronInit<NeuronModelTestCustomFloat32> as NeuronInitializer<NeuronModelTestCustomFloat32>>::GenomeLevelNeuronIntoType>();
 }
 
 /// A model without variance fields gets its variance generated, and holds no per neuron memory
@@ -159,6 +196,8 @@ define_cortical_dynamics_quantization_template! {
         IndexAsValue: IndexAsValueInit,
     }
 
+    GenomeNeuronInit: IndexAsValueInit
+
     QuantizationLevels: {
         Float32: {
             MembranePotentialQuant: f32,
@@ -179,6 +218,8 @@ cortical_dynamics_quantization_test_custom_template!(expand_cortical_dynamics_qu
 impl<NM: NeuronModelTestCustom> NeuronInitializer<NM> for IndexAsValueInit {
     /// Fits any layout
     type Error = core::convert::Infallible;
+    /// Holds nothing, so it is stored in a genome as is
+    type GenomeLevelNeuronIntoType = Self;
 
     fn neuron_data_at<FIQ: FeagiIndexQuantization>(
         &self,
@@ -189,7 +230,13 @@ impl<NM: NeuronModelTestCustom> NeuronInitializer<NM> for IndexAsValueInit {
         let value = QuantizedDecimalTrait::from_quantization(index.quant_to_usize() as f32);
         (TestCustomNeuronDataInternal::new(value), TestCustomNeuronDataScratch::new())
     }
+
+    fn as_genome_level_neuron_initializer(&self) -> Self {
+        self.clone()
+    }
 }
+
+impl GenomeNeuronInitializer for IndexAsValueInit {}
 
 #[test]
 fn custom_neuron_init_runs_through_the_spec() {

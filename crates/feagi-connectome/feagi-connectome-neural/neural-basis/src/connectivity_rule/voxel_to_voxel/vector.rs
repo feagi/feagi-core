@@ -1,7 +1,7 @@
 use crate::connectivity_rule::voxel_to_voxel::{ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
 use crate::connectivity_rule::{voxel_to_voxel, AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use crate::neuron_model::neuron_layout::NeuronLayout;
+use crate::neuron_model::neuron_layout::NeuronLayoutData;
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;

@@ -4,9 +4,9 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 #[cfg(feature = "alloc")]
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
+use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::{GenomeNeuronInitializer, NeuronInitializer};
 #[cfg(feature = "alloc")]
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutData;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -29,6 +29,7 @@ impl<NM: NeuronModel> UniformNeuronInit<NM> {
 impl<NM: NeuronModel> NeuronInitializer<NM> for UniformNeuronInit<NM> {
     /// Fits any layout
     type Error = core::convert::Infallible;
+    type GenomeLevelNeuronIntoType = Self;
 
     fn neuron_data_at<FIQ: FeagiIndexQuantization>(
         &self,
@@ -37,7 +38,14 @@ impl<NM: NeuronModel> NeuronInitializer<NM> for UniformNeuronInit<NM> {
     ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
         (self.internal.clone(), self.scratch.clone())
     }
+
+    /// Small enough to be stored in a genome as is
+    fn as_genome_level_neuron_initializer(&self) -> Self::GenomeLevelNeuronIntoType {
+        self.clone()
+    }
 }
+
+impl<NM: NeuronModel> GenomeNeuronInitializer for UniformNeuronInit<NM> {}
 
 impl<NM: NeuronModel> Clone for UniformNeuronInit<NM> {
     fn clone(&self) -> Self {
@@ -68,18 +76,24 @@ impl<NM: NeuronModel> PartialEq for UniformNeuronInit<NM> {
 pub struct StoredNeuronInit<NM: NeuronModel> {
     pub internal: Vec<NM::NeuronDataInternal>,
     pub scratch: Vec<NM::NeuronDataScratch>,
+    default_neuron: (NM::NeuronDataInternal, NM::NeuronDataScratch)
 }
 
 #[cfg(feature = "alloc")]
 impl<NM: NeuronModel> StoredNeuronInit<NM> {
-    pub fn new(internal: Vec<NM::NeuronDataInternal>, scratch: Vec<NM::NeuronDataScratch>) -> Self {
-        Self { internal, scratch }
+    pub fn new(
+        internal: Vec<NM::NeuronDataInternal>,
+        scratch: Vec<NM::NeuronDataScratch>,
+        default_neuron: (NM::NeuronDataInternal, NM::NeuronDataScratch)
+    ) -> Self {
+        Self { internal, scratch, default_neuron }
     }
 }
 
 #[cfg(feature = "alloc")]
 impl<NM: NeuronModel> NeuronInitializer<NM> for StoredNeuronInit<NM> {
     type Error = StoredNeuronInitError;
+    type GenomeLevelNeuronIntoType = UniformNeuronInit<NM>;
 
     /// Errors unless exactly one element per neuron of the layout is held
     fn check_against_layout<FIQ: FeagiIndexQuantization>(&self, layout: &NeuronLayoutOf<NM, FIQ>) -> Result<(), Self::Error> {
@@ -102,12 +116,20 @@ impl<NM: NeuronModel> NeuronInitializer<NM> for StoredNeuronInit<NM> {
         let index = index.quant_to_usize();
         (self.internal[index].clone(), self.scratch[index].clone())
     }
+
+    fn as_genome_level_neuron_initializer(&self) -> Self::GenomeLevelNeuronIntoType
+    {
+        UniformNeuronInit::<NM> {
+            internal: self.default_neuron.0.clone(),
+            scratch: self.default_neuron.1.clone(),
+        }
+    }
 }
 
 #[cfg(feature = "alloc")]
 impl<NM: NeuronModel> Clone for StoredNeuronInit<NM> {
     fn clone(&self) -> Self {
-        Self { internal: self.internal.clone(), scratch: self.scratch.clone() }
+        Self { internal: self.internal.clone(), scratch: self.scratch.clone(), default_neuron: self.default_neuron.clone() }
     }
 }
 

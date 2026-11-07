@@ -22,7 +22,7 @@ use feagi_genome::cortical_area::sensor::Camera;
 use feagi_genome::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::cortical_area::CorticalGenomicDataEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
-use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayout, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel, UniformNeuronInit};
+use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel, UniformNeuronInit};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};
 
 type Fiq = FeagiIndexQuantizationStandard;

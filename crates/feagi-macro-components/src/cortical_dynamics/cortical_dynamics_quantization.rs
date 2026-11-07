@@ -10,6 +10,7 @@ use syn::{braced, Attribute, Token, Type, TypeParamBound};
 mod kw {
     syn::custom_keyword!(NeuronLayout);
     syn::custom_keyword!(NeuronInitializers);
+    syn::custom_keyword!(GenomeNeuronInit);
     syn::custom_keyword!(Quantizables);
     syn::custom_keyword!(QuantizationLevels);
     syn::custom_keyword!(DataSpecifications);
@@ -71,6 +72,8 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 ///     Custom: SomeInitializer,
 /// }
 ///
+/// GenomeNeuronInit: UniformNeuronInit<NM>
+///
 /// Quantizables: {
 ///     /// Optional description
 ///     RefractoryPeriod: QDECIMAL,
@@ -96,8 +99,11 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 /// `NeuronInitializers` list every way of initializing the model's neurons, at least one, each
 /// as a variant name and a type implementing `NeuronInitializer<NM>` for every quantization level
 /// of the model, generically over `NM`. They become the variants of `{Model}NeuronInit<NM>`, the
-/// `NeuronModel::NeuronInit` of every level (see [`NeuronInitializerTemplate`]). The optional
-/// `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
+/// `NeuronModel::NeuronInit` of every level (see [`NeuronInitializerTemplate`]). The required
+/// `GenomeNeuronInit` is the type, written in terms of `NM`, that `{Model}NeuronInit<NM>` converts
+/// into to be stored in a genome, its `NeuronInitializer::GenomeLevelNeuronIntoType`. It must
+/// implement `NeuronInitializer<NM>` and `GenomeNeuronInitializer`, and the genome level type of
+/// every listed initializer must convert `Into` it. The optional `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
 /// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
 /// model's data structs, one per data type of `NeuronModel` (see
@@ -112,6 +118,7 @@ pub struct CorticalDynamicsQuantizationTemplate {
     pub model_name: Ident,
     pub layout: ModelLayoutTemplate,
     pub neuron_initializers: IndexMap<Ident, NeuronInitializerTemplate>,
+    pub genome_neuron_init: Type,
     pub quantizables: IndexMap<Ident, QuantizableTemplate>,
     pub quantization_levels: IndexMap<Ident, QuantizationLevelTemplate>,
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
@@ -551,9 +558,12 @@ impl CorticalDynamicsQuantizationTemplate {
     /// `From` each of them and `NeuronInitializer` forwarded to the one held, and
     /// `{Model}NeuronInitError<NM>`, its error, holding the error of any one of them. Both have a
     /// hidden variant that cannot be constructed, so `NM` is held even if no initializer names it.
-    /// `Clone`, `Debug` and `PartialEq` are written out, as deriving them would require them of `NM`
+    /// Its genome level form is the `GenomeNeuronInit` type, which the genome level form of the held
+    /// initializer is converted into. `Clone`, `Debug` and `PartialEq` are written out, as deriving
+    /// them would require them of `NM`
     fn generate_neuron_init(&self) -> proc_macro2::TokenStream {
         let model_name = &self.model_name;
+        let genome_neuron_init = &self.genome_neuron_init;
         let model_trait = self.model_trait_name();
         let neuron_init = self.neuron_init_name();
         let neuron_init_error = self.neuron_init_error_name();
@@ -605,6 +615,17 @@ impl CorticalDynamicsQuantizationTemplate {
 
             impl<#nm: #model_trait> NeuronInitializer<#nm> for #neuron_init<#nm> {
                 type Error = #neuron_init_error<#nm>;
+                type GenomeLevelNeuronIntoType = #genome_neuron_init;
+
+                fn as_genome_level_neuron_initializer(&self) -> Self::GenomeLevelNeuronIntoType {
+                    match self {
+                        #(
+                            #( #cfgs )*
+                            Self::#names(initializer) => ::core::convert::Into::into(NeuronInitializer::<#nm>::as_genome_level_neuron_initializer(initializer)),
+                        )*
+                        #marker_arm
+                    }
+                }
 
                 fn check_against_layout<#fiq: FeagiIndexQuantization>(&self, layout: &NeuronLayoutOf<#nm, #fiq>) -> ::core::result::Result<(), Self::Error> {
                     match self {
@@ -731,6 +752,12 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
         let neuron_initializers = parse_neuron_initializers(input)?;
         parse_optional_comma(input)?;
 
+        // Required, as every initializer must have a form that can be stored in a genome
+        input.parse::<kw::GenomeNeuronInit>()?;
+        input.parse::<Token![:]>()?;
+        let genome_neuron_init = input.parse::<Type>()?;
+        parse_optional_comma(input)?;
+
         let quantizables = if input.peek(kw::Quantizables) {
             input.parse::<kw::Quantizables>()?;
             input.parse::<Token![:]>()?;
@@ -765,6 +792,7 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             model_name,
             layout,
             neuron_initializers,
+            genome_neuron_init,
             quantizables,
             quantization_levels,
             data_specifications,
@@ -779,6 +807,7 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
         let model_attributes = &self.model_attributes;
         let model_name = &self.model_name;
         let layout = &self.layout;
+        let genome_neuron_init = &self.genome_neuron_init;
 
         let neuron_initializers = self.neuron_initializers.iter().map(|(name, initializer)| {
             let attributes = &initializer.attributes;
@@ -835,6 +864,8 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
             NeuronInitializers: {
                 #( #neuron_initializers )*
             }
+
+            GenomeNeuronInit: #genome_neuron_init,
 
             Quantizables: {
                 #( #quantizables )*

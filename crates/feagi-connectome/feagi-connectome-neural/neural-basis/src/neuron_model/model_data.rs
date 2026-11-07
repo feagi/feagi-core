@@ -1,4 +1,4 @@
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
+use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
 use core::fmt::Debug;
@@ -65,13 +65,15 @@ pub trait CorticalDataVarianceSpecification<NM: NeuronModel>: Clone + Debug + Pa
 }
 
 /// The per neuron level data that should be saved to the connectome
-pub trait NeuronDataInternalSpecification<NM: NeuronModel>: Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
+pub trait NeuronDataInternalSpecification<NM: NeuronModel>: Clone + Debug + PartialEq + Serialize
++ DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// The per neuron level data that should not be saved to the connectome
 /// (starts clean with every init)
-pub trait NeuronDataScratchSpecification<NM: NeuronModel>: Clone + Debug + PartialEq + Serialize + DeserializeOwned + Sync + Send {
+pub trait NeuronDataScratchSpecification<NM: NeuronModel>: Clone + Debug + PartialEq + Serialize
++ DeserializeOwned + Sync + Send {
     // Any cortical area model data should be defined here (for the specification)
 }
 

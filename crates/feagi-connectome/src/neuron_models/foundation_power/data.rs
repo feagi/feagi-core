@@ -24,6 +24,9 @@ define_cortical_dynamics_quantization_template! {
         Stored: StoredNeuronInit<NM>,
     }
 
+    // Stored in a genome as every neuron starting with the same data
+    GenomeNeuronInit: UniformNeuronInit<NM>
+
     QuantizationLevels: {
         Float16: {
             MembranePotentialQuant: f16,
