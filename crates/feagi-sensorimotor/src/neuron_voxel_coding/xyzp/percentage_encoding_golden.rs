@@ -235,3 +235,57 @@ fn percentage_encoding_golden_drift_is_detected_negative_case() {
     altered[3].rows[5].linear_z[0] += 1;
     assert_ne!(altered, traces);
 }
+
+/// The public coder interface (`single_voxel_decode::encode_percentage_to_z_indexes`) selects
+/// its coding from the IO configuration flag and must reproduce every checked-in golden row.
+#[test]
+fn public_encode_reproduces_checked_in_golden_rows() {
+    use crate::single_voxel_decode::encode_percentage_to_z_indexes;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, IOCorticalAreaConfigurationFlag as Flag, PercentageNeuronPositioning,
+    };
+
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(FIXTURE_DIR)
+        .join(FILE_NAME);
+    let text = std::fs::read_to_string(&path).expect("fixture missing; see module docs");
+    let checked_in: Golden = serde_json::from_str(&text).unwrap();
+    assert!(!checked_in.traces.is_empty());
+
+    let frame = FrameChangeHandling::Absolute;
+    for trace in &checked_in.traces {
+        let depth = trace.settings.planes;
+        let (linear_flag, fractional_flag) = if trace.settings.signed {
+            (
+                Flag::SignedPercentage(frame, PercentageNeuronPositioning::Linear),
+                Flag::SignedPercentage(frame, PercentageNeuronPositioning::Fractional),
+            )
+        } else {
+            (
+                Flag::Percentage(frame, PercentageNeuronPositioning::Linear),
+                Flag::Percentage(frame, PercentageNeuronPositioning::Fractional),
+            )
+        };
+        for row in &trace.rows {
+            let linear = encode_percentage_to_z_indexes(&linear_flag, depth, row.reading).unwrap();
+            assert_eq!(
+                linear.positive, row.linear_z,
+                "{} linear {}",
+                trace.name, row.reading
+            );
+            assert!(linear.negative.is_empty());
+            let fractional =
+                encode_percentage_to_z_indexes(&fractional_flag, depth, row.reading).unwrap();
+            assert_eq!(
+                fractional.positive, row.fractional_positive_z,
+                "{} fractional positive {}",
+                trace.name, row.reading
+            );
+            assert_eq!(
+                fractional.negative, row.fractional_negative_z,
+                "{} fractional negative {}",
+                trace.name, row.reading
+            );
+        }
+    }
+}

@@ -2867,6 +2867,66 @@ fn test_device_registration_store_compare_flags_stale_segmented_vision() {
     assert!(row.keys_only_in_session.contains(&"Vision".to_string()));
 }
 
+/// A device `physical_range` is kept verbatim in the stored registration JSON the API reads
+/// back, and does not change what the API derives from the registration or how it compares
+/// stores.
+#[cfg(feature = "feagi-agent")]
+#[test]
+fn test_stored_registration_keeps_physical_range_and_api_derivation_is_unchanged() {
+    let range = json!({"value_at_0": -1.0, "value_at_1": 1.0, "unit": "rad"});
+    let plain = sample_servo_sensory_device_registrations();
+    let mut with_range = plain.clone();
+    with_range["input_units_and_encoder_properties"]["Servo"][0][0]["device_grouping"][0]
+        ["physical_range"] = range.clone();
+
+    let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
+    let descriptor =
+        AgentDescriptor::new("neuraville", "range-agent", 1).expect("descriptor creation failed");
+    let session_id = AgentID::new([6u8; AgentID::NUMBER_BYTES]);
+    handler.set_device_registrations_by_descriptor(
+        session_id.to_base64(),
+        descriptor.clone(),
+        with_range.clone(),
+    );
+    handler.set_device_registrations_by_agent(session_id, with_range.clone());
+    handler.register_logical_agent(
+        session_id,
+        descriptor.clone(),
+        vec![AgentCapabilities::SendSensorData],
+    );
+
+    // Stored registration JSON, by session and by descriptor, keeps the range untouched.
+    let by_agent = handler
+        .get_device_registrations_by_agent(session_id)
+        .expect("session registration must be stored");
+    assert_eq!(
+        by_agent["input_units_and_encoder_properties"]["Servo"][0][0]["device_grouping"][0]
+            ["physical_range"],
+        range
+    );
+    assert_eq!(
+        handler.get_device_registrations_by_descriptor(&descriptor),
+        Some(&with_range)
+    );
+
+    // What the API derives from the registration is the same with and without the range.
+    assert_eq!(
+        derive_sensory_cortical_ids_from_device_registrations(&with_range)
+            .expect("derive with range"),
+        derive_sensory_cortical_ids_from_device_registrations(&plain).expect("derive plain"),
+    );
+
+    // The store comparison reports no mismatch for a range-carrying registration.
+    let compare = build_device_registration_store_compare(
+        handler.get_all_registered_agents(),
+        handler.get_device_registrations_by_descriptor_store(),
+        handler.get_device_registrations_by_agent_store(),
+        handler.get_descriptor_session_ids(),
+    );
+    assert_eq!(compare.count, 1);
+    assert_eq!(compare.mismatch_count, 0);
+}
+
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 #[ignore = "real transport path can hang in CI; run manually for websocket validation"]

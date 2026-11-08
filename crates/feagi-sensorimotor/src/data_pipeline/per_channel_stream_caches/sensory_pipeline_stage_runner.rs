@@ -1,5 +1,5 @@
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
-use crate::configuration::jsonable::JSONDeviceProperties;
+use crate::configuration::jsonable::{JSONDeviceProperties, PhysicalRange};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_pipeline::PipelineStagePropertyIndex;
@@ -17,6 +17,7 @@ pub struct SensoryPipelineStageRunner {
     channel_friendly_name: Option<String>,
     channel_index_override: Option<CorticalChannelIndex>,
     json_device_properties: JSONDeviceProperties,
+    physical_range: Option<PhysicalRange>,
 }
 
 impl PipelineStageRunner for SensoryPipelineStageRunner {
@@ -67,6 +68,14 @@ impl PipelineStageRunner for SensoryPipelineStageRunner {
     fn set_json_device_properties(&mut self, json_device_properties: JSONDeviceProperties) {
         self.json_device_properties = json_device_properties;
     }
+
+    fn get_physical_range(&self) -> Option<&PhysicalRange> {
+        self.physical_range.as_ref()
+    }
+
+    fn set_physical_range(&mut self, physical_range: Option<PhysicalRange>) {
+        self.physical_range = physical_range;
+    }
 }
 
 impl SensoryPipelineStageRunner {
@@ -83,6 +92,7 @@ impl SensoryPipelineStageRunner {
             channel_friendly_name: None,
             channel_index_override: None,
             json_device_properties: JSONDeviceProperties::default(),
+            physical_range: None,
         })
     }
 

@@ -144,7 +144,7 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
         }
     }
 
-    fn decode_axis_percentage(&self, z_indexes: &Vec<u32>) -> Option<f32> {
+    fn decode_axis_percentage(&self, z_indexes: &[u32]) -> Option<f32> {
         if z_indexes.is_empty() {
             return None;
         }

@@ -84,7 +84,7 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         Ok(Box::new(decoder))
     }
 
-    fn decode_column(&self, indexes: &Vec<u32>) -> Option<f32> {
+    fn decode_column(&self, indexes: &[u32]) -> Option<f32> {
         if indexes.is_empty() {
             return None;
         }

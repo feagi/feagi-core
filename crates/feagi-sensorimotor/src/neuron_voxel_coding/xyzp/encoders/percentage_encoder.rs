@@ -9,13 +9,7 @@ use crate::data_types::{
     Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
-    encode_signed_percentage_to_fractional_exponential_neuron_z_indexes,
-    encode_signed_percentage_to_linear_neuron_z_index,
-    encode_signed_percentage_to_linear_neuron_z_index_along_z,
-    encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes,
-    encode_unsigned_percentage_to_linear_neuron_z_index,
-};
+use crate::neuron_voxel_coding::xyzp::percentage_variant::PercentageCodingVariant;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -84,9 +78,11 @@ impl PercentageNeuronVoxelXYZPEncoder {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let num_dims = number_percentages.as_u32();
-        let along_z_signed_d1_linear = is_signed
-            && number_percentages == PercentageChannelDimensionality::D1
-            && interpolation == PercentageNeuronPositioning::Linear;
+        let along_z_signed_d1_linear = PercentageCodingVariant::from_parts(
+            is_signed,
+            number_percentages == PercentageChannelDimensionality::D1,
+            interpolation,
+        ) == PercentageCodingVariant::SignedLinearAlongZ;
         let channel_width = if is_signed {
             if along_z_signed_d1_linear {
                 num_dims
@@ -116,9 +112,11 @@ impl PercentageNeuronVoxelXYZPEncoder {
 
     #[inline]
     fn signed_d1_linear_uses_along_z_layout(&self) -> bool {
-        self.is_signed
-            && self.number_percentages == PercentageChannelDimensionality::D1
-            && self.interpolation == PercentageNeuronPositioning::Linear
+        PercentageCodingVariant::from_parts(
+            self.is_signed,
+            self.number_percentages == PercentageChannelDimensionality::D1,
+            self.interpolation,
+        ) == PercentageCodingVariant::SignedLinearAlongZ
     }
 
     fn channel_width(&self) -> u32 {
@@ -168,7 +166,6 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
             write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
 
         let z_depth = self.channel_dimensions.depth;
-        let z_depth_float = z_depth as f32;
         let interpolation = self.interpolation;
         let is_signed = self.is_signed;
         let channel_width = self.channel_width();
@@ -190,19 +187,12 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage = data.try_into()?;
-                            if signed_d1_linear_along_z {
-                                encode_signed_percentage_to_linear_neuron_z_index_along_z(
-                                    &p,
-                                    z_depth_float,
-                                    s,
-                                );
-                                s_neg.clear();
-                            } else {
-                                encode_signed(interpolation, &p, z_depth, z_depth_float, s, s_neg);
-                            }
+                            // Shared selector: along-z (clears the negative list) or fractional
+                            PercentageCodingVariant::from_parts(true, true, interpolation)
+                                .encode_signed_into(&p, z_depth, s, s_neg);
                         } else {
                             let p: Percentage = data.try_into()?;
-                            encode_unsigned(interpolation, &p, z_depth, z_depth_float, s);
+                            encode_unsigned(interpolation, &p, z_depth, s);
                         }
                         Ok(())
                     })?;
@@ -241,26 +231,12 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage2D = data.try_into()?;
-                            encode_signed(
-                                interpolation,
-                                &p.a,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.0,
-                                &mut s_neg.0,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.b,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.1,
-                                &mut s_neg.1,
-                            );
+                            encode_signed(interpolation, &p.a, z_depth, &mut s.0, &mut s_neg.0);
+                            encode_signed(interpolation, &p.b, z_depth, &mut s.1, &mut s_neg.1);
                         } else {
                             let p: Percentage2D = data.try_into()?;
-                            encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
-                            encode_unsigned(interpolation, &p.b, z_depth, z_depth_float, &mut s.1);
+                            encode_unsigned(interpolation, &p.a, z_depth, &mut s.0);
+                            encode_unsigned(interpolation, &p.b, z_depth, &mut s.1);
                         }
                         Ok(())
                     })?;
@@ -311,35 +287,14 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage3D = data.try_into()?;
-                            encode_signed(
-                                interpolation,
-                                &p.a,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.0,
-                                &mut s_neg.0,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.b,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.1,
-                                &mut s_neg.1,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.c,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.2,
-                                &mut s_neg.2,
-                            );
+                            encode_signed(interpolation, &p.a, z_depth, &mut s.0, &mut s_neg.0);
+                            encode_signed(interpolation, &p.b, z_depth, &mut s.1, &mut s_neg.1);
+                            encode_signed(interpolation, &p.c, z_depth, &mut s.2, &mut s_neg.2);
                         } else {
                             let p: Percentage3D = data.try_into()?;
-                            encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
-                            encode_unsigned(interpolation, &p.b, z_depth, z_depth_float, &mut s.1);
-                            encode_unsigned(interpolation, &p.c, z_depth, z_depth_float, &mut s.2);
+                            encode_unsigned(interpolation, &p.a, z_depth, &mut s.0);
+                            encode_unsigned(interpolation, &p.b, z_depth, &mut s.1);
+                            encode_unsigned(interpolation, &p.c, z_depth, &mut s.2);
                         }
                         Ok(())
                     })?;
@@ -399,44 +354,16 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage4D = data.try_into()?;
-                            encode_signed(
-                                interpolation,
-                                &p.a,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.0,
-                                &mut s_neg.0,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.b,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.1,
-                                &mut s_neg.1,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.c,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.2,
-                                &mut s_neg.2,
-                            );
-                            encode_signed(
-                                interpolation,
-                                &p.d,
-                                z_depth,
-                                z_depth_float,
-                                &mut s.3,
-                                &mut s_neg.3,
-                            );
+                            encode_signed(interpolation, &p.a, z_depth, &mut s.0, &mut s_neg.0);
+                            encode_signed(interpolation, &p.b, z_depth, &mut s.1, &mut s_neg.1);
+                            encode_signed(interpolation, &p.c, z_depth, &mut s.2, &mut s_neg.2);
+                            encode_signed(interpolation, &p.d, z_depth, &mut s.3, &mut s_neg.3);
                         } else {
                             let p: Percentage4D = data.try_into()?;
-                            encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
-                            encode_unsigned(interpolation, &p.b, z_depth, z_depth_float, &mut s.1);
-                            encode_unsigned(interpolation, &p.c, z_depth, z_depth_float, &mut s.2);
-                            encode_unsigned(interpolation, &p.d, z_depth, z_depth_float, &mut s.3);
+                            encode_unsigned(interpolation, &p.a, z_depth, &mut s.0);
+                            encode_unsigned(interpolation, &p.b, z_depth, &mut s.1);
+                            encode_unsigned(interpolation, &p.c, z_depth, &mut s.2);
+                            encode_unsigned(interpolation, &p.d, z_depth, &mut s.3);
                         }
                         Ok(())
                     })?;
@@ -502,52 +429,33 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
 
 //region Internal
 
+/// Encode one unsigned value; the variant comes from the shared selector.
 #[inline]
 fn encode_unsigned(
     interpolation: PercentageNeuronPositioning,
     value: &Percentage,
     z_depth: u32,
-    z_depth_float: f32,
     scratch: &mut Vec<u32>,
 ) {
-    match interpolation {
-        PercentageNeuronPositioning::Linear => {
-            encode_unsigned_percentage_to_linear_neuron_z_index(value, z_depth_float, scratch);
-        }
-        PercentageNeuronPositioning::Fractional => {
-            encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(
-                value, z_depth, scratch,
-            );
-        }
-    }
+    PercentageCodingVariant::from_parts(false, true, interpolation)
+        .encode_unsigned_into(value, z_depth, scratch);
 }
 
+/// Encode one signed value on two lobes (linear two-lobe or fractional); the single-column
+/// along-z layout is handled by the caller through the shared selector.
 #[inline]
 fn encode_signed(
     interpolation: PercentageNeuronPositioning,
     value: &SignedPercentage,
     z_depth: u32,
-    z_depth_float: f32,
     scratch_pos: &mut Vec<u32>,
     scratch_neg: &mut Vec<u32>,
 ) {
-    match interpolation {
-        PercentageNeuronPositioning::Linear => {
-            encode_signed_percentage_to_linear_neuron_z_index(
-                value,
-                z_depth_float,
-                scratch_pos,
-                scratch_neg,
-            );
-        }
-        PercentageNeuronPositioning::Fractional => {
-            encode_signed_percentage_to_fractional_exponential_neuron_z_indexes(
-                value,
-                z_depth,
-                scratch_pos,
-                scratch_neg,
-            );
-        }
-    }
+    PercentageCodingVariant::from_parts(true, false, interpolation).encode_signed_into(
+        value,
+        z_depth,
+        scratch_pos,
+        scratch_neg,
+    );
 }
 //endregion

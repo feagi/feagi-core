@@ -82,9 +82,20 @@ atomically on immutable source bytes:
 
 Connectome-lite artifacts must include a genome. Full artifacts may omit it
 because they carry complete structure; in that case the report explicitly says
-genome compatibility was not evaluated. Future versions and migration-chain
-gaps fail explicitly. The service never downgrades and has no permissive
-fallback.
+genome compatibility was not evaluated. Migration-chain gaps fail explicitly.
+The service never downgrades and has no permissive fallback.
+
+An artifact newer than this build supports is reported as
+`ConnectomeError::UnsupportedArtifactVersion { component, artifact_version,
+supported_version }`, distinct from a corrupt or invalid artifact. `component`
+is an `ArtifactVersionComponent` (`contract`, `container`, `connectome_schema`,
+`genome_schema`). Container v3 is checked from its envelope manifest header
+before the body is decoded (order: container, contract, connectome schema,
+genome schema); the manifest reader parses only the version fields and ignores
+unknown ones. Older containers and manifests without a genome version are
+checked after decode, from the snapshot and the embedded genome.
+`brain_artifact::supported_brain_artifact_versions()` returns the
+`SupportedArtifactVersions` this build reads.
 
 HTTP adapters expose `/v1/connectome/validate` and `/v1/connectome/migrate`.
 Python services use the same implementation through

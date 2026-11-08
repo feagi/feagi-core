@@ -143,6 +143,9 @@ pub struct BurstLoopRunner {
     frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
     running: Arc<AtomicBool>,
+    /// Paused flag: while set (and running), the burst loop performs no bursts but keeps
+    /// draining the parameter queue so property edits still land.
+    paused: Arc<AtomicBool>,
     /// Thread handle (for graceful shutdown)
     thread_handle: Option<thread::JoinHandle<()>>,
     /// Sensory agent manager (per-agent injection threads - SHM-based agents)
@@ -396,6 +399,7 @@ impl BurstLoopRunner {
             npu,
             frequency_hz: Arc::new(Mutex::new(frequency_hz)), // Shared with burst thread for dynamic updates
             running: Arc::new(AtomicBool::new(false)),
+            paused: Arc::new(AtomicBool::new(false)),
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
             sensory_intake: None, // Can be set later via set_sensory_intake()
@@ -690,11 +694,13 @@ impl BurstLoopRunner {
         info!("[BURST-RUNNER] Starting burst loop at {:.2} Hz (power neurons auto-discovered from cortical_idx=1)",
                  current_freq);
 
+        self.paused.store(false, Ordering::Release);
         self.running.store(true, Ordering::Release);
 
         let npu = self.npu.clone();
         let frequency = self.frequency_hz.clone(); // Clone Arc for thread
         let running = self.running.clone();
+        let paused = self.paused.clone();
         let viz_writer = self.viz_shm_writer.clone();
         let motor_writer = self.motor_shm_writer.clone();
         let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
@@ -729,6 +735,7 @@ impl BurstLoopRunner {
                         npu,
                         frequency,
                         running,
+                        paused,
                         viz_writer,
                         motor_writer,
                         viz_publisher,
@@ -771,6 +778,7 @@ impl BurstLoopRunner {
 
         info!("[BURST-RUNNER] Stopping burst loop...");
         self.running.store(false, Ordering::Release);
+        self.paused.store(false, Ordering::Release);
 
         if let Some(handle) = self.thread_handle.take() {
             // Use a timeout to prevent blocking indefinitely
@@ -827,6 +835,27 @@ impl BurstLoopRunner {
     /// Check if the burst loop is running
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Acquire)
+    }
+
+    /// Pause the burst loop: no bursts run (no neural step, burst counter, publishes or
+    /// stimulus-schedule drain) until `resume()`. Queued parameter updates keep being applied.
+    /// Errors when the loop is not running.
+    pub fn pause(&self) -> Result<(), String> {
+        if !self.running.load(Ordering::Acquire) {
+            return Err("Burst loop is not running".to_string());
+        }
+        self.paused.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    /// Resume a paused burst loop. The pause gap is not counted and no catch-up bursts run.
+    pub fn resume(&self) {
+        self.paused.store(false, Ordering::Release);
+    }
+
+    /// True while the loop is running and paused.
+    pub fn is_paused(&self) -> bool {
+        self.running.load(Ordering::Acquire) && self.paused.load(Ordering::Acquire)
     }
 
     /// Get current burst count (lock-free atomic read)
@@ -1561,6 +1590,275 @@ mod sensory_ingest_tests {
     }
 }
 
+/// Apply queued parameter updates to the NPU (shared by the burst path and the paused path).
+fn apply_parameter_updates(
+    npu_lock: &mut DynamicNPU,
+    pending_updates: Vec<crate::parameter_update_queue::ParameterUpdate>,
+) {
+    if !pending_updates.is_empty() {
+        let update_start = Instant::now();
+        let mut applied_count = 0;
+
+        info!(
+            "[PARAM-QUEUE] Processing {} queued updates",
+            pending_updates.len()
+        );
+
+        for update in pending_updates {
+            let count = match update.parameter_name.as_str() {
+                "neuron_fire_threshold" | "firing_threshold" => {
+                    if let Some(threshold) = update.value.as_f64() {
+                        npu_lock
+                            .update_cortical_area_threshold(update.cortical_idx, threshold as f32)
+                    } else {
+                        0
+                    }
+                }
+                // One-shot rewrite of stored per-neuron thresholds. Increment is
+                // not consulted during fire; only thresholds[] is used after this.
+                "neuron_fire_threshold_increment" | "firing_threshold_increment" => {
+                    match increment_from_parameter_update(&update) {
+                        Some((base_threshold, [inc_x, inc_y, inc_z])) => {
+                            let count = npu_lock.update_cortical_area_threshold_with_gradient(
+                                update.cortical_idx,
+                                base_threshold,
+                                inc_x,
+                                inc_y,
+                                inc_z,
+                            );
+                            if count == 0 {
+                                warn!(
+                                    "[PARAM-QUEUE] firing_threshold_increment applied to 0 neurons (cortical_idx={}, cortical_id={}, value={})",
+                                    update.cortical_idx,
+                                    update.cortical_id,
+                                    update.value
+                                );
+                            }
+                            count
+                        }
+                        None => {
+                            warn!(
+                                "[PARAM-QUEUE] firing_threshold_increment skipped: need numeric [x,y,z]/{{x,y,z}}/scalar plus base_threshold (cortical_id={}, value={:?}, base_threshold={:?})",
+                                update.cortical_id,
+                                update.value,
+                                update.base_threshold
+                            );
+                            0
+                        }
+                    }
+                }
+                "firing_threshold_increment_x"
+                | "firing_threshold_increment_y"
+                | "firing_threshold_increment_z" => {
+                    warn!(
+                        "[PARAM-QUEUE] per-axis increment {} must be merged into [x,y,z] before queue; skipping (cortical_id={})",
+                        update.parameter_name, update.cortical_id
+                    );
+                    0
+                }
+                // IMPORTANT: firing_threshold_limit is NOT the firing threshold.
+                // Previously this was (incorrectly) routed into update_cortical_area_threshold(),
+                // which could set threshold=0 and make downstream neurons fire trivially.
+                "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
+                    if let Some(limit) = update.value.as_f64() {
+                        npu_lock
+                            .update_cortical_area_threshold_limit(update.cortical_idx, limit as f32)
+                    } else {
+                        0
+                    }
+                }
+                "neuron_refractory_period" | "refractory_period" | "refrac" => {
+                    if let Some(period) = update.value.as_u64() {
+                        npu_lock.update_cortical_area_refractory_period(
+                            update.cortical_idx,
+                            period as u16,
+                        )
+                    } else {
+                        0
+                    }
+                }
+                "leak" | "leak_coefficient" | "neuron_leak_coefficient" => {
+                    if let Some(leak) = update.value.as_f64() {
+                        if (0.0..=1.0).contains(&leak) {
+                            npu_lock.update_cortical_area_leak(update.cortical_idx, leak as f32)
+                        } else {
+                            0
+                        }
+                    } else {
+                        0
+                    }
+                }
+                "consecutive_fire_cnt_max"
+                | "neuron_consecutive_fire_count"
+                | "consecutive_fire_count" => {
+                    if let Some(limit) = update.value.as_u64() {
+                        npu_lock.update_cortical_area_consecutive_fire_limit(
+                            update.cortical_idx,
+                            limit as u16,
+                        )
+                    } else {
+                        0
+                    }
+                }
+                "snooze_length" | "neuron_snooze_period" | "snooze_period" => {
+                    if let Some(snooze) = update.value.as_u64() {
+                        npu_lock
+                            .update_cortical_area_snooze_period(update.cortical_idx, snooze as u16)
+                    } else {
+                        0
+                    }
+                }
+                "neuron_excitability" => {
+                    if let Some(excitability) = update.value.as_f64() {
+                        if (0.0..=1.0).contains(&excitability) {
+                            npu_lock.update_cortical_area_excitability(
+                                update.cortical_idx,
+                                excitability as f32,
+                            )
+                        } else {
+                            0
+                        }
+                    } else {
+                        0
+                    }
+                }
+                "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
+                    if let Some(accumulation) = update.value.as_bool() {
+                        let n = npu_lock.update_cortical_area_mp_charge_accumulation(
+                            update.cortical_idx,
+                            accumulation,
+                        );
+                        if n == 0 {
+                            tracing::warn!(
+                                target: "feagi-burst-engine",
+                                "mp_charge_accumulation update applied to 0 neurons (cortical_idx={}, cortical_id={}); check area index",
+                                update.cortical_idx,
+                                update.cortical_id
+                            );
+                        }
+                        n
+                    } else {
+                        tracing::warn!(
+                            target: "feagi-burst-engine",
+                            "mp_charge_accumulation ignored: JSON value must be boolean, got {:?} (cortical_id={})",
+                            update.value,
+                            update.cortical_id
+                        );
+                        0
+                    }
+                }
+                "postsynaptic_current" | "neuron_post_synaptic_potential" => {
+                    if let Some(psp) = update.value.as_f64() {
+                        let psp_f32 = psp as f32;
+                        let synapses_updated = npu_lock.update_cortical_area_postsynaptic_current(
+                            update.cortical_idx,
+                            psp_f32,
+                        );
+                        let mappings_updated = npu_lock
+                            .update_stdp_mapping_psp_for_source(update.cortical_idx, psp_f32);
+                        if let Ok(cortical_id) =
+                            feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                &update.cortical_id,
+                            )
+                        {
+                            npu_lock.set_postsynaptic_current_flag(cortical_id, psp_f32);
+                        }
+                        info!(
+                            target: "feagi-burst-engine",
+                            "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
+                            update.cortical_id,
+                            psp_f32,
+                            synapses_updated,
+                            mappings_updated
+                        );
+                        synapses_updated
+                    } else {
+                        0
+                    }
+                }
+                "mp_driven_psp" | "neuron_mp_driven_psp" => {
+                    if let Some(enabled) = update.value.as_bool() {
+                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                            &update.cortical_id,
+                        ) {
+                            Ok(cortical_id) => {
+                                npu_lock.set_mp_driven_psp_flag(cortical_id, enabled);
+                                1
+                            }
+                            Err(_) => 0,
+                        }
+                    } else {
+                        0
+                    }
+                }
+                "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
+                    if let Some(enabled) = update.value.as_bool() {
+                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                            &update.cortical_id,
+                        ) {
+                            Ok(cortical_id) => {
+                                npu_lock.set_psp_uniform_distribution_flag(cortical_id, enabled);
+                                1
+                            }
+                            Err(_) => 0,
+                        }
+                    } else {
+                        0
+                    }
+                }
+                "degeneration" | "neuron_degeneracy_coefficient" => {
+                    if let Some(degeneration) = update.value.as_f64() {
+                        if degeneration < 0.0 {
+                            0
+                        } else {
+                            match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                &update.cortical_id,
+                            ) {
+                                Ok(cortical_id) => {
+                                    npu_lock.set_degeneration_flag(
+                                        cortical_id,
+                                        degeneration as f32,
+                                    );
+                                    1
+                                }
+                                Err(_) => 0,
+                            }
+                        }
+                    } else {
+                        0
+                    }
+                }
+                _ => 0,
+            };
+
+            if count > 0 {
+                applied_count += 1;
+                if update.parameter_name == "postsynaptic_current"
+                    || update.parameter_name == "neuron_post_synaptic_potential"
+                {
+                    debug!(
+                        "[PARAM-QUEUE] Applied {}={} to {} synapses in area {}",
+                        update.parameter_name, update.value, count, update.cortical_id
+                    );
+                } else {
+                    debug!(
+                        "[PARAM-QUEUE] Applied {}={} to {} neurons in area {}",
+                        update.parameter_name, update.value, count, update.cortical_id
+                    );
+                }
+            }
+        }
+
+        if applied_count > 0 {
+            let update_duration = update_start.elapsed();
+            info!(
+                "[PARAM-QUEUE] ✓ Applied {} parameter updates in {:?}",
+                applied_count, update_duration
+            );
+        }
+    }
+}
+
 /// Main burst processing loop (runs in dedicated thread)
 ///
 /// This is the HOT PATH - zero Python involvement!
@@ -1571,6 +1869,7 @@ fn burst_loop(
     npu: Arc<TracingMutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>, // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
+    paused: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     motor_shm_writer: Arc<Mutex<Option<crate::motor_shm_writer::MotorSHMWriter>>>,
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
@@ -1619,7 +1918,56 @@ fn burst_loop(
     let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
     let mut missing_motor_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
 
+    // Gap-tracking statics (hoisted so a pause gap can be cleared on resume).
+    static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+    static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+    // Wait granularity while paused: keeps stop/resume/param edits responsive (<= 50 ms).
+    const PAUSED_POLL: Duration = Duration::from_millis(10);
+    let mut was_paused = false;
+
     while running.load(Ordering::Acquire) {
+        if paused.load(Ordering::Acquire) {
+            was_paused = true;
+            // Drop (do not queue) sensory packets that arrive while paused.
+            if let Some(intake) = sensory_intake.as_ref() {
+                if let Ok(mut guard) = intake.lock() {
+                    while let Ok(Some(_)) = guard.poll_sensory_data() {}
+                }
+            }
+            // Parameter edits keep landing while paused.
+            let pending_updates = parameter_queue.drain_all();
+            if !pending_updates.is_empty() {
+                let mut npu_lock = npu.lock().unwrap();
+                apply_parameter_updates(&mut npu_lock, pending_updates);
+            }
+            thread::sleep(PAUSED_POLL);
+            continue;
+        }
+        if was_paused {
+            was_paused = false;
+            // Do not count the pause gap and do not catch up: reset timing trackers and
+            // wait one interval before the first burst after resume.
+            last_burst_time = None;
+            burst_times.clear();
+            *LAST_ITERATION_END.lock().unwrap() = None;
+            if let Ok(mut last_release) = LAST_LOCK_RELEASE.lock() {
+                *last_release = None;
+            }
+            let hz = *frequency_hz.lock().unwrap();
+            let interval = if hz > 0.0 {
+                Duration::from_secs_f64(1.0 / hz)
+            } else {
+                Duration::from_millis(100)
+            };
+            let resume_at = Instant::now() + interval;
+            while Instant::now() < resume_at
+                && running.load(Ordering::Acquire)
+                && !paused.load(Ordering::Acquire)
+            {
+                thread::sleep(PAUSED_POLL.min(resume_at.saturating_duration_since(Instant::now())));
+            }
+            continue;
+        }
         let iteration_start = Instant::now();
         let burst_start = Instant::now();
         // Keep simulation timestep snapshot aligned with runtime frequency.
@@ -1630,7 +1978,6 @@ fn burst_loop(
         // Per-burst heartbeat removed (was every 100 bursts)
 
         // Track time since last burst (to detect blocking)
-        static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         {
             let mut last_end = LAST_ITERATION_END.lock().unwrap();
             if let Some(last) = *last_end {
@@ -1835,7 +2182,6 @@ fn burst_loop(
         }
 
         // Track time since last lock release to detect if something held it
-        static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         #[allow(dead_code)]
         static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         static POST_BURST_MISSING_LOGGED: std::sync::atomic::AtomicBool =
@@ -1933,283 +2279,7 @@ fn burst_loop(
                 // APPLY QUEUED PARAMETER UPDATES (before burst processing)
                 // This ensures updates take effect immediately in this burst
                 let pending_updates = parameter_queue.drain_all();
-                if !pending_updates.is_empty() {
-                    let update_start = Instant::now();
-                    let mut applied_count = 0;
-
-                    info!(
-                        "[PARAM-QUEUE] Processing {} queued updates",
-                        pending_updates.len()
-                    );
-
-                    for update in pending_updates {
-                        let count = match update.parameter_name.as_str() {
-                            "neuron_fire_threshold" | "firing_threshold" => {
-                                if let Some(threshold) = update.value.as_f64() {
-                                    npu_lock.update_cortical_area_threshold(
-                                        update.cortical_idx,
-                                        threshold as f32,
-                                    )
-                                } else {
-                                    0
-                                }
-                            }
-                            // One-shot rewrite of stored per-neuron thresholds. Increment is
-                            // not consulted during fire; only thresholds[] is used after this.
-                            "neuron_fire_threshold_increment" | "firing_threshold_increment" => {
-                                match increment_from_parameter_update(&update) {
-                                    Some((base_threshold, [inc_x, inc_y, inc_z])) => {
-                                        let count = npu_lock
-                                            .update_cortical_area_threshold_with_gradient(
-                                                update.cortical_idx,
-                                                base_threshold,
-                                                inc_x,
-                                                inc_y,
-                                                inc_z,
-                                            );
-                                        if count == 0 {
-                                            warn!(
-                                                "[PARAM-QUEUE] firing_threshold_increment applied to 0 neurons (cortical_idx={}, cortical_id={}, value={})",
-                                                update.cortical_idx,
-                                                update.cortical_id,
-                                                update.value
-                                            );
-                                        }
-                                        count
-                                    }
-                                    None => {
-                                        warn!(
-                                            "[PARAM-QUEUE] firing_threshold_increment skipped: need numeric [x,y,z]/{{x,y,z}}/scalar plus base_threshold (cortical_id={}, value={:?}, base_threshold={:?})",
-                                            update.cortical_id,
-                                            update.value,
-                                            update.base_threshold
-                                        );
-                                        0
-                                    }
-                                }
-                            }
-                            "firing_threshold_increment_x"
-                            | "firing_threshold_increment_y"
-                            | "firing_threshold_increment_z" => {
-                                warn!(
-                                    "[PARAM-QUEUE] per-axis increment {} must be merged into [x,y,z] before queue; skipping (cortical_id={})",
-                                    update.parameter_name, update.cortical_id
-                                );
-                                0
-                            }
-                            // IMPORTANT: firing_threshold_limit is NOT the firing threshold.
-                            // Previously this was (incorrectly) routed into update_cortical_area_threshold(),
-                            // which could set threshold=0 and make downstream neurons fire trivially.
-                            "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
-                                if let Some(limit) = update.value.as_f64() {
-                                    npu_lock.update_cortical_area_threshold_limit(
-                                        update.cortical_idx,
-                                        limit as f32,
-                                    )
-                                } else {
-                                    0
-                                }
-                            }
-                            "neuron_refractory_period" | "refractory_period" | "refrac" => {
-                                if let Some(period) = update.value.as_u64() {
-                                    npu_lock.update_cortical_area_refractory_period(
-                                        update.cortical_idx,
-                                        period as u16,
-                                    )
-                                } else {
-                                    0
-                                }
-                            }
-                            "leak" | "leak_coefficient" | "neuron_leak_coefficient" => {
-                                if let Some(leak) = update.value.as_f64() {
-                                    if (0.0..=1.0).contains(&leak) {
-                                        npu_lock.update_cortical_area_leak(
-                                            update.cortical_idx,
-                                            leak as f32,
-                                        )
-                                    } else {
-                                        0
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            "consecutive_fire_cnt_max"
-                            | "neuron_consecutive_fire_count"
-                            | "consecutive_fire_count" => {
-                                if let Some(limit) = update.value.as_u64() {
-                                    npu_lock.update_cortical_area_consecutive_fire_limit(
-                                        update.cortical_idx,
-                                        limit as u16,
-                                    )
-                                } else {
-                                    0
-                                }
-                            }
-                            "snooze_length" | "neuron_snooze_period" | "snooze_period" => {
-                                if let Some(snooze) = update.value.as_u64() {
-                                    npu_lock.update_cortical_area_snooze_period(
-                                        update.cortical_idx,
-                                        snooze as u16,
-                                    )
-                                } else {
-                                    0
-                                }
-                            }
-                            "neuron_excitability" => {
-                                if let Some(excitability) = update.value.as_f64() {
-                                    if (0.0..=1.0).contains(&excitability) {
-                                        npu_lock.update_cortical_area_excitability(
-                                            update.cortical_idx,
-                                            excitability as f32,
-                                        )
-                                    } else {
-                                        0
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
-                                if let Some(accumulation) = update.value.as_bool() {
-                                    let n = npu_lock.update_cortical_area_mp_charge_accumulation(
-                                        update.cortical_idx,
-                                        accumulation,
-                                    );
-                                    if n == 0 {
-                                        tracing::warn!(
-                                            target: "feagi-burst-engine",
-                                            "mp_charge_accumulation update applied to 0 neurons (cortical_idx={}, cortical_id={}); check area index",
-                                            update.cortical_idx,
-                                            update.cortical_id
-                                        );
-                                    }
-                                    n
-                                } else {
-                                    tracing::warn!(
-                                        target: "feagi-burst-engine",
-                                        "mp_charge_accumulation ignored: JSON value must be boolean, got {:?} (cortical_id={})",
-                                        update.value,
-                                        update.cortical_id
-                                    );
-                                    0
-                                }
-                            }
-                            "postsynaptic_current" | "neuron_post_synaptic_potential" => {
-                                if let Some(psp) = update.value.as_f64() {
-                                    let psp_f32 = psp as f32;
-                                    let synapses_updated = npu_lock
-                                        .update_cortical_area_postsynaptic_current(
-                                            update.cortical_idx,
-                                            psp_f32,
-                                        );
-                                    let mappings_updated = npu_lock
-                                        .update_stdp_mapping_psp_for_source(
-                                            update.cortical_idx,
-                                            psp_f32,
-                                        );
-                                    if let Ok(cortical_id) = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
-                                        &update.cortical_id,
-                                    ) {
-                                        npu_lock.set_postsynaptic_current_flag(cortical_id, psp_f32);
-                                    }
-                                    info!(
-                                        target: "feagi-burst-engine",
-                                        "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
-                                        update.cortical_id,
-                                        psp_f32,
-                                        synapses_updated,
-                                        mappings_updated
-                                    );
-                                    synapses_updated
-                                } else {
-                                    0
-                                }
-                            }
-                            "mp_driven_psp" | "neuron_mp_driven_psp" => {
-                                if let Some(enabled) = update.value.as_bool() {
-                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
-                                        &update.cortical_id,
-                                    ) {
-                                        Ok(cortical_id) => {
-                                            npu_lock.set_mp_driven_psp_flag(cortical_id, enabled);
-                                            1
-                                        }
-                                        Err(_) => 0,
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
-                                if let Some(enabled) = update.value.as_bool() {
-                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
-                                        &update.cortical_id,
-                                    ) {
-                                        Ok(cortical_id) => {
-                                            npu_lock.set_psp_uniform_distribution_flag(
-                                                cortical_id,
-                                                enabled,
-                                            );
-                                            1
-                                        }
-                                        Err(_) => 0,
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            "degeneration" | "neuron_degeneracy_coefficient" => {
-                                if let Some(degeneration) = update.value.as_f64() {
-                                    if degeneration < 0.0 {
-                                        0
-                                    } else {
-                                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
-                                            &update.cortical_id,
-                                        ) {
-                                            Ok(cortical_id) => {
-                                                npu_lock.set_degeneration_flag(
-                                                    cortical_id,
-                                                    degeneration as f32,
-                                                );
-                                                1
-                                            }
-                                            Err(_) => 0,
-                                        }
-                                    }
-                                } else {
-                                    0
-                                }
-                            }
-                            _ => 0,
-                        };
-
-                        if count > 0 {
-                            applied_count += 1;
-                            if update.parameter_name == "postsynaptic_current"
-                                || update.parameter_name == "neuron_post_synaptic_potential"
-                            {
-                                debug!(
-                                    "[PARAM-QUEUE] Applied {}={} to {} synapses in area {}",
-                                    update.parameter_name, update.value, count, update.cortical_id
-                                );
-                            } else {
-                                debug!(
-                                    "[PARAM-QUEUE] Applied {}={} to {} neurons in area {}",
-                                    update.parameter_name, update.value, count, update.cortical_id
-                                );
-                            }
-                        }
-                    }
-
-                    if applied_count > 0 {
-                        let update_duration = update_start.elapsed();
-                        info!(
-                            "[PARAM-QUEUE] ✓ Applied {} parameter updates in {:?}",
-                            applied_count, update_duration
-                        );
-                    }
-                }
+                apply_parameter_updates(&mut npu_lock, pending_updates);
 
                 // Scheduled stimuli due on this burst index (the burst about to run is
                 // count + 1). Same force-fire path as manual stimulation, so every area of
@@ -3616,6 +3686,77 @@ mod tests {
 
         runner.stop();
         assert!(!runner.is_running());
+    }
+
+    struct PauseNoViz;
+    impl VisualizationPublisher for PauseNoViz {
+        fn publish_raw_fire_queue_for_agent(
+            &self,
+            _agent_id: &str,
+            _fire_data: RawFireQueueSnapshot,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+    struct PauseNoMotor;
+    impl MotorPublisher for PauseNoMotor {
+        fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn pause_test_runner(hz: f64) -> BurstLoopRunner {
+        let rust_npu = <crate::RustNPU<
+            feagi_npu_runtime::StdRuntime,
+            f32,
+            crate::backend::CPUBackend,
+        >>::new_cpu_only(1000, 10000, 20);
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
+        BurstLoopRunner::new::<PauseNoViz, PauseNoMotor>(npu, None, None, hz)
+    }
+
+    #[test]
+    fn test_pause_halts_bursts_and_resume_continues() {
+        let mut runner = pause_test_runner(200.0);
+        assert!(runner.pause().is_err(), "pause requires a running loop");
+        runner.start().unwrap();
+        thread::sleep(Duration::from_millis(150));
+        assert!(runner.get_burst_count() >= 1);
+
+        runner.pause().unwrap();
+        assert!(runner.is_paused());
+        // Let an in-flight burst finish, then the counter must stay frozen.
+        thread::sleep(Duration::from_millis(60));
+        let frozen = runner.get_burst_count();
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(runner.get_burst_count(), frozen, "no bursts while paused");
+
+        runner.resume();
+        assert!(!runner.is_paused());
+        thread::sleep(Duration::from_millis(300));
+        assert!(
+            runner.get_burst_count() > frozen,
+            "bursts continue after resume"
+        );
+        runner.stop();
+    }
+
+    #[test]
+    fn test_stop_returns_promptly_while_paused() {
+        let mut runner = pause_test_runner(10.0);
+        runner.start().unwrap();
+        thread::sleep(Duration::from_millis(50));
+        runner.pause().unwrap();
+        thread::sleep(Duration::from_millis(100));
+        let t = Instant::now();
+        runner.stop_strict().unwrap();
+        assert!(
+            t.elapsed() < Duration::from_millis(500),
+            "{:?}",
+            t.elapsed()
+        );
+        assert!(!runner.is_running());
+        assert!(!runner.is_paused());
     }
 
     #[test]

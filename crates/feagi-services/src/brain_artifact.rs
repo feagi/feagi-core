@@ -17,8 +17,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::connectome::{
-    connectome_container_version, load_connectome_from_bytes, save_connectome_to_bytes,
-    ConnectomeError, Result,
+    connectome_container_version, connectome_envelope_manifest, load_connectome_from_bytes,
+    save_connectome_to_bytes, ConnectomeError, Result, CURRENT_CONTAINER_VERSION,
 };
 
 const BRAIN_ARTIFACT_MANIFEST_TAG: &str = "brain_artifact_manifest";
@@ -26,7 +26,158 @@ const BRAIN_ARTIFACT_MANIFEST_TAG: &str = "brain_artifact_manifest";
 /// Contract v1 manifests carry none and still import.
 const CURRENT_CONTRACT_VERSION: u32 = 2;
 const CURRENT_CONNECTOME_SCHEMA_VERSION: u32 = CONNECTOME_SNAPSHOT_SCHEMA_VERSION;
-const CURRENT_CONTAINER_VERSION: u32 = 3;
+
+/// The independently versioned parts of a brain artifact.
+///
+/// Used by `ConnectomeError::UnsupportedArtifactVersion` to name which part of an artifact is
+/// newer than this build supports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactVersionComponent {
+    /// Manifest contract version.
+    Contract,
+    /// Binary container format version.
+    Container,
+    /// Connectome snapshot schema version.
+    ConnectomeSchema,
+    /// Embedded genome schema version.
+    GenomeSchema,
+}
+
+impl ArtifactVersionComponent {
+    /// Stable snake_case name, identical to the serialized form.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Contract => "contract",
+            Self::Container => "container",
+            Self::ConnectomeSchema => "connectome_schema",
+            Self::GenomeSchema => "genome_schema",
+        }
+    }
+}
+
+impl std::fmt::Display for ArtifactVersionComponent {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// Highest version of each artifact component that this build reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SupportedArtifactVersions {
+    pub contract: u32,
+    pub container: u32,
+    pub connectome_schema: u32,
+    pub genome_schema: u32,
+}
+
+/// Versions this build supports, built from the same constants validation compares against.
+pub fn supported_brain_artifact_versions() -> SupportedArtifactVersions {
+    SupportedArtifactVersions {
+        contract: CURRENT_CONTRACT_VERSION,
+        container: CURRENT_CONTAINER_VERSION,
+        connectome_schema: CURRENT_CONNECTOME_SCHEMA_VERSION,
+        genome_schema: feagi_evolutionary::genome::CURRENT_SCHEMA_VERSION.as_u32(),
+    }
+}
+
+/// Build the structured error for an artifact component newer than this build supports.
+fn unsupported_version(
+    component: ArtifactVersionComponent,
+    artifact_version: u32,
+    supported_version: u32,
+) -> ConnectomeError {
+    ConnectomeError::UnsupportedArtifactVersion {
+        component,
+        artifact_version,
+        supported_version,
+    }
+}
+
+/// Version fields of an artifact manifest, read without the rest of the manifest.
+///
+/// Unknown fields are ignored (no `deny_unknown_fields`) so a manifest written by a newer build,
+/// which may carry more fields, still yields its versions.
+#[derive(Debug, Deserialize)]
+struct ManifestVersionHeader {
+    contract_version: u32,
+    connectome_schema_version: u32,
+    #[serde(default)]
+    genome_schema_version: Option<u32>,
+}
+
+/// Parse only the version fields of a manifest JSON string.
+fn read_manifest_version_header(manifest_json: &str) -> Result<ManifestVersionHeader> {
+    serde_json::from_str(manifest_json).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!("embedded manifest is invalid: {error}"))
+    })
+}
+
+/// Reject an artifact whose container or envelope manifest declares a newer version than this
+/// build supports, before the body is decoded (a newer body may not decode at all).
+///
+/// Components are checked in the order container, contract, connectome schema, genome schema.
+/// Containers without an envelope manifest (v1, v2) are checked after decode instead.
+fn reject_newer_header_versions(source_bytes: &[u8], container_version: u32) -> Result<()> {
+    if container_version > CURRENT_CONTAINER_VERSION {
+        return Err(unsupported_version(
+            ArtifactVersionComponent::Container,
+            container_version,
+            CURRENT_CONTAINER_VERSION,
+        ));
+    }
+    let Some(manifest_json) = connectome_envelope_manifest(source_bytes)? else {
+        return Ok(());
+    };
+    let header = read_manifest_version_header(manifest_json)?;
+    let supported = supported_brain_artifact_versions();
+    if header.contract_version > supported.contract {
+        return Err(unsupported_version(
+            ArtifactVersionComponent::Contract,
+            header.contract_version,
+            supported.contract,
+        ));
+    }
+    if header.connectome_schema_version > supported.connectome_schema {
+        return Err(unsupported_version(
+            ArtifactVersionComponent::ConnectomeSchema,
+            header.connectome_schema_version,
+            supported.connectome_schema,
+        ));
+    }
+    if let Some(genome_version) = header.genome_schema_version {
+        if genome_version > supported.genome_schema {
+            return Err(unsupported_version(
+                ArtifactVersionComponent::GenomeSchema,
+                genome_version,
+                supported.genome_schema,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Reject an embedded genome newer than this build's genome schema, before migration.
+///
+/// A genome whose version cannot be detected is left to the migration step, which reports
+/// it as invalid.
+fn reject_newer_embedded_genome(genome_json: &str) -> Result<()> {
+    let Ok(genome) = serde_json::from_str::<Value>(genome_json) else {
+        return Ok(());
+    };
+    let Ok(detected) = feagi_evolutionary::genome::detect_schema_version(&genome) else {
+        return Ok(());
+    };
+    let supported = feagi_evolutionary::genome::CURRENT_SCHEMA_VERSION.as_u32();
+    if detected.as_u32() > supported {
+        return Err(unsupported_version(
+            ArtifactVersionComponent::GenomeSchema,
+            detected.as_u32(),
+            supported,
+        ));
+    }
+    Ok(())
+}
 
 /// Compatibility metadata embedded inside the connectome's metadata tags.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,17 +303,20 @@ pub fn validate_and_migrate_brain_artifact(
     source_bytes: &[u8],
 ) -> Result<BrainArtifactMigrationResult> {
     let source_container_version = connectome_container_version(source_bytes)?;
+    reject_newer_header_versions(source_bytes, source_container_version)?;
     let mut snapshot = load_connectome_from_bytes(source_bytes)?;
     snapshot.validate().map_err(|error| {
         ConnectomeError::BrainArtifact(format!("connectome snapshot validation failed: {error}"))
     })?;
     let source_connectome_schema_version = snapshot.version;
 
+    // Reached for containers without an envelope manifest (v1, v2); v3 is rejected earlier.
     if source_connectome_schema_version > CURRENT_CONNECTOME_SCHEMA_VERSION {
-        return Err(ConnectomeError::BrainArtifact(format!(
-            "connectome schema v{} is newer than supported v{}",
-            source_connectome_schema_version, CURRENT_CONNECTOME_SCHEMA_VERSION
-        )));
+        return Err(unsupported_version(
+            ArtifactVersionComponent::ConnectomeSchema,
+            source_connectome_schema_version,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+        ));
     }
     if source_connectome_schema_version < CURRENT_CONNECTOME_SCHEMA_VERSION {
         return Err(ConnectomeError::BrainArtifact(format!(
@@ -174,10 +328,11 @@ pub fn validate_and_migrate_brain_artifact(
     let previous_manifest = read_manifest(&snapshot)?;
     if let Some(manifest) = &previous_manifest {
         if manifest.contract_version > CURRENT_CONTRACT_VERSION {
-            return Err(ConnectomeError::BrainArtifact(format!(
-                "artifact contract v{} is newer than supported v{}",
-                manifest.contract_version, CURRENT_CONTRACT_VERSION
-            )));
+            return Err(unsupported_version(
+                ArtifactVersionComponent::Contract,
+                manifest.contract_version,
+                CURRENT_CONTRACT_VERSION,
+            ));
         }
         if manifest.container_format_version != source_container_version {
             return Err(ConnectomeError::BrainArtifact(
@@ -210,6 +365,16 @@ pub fn validate_and_migrate_brain_artifact(
                 .and_then(|manifest| manifest.genome_sha256.as_deref())
             {
                 verify_stored_genome_digest(&genome_json, expected_digest)?;
+            }
+
+            // A manifest with a genome version was already checked from the header; without
+            // one the embedded genome is the only source of its version.
+            if previous_manifest
+                .as_ref()
+                .and_then(|manifest| manifest.genome_schema_version)
+                .is_none()
+            {
+                reject_newer_embedded_genome(&genome_json)?;
             }
 
             let (migrated_genome, chain_report) =
@@ -928,6 +1093,363 @@ mod tests {
         let error = validate_and_migrate_brain_artifact(&bytes)
             .expect_err("future schema must be rejected");
 
-        assert!(error.to_string().contains("newer than supported"));
+        assert!(matches!(
+            error,
+            ConnectomeError::UnsupportedArtifactVersion {
+                component: ArtifactVersionComponent::ConnectomeSchema,
+                artifact_version,
+                supported_version,
+            } if artifact_version == CURRENT_CONNECTOME_SCHEMA_VERSION + 1
+                && supported_version == CURRENT_CONNECTOME_SCHEMA_VERSION
+        ));
+    }
+
+    /// Container v3 artifact whose envelope manifest declares the given versions. The snapshot
+    /// body carries the same connectome schema version, so the artifact is self-consistent.
+    fn artifact_with_manifest_versions(
+        genome_json: Option<String>,
+        contract: u32,
+        connectome_schema: u32,
+        genome_schema: Option<u32>,
+        extra_manifest_fields: Value,
+    ) -> Vec<u8> {
+        let mode = if genome_json.is_some() {
+            ConnectomePersistMode::Lite
+        } else {
+            ConnectomePersistMode::Full
+        };
+        let mut source = snapshot(mode, genome_json);
+        source.version = connectome_schema;
+        let mut manifest = json!({
+            "contract_version": contract,
+            "container_format_version": CURRENT_CONTAINER_VERSION,
+            "connectome_schema_version": connectome_schema,
+            "genome_schema_version": genome_schema,
+            "genome_sha256": null,
+            "producer_version": "9.9.9",
+            "migration_steps": [],
+            "blocking_errors": []
+        });
+        manifest
+            .as_object_mut()
+            .expect("manifest is an object")
+            .extend(
+                extra_manifest_fields
+                    .as_object()
+                    .expect("extra fields are an object")
+                    .clone(),
+            );
+        source.metadata.tags.insert(
+            BRAIN_ARTIFACT_MANIFEST_TAG.to_string(),
+            manifest.to_string(),
+        );
+        save_connectome_to_bytes(&source).expect("save artifact with a prebuilt manifest")
+    }
+
+    /// Flip the last body byte so that decoding the body fails its checksum. A version error
+    /// from such bytes proves it was raised from the header, before the body was decoded.
+    fn with_corrupt_body(mut bytes: Vec<u8>) -> Vec<u8> {
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0xFF;
+        bytes
+    }
+
+    fn assert_unsupported(
+        error: ConnectomeError,
+        expected_component: ArtifactVersionComponent,
+        expected_artifact: u32,
+        expected_supported: u32,
+    ) {
+        match error {
+            ConnectomeError::UnsupportedArtifactVersion {
+                component,
+                artifact_version,
+                supported_version,
+            } => {
+                assert_eq!(component, expected_component);
+                assert_eq!(artifact_version, expected_artifact);
+                assert_eq!(supported_version, expected_supported);
+            }
+            other => panic!("expected UnsupportedArtifactVersion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn newer_container_version_is_structured_error() {
+        let mut bytes = save_connectome_to_bytes(&snapshot(ConnectomePersistMode::Full, None))
+            .expect("serialize test snapshot");
+        let newer = CURRENT_CONTAINER_VERSION + 1;
+        bytes[5..9].copy_from_slice(&newer.to_le_bytes());
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("newer container");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::Container,
+            newer,
+            CURRENT_CONTAINER_VERSION,
+        );
+    }
+
+    #[test]
+    fn newer_contract_version_is_rejected_from_header_before_body_decode() {
+        let bytes = with_corrupt_body(artifact_with_manifest_versions(
+            None,
+            CURRENT_CONTRACT_VERSION + 1,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+            None,
+            json!({}),
+        ));
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("newer contract");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::Contract,
+            CURRENT_CONTRACT_VERSION + 1,
+            CURRENT_CONTRACT_VERSION,
+        );
+    }
+
+    #[test]
+    fn newer_connectome_schema_in_v3_is_rejected_from_header_before_body_decode() {
+        let newer = CURRENT_CONNECTOME_SCHEMA_VERSION + 1;
+        let bytes = with_corrupt_body(artifact_with_manifest_versions(
+            None,
+            CURRENT_CONTRACT_VERSION,
+            newer,
+            None,
+            json!({}),
+        ));
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("newer schema");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::ConnectomeSchema,
+            newer,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+        );
+    }
+
+    #[test]
+    fn newer_genome_schema_in_manifest_is_rejected_from_header_before_body_decode() {
+        let supported = supported_brain_artifact_versions().genome_schema;
+        let bytes = with_corrupt_body(artifact_with_manifest_versions(
+            None,
+            CURRENT_CONTRACT_VERSION,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+            Some(supported + 1),
+            json!({}),
+        ));
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("newer genome");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::GenomeSchema,
+            supported + 1,
+            supported,
+        );
+    }
+
+    #[test]
+    fn first_newer_component_in_order_is_reported() {
+        let versions = supported_brain_artifact_versions();
+        let bytes = artifact_with_manifest_versions(
+            None,
+            versions.contract + 1,
+            versions.connectome_schema + 1,
+            Some(versions.genome_schema + 1),
+            json!({}),
+        );
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("all newer");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::Contract,
+            versions.contract + 1,
+            versions.contract,
+        );
+    }
+
+    #[test]
+    fn newer_embedded_genome_without_manifest_genome_version_is_structured_error() {
+        let supported = supported_brain_artifact_versions().genome_schema;
+        let mut genome: Value =
+            serde_json::from_str(&both_membership_keys_genome()).expect("genome json");
+        genome["genome_schema_version"] = json!(supported + 1);
+
+        // Legacy container: no envelope manifest at all.
+        let legacy = legacy_v2_bytes(&snapshot(
+            ConnectomePersistMode::Lite,
+            Some(genome.to_string()),
+        ));
+        let error = validate_and_migrate_brain_artifact(&legacy).expect_err("newer genome");
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::GenomeSchema,
+            supported + 1,
+            supported,
+        );
+
+        // Container v3: manifest present but without a genome version.
+        let v3 = artifact_with_manifest_versions(
+            Some(genome.to_string()),
+            CURRENT_CONTRACT_VERSION,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+            None,
+            json!({}),
+        );
+        let error = validate_and_migrate_brain_artifact(&v3).expect_err("newer genome");
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::GenomeSchema,
+            supported + 1,
+            supported,
+        );
+    }
+
+    #[test]
+    fn corrupt_artifacts_are_not_reported_as_newer_versions() {
+        let current = save_connectome_to_bytes(&snapshot(ConnectomePersistMode::Full, None))
+            .expect("serialize test snapshot");
+
+        let corrupt_body = validate_and_migrate_brain_artifact(&with_corrupt_body(current.clone()))
+            .expect_err("corrupt body");
+        assert!(matches!(corrupt_body, ConnectomeError::ChecksumMismatch));
+
+        let bad_magic =
+            validate_and_migrate_brain_artifact(b"NOTFEAGI-----").expect_err("bad magic");
+        assert!(matches!(bad_magic, ConnectomeError::InvalidMagic(_)));
+
+        let truncated =
+            validate_and_migrate_brain_artifact(&current[..12]).expect_err("truncated header");
+        assert!(matches!(truncated, ConnectomeError::BrainArtifact(_)));
+
+        let unparseable_manifest = {
+            let mut source = snapshot(ConnectomePersistMode::Full, None);
+            source.metadata.tags.insert(
+                BRAIN_ARTIFACT_MANIFEST_TAG.to_string(),
+                "{ not a manifest".to_string(),
+            );
+            save_connectome_to_bytes(&source).expect("save with unparseable manifest")
+        };
+        let error = validate_and_migrate_brain_artifact(&unparseable_manifest)
+            .expect_err("invalid manifest");
+        assert!(matches!(error, ConnectomeError::BrainArtifact(_)));
+        assert!(error.to_string().contains("embedded manifest is invalid"));
+    }
+
+    #[test]
+    fn current_artifact_still_passes() {
+        let bytes = artifact_with_manifest_versions(
+            None,
+            CURRENT_CONTRACT_VERSION,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+            None,
+            json!({}),
+        );
+
+        let result = validate_and_migrate_brain_artifact(&bytes).expect("current artifact");
+
+        assert!(result.report.valid && result.report.compatible);
+    }
+
+    #[test]
+    fn supported_versions_match_constants() {
+        let versions = supported_brain_artifact_versions();
+
+        assert_eq!(versions.contract, CURRENT_CONTRACT_VERSION);
+        assert_eq!(versions.container, CURRENT_CONTAINER_VERSION);
+        assert_eq!(
+            versions.connectome_schema,
+            CURRENT_CONNECTOME_SCHEMA_VERSION
+        );
+        assert_eq!(
+            versions.genome_schema,
+            feagi_evolutionary::genome::CURRENT_SCHEMA_VERSION.as_u32()
+        );
+    }
+
+    #[test]
+    fn version_component_names_are_stable() {
+        let expected = [
+            (ArtifactVersionComponent::Contract, "contract"),
+            (ArtifactVersionComponent::Container, "container"),
+            (
+                ArtifactVersionComponent::ConnectomeSchema,
+                "connectome_schema",
+            ),
+            (ArtifactVersionComponent::GenomeSchema, "genome_schema"),
+        ];
+        for (component, name) in expected {
+            assert_eq!(component.as_str(), name);
+            assert_eq!(component.to_string(), name);
+            assert_eq!(
+                serde_json::to_value(component).expect("serialize component"),
+                json!(name)
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_version_error_message_is_exact() {
+        let error = ConnectomeError::UnsupportedArtifactVersion {
+            component: ArtifactVersionComponent::GenomeSchema,
+            artifact_version: 8,
+            supported_version: 7,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "Brain artifact genome_schema v8 is newer than supported v7"
+        );
+    }
+
+    #[test]
+    fn header_reader_ignores_unknown_manifest_fields() {
+        let header = read_manifest_version_header(
+            &json!({
+                "contract_version": 5,
+                "connectome_schema_version": 6,
+                "genome_schema_version": 7,
+                "added_by_a_newer_build": { "nested": [1, 2, 3] },
+                "another_field": "value"
+            })
+            .to_string(),
+        )
+        .expect("unknown fields are ignored");
+
+        assert_eq!(header.contract_version, 5);
+        assert_eq!(header.connectome_schema_version, 6);
+        assert_eq!(header.genome_schema_version, Some(7));
+
+        let without_genome = read_manifest_version_header(
+            &json!({ "contract_version": 1, "connectome_schema_version": 1 }).to_string(),
+        )
+        .expect("genome version is optional");
+        assert_eq!(without_genome.genome_schema_version, None);
+    }
+
+    #[test]
+    fn newer_manifest_with_extra_fields_still_reports_its_version() {
+        let bytes = artifact_with_manifest_versions(
+            None,
+            CURRENT_CONTRACT_VERSION + 1,
+            CURRENT_CONNECTOME_SCHEMA_VERSION,
+            None,
+            json!({ "field_from_a_newer_contract": { "a": 1 } }),
+        );
+
+        let error = validate_and_migrate_brain_artifact(&bytes).expect_err("newer contract");
+
+        assert_unsupported(
+            error,
+            ArtifactVersionComponent::Contract,
+            CURRENT_CONTRACT_VERSION + 1,
+            CURRENT_CONTRACT_VERSION,
+        );
     }
 }

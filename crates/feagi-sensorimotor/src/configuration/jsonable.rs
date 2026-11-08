@@ -195,6 +195,93 @@ pub struct JSONDeviceGrouping {
     pub(crate) device_properties: JSONDeviceProperties,
     pub(crate) channel_index_override: Option<CorticalChannelIndex>,
     pub(crate) pipeline_stages: Vec<PipelineStageProperties>,
+    /// Physical meaning of the channel's normalized 0..1 value, when the device declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) physical_range: Option<PhysicalRange>,
+}
+
+impl JSONDeviceGrouping {
+    /// Physical range declared for this channel, if any.
+    pub fn physical_range(&self) -> Option<&PhysicalRange> {
+        self.physical_range.as_ref()
+    }
+}
+
+/// Physical meaning of a channel's normalized value: the physical value at normalized 0 and at
+/// normalized 1, and the unit the two values are expressed in.
+///
+/// Accepted unit spellings: SI unit symbols written as is, for example `rad`, `m`, `s`, `N`,
+/// `Pa`. The unit is carried as declared and is only required to be non-empty; this type does
+/// not convert between units.
+///
+/// Every parse goes through [`PhysicalRange::new`]'s rules, so a range read from JSON is always
+/// valid: both values finite, `value_at_0 != value_at_1`, and a non-empty unit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "PhysicalRangeRaw")]
+pub struct PhysicalRange {
+    value_at_0: f64,
+    value_at_1: f64,
+    unit: String,
+}
+
+/// Unvalidated wire form of [`PhysicalRange`]; deserialization validates it via `TryFrom`.
+#[derive(Deserialize)]
+struct PhysicalRangeRaw {
+    value_at_0: f64,
+    value_at_1: f64,
+    unit: String,
+}
+
+impl PhysicalRange {
+    /// Create a validated range.
+    ///
+    /// Fails if either value is not finite, if the two values are equal, or if the unit is
+    /// empty (or only whitespace).
+    pub fn new(value_at_0: f64, value_at_1: f64, unit: String) -> Result<Self, FeagiDataError> {
+        if !value_at_0.is_finite() || !value_at_1.is_finite() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "physical_range values must be finite, got value_at_0={value_at_0} value_at_1={value_at_1}"
+            )));
+        }
+        if value_at_0 == value_at_1 {
+            return Err(FeagiDataError::BadParameters(format!(
+                "physical_range value_at_0 and value_at_1 must differ, both are {value_at_0}"
+            )));
+        }
+        if unit.trim().is_empty() {
+            return Err(FeagiDataError::BadParameters(
+                "physical_range unit must not be empty".to_string(),
+            ));
+        }
+        Ok(Self {
+            value_at_0,
+            value_at_1,
+            unit,
+        })
+    }
+
+    /// Physical value at normalized 0.
+    pub fn value_at_0(&self) -> f64 {
+        self.value_at_0
+    }
+
+    /// Physical value at normalized 1.
+    pub fn value_at_1(&self) -> f64 {
+        self.value_at_1
+    }
+
+    /// Unit of both values, as declared.
+    pub fn unit(&self) -> &str {
+        &self.unit
+    }
+}
+
+impl TryFrom<PhysicalRangeRaw> for PhysicalRange {
+    type Error = String;
+
+    fn try_from(raw: PhysicalRangeRaw) -> Result<Self, Self::Error> {
+        PhysicalRange::new(raw.value_at_0, raw.value_at_1, raw.unit).map_err(|e| e.to_string())
+    }
 }
 
 /// Middleman for Encoders and Decoders
@@ -726,3 +813,101 @@ pub enum JSONDevicePropertyValue {
 }
 
 //endregion
+
+#[cfg(test)]
+mod physical_range_tests {
+    use super::*;
+
+    fn grouping_json(extra: serde_json::Value) -> serde_json::Value {
+        let mut base = serde_json::json!({
+            "friendly_name": null,
+            "device_properties": {},
+            "channel_index_override": null,
+            "pipeline_stages": []
+        });
+        if let (Some(map), Some(extra)) = (base.as_object_mut(), extra.as_object()) {
+            map.extend(extra.clone());
+        }
+        base
+    }
+
+    #[test]
+    fn new_accepts_valid_range_and_exposes_getters() {
+        let range = PhysicalRange::new(-1.5, 2.0, "rad".to_string()).unwrap();
+        assert_eq!(range.value_at_0(), -1.5);
+        assert_eq!(range.value_at_1(), 2.0);
+        assert_eq!(range.unit(), "rad");
+        // value_at_0 may be above value_at_1 (an inverted axis)
+        assert!(PhysicalRange::new(2.0, -1.5, "m".to_string()).is_ok());
+    }
+
+    #[test]
+    fn new_rejects_bad_ranges() {
+        for (a, b) in [
+            (f64::NAN, 1.0),
+            (0.0, f64::NAN),
+            (f64::INFINITY, 1.0),
+            (0.0, f64::NEG_INFINITY),
+        ] {
+            assert!(
+                PhysicalRange::new(a, b, "rad".to_string()).is_err(),
+                "{a} {b}"
+            );
+        }
+        assert!(PhysicalRange::new(1.0, 1.0, "rad".to_string()).is_err());
+        assert!(PhysicalRange::new(0.0, 1.0, String::new()).is_err());
+        assert!(PhysicalRange::new(0.0, 1.0, "   ".to_string()).is_err());
+    }
+
+    #[test]
+    fn deserialize_validates_every_parse() {
+        let ok: PhysicalRange = serde_json::from_value(
+            serde_json::json!({"value_at_0": 0.0, "value_at_1": 3.0, "unit": "m"}),
+        )
+        .unwrap();
+        assert_eq!(ok.unit(), "m");
+        for bad in [
+            serde_json::json!({"value_at_0": 1.0, "value_at_1": 1.0, "unit": "m"}),
+            serde_json::json!({"value_at_0": 0.0, "value_at_1": 1.0, "unit": ""}),
+            serde_json::json!({"value_at_0": 0.0, "value_at_1": 1.0}),
+            serde_json::json!({"value_at_0": "a", "value_at_1": 1.0, "unit": "m"}),
+        ] {
+            assert!(
+                serde_json::from_value::<PhysicalRange>(bad.clone()).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn grouping_without_range_parses_as_none_and_omits_the_key() {
+        let grouping: JSONDeviceGrouping =
+            serde_json::from_value(grouping_json(serde_json::json!({}))).unwrap();
+        assert!(grouping.physical_range().is_none());
+        let out = serde_json::to_value(&grouping).unwrap();
+        assert!(!out.as_object().unwrap().contains_key("physical_range"));
+    }
+
+    #[test]
+    fn grouping_with_valid_range_round_trips() {
+        let input = grouping_json(serde_json::json!({
+            "physical_range": {"value_at_0": -2.0, "value_at_1": 2.0, "unit": "rad"}
+        }));
+        let grouping: JSONDeviceGrouping = serde_json::from_value(input.clone()).unwrap();
+        let range = grouping.physical_range().unwrap();
+        assert_eq!(
+            (range.value_at_0(), range.value_at_1(), range.unit()),
+            (-2.0, 2.0, "rad")
+        );
+        assert_eq!(serde_json::to_value(&grouping).unwrap(), input);
+    }
+
+    #[test]
+    fn grouping_with_invalid_range_is_rejected() {
+        let bad = grouping_json(serde_json::json!({
+            "physical_range": {"value_at_0": 0.5, "value_at_1": 0.5, "unit": "rad"}
+        }));
+        let err = serde_json::from_value::<JSONDeviceGrouping>(bad).unwrap_err();
+        assert!(err.to_string().contains("must differ"), "{err}");
+    }
+}

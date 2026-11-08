@@ -1,4 +1,4 @@
-use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties};
+use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties, PhysicalRange};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::{
     stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
@@ -56,6 +56,11 @@ pub(crate) trait PipelineStageRunner {
 
     fn set_json_device_properties(&mut self, json_device_properties: JSONDeviceProperties);
 
+    /// Physical range declared for this channel (stored next to the device properties).
+    fn get_physical_range(&self) -> Option<&PhysicalRange>;
+
+    fn set_physical_range(&mut self, physical_range: Option<PhysicalRange>);
+
     //region Defaults Implementations
 
     fn export_as_json_device_grouping(&self) -> JSONDeviceGrouping {
@@ -64,6 +69,7 @@ pub(crate) trait PipelineStageRunner {
             device_properties: self.get_json_device_properties().clone(),
             channel_index_override: self.get_channel_index_override(),
             pipeline_stages: self.get_all_stage_properties(),
+            physical_range: self.get_physical_range().cloned(),
         }
     }
 

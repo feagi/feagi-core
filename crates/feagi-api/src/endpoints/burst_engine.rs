@@ -760,7 +760,7 @@ pub async fn post_control(
     let action = request.get("action").map(|s| s.as_str());
 
     match action {
-        Some("start") | Some("resume") => {
+        Some("start") => {
             runtime_service
                 .start()
                 .await
@@ -768,6 +768,16 @@ pub async fn post_control(
             Ok(Json(HashMap::from([(
                 "message".to_string(),
                 "Burst engine started".to_string(),
+            )])))
+        }
+        Some("resume") => {
+            runtime_service
+                .resume()
+                .await
+                .map_err(|e| ApiError::internal(format!("Failed to resume: {}", e)))?;
+            Ok(Json(HashMap::from([(
+                "message".to_string(),
+                "Burst engine resumed".to_string(),
             )])))
         }
         Some("pause") => {

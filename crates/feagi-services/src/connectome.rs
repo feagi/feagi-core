@@ -31,6 +31,8 @@ use std::io::{Read, Write};
 use std::path::Path;
 use thiserror::Error;
 
+use crate::brain_artifact::ArtifactVersionComponent;
+
 /// Metadata tag holding associative class-channel weights outside schema v1 bincode.
 const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
 
@@ -78,6 +80,17 @@ pub enum ConnectomeError {
 
     #[error("Brain artifact compatibility error: {0}")]
     BrainArtifact(String),
+
+    /// The artifact was written by a newer build than this one. Distinct from a corrupt or
+    /// invalid artifact: upgrading the reader is the remedy, not repairing the file.
+    #[error(
+        "Brain artifact {component} v{artifact_version} is newer than supported v{supported_version}"
+    )]
+    UnsupportedArtifactVersion {
+        component: ArtifactVersionComponent,
+        artifact_version: u32,
+        supported_version: u32,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, ConnectomeError>;
@@ -88,7 +101,40 @@ const MAGIC: &[u8; 5] = b"FEAGI";
 /// Current format version (increment when format changes)
 /// Version 1: Original format without compression
 /// Version 2: Added flags byte for compression support
-const FORMAT_VERSION: u32 = 3;
+/// Version 3: Added the artifact manifest to the envelope ahead of the body
+///
+/// Single source of truth for the container version, also used by brain artifact validation.
+pub(crate) const CURRENT_CONTAINER_VERSION: u32 = 3;
+
+/// Return the manifest JSON stored in a container-v3 envelope, or `None` for containers that
+/// predate envelope manifests (v1, v2). Reads only the header; the body is never touched.
+pub(crate) fn connectome_envelope_manifest(bytes: &[u8]) -> Result<Option<&str>> {
+    let version = connectome_container_version(bytes)?;
+    if version < 3 {
+        return Ok(None);
+    }
+    // Header layout before the manifest: magic, version, flags (1), uncompressed size (8), length (4).
+    let length_offset = MAGIC.len() + std::mem::size_of::<u32>() + 1 + std::mem::size_of::<u64>();
+    let manifest_offset = length_offset + std::mem::size_of::<u32>();
+    let truncated = || ConnectomeError::BrainArtifact("connectome header is truncated".to_string());
+    let length_bytes: [u8; 4] = bytes
+        .get(length_offset..manifest_offset)
+        .ok_or_else(truncated)?
+        .try_into()
+        .map_err(|_| truncated())?;
+    let manifest_len = u32::from_le_bytes(length_bytes) as usize;
+    let manifest_end = manifest_offset
+        .checked_add(manifest_len)
+        .ok_or_else(truncated)?;
+    let manifest_bytes = bytes
+        .get(manifest_offset..manifest_end)
+        .ok_or_else(truncated)?;
+    std::str::from_utf8(manifest_bytes)
+        .map(Some)
+        .map_err(|error| {
+            ConnectomeError::BrainArtifact(format!("artifact manifest is not UTF-8: {error}"))
+        })
+}
 
 /// Return the binary container format version without deserializing its body.
 pub fn connectome_container_version(bytes: &[u8]) -> Result<u32> {
@@ -152,7 +198,7 @@ fn write_connectome_to_writer<W: Write>(
 
     // Write header
     writer.write_all(MAGIC)?;
-    writer.write_all(&FORMAT_VERSION.to_le_bytes())?;
+    writer.write_all(&CURRENT_CONTAINER_VERSION.to_le_bytes())?;
 
     // Serialize data
     let data = bincode::serialize(&export_snapshot)
@@ -226,7 +272,7 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     if version != 1 && version != 2 && version != 3 {
         return Err(ConnectomeError::VersionMismatch {
             file_version: version,
-            expected_version: FORMAT_VERSION,
+            expected_version: CURRENT_CONTAINER_VERSION,
         });
     }
 

@@ -6,4 +6,5 @@ pub(crate) mod decoders;
 pub(crate) mod encoders;
 #[cfg(test)]
 mod percentage_encoding_golden;
+pub(crate) mod percentage_variant;
 pub(crate) use coder_traits::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};

@@ -136,7 +136,7 @@ impl AngularPointerNeuronVoxelXYZPDecoder {
         }
     }
 
-    fn decode_unsigned_axis_percentage(&self, z_indexes: &Vec<u32>) -> Option<f32> {
+    fn decode_unsigned_axis_percentage(&self, z_indexes: &[u32]) -> Option<f32> {
         if z_indexes.is_empty() {
             return None;
         }
@@ -160,7 +160,7 @@ impl AngularPointerNeuronVoxelXYZPDecoder {
         Some(percentage.get_as_0_1())
     }
 
-    fn decode_signed_axis(&self, z_indexes: &Vec<u32>) -> Option<f32> {
+    fn decode_signed_axis(&self, z_indexes: &[u32]) -> Option<f32> {
         if z_indexes.is_empty() {
             return None;
         }

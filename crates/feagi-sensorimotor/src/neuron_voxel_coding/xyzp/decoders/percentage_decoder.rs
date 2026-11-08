@@ -7,13 +7,7 @@ use crate::data_types::{
     Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
-    decode_signed_percentage_from_fractional_exponential_neurons,
-    decode_signed_percentage_from_linear_neurons,
-    decode_signed_percentage_from_linear_neurons_along_z,
-    decode_unsigned_percentage_from_fractional_exponential_neurons,
-    decode_unsigned_percentage_from_linear_neurons,
-};
+use crate::neuron_voxel_coding::xyzp::percentage_variant::PercentageCodingVariant;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -58,9 +52,11 @@ impl PercentageNeuronVoxelXYZPDecoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         let number_pairs_per_channel = number_percentages.as_u32();
-        let along_z_signed_d1_linear = is_signed
-            && number_percentages == PercentageChannelDimensionality::D1
-            && interpolation == PercentageNeuronPositioning::Linear;
+        let along_z_signed_d1_linear = PercentageCodingVariant::from_parts(
+            is_signed,
+            number_percentages == PercentageChannelDimensionality::D1,
+            interpolation,
+        ) == PercentageCodingVariant::SignedLinearAlongZ;
         let per_channel_width = if is_signed {
             if along_z_signed_d1_linear {
                 WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel
@@ -98,9 +94,11 @@ impl PercentageNeuronVoxelXYZPDecoder {
     /// Signed 1D linear: one cortical X index per channel; Z carries -1..+1.
     #[inline]
     fn signed_d1_linear_uses_along_z_layout(&self) -> bool {
-        self.is_signed
-            && self.number_percentages == PercentageChannelDimensionality::D1
-            && self.interpolation == PercentageNeuronPositioning::Linear
+        PercentageCodingVariant::from_parts(
+            self.is_signed,
+            self.number_percentages == PercentageChannelDimensionality::D1,
+            self.interpolation,
+        ) == PercentageCodingVariant::SignedLinearAlongZ
     }
 
     /// Clear all scratch spaces
@@ -115,45 +113,28 @@ impl PercentageNeuronVoxelXYZPDecoder {
     }
 
     /// Decode a single unsigned percentage using the configured interpolation
-    fn decode_unsigned(&self, z_vector: &Vec<u32>, target: &mut Percentage) {
-        match self.interpolation {
-            PercentageNeuronPositioning::Linear => {
-                decode_unsigned_percentage_from_linear_neurons(
-                    z_vector,
-                    self.channel_dimensions.depth,
-                    target,
-                );
-            }
-            PercentageNeuronPositioning::Fractional => {
-                decode_unsigned_percentage_from_fractional_exponential_neurons(z_vector, target);
-            }
-        }
+    fn decode_unsigned(&self, z_vector: &[u32], target: &mut Percentage) {
+        PercentageCodingVariant::from_parts(false, true, self.interpolation).decode_unsigned_into(
+            z_vector,
+            self.channel_dimensions.depth,
+            target,
+        );
     }
 
-    /// Decode a single signed percentage using the configured interpolation
+    /// Decode a single signed percentage on two lobes (linear two-lobe or fractional); the
+    /// single-column along-z layout is handled by the caller through the shared selector.
     fn decode_signed(
         &self,
-        z_vector_positive: &Vec<u32>,
-        z_vector_negative: &Vec<u32>,
+        z_vector_positive: &[u32],
+        z_vector_negative: &[u32],
         target: &mut SignedPercentage,
     ) {
-        match self.interpolation {
-            PercentageNeuronPositioning::Linear => {
-                decode_signed_percentage_from_linear_neurons(
-                    z_vector_positive,
-                    z_vector_negative,
-                    self.channel_dimensions.depth,
-                    target,
-                );
-            }
-            PercentageNeuronPositioning::Fractional => {
-                decode_signed_percentage_from_fractional_exponential_neurons(
-                    z_vector_positive,
-                    z_vector_negative,
-                    target,
-                );
-            }
-        }
+        PercentageCodingVariant::from_parts(true, false, self.interpolation).decode_signed_into(
+            z_vector_positive,
+            z_vector_negative,
+            self.channel_dimensions.depth,
+            target,
+        );
     }
 
     fn process_unsigned_channel(
@@ -283,8 +264,9 @@ impl PercentageNeuronVoxelXYZPDecoder {
                 if self.signed_d1_linear_uses_along_z_layout() {
                     let z_col = self.z_depth_scratch_space.get(base_index).unwrap();
                     if !z_col.is_empty() {
-                        decode_signed_percentage_from_linear_neurons_along_z(
+                        PercentageCodingVariant::SignedLinearAlongZ.decode_signed_into(
                             z_col,
+                            &[],
                             self.channel_dimensions.depth,
                             signed_percentage,
                         );

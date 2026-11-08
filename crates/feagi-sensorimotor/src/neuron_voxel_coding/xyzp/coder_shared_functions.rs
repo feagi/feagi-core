@@ -72,7 +72,7 @@ pub(crate) fn decode_signed_percentage_from_linear_neurons_along_z(
 
 #[inline]
 pub(crate) fn decode_unsigned_percentage_from_fractional_exponential_neurons(
-    neuron_indexes_along_z: &Vec<u32>,
+    neuron_indexes_along_z: &[u32],
     replace_val: &mut Percentage,
 ) {
     let mut processing: f32 = 0.0; // WARNING: If there are repeats along z, then we will have issues
@@ -84,8 +84,8 @@ pub(crate) fn decode_unsigned_percentage_from_fractional_exponential_neurons(
 
 #[inline]
 pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(
-    neuron_indexes_along_z_positive: &Vec<u32>,
-    neuron_indexes_along_z_negative: &Vec<u32>,
+    neuron_indexes_along_z_positive: &[u32],
+    neuron_indexes_along_z_negative: &[u32],
     replace_val: &mut SignedPercentage,
 ) {
     let mut processing: f32 = 0.0; // WARNING: If there are repeats along z, then we will have issues
@@ -96,6 +96,57 @@ pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(
         processing -= 0.5f32.powi(*z as i32 + 1);
     }
     replace_val.inplace_update_unchecked(processing);
+}
+
+//endregion
+
+//region Decoder inverses (target value -> z bin)
+
+/// Z bin whose unsigned linear decode is nearest to `target` (0..1).
+///
+/// The decoder reads one active bin as `1 - z / (depth - 1)`, so the inverse is
+/// `round((1 - target) * (depth - 1))`. Ties round to the even bin, computed in `f64`; this is
+/// the same arithmetic as the Python tooling's `value_to_z_bin` (`int(round(frac * (depth - 1)))`),
+/// so a stance mapping saved by that tool does not shift. Depth 1 has one bin, z = 0.
+///
+/// The caller validates that `target` is finite and within `0..=1` and that `depth >= 1`.
+#[inline]
+pub(crate) fn target_to_z_bin_unsigned_linear(target: f64, depth: u32) -> u32 {
+    let max_idx = depth.saturating_sub(1);
+    ((1.0 - target) * max_idx as f64).round_ties_even() as u32
+}
+
+/// Z bin whose along-z signed linear decode is nearest to `target` (-1..1).
+///
+/// The decoder reads one active bin as `1 - 2 * z / (depth - 1)`, so the inverse is
+/// `round((1 - target) / 2 * (depth - 1))`, ties to even, in `f64`. Depth 1 has one bin, z = 0.
+///
+/// The caller validates that `target` is finite and within `-1..=1` and that `depth >= 1`.
+#[inline]
+pub(crate) fn target_to_z_bin_signed_linear_along_z(target: f64, depth: u32) -> u32 {
+    let max_idx = depth.saturating_sub(1);
+    ((1.0 - target) / 2.0 * max_idx as f64).round_ties_even() as u32
+}
+
+/// Z bin whose single-bin unsigned fractional decode (`0.5^(z + 1)`) is nearest to `target`.
+///
+/// A fractional value is normally a sum over several bins; this answers only "which one bin
+/// decodes closest", scanning the bins with the real decoder. Equal distances pick the lower z.
+///
+/// The caller validates that `target` is finite and within `0..=1` and that `depth >= 1`.
+pub(crate) fn target_to_z_bin_unsigned_fractional(target: f64, depth: u32) -> u32 {
+    let mut best_z: u32 = 0;
+    let mut best_distance = f64::INFINITY;
+    for z in 0..depth {
+        let mut decoded = Percentage::new_zero();
+        decode_unsigned_percentage_from_fractional_exponential_neurons(&[z], &mut decoded);
+        let distance = (decoded.get_as_0_1() as f64 - target).abs();
+        if distance < best_distance {
+            best_distance = distance;
+            best_z = z;
+        }
+    }
+    best_z
 }
 
 //endregion

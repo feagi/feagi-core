@@ -4,8 +4,8 @@
 //! # Why this is best-effort, not benchmark-grade
 //!
 //! FEAGI is a free-running asynchronous spiking substrate: its burst engine advances on its own
-//! clock and cannot be deterministically single-stepped or paused from a client (empirically
-//! confirmed against a live instance — REST pause/hold does not halt the burst loop). The runtime
+//! clock and cannot be deterministically single-stepped from a client. REST pause/hold halts the burst loop
+//! (no bursts, no counter advance) but does not provide stepping. The runtime
 //! contract's [`FeagiRuntime::step`] therefore uses a **wall-clock** model (Option A): it waits
 //! `ticks × burst_period` to give the brain a consistent integration window, then
 //! [`FeagiRuntime::collect_motor`] reads the *freshest* motor frame. The exact number of bursts

@@ -101,6 +101,7 @@ impl MotorCorticalUnitCache {
             pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
             pipeline_runner.set_channel_index_override(device_group.channel_index_override);
             pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
+            pipeline_runner.set_physical_range(device_group.physical_range.clone());
         }
 
         Ok(motor_cortical_unit_cache)

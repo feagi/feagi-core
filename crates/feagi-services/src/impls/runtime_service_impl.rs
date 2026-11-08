@@ -42,7 +42,6 @@ struct FireHistorySubscription {
 /// Wraps the BurstLoopRunner and provides async interface for runtime control.
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
-    paused: Arc<RwLock<bool>>,
     fire_history_subscriptions:
         parking_lot::Mutex<std::collections::HashMap<u32, FireHistorySubscription>>,
     /// Only present when `plasticity` feature is enabled (used in `reset_cortical_area_states`).
@@ -55,7 +54,6 @@ impl RuntimeServiceImpl {
     pub fn new(burst_runner: Arc<RwLock<BurstLoopRunner>>) -> Self {
         Self {
             burst_runner,
-            paused: Arc::new(RwLock::new(false)),
             fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
             #[cfg(feature = "plasticity")]
             plasticity_service: None,
@@ -70,7 +68,6 @@ impl RuntimeServiceImpl {
     ) -> Self {
         Self {
             burst_runner,
-            paused: Arc::new(RwLock::new(false)),
             fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
             plasticity_service: Some(plasticity_service as Arc<dyn std::any::Any + Send + Sync>),
         }
@@ -84,7 +81,6 @@ impl RuntimeServiceImpl {
     ) -> Self {
         Self {
             burst_runner,
-            paused: Arc::new(RwLock::new(false)),
             fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
         }
     }
@@ -281,9 +277,6 @@ impl RuntimeService for RuntimeServiceImpl {
             .start()
             .map_err(|e| ServiceError::InvalidState(e.to_string()))?;
 
-        // Clear paused flag
-        *self.paused.write() = false;
-
         Ok(())
     }
 
@@ -294,9 +287,6 @@ impl RuntimeService for RuntimeServiceImpl {
         runner
             .stop_strict()
             .map_err(|e| ServiceError::Backend(format!("Failed to stop burst engine: {}", e)))?;
-
-        // Clear paused flag
-        *self.paused.write() = false;
 
         Ok(())
     }
@@ -311,12 +301,9 @@ impl RuntimeService for RuntimeServiceImpl {
             ));
         }
 
-        // Set paused flag (actual pause implementation depends on burst loop design)
-        *self.paused.write() = true;
-
-        // TODO: Implement actual pause mechanism in BurstLoopRunner
-        // For now, we just track the paused state
-        warn!(target: "feagi-services", "Pause not yet implemented in BurstLoopRunner - using flag only");
+        runner
+            .pause()
+            .map_err(|e| ServiceError::InvalidState(e.to_string()))?;
 
         Ok(())
     }
@@ -324,18 +311,13 @@ impl RuntimeService for RuntimeServiceImpl {
     async fn resume(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Resuming burst engine");
 
-        let paused = *self.paused.read();
-        if !paused {
+        let runner = self.burst_runner.read();
+        if !runner.is_paused() {
             return Err(ServiceError::InvalidState(
                 "Burst engine is not paused".to_string(),
             ));
         }
-
-        // Clear paused flag
-        *self.paused.write() = false;
-
-        // TODO: Implement actual resume mechanism in BurstLoopRunner
-        warn!(target: "feagi-services", "Resume not yet implemented in BurstLoopRunner - using flag only");
+        runner.resume();
 
         Ok(())
     }
@@ -362,7 +344,7 @@ impl RuntimeService for RuntimeServiceImpl {
         let runner = self.burst_runner.read();
         let is_running = runner.is_running();
         let burst_count = runner.get_burst_count();
-        let is_paused = *self.paused.read();
+        let is_paused = runner.is_paused();
 
         // Note: Some metrics not yet available from BurstLoopRunner
         // - current_rate_hz: Would require tracking actual execution rate
@@ -892,6 +874,30 @@ mod fire_history_tests {
             )]);
         }
         npu.process_burst().unwrap();
+    }
+
+    #[tokio::test]
+    async fn pause_and_resume_status_reflects_the_runner() {
+        let (svc, _npu, _neuron) = service_with_one_neuron();
+        assert!(svc.pause().await.is_err(), "cannot pause a stopped engine");
+        assert!(svc.resume().await.is_err(), "cannot resume when not paused");
+
+        svc.start().await.unwrap();
+        let st = svc.get_status().await.unwrap();
+        assert!(st.is_running && !st.is_paused);
+
+        svc.pause().await.unwrap();
+        let st = svc.get_status().await.unwrap();
+        assert!(st.is_running && st.is_paused);
+
+        svc.resume().await.unwrap();
+        let st = svc.get_status().await.unwrap();
+        assert!(st.is_running && !st.is_paused);
+
+        svc.pause().await.unwrap();
+        svc.stop().await.unwrap();
+        let st = svc.get_status().await.unwrap();
+        assert!(!st.is_running && !st.is_paused, "stop clears paused");
     }
 
     #[tokio::test]

@@ -3,10 +3,7 @@
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::{Percentage, Percentage2D};
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
-    decode_unsigned_percentage_from_fractional_exponential_neurons,
-    decode_unsigned_percentage_from_linear_neurons,
-};
+use crate::neuron_voxel_coding::xyzp::percentage_variant::PercentageCodingVariant;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -229,17 +226,8 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         interpolation: PercentageNeuronPositioning,
         target: &mut Percentage,
     ) {
-        match interpolation {
-            PercentageNeuronPositioning::Linear => {
-                decode_unsigned_percentage_from_linear_neurons(z_vector, z_depth, target);
-            }
-            PercentageNeuronPositioning::Fractional => {
-                decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &z_vector.to_vec(),
-                    target,
-                );
-            }
-        }
+        PercentageCodingVariant::from_parts(false, true, interpolation)
+            .decode_unsigned_into(z_vector, z_depth, target);
     }
 }
 
@@ -605,6 +593,45 @@ mod tests {
             )
             .unwrap();
         changed
+    }
+
+    // -----------------------------------------------------------------------
+    // Agreement with the public coder interface
+    // -----------------------------------------------------------------------
+
+    /// The PositionalServo absolute decode and the public `decode_percentage_from_z_indexes`
+    /// select the same coding from the same flag, so they return the same value for every z,
+    /// and `target_to_z_bin` followed by the servo decode lands within half a bin of the target.
+    #[test]
+    fn absolute_decode_agrees_with_public_coder_interface() {
+        use crate::single_voxel_decode::{decode_percentage_from_z_indexes, target_to_z_bin};
+        let flag = IOCorticalAreaConfigurationFlag::Percentage(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+        );
+        let half_bin = 0.5 / (Z_DEPTH - 1) as f32;
+        for z in 0..Z_DEPTH {
+            let mut decoder = make_decoder();
+            let mut pipelines = one_channel_pipeline();
+            let neurons = make_neuron_map(absolute_cortical_id(), &[(0, 0, z)]);
+            decode(&mut decoder, &neurons, &mut pipelines);
+            let servo = read_percentage(&pipelines);
+            let public = decode_percentage_from_z_indexes(&flag, Z_DEPTH, &[z], &[]).unwrap();
+            assert_eq!(servo, public, "z={z}");
+        }
+        for step in 0..=20 {
+            let target = step as f64 / 20.0;
+            let z = target_to_z_bin(&flag, Z_DEPTH, target).unwrap();
+            let mut decoder = make_decoder();
+            let mut pipelines = one_channel_pipeline();
+            let neurons = make_neuron_map(absolute_cortical_id(), &[(0, 0, z)]);
+            decode(&mut decoder, &neurons, &mut pipelines);
+            let servo = read_percentage(&pipelines);
+            assert!(
+                (servo as f64 - target).abs() <= half_bin as f64 + 1e-6,
+                "target={target} z={z} servo={servo}"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------
