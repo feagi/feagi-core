@@ -1,11 +1,10 @@
 use crate::basis::brain_region_identifiers::BrainRegionID;
-use crate::basis::cortical_area::{CorticalAreaTypeEnum, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalAreaTypeMemberAt, CorticalIdentifier};
+use crate::basis::cortical_area::{CorticalAreaTypeEnum, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalIdentifier};
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use std::collections::HashSet;
-use feagi_basis::quantization::quantizable::DataValueQuantizationError;
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::{NeuronLayoutData, NeuronLayoutOf, NeuronLayoutTag, NeuronModel, NeuronModelContainer, NeuronModelMember, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutData, NeuronLayoutTag, NeuronModel, NeuronModelContainer, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
@@ -56,36 +55,14 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 
 
 
-/// What a new cortical area is generated from: its layout, and the parts of the defaults of its
-/// cortical type a client may edit. What the cortical type fixes is filled in when generating
-pub struct CorticalAreaGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
-    /// Details on how its neurons are laid out (dimensions, neuron count, etc)
-    pub layout_context: <NeuronLayoutOf<NM, FIQ> as NeuronLayoutData<FIQ>>::CorticalLevelContext,
-    pub universal_properties: NeuronModelUniversalCorticalProperties<NM>,
-    pub cortical_properties: NM::CorticalDataProperties,
-    pub cortical_variance: NM::CorticalDataVariance,
-}
-
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelMember> CorticalAreaGenerator<FIQ, NM> {
-    /// The defaults of cortical type `T` at this model member, with the given layout. Returns an
-    /// error if a decimal default becomes infinite or NaN at this model member
-    pub fn from_defaults<T: CorticalAreaTypeMemberAt<NM>>(
-        layout_context: <NeuronLayoutOf<NM, FIQ> as NeuronLayoutData<FIQ>>::CorticalLevelContext,
-    ) -> Result<Self, DataValueQuantizationError> {
-        Ok(Self {
-            layout_context,
-            universal_properties: <T as CorticalAreaTypeMemberAt<NM>>::default_universal_properties()?,
-            cortical_properties: <T as CorticalAreaTypeMemberAt<NM>>::default_cortical_properties()?,
-            cortical_variance: <T as CorticalAreaTypeMemberAt<NM>>::default_cortical_variance()?,
-        })
-    }
-}
-
-/// Holds the [`CorticalAreaGenerator`] of a new cortical area
+/// Holds what a new cortical area is generated from: a [`NeurogenesisDefaultsGenerator`] with the
+/// defaults of its cortical type, which a client may edit before the area is created. Get one from
+/// the generator wrapper of the cortical type, or generically through
+/// `CorticalAreaTypeMemberAt::new_defaults_generator`
 pub struct CorticalAreaGeneratorContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
 
 impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for CorticalAreaGeneratorContainer<FIQ> {
-    type Of<M: NeuronModel> = CorticalAreaGenerator<FIQ, M>;
+    type Of<M: NeuronModel> = NeurogenesisDefaultsGenerator<FIQ, M>;
 }
 
 /// The generator of a new cortical area, at whichever cortical type and model member it is

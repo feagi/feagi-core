@@ -22,7 +22,11 @@ use feagi_genome::basis::cortical_area::sensor::Camera;
 use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::basis::cortical_area::CorticalGenomicDataEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
-use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel, UniformNeuronInit};
+use feagi_connectome::connectome_basis::neuron_model::{
+    CorticalAreaNeurogenesis, NeurogenesisDefaultsGenerator, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
+};
+use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{FeagiAdvancedNeuronDataInternal, Period};
+use feagi_genome::basis::cortical_area::processing::{InterconnectFeagiAdvancedGenerator, InterconnectFeagiSimpleGenerator};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};
 
 type Fiq = FeagiIndexQuantizationStandard;
@@ -181,36 +185,14 @@ fn serde_round_trip() {
     assert_eq!(serde_json::from_str::<CorticalAreaTypeEnum<Named>>(&json).unwrap(), value);
 }
 
-/// Every neuron starting with the default neuron data of this type and member
-fn uniform_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>() -> UniformNeuronInit<M> {
-    UniformNeuronInit::new(
-        <T as CorticalAreaTypeMemberAt<M>>::neuron_internal().unwrap(),
-        <T as CorticalAreaTypeMemberAt<M>>::neuron_scratch().unwrap(),
-    )
-}
-
-/// A new area of this type and member, generated from the defaults of the cortical type, with
-/// every neuron starting with the default neuron data. Every model here lists `Uniform`
-fn generate_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> CorticalAreaInit<Fiq, M>
-where
-    M::NeuronInit: From<UniformNeuronInit<M>>,
-{
-    <T as CorticalAreaTypeMemberAt<M>>::generate_init::<Fiq>(
-        layout,
-        <T as CorticalAreaTypeMemberAt<M>>::default_universal_properties().unwrap(),
-        <T as CorticalAreaTypeMemberAt<M>>::default_cortical_properties().unwrap(),
-        <T as CorticalAreaTypeMemberAt<M>>::default_cortical_variance().unwrap(),
-        uniform_from_defaults::<T, M>().into(),
-    )
-    .unwrap()
+/// A new area of this type and member, from the defaults of the cortical type
+fn generator_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> NeurogenesisDefaultsGenerator<Fiq, M> {
+    <T as CorticalAreaTypeMemberAt<M>>::new_defaults_generator::<Fiq>(layout).unwrap()
 }
 
 /// How many neurons a new area of this type and member starts with, generated from its defaults
-fn generated_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> usize
-where
-    M::NeuronInit: From<UniformNeuronInit<M>>,
-{
-    generate_from_defaults::<T, M>(layout).iter().len()
+fn generated_neuron_count<T: CorticalAreaTypeMemberAt<M>, M: NeuronModelMember>(layout: NeuronLayoutOf<M, Fiq>) -> usize {
+    generator_from_defaults::<T, M>(layout).iter().len()
 }
 
 /// A voxel layout of 2 neurons
@@ -235,31 +217,35 @@ fn every_cortical_type_and_model_generates_from_its_defaults() {
     assert_eq!(generated_neuron_count::<Memory, Hashing>(NeuronLayoutSingleSteppedDynamic::new(CorticalAreaNeuronCount::QUANT_ZERO)), 0);
 }
 
+/// The generic access through the family gives the generator the wrapper of the cortical type
+/// builds
 #[test]
-fn generated_init_uses_the_given_properties_and_the_fixed_data() {
-    let mut properties = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_cortical_properties().unwrap();
-    properties.firing_threshold = 7.0;
-    let init = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::generate_init::<Fiq>(
-        two_voxels(),
-        <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_universal_properties().unwrap(),
-        properties.clone(),
-        <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::default_cortical_variance().unwrap(),
-        uniform_from_defaults::<Interconnect, Advanced>().into(),
-    )
-    .unwrap();
-    let (given_properties, internal, scratch) = init.get_cortical_level_data();
-    assert_eq!(given_properties, &properties);
-    assert_eq!(internal, &<Interconnect as CorticalAreaTypeMemberAt<Advanced>>::cortical_internal().unwrap());
-    assert_eq!(scratch, &<Interconnect as CorticalAreaTypeMemberAt<Advanced>>::cortical_scratch().unwrap());
-    let neuron_internal = <Interconnect as CorticalAreaTypeMemberAt<Advanced>>::neuron_internal().unwrap();
-    assert!(init.iter().all(|(internal, _, _)| internal == neuron_internal));
+fn family_access_gives_the_generator_of_the_wrapper() {
+    let wrapper = InterconnectFeagiAdvancedGenerator::<Fiq, Advanced>::new(two_voxels()).unwrap();
+    assert_eq!(generator_from_defaults::<Interconnect, Advanced>(two_voxels()), wrapper.0);
+    let wrapper = InterconnectFeagiSimpleGenerator::<Fiq, Simple>::new(two_voxels()).unwrap();
+    assert_eq!(generator_from_defaults::<Interconnect, Simple>(two_voxels()), wrapper.0);
+}
+
+/// A client edits the defaults of the wrapper, which the generator of the model then holds
+#[test]
+fn edited_defaults_become_the_model_generator() {
+    let mut wrapper = InterconnectFeagiAdvancedGenerator::<Fiq, Advanced>::new(two_voxels()).unwrap();
+    wrapper.0.cortical_properties.firing_threshold = 7.0;
+    let expected_properties = wrapper.0.cortical_properties.clone();
+    let expected_internal = wrapper.0.cortical_internal.clone();
+
+    let generator: <Advanced as NeuronModel>::NeurogenesisGenerator<Fiq> = wrapper.into_model_generator();
+    assert_eq!(generator.neuron_internal, FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO));
+    assert_eq!(generator.get_layout(), &two_voxels());
+    assert_eq!(generator.into_model_cortical_data(), (expected_properties, expected_internal));
 }
 
 #[test]
-fn genomic_data_holds_the_init_of_a_cortical_type() {
-    let init = generate_from_defaults::<Interconnect, Simple>(two_voxels());
-    let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(init);
+fn genomic_data_holds_the_neurogenesis_of_a_cortical_type() {
+    let generator = InterconnectFeagiSimpleGenerator::<Fiq, Simple>::new(two_voxels()).unwrap().into_model_generator();
+    let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(CorticalAreaNeurogenesis::ByGenerator(generator));
     assert_eq!(data.kind(), Interconnect::KIND);
     assert_eq!(data.neuron_model_kind(), Simple::KIND);
-    assert!(data.try_as::<Interconnect, Simple>().is_ok());
+    assert!(matches!(data.try_as::<Interconnect, Simple>(), Ok(CorticalAreaNeurogenesis::ByGenerator(_))));
 }

@@ -112,7 +112,7 @@ mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
     use feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTagVoxel;
     use feagi_connectome::connectome_basis::neuron_model::{
-        CorticalAreaInit, CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+        NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
     };
     use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model;
@@ -164,31 +164,9 @@ mod custom_inner {
 
         /// Never generated, only identified
         impl UsesFeagiSimple for Thing {
-            fn default_universal_properties<NM: NeuronModelFeagiSimple>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn default_cortical_properties<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn default_cortical_variance<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn cortical_internal<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn cortical_scratch<NM: NeuronModelFeagiSimple>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn neuron_internal<NM: NeuronModelFeagiSimple>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
-                unimplemented!()
-            }
-
-            fn neuron_scratch<NM: NeuronModelFeagiSimple>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
+            fn new_defaults_generator<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>(
+                _layout: NeuronLayoutOf<NM, FIQ>,
+            ) -> Result<NeurogenesisDefaultsGenerator<FIQ, NM>, DataValueQuantizationError> {
                 unimplemented!()
             }
         }

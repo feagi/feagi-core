@@ -1,15 +1,64 @@
 //! Every cortical area type. The template below lists each one by its super type, with the neuron
 //! models it allows, while the details of a type live with its super type in the module of that
-//! name: its marker struct, [`CorticalAreaType`] implementation, and a `Uses{Model}` implementation
-//! per neuron model it allows. Generated items are also reached through `cortical_area_type`
+//! name: its marker struct, [`CorticalAreaType`] implementation, and per neuron model it allows, a
+//! generator wrapper holding its defaults (see `cortical_type_generator!`). Generated items are
+//! also reached through `cortical_area_type`
 
 use feagi_connectome::connectome_basis::neuron_model::{
     self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInitContainer,
-    NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+    NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
 };
 #[cfg(feature = "std")]
 use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+
+/// Declares the generator wrapper of a cortical type for one neuron model it allows:
+/// `$wrapper<FIQ, NM>`, holding a [`NeurogenesisDefaultsGenerator`] as its public field, with
+/// `into_model_generator`, and the `$uses_trait` implementation of the cortical type, which builds
+/// the wrapper. The wrapper's `new(layout) -> Result<Self, DataValueQuantizationError>`, holding
+/// the defaults of the cortical type for that model, is written next to the cortical type
+macro_rules! cortical_type_generator {
+    (
+        $(#[$meta:meta])*
+        $wrapper:ident for $cortical_type:ty, $uses_trait:ident, $model_trait:ident
+    ) => {
+        $(#[$meta])*
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper<
+            FIQ: ::feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization,
+            NM: $model_trait,
+        >(pub ::feagi_connectome::connectome_basis::neuron_model::NeurogenesisDefaultsGenerator<FIQ, NM>);
+
+        impl<FIQ, NM> $wrapper<FIQ, NM>
+        where
+            FIQ: ::feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization,
+            NM: $model_trait,
+        {
+            /// The generator, as the generator of the neuron model. Only available for a model
+            /// whose generator can be made from a `NeurogenesisDefaultsGenerator`
+            pub fn into_model_generator(self) -> NM::NeurogenesisGenerator<FIQ>
+            where
+                NM::NeurogenesisGenerator<FIQ>: ::core::convert::From<::feagi_connectome::connectome_basis::neuron_model::NeurogenesisDefaultsGenerator<FIQ, NM>>,
+            {
+                ::core::convert::Into::into(self.0)
+            }
+        }
+
+        impl $uses_trait for $cortical_type {
+            fn new_defaults_generator<
+                FIQ: ::feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization,
+                NM: $model_trait,
+            >(
+                layout: ::feagi_connectome::connectome_basis::neuron_model::NeuronLayoutOf<NM, FIQ>,
+            ) -> ::core::result::Result<
+                ::feagi_connectome::connectome_basis::neuron_model::NeurogenesisDefaultsGenerator<FIQ, NM>,
+                ::feagi_basis::quantization::quantizable::DataValueQuantizationError,
+            > {
+                $wrapper::<FIQ, NM>::new(layout).map(|wrapper| wrapper.0)
+            }
+        }
+    };
+}
 
 pub mod cortical_identifier_base64;
 pub mod foundation;

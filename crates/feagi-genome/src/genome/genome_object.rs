@@ -21,6 +21,15 @@ pub struct GenomeObjectPositioning {
     pub position_3d: GenomeObjectCoordinate3D,
 }
 
+impl Default for GenomeObjectPositioning {
+    fn default() -> Self {
+        Self {
+            position_2d: GenomeObjectCoordinate2D::new_zero(),
+            position_3d: GenomeObjectCoordinate3D::new_zero()
+        }
+    }
+}
+
 /// Defines the 3d coordinate of a genome object in relation to its parent brain region
 pub type GenomeObjectCoordinate3D =
 SignedIntegerSpatial<i64, 3>;

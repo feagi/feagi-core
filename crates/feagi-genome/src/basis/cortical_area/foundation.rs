@@ -2,15 +2,16 @@
 
 use super::{CorticalAreaType, UsesFoundationDeath, UsesFoundationPower};
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
-use feagi_connectome::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::foundation_death::{
-    FoundationDeathCorticalDataInternal, FoundationDeathCorticalDataProperties, FoundationDeathCorticalDataScratch, FoundationDeathCorticalDataVariance,
-    FoundationDeathNeuronDataInternal, FoundationDeathNeuronDataScratch, NeuronModelFoundationDeath,
+    FoundationDeathCorticalDataInternal, FoundationDeathCorticalDataProperties, FoundationDeathCorticalDataVariance,
+    FoundationDeathNeuronDataInternal, NeuronModelFoundationDeath,
 };
 use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
-    FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataScratch, FoundationPowerCorticalDataVariance,
-    FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataScratch, NeuronModelFoundationPower,
+    FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataVariance,
+    FoundationPowerNeuronDataInternal, NeuronModelFoundationPower,
 };
 
 //region Power
@@ -23,37 +24,27 @@ impl CorticalAreaType for Power {
     type Inner = [u8; 6];
 }
 
-impl UsesFoundationPower for Power {
-    fn default_universal_properties<NM: NeuronModelFoundationPower>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
-        Ok(NeuronModelUniversalCorticalProperties {
-            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-            is_psp_uniform: false,
-            is_psp_using_neuron_potential: false,
-        })
-    }
+cortical_type_generator! {
+    /// The defaults of a new `Power` area using the `FoundationPower` neuron model
+    PowerFoundationPowerGenerator for Power, UsesFoundationPower, NeuronModelFoundationPower
+}
 
-    fn default_cortical_properties<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
-        Ok(FoundationPowerCorticalDataProperties::new())
-    }
-
-    fn default_cortical_variance<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
-        Ok(FoundationPowerCorticalDataVariance::new())
-    }
-
-    fn cortical_internal<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
-        Ok(FoundationPowerCorticalDataInternal::new())
-    }
-
-    fn cortical_scratch<NM: NeuronModelFoundationPower>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
-        Ok(FoundationPowerCorticalDataScratch::new())
-    }
-
-    fn neuron_internal<NM: NeuronModelFoundationPower>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
-        Ok(FoundationPowerNeuronDataInternal::new())
-    }
-
-    fn neuron_scratch<NM: NeuronModelFoundationPower>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
-        Ok(FoundationPowerNeuronDataScratch::new())
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower> PowerFoundationPowerGenerator<FIQ, NM> {
+    /// A new `Power` area laid out as `layout`, starting from the defaults of this type. Errors if
+    /// a default decimal becomes infinite or NaN at quantization `NM`
+    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+        Ok(Self(NeurogenesisDefaultsGenerator::new(
+            layout,
+            NeuronModelUniversalCorticalProperties {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            FoundationPowerCorticalDataProperties::new(),
+            FoundationPowerCorticalDataInternal::new(),
+            FoundationPowerCorticalDataVariance::new(),
+            FoundationPowerNeuronDataInternal::new(),
+        )))
     }
 }
 
@@ -69,37 +60,27 @@ impl CorticalAreaType for Death {
     type Inner = [u8; 6];
 }
 
-impl UsesFoundationDeath for Death {
-    fn default_universal_properties<NM: NeuronModelFoundationDeath>() -> Result<NeuronModelUniversalCorticalProperties<NM>, DataValueQuantizationError> {
-        Ok(NeuronModelUniversalCorticalProperties {
-            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-            is_psp_uniform: false,
-            is_psp_using_neuron_potential: false,
-        })
-    }
+cortical_type_generator! {
+    /// The defaults of a new `Death` area using the `FoundationDeath` neuron model
+    DeathFoundationDeathGenerator for Death, UsesFoundationDeath, NeuronModelFoundationDeath
+}
 
-    fn default_cortical_properties<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataProperties, DataValueQuantizationError> {
-        Ok(FoundationDeathCorticalDataProperties::new())
-    }
-
-    fn default_cortical_variance<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataVariance, DataValueQuantizationError> {
-        Ok(FoundationDeathCorticalDataVariance::new())
-    }
-
-    fn cortical_internal<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataInternal, DataValueQuantizationError> {
-        Ok(FoundationDeathCorticalDataInternal::new())
-    }
-
-    fn cortical_scratch<NM: NeuronModelFoundationDeath>() -> Result<NM::CorticalDataScratch, DataValueQuantizationError> {
-        Ok(FoundationDeathCorticalDataScratch::new())
-    }
-
-    fn neuron_internal<NM: NeuronModelFoundationDeath>() -> Result<NM::NeuronDataInternal, DataValueQuantizationError> {
-        Ok(FoundationDeathNeuronDataInternal::new())
-    }
-
-    fn neuron_scratch<NM: NeuronModelFoundationDeath>() -> Result<NM::NeuronDataScratch, DataValueQuantizationError> {
-        Ok(FoundationDeathNeuronDataScratch::new())
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath> DeathFoundationDeathGenerator<FIQ, NM> {
+    /// A new `Death` area laid out as `layout`, starting from the defaults of this type. Errors if
+    /// a default decimal becomes infinite or NaN at quantization `NM`
+    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+        Ok(Self(NeurogenesisDefaultsGenerator::new(
+            layout,
+            NeuronModelUniversalCorticalProperties {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            FoundationDeathCorticalDataProperties::new(),
+            FoundationDeathCorticalDataInternal::new(),
+            FoundationDeathCorticalDataVariance::new(),
+            FoundationDeathNeuronDataInternal::new(),
+        )))
     }
 }
 

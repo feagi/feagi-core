@@ -1,5 +1,26 @@
 pub mod designer;
 pub mod storage;
+
+
+
+
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum GenomeError {
+    #[error("Unable to find brain region of given ID!")]
+    InvalidParentRegionID,
+}
+
+
+
+
+
+
+
+
+
+
 // TODO review and implement
 
 

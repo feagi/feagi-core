@@ -42,6 +42,17 @@ impl BrainRegionContainerRuntime {
             Self::Inner(container) => container.get_contained_regions_mut(),
         }
     }
+    
+    pub(crate) fn insert_contained_brain_region_id(&mut self, contained_id: BrainRegionID) { // TODO error for collision
+        match self {
+            BrainRegionContainerRuntime::Root(root) => {
+                root.contained_regions.insert(contained_id);
+            }
+            BrainRegionContainerRuntime::Inner(inner) => {
+                inner.contained_regions.insert(contained_id);
+            }
+        }
+    }
 }
 
 impl BrainRegionContainer for BrainRegionContainerRuntime {
@@ -89,6 +100,7 @@ impl BrainRegionContainer for BrainRegionContainerRuntime {
 }
 
 pub struct BrainRegionContainerRootRuntime {
+    pub root_id: BrainRegionID,
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
     pub ancestor_id: BrainRegionAncestryID,
@@ -97,6 +109,21 @@ pub struct BrainRegionContainerRootRuntime {
 }
 
 impl BrainRegionContainerRootRuntime {
+    
+    pub(crate) fn new_now(metadata: GenomeObjectMetadata) -> (Self, BrainRegionID) {
+        let this_id = BrainRegionID::new_now();
+        (Self {
+            root_id: this_id.clone(),
+            metadata,
+            positioning: GenomeObjectPositioning::default(),
+            ancestor_id: this_id.into(),
+            contained_areas: Default::default(),
+            contained_regions: Default::default(),
+        },
+            this_id
+        )
+    }
+    
     /// The cortical areas directly inside this region
     pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
         &self.contained_areas
@@ -154,6 +181,21 @@ pub struct BrainRegionContainerInnerRuntime {
 }
 
 impl BrainRegionContainerInnerRuntime {
+    pub fn new_now(parent_id: BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> (Self, BrainRegionID) {
+        let this_id = BrainRegionID::new_now();
+
+        (Self {
+            metadata,
+            positioning,
+            parent_id,
+            ancestor_id: this_id.clone().into(),
+            contained_areas: Default::default(),
+            contained_regions: Default::default(),
+        },
+         this_id
+        )
+    }
+    
     /// The cortical areas directly inside this region
     pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
         &self.contained_areas

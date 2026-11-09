@@ -1,6 +1,7 @@
 use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
+use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance, NeuronModelFeagiAdvancedDefaultQuant};
@@ -139,6 +140,7 @@ fn simple_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiSimpleDefaultQu
         cortical_data_variance: FeagiSimpleCorticalDataVariance::new(),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
+        visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
     }
 }
 
@@ -149,6 +151,7 @@ fn advanced_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiAdvancedDefau
         cortical_data_variance: FeagiAdvancedCorticalDataVariance::new(0.0, 0.0, 0.0),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
+        visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
     }
 }
 
@@ -172,6 +175,7 @@ fn designer_containers_hold_only_what_their_cortical_type_allows() {
                 cortical_data_variance: MemoryFireHashingCorticalDataVariance::new(),
                 cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
                 burst_engine_index: BurstEngineIndex(0),
+                visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
             })),
         ),
     );
