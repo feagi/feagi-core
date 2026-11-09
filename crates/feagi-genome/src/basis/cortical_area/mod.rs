@@ -4,10 +4,7 @@
 //! generator wrapper holding its defaults (see `cortical_type_generator!`). Generated items are
 //! also reached through `cortical_area_type`
 
-use feagi_connectome::connectome_basis::neuron_model::{
-    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, NeurogenesisFromStorageOrByGeneratorContainer,
-    NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
-};
+use feagi_connectome::connectome_basis::neuron_model::{self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, NeurogenesisFromStorageOrByGeneratorContainer, NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag, NeuronModel};
 #[cfg(feature = "std")]
 use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
@@ -87,6 +84,43 @@ pub trait CorticalAreaType {
     type Inner: CorticalAreaInnerID;
 }
 
+//region test
+
+pub trait CorticalTypeNeuronModelMarker {
+
+    type NeuronModel: NeuronModel;
+
+    fn spawn_generator<NMQuant>()
+}
+
+/// What Cortical Supertype are we using
+pub enum CTEnumKind {
+    Foundation(CTFoundationEnumKind),
+    Processing(),
+    Sensor(),
+    Motor(),
+    Tunable(),
+}
+
+/// Describes the cortical type under the Foundation SuperType
+pub enum CTFoundationEnumKind {
+    Power(CTFoundationPowerEnumKind),
+    Death(),
+}
+
+/// Defines the type of neuron model Power uses
+pub enum CTFoundationPowerEnumKind {
+    NMFoundationPower
+}
+
+pub struct CTFFoundationPowerNMFoundationPowerMarker;
+
+
+
+//endregion
+
+
+
 define_cortical_type_family_template! {
     /// The `CorticalAreaType` family: every cortical area type, each allowing one or more neuron models
     Family: CorticalAreaType,
@@ -135,6 +169,6 @@ define_cortical_type_family_template! {
 cortical_area_type_family_template!(expand_cortical_type_family);
 cortical_area_type_family_template!(expand_cortical_identifier);
 
-// TODO why are templates broken?
+
 #[cfg(feature = "std")]
 cortical_area_type_family_template!(expand_cortical_area_map);
