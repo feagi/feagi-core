@@ -1,4 +1,101 @@
-//! Cortical Models
+//! The neuron models, and the `NeuronModel` family holding every one of them at each of its
+//! quantization levels. Everything here is reached publicly through
+//! `connectome_basis::neuron_model`, with a module per model such as
+//! `connectome_basis::neuron_model::feagi_advanced`.
+//!
+//! Every generated name is prefixed `NM`. Two macro steps generate the items: one per model, and
+//! one for the family as a whole.
+//!
+//! # Per model: `define_cortical_dynamics_quantization_template!`
+//!
+//! Each model folder (such as `feagi_advanced/`) expands its template in `data.rs`. The template
+//! gives the model's `NeuronLayout` (the single layout type of the model), its
+//! `NeurogenesisDefaults` and `NeurogenesisGenerator`, its `Quantizables`, its
+//! `QuantizationLevels`, and the fields of its `DataSpecifications`. Using `FeagiAdvanced`, with
+//! the quantizable `Period` and the level `DefaultQuant`, as the example, it generates:
+//!
+//! ```text
+//! Period<T>                                   // a wrapper struct per quantizable
+//!
+//! trait NMFeagiAdvancedTrait: NeuronModel<    // the model trait, fixing the layout and every data type
+//!     NeuronLayoutTag = NeuronLayoutTagVoxel,
+//!     CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>, ..
+//! > {
+//!     type Period;                            // an associated type per quantizable
+//! }
+//!
+//! struct NMFeagiAdvancedQuantDefaultQuant;    // a unit marker struct per quantization level,
+//!                                             // implementing NeuronModel and the model trait
+//!
+//! type NMFeagiAdvancedTag = NMFeagiAdvancedQuantDefaultQuant;
+//!                                             // names the model as a whole (the first level)
+//!
+//! struct NMFeagiAdvancedData{DataType}<NM>    // one per data type of NeuronModel, 7 in all:
+//!                                             //   CorticalProperties, CorticalInternal,
+//!                                             //   CorticalScratch, CorticalVariance,
+//!                                             //   NeuronInternal, NeuronScratch, NeuronVariance
+//!                                             // with public fields, `new`, and `requantize`
+//! ```
+//!
+//! A field typed by a quantizable becomes its wrapper at the level's quantization, such as
+//! `Period<NM::Period>`. A field typed `MembranePotentialQuant` becomes `NM::MembranePotentialQuant`.
+//! If a model gives no variance fields, its `CorticalDataVarianceSpecification` is generated.
+//! Otherwise, as for `FeagiAdvanced`, it is written by hand in `data.rs`.
+//!
+//! Each model's `mod.rs` re-exports its generated items, and re-exports its
+//! `{Model}BurstEngineDynamics` as `BurstEngineDynamics`.
+//!
+//! # The family: `define_model_family_template!`
+//!
+//! [`family`] lists every model and its quantization levels. These items are written by hand
+//! there:
+//!
+//! - `NMContainer`, a kind of data held per member, as `type Of<M: NeuronModel>`. It is implemented
+//!   on a zero sized struct per kind of data, such as `CorticalAreaNeurogenesisContainer`
+//! - `NMMember`, implemented by every marker struct, with its model `Tag`, its `KIND`, and
+//!   conversions of its data to and from `NMEnum`
+//! - `NMAccessError`, returned when data is accessed as a member or model it does not hold
+//!
+//! The expansion of the family template generates:
+//!
+//! ```text
+//! enum NMFeagiAdvancedQuantKind { DefaultQuant }     // per model, a variant per level, no data
+//! enum NMKind { FeagiAdvanced(NMFeagiAdvancedQuantKind), .. }
+//!
+//! enum NMFeagiAdvancedQuantEnum<C: NMContainer> {    // per model, the data of C per level
+//!     DefaultQuant(C::Of<NMFeagiAdvancedQuantDefaultQuant>),
+//! }
+//! enum NMEnum<C: NMContainer> { FeagiAdvanced(NMFeagiAdvancedQuantEnum<C>), .. }
+//!                                                    // kind, from_data, try_as, try_as_mut,
+//!                                                    // try_into_data, From and TryFrom between them
+//!
+//! trait NMFeagiAdvancedMember: NMMember + NMFeagiAdvancedTrait
+//!                                                    // per model, converts to and from its QuantEnum
+//! impl NMMember + NM{Model}Member for every marker struct
+//!
+//! with_nm!(value, <NM, Model> |data| body)           // dispatch over NMEnum
+//! with_nm_feagi_advanced!(value, <NM, Model> |data| body)
+//!                                                    // dispatch over one model's QuantEnum
+//! ```
+//!
+//! The dispatch macros are exported at the crate root, and their paths start at
+//! `$crate::connectome_basis::neuron_model`, so callers need no imports. In `body`, `NM` aliases
+//! the marker struct of the member held, and `Model` aliases its model module, so
+//! `Model::BurstEngineDynamics` can be used. Both aliases are optional.
+//!
+//! # Using the family
+//!
+//! [`neurogenesis_dispatch`] puts the family to use. `CorticalAreaNeurogenesisEnum<FIQ>` is
+//! `NMEnum<CorticalAreaNeurogenesisContainer<FIQ>>`, and it dispatches each area to the burst
+//! engine with its concrete model through `with_nm!`.
+//!
+//! # Adding a model
+//!
+//! 1. Add a folder named the model's snake case, holding `data.rs` (with its quantization template),
+//!    `neurogenesis.rs`, and `burst_dynamics.rs` (with `{Model}BurstEngineDynamics`), and a `mod.rs`
+//!    re-exporting them as the other models do.
+//! 2. Declare the folder below, and re-export it in `connectome_basis::neuron_model`.
+//! 3. Add the model and its quantization levels to the template in [`family`].
 
 pub mod foundation_power;
 pub mod foundation_death;
