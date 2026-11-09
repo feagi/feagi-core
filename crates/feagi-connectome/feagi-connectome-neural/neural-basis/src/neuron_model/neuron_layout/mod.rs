@@ -28,6 +28,9 @@ pub trait NeuronLayoutData<
     /// The per neuron context, helps identify a neurons "location" relative to others within a
     /// cortical area
     type NeuronLevelContext;
+    
+    /// Data used to maintain some sort of context needed for visualization of neuron activity
+    type VisualizerContext;
 
 
     fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res)

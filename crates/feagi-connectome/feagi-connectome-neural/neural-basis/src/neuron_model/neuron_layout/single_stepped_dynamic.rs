@@ -18,6 +18,7 @@ for NeuronLayoutSingleSteppedDynamic<FIQ> {
     const SPARSITY: NeuronLayoutSparsity = NeuronLayoutSparsity::Sparse;
     type CorticalLevelContext = CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
     type NeuronLevelContext = CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>;
+    type VisualizerContext = (); // Empty for now
 
     // yes these are trivial lol
     

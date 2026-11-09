@@ -5,7 +5,7 @@ use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
 use crate::quantization_levels::FeagiIndexQuantization;
-
+use crate::visualization::NeuronVisualizationVoxelIndex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NeuronLayoutVoxel<FIQ: FeagiIndexQuantization> {
@@ -33,6 +33,7 @@ for NeuronLayoutVoxel<FIQ> {
 
     type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
     type NeuronLevelContext = DimensionalCorticalAreaNeuronCoordinates<FIQ::NeuronIndexQuant>;
+    type VisualizerContext = NeuronVisualizationVoxelIndex<FIQ::NeuronBitBatchIndexQuant>;
 
     fn new(init_data: Self::CorticalLevelContext) -> Self {
         Self{helper: SpatialHelper::new(init_data) }
