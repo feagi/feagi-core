@@ -3,7 +3,7 @@ use crate::basis::brain_region_identifiers::{BrainRegionAncestryID, BrainRegionI
 use crate::basis::cortical_area::CorticalIdentifier;
 use crate::genome::containers::BrainRegionContainer;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
-
+use crate::genome::genomes::GenomeError;
 
 /// A borrowed brain region of the designer genome, either the root or an inner region
 #[derive(Clone, Copy)]
@@ -16,8 +16,19 @@ impl<'a> BrainRegionContainerRuntimeRef<'a> {
     /// If this is the root region
     pub fn is_root(&self) -> bool {
         match self {
-            Self::Root(container) => container.is_root(),
-            Self::Inner(container) => container.is_root(),
+            Self::Root(container) => true,
+            Self::Inner(container) => false,
+        }
+    }
+    
+    pub fn unwrap_as_inner(&self) -> Result<&BrainRegionContainerInnerRuntime, GenomeError> {
+        match self {
+            BrainRegionContainerRuntimeRef::Root(r) => {
+                Err(GenomeError::InvalidRootIDOperation)
+            }
+            BrainRegionContainerRuntimeRef::Inner(i) => {
+                Ok(i)
+            }
         }
     }
 
@@ -74,6 +85,25 @@ impl<'a> BrainRegionContainerRuntimeMut<'a> {
         }
     }
 
+    /// If this is the root region
+    pub fn is_root(&self) -> bool {
+        match self {
+            Self::Root(container) => true,
+            Self::Inner(container) => false,
+        }
+    }
+
+    pub fn unwrap_as_inner(&self) -> Result<&mut BrainRegionContainerInnerRuntime, GenomeError> {
+        match self {
+            BrainRegionContainerRuntimeMut::Root(r) => {
+                Err(GenomeError::InvalidRootIDOperation)
+            }
+            BrainRegionContainerRuntimeMut::Inner(i) => {
+                Ok(*i)
+            }
+        }
+    }
+    
     /// The cortical areas directly inside this region
     pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
         match self {

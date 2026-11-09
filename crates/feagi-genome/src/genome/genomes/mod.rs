@@ -10,6 +10,10 @@ pub mod storage;
 pub enum GenomeError {
     #[error("Unable to find brain region of given ID!")]
     InvalidParentRegionID,
+    #[error("Given region ID already exists!")]
+    DuplicateParentRegionID,
+    #[error("This operation cannot be applied to the root region!")]
+    InvalidRootIDOperation,
 }
 
 

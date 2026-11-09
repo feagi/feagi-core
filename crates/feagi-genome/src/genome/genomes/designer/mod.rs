@@ -5,6 +5,7 @@ use crate::basis::brain_region_identifiers::BrainRegionID;
 use std::collections::HashMap;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use container_brain_region::{BrainRegionContainerRuntimeMut, BrainRegionContainerRuntimeRef};
+use crate::genome::containers::BrainRegionContainer;
 use crate::genome::cortical_area::CorticalAreaContainersDesigner;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
@@ -50,6 +51,20 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
         Err(GenomeError::InvalidParentRegionID)
     }
 
+    pub fn add_new_brain_region(&mut self, parent_region_id: &BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> Result<(), GenomeError> {
+        let (new_region, new_id) = BrainRegionContainerInnerRuntime::new_now(parent_region_id.clone(), metadata, positioning);
+        self.get_brain_region_mut(parent_region_id)?.insert_contained_brain_region_id(new_id.clone());
+        self.inner_brain_regions.insert(new_id, new_region);
+        Ok(())
+    }
+
+    pub fn reposition_brain_region(&mut self, region_id: &BrainRegionID, new_pos: GenomeObjectPositioning) -> Result<(), GenomeError> {
+        let region = self.get_brain_region_mut(region_id)?;
+        let region = region.unwrap_as_inner()?;
+        region.positioning = new_pos;
+        Ok(())
+    }
+
     pub(crate) fn get_brain_region_mut(&mut self, id: &BrainRegionID) -> Result<BrainRegionContainerRuntimeMut<'_>, GenomeError> {
         if &self.root_brain_region.root_id == id {
             return Ok(BrainRegionContainerRuntimeMut::Root(&mut self.root_brain_region))
@@ -60,13 +75,12 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
         Err(GenomeError::InvalidParentRegionID)
     }
 
-    
-    pub fn add_new_brain_region(&mut self, parent_region_id: &BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> Result<(), GenomeError> {
-        let (new_region, new_id) = BrainRegionContainerInnerRuntime::new_now(parent_region_id.clone(), metadata, positioning);
-        self.get_brain_region_mut(parent_region_id)?.insert_contained_brain_region_id(new_id.clone());
-        self.inner_brain_regions.insert(new_id, new_region);
-        Ok(())
-    }
+
+
+
+
+
+
 
 
 
