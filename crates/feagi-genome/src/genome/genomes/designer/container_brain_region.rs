@@ -4,13 +4,76 @@ use crate::basis::cortical_area::CorticalIdentifier;
 use crate::genome::containers::BrainRegionContainer;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
-//region Runtime
-pub enum BrainRegionContainerRuntime {
-    Root(BrainRegionContainerRootRuntime),
-    Inner(BrainRegionContainerInnerRuntime),
+
+/// A borrowed brain region of the designer genome, either the root or an inner region
+#[derive(Clone, Copy)]
+pub enum BrainRegionContainerRuntimeRef<'a> {
+    Root(&'a BrainRegionContainerRootRuntime),
+    Inner(&'a BrainRegionContainerInnerRuntime),
 }
 
-impl BrainRegionContainerRuntime {
+impl<'a> BrainRegionContainerRuntimeRef<'a> {
+    /// If this is the root region
+    pub fn is_root(&self) -> bool {
+        match self {
+            Self::Root(container) => container.is_root(),
+            Self::Inner(container) => container.is_root(),
+        }
+    }
+
+    pub fn get_metadata(&self) -> &'a GenomeObjectMetadata {
+        match self {
+            Self::Root(container) => container.get_metadata(),
+            Self::Inner(container) => container.get_metadata(),
+        }
+    }
+
+    pub fn get_positioning(&self) -> &'a GenomeObjectPositioning {
+        match self {
+            Self::Root(container) => container.get_positioning(),
+            Self::Inner(container) => container.get_positioning(),
+        }
+    }
+
+    pub fn get_ancestor_id(&self) -> &'a BrainRegionAncestryID {
+        match self {
+            Self::Root(container) => container.get_ancestor_id(),
+            Self::Inner(container) => container.get_ancestor_id(),
+        }
+    }
+
+    /// The cortical areas directly inside this region
+    pub fn get_contained_areas(&self) -> &'a HashSet<CorticalIdentifier> {
+        match self {
+            Self::Root(container) => container.get_contained_areas(),
+            Self::Inner(container) => container.get_contained_areas(),
+        }
+    }
+
+    /// The brain regions directly inside this region
+    pub fn get_contained_regions(&self) -> &'a HashSet<BrainRegionID> {
+        match self {
+            Self::Root(container) => container.get_contained_regions(),
+            Self::Inner(container) => container.get_contained_regions(),
+        }
+    }
+}
+
+/// A mutably borrowed brain region of the designer genome, either the root or an inner region
+pub enum BrainRegionContainerRuntimeMut<'a> {
+    Root(&'a mut BrainRegionContainerRootRuntime),
+    Inner(&'a mut BrainRegionContainerInnerRuntime),
+}
+
+impl<'a> BrainRegionContainerRuntimeMut<'a> {
+    /// This region, borrowed immutably
+    pub fn as_ref(&self) -> BrainRegionContainerRuntimeRef<'_> {
+        match self {
+            Self::Root(container) => BrainRegionContainerRuntimeRef::Root(container),
+            Self::Inner(container) => BrainRegionContainerRuntimeRef::Inner(container),
+        }
+    }
+
     /// The cortical areas directly inside this region
     pub fn get_contained_areas(&self) -> &HashSet<CorticalIdentifier> {
         match self {
@@ -42,32 +105,19 @@ impl BrainRegionContainerRuntime {
             Self::Inner(container) => container.get_contained_regions_mut(),
         }
     }
-    
+
     pub(crate) fn insert_contained_brain_region_id(&mut self, contained_id: BrainRegionID) { // TODO error for collision
-        match self {
-            BrainRegionContainerRuntime::Root(root) => {
-                root.contained_regions.insert(contained_id);
-            }
-            BrainRegionContainerRuntime::Inner(inner) => {
-                inner.contained_regions.insert(contained_id);
-            }
-        }
+        self.get_contained_regions_mut().insert(contained_id);
     }
 }
 
-impl BrainRegionContainer for BrainRegionContainerRuntime {
+impl BrainRegionContainer for BrainRegionContainerRuntimeMut<'_> {
     fn is_root(&self) -> bool {
-        match self {
-            Self::Root(container) => container.is_root(),
-            Self::Inner(container) => container.is_root(),
-        }
+        self.as_ref().is_root()
     }
 
     fn get_metadata(&self) -> &GenomeObjectMetadata {
-        match self {
-            Self::Root(container) => container.get_metadata(),
-            Self::Inner(container) => container.get_metadata(),
-        }
+        self.as_ref().get_metadata()
     }
 
     fn get_metadata_mut(&mut self) -> &mut GenomeObjectMetadata {
@@ -78,10 +128,7 @@ impl BrainRegionContainer for BrainRegionContainerRuntime {
     }
 
     fn get_positioning(&self) -> &GenomeObjectPositioning {
-        match self {
-            Self::Root(container) => container.get_positioning(),
-            Self::Inner(container) => container.get_positioning(),
-        }
+        self.as_ref().get_positioning()
     }
 
     fn get_positioning_mut(&mut self) -> &mut GenomeObjectPositioning {
@@ -92,10 +139,7 @@ impl BrainRegionContainer for BrainRegionContainerRuntime {
     }
 
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
-        match self {
-            Self::Root(container) => container.get_ancestor_id(),
-            Self::Inner(container) => container.get_ancestor_id(),
-        }
+        self.as_ref().get_ancestor_id()
     }
 }
 
