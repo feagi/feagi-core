@@ -6,8 +6,10 @@ pub mod neural_processors;
 /// Core data structures and traits needed for interfacing with the connectome
 pub mod connectome_basis {
     pub use feagi_connectome_neural::neural_basis::quantization_levels;
+    #[cfg(feature = "alloc")]
     pub use feagi_connectome_neural::neural_basis::visualization;
 
+    #[cfg(feature = "alloc")]
     pub mod engine {
         pub use feagi_connectome_neural::neural_basis::engine::BurstEngineIndex;
         pub use feagi_connectome_neural::neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
@@ -30,10 +32,9 @@ pub mod connectome_basis {
 
     pub mod neuron_model {
         pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-        pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModelTag;
         /// The generated `NeuronModel` family, which the cortical type family macros reach as `neuron_model`
         pub use crate::neuron_models::neuron_model::*;
-        pub use crate::neuron_models::init_dispatch::{CorticalAreaInitContainer, CorticalAreaInitEnum};
+        pub use crate::neuron_models::init_dispatch::{CorticalAreaInitContainer, CorticalAreaInitEnum, CorticalAreaNeurogenesis};
         pub use feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing;
         pub use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf, NeuronLayoutTag};
@@ -41,13 +42,13 @@ pub mod connectome_basis {
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::{
             NeuronLayoutSingleSteppedDynamic, NeuronLayoutTagSingleSteppedDynamic,
         };
-        pub use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::{
-            CorticalAreaInit, CorticalAreaInitGenerationError, GenomeNeuronInitializer, NeuronInitErrorOf, NeuronInitializer,
+        /// How the neurons of a cortical area are spawned
+        pub use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{
+            by_generator::NeurogenesisByGenerator, from_storage::{NeurogenesisFromStorage, NeurogenesisStorageError},
+            from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
         };
-        /// The neuron initializers commonly listed by neuron models
-        pub use crate::neuron_models::initializers::UniformNeuronInit;
-        #[cfg(feature = "alloc")]
-        pub use crate::neuron_models::initializers::{StoredNeuronInit, StoredNeuronInitError};
+        /// The generator starting every neuron of an area from the same values, for cortical types to wrap
+        pub use crate::neuron_models::defaults_generator::NeurogenesisDefaultsGenerator;
         pub use feagi_connectome_proc::{
             define_cortical_type_family_template, define_model_family_template, expand_cortical_area_map, expand_cortical_identifier, expand_cortical_type_family,
             expand_model_family,

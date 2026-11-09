@@ -4,8 +4,8 @@
 //! per neuron model it allows. Generated items are also reached through `cortical_area_type`
 
 use feagi_connectome::connectome_basis::neuron_model::{
-    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInit, CorticalAreaInitContainer,
-    CorticalAreaInitGenerationError, NeuronInitErrorOf, NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
+    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInitContainer,
+    NeuronLayoutOf, NeuronLayoutTag, NeuronModelUniversalCorticalProperties,
 };
 #[cfg(feature = "std")]
 use feagi_connectome::connectome_basis::neuron_model::expand_cortical_area_map;
@@ -17,6 +17,7 @@ pub mod motor;
 pub mod processing;
 pub mod sensor;
 pub mod tunable;
+pub mod faux_cortical_identifier;
 
 /// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
 /// bytes and back must return the exact same bytes, or two different byte patterns could mean the

@@ -8,18 +8,18 @@ use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{self, Feagi
 use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{self, MemoryFireHashingCorticalDataProperties, MemoryFireHashingCorticalDataVariance, NeuronModelMemoryFireHashingDefaultQuant};
 use feagi_connectome::connectome_basis::neuron_model::{FeagiAdvancedQuantEnum, FeagiSimpleQuantEnum, MemoryFireHashingQuantEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
-use feagi_genome::basis::specifications::brain_regions::BrainRegionID;
-use feagi_genome::cortical_area::foundation::Power;
-use feagi_genome::cortical_area::motor::Led;
-use feagi_genome::cortical_area::processing::{Interconnect, Memory};
-use feagi_genome::cortical_area::sensor::Camera;
-use feagi_genome::cortical_area::{
+use feagi_genome::basis::brain_region_identifiers::BrainRegionID;
+use feagi_genome::basis::cortical_area::foundation::Power;
+use feagi_genome::basis::cortical_area::motor::Led;
+use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};
+use feagi_genome::basis::cortical_area::sensor::Camera;
+use feagi_genome::basis::cortical_area::{
     CorticalAreaTypeMap, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalAreaTypeRef, CorticalAreaTypeRefMut, CorticalIdentifier, ProcessingInterconnectModelEnum,
     ProcessingMemoryModelEnum, ProcessingSuperTypeRef, ProcessingSuperTypeRefMut, SensorSuperTypeRef,
 };
-use feagi_genome::genome::containers::cortical_area::{CorticalAreaContainerDesigner, CorticalAreaContainersDesigner, NeuronModelDataDesigner};
+use feagi_genome::genome::cortical_area::{CorticalAreaContainerDesigner, CorticalAreaContainersDesigner, NeuronModelDataDesigner};
 use feagi_genome::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
-use feagi_genome::genome::genomes::designer_genome::DesignerGenome;
+use feagi_genome::genome::genomes::designer::DesignerGenome;
 use std::collections::HashSet;
 
 type Fiq = FeagiIndexQuantizationStandard;
@@ -116,7 +116,7 @@ fn universal<NM: feagi_connectome::connectome_basis::neuron_model::NeuronModel>(
 
 fn container<CT: CorticalAreaTypeMember>(
     layout_context: <<CT::NeuronLayout as feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTag>::Layout<Fiq> as feagi_connectome::connectome_basis::neuron_model::NeuronLayoutData<Fiq>>::CorticalLevelContext,
-    neuron_model_data: CT::Models<feagi_genome::genome::containers::cortical_area::NeuronModelDataDesignerContainer<Fiq>>,
+    neuron_model_data: CT::Models<feagi_genome::genome::cortical_area::NeuronModelDataDesignerContainer<Fiq>>,
 ) -> CorticalAreaContainerDesigner<Fiq, CT> {
     CorticalAreaContainerDesigner {
         metadata: GenomeObjectMetadata { name: "area".to_string(), description: String::new() },

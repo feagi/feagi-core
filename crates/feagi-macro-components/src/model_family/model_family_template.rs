@@ -37,12 +37,11 @@ const SERDE_CRATE: &str = "::feagi_basis::__private::serde";
 /// ```
 /// No paths are given. Expanding this generates the family module, named the snake case of the
 /// family, which re-exports everything public where it is expanded. That must include the base
-/// trait `{Family}` and the tag trait `{Family}Tag`, as the items generated for the family reach
-/// them through this module. The family
+/// trait `{Family}`, as the items generated for the family reach it through this module. The family
 /// module has a sub module per model named the snake case of the model, re-exporting the model from
 /// the folder of that name next to the file the template is expanded in. Each folder must hold a
-/// `data` module, with the model trait `{Family}{Model}`, the tag `{Family}{Model}Tag`, and the
-/// marker struct `{Family}{Model}{Level}` of each of its quantization levels, and a `burst_dynamics` module, with
+/// `data` module, with the model trait `{Family}{Model}`, the tag `{Family}{Model}Tag` (a type
+/// distinct per model implementing the base trait), and the marker struct `{Family}{Model}{Level}` of each of its quantization levels, and a `burst_dynamics` module, with
 /// `{Model}BurstEngineDynamics`, which is re-exported as `BurstEngineDynamics`. Marker structs must
 /// be unit structs. Every map keeps its template order
 pub struct ModelFamilyTemplate {
@@ -98,13 +97,6 @@ impl ModelFamilyTemplate {
         let model_module = Self::model_module(model);
         let tag = format_ident!("{}{}Tag", self.family_name, model);
         quote!(#family_module::#model_module::#tag)
-    }
-
-    /// The trait every tag of the family implements
-    pub fn tag_trait_path(&self) -> proc_macro2::TokenStream {
-        let family_module = self.family_module();
-        let tag_trait = format_ident!("{}Tag", self.family_name);
-        quote!(#family_module::#tag_trait)
     }
 
     pub fn marker_path(&self, model: &Ident, level: &Ident) -> proc_macro2::TokenStream {
@@ -604,7 +596,6 @@ impl ModelFamilyTemplate {
     fn generate_member_traits(&self) -> proc_macro2::TokenStream {
         let family_name = &self.family_name;
         let base_trait = self.base_trait_path();
-        let tag_trait = self.tag_trait_path();
         let member_trait = self.member_trait_name();
         let kind = self.kind_name();
         let container = self.container_trait_name();
@@ -721,8 +712,9 @@ impl ModelFamilyTemplate {
         quote! {
             #[doc = #member_doc]
             pub trait #member_trait: #base_trait + ::core::marker::Sized {
-                /// The model this is a member of, as a whole across its quantization levels
-                type Tag: #tag_trait;
+                /// The model this is a member of, as a whole across its quantization levels. A
+                /// type distinct per model, whose layout is the layout of the model
+                type Tag: #base_trait;
 
                 /// The member of the family this is
                 const KIND: #kind;

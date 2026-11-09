@@ -1,6 +1,6 @@
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::cortical_area::CorticalIdentifier;
+use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::cortical_area::CorticalIdentifier;
 use crate::genome::genome_editing::genome_edit_steps::GenomeEditStepType;
 use crate::genome::genome_editing::GenomeEditSequence;
 use crate::genome::genome_object::GenomeObjectMetadata;

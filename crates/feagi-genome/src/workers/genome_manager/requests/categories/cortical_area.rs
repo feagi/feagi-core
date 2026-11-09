@@ -3,7 +3,7 @@
 //!
 //! Converted (for reference only) from the old `cortical_area` REST endpoints.
 
-use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
+use crate::basis::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 

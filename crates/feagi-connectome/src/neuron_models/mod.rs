@@ -11,5 +11,7 @@ pub use family::neuron_model;
 #[macro_use]
 pub mod family;
 pub mod init_dispatch;
-pub mod initializers;
+pub mod defaults_generator;
+// Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
+//pub mod initializers;
 

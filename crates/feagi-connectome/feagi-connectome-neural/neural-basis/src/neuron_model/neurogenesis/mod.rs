@@ -9,8 +9,8 @@ use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
-/// Shared generator for initing scratch and variance data
-pub trait NeurogenesisDefaults<FIQ, NM>: Clone + core::fmt::Debug + Send + Sync
+/// Shared static generator for initing scratch and variance data
+pub trait NeurogenesisScratchVarianceGenerator<FIQ, NM>: Clone + core::fmt::Debug + Send + Sync
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel

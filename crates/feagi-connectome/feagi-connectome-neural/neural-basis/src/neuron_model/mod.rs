@@ -1,4 +1,4 @@
-use crate::neuron_model::neurogenesis::NeurogenesisDefaults;
+use crate::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::quantization_levels::MembranePotentialQuantization;
 use crate::quantization_levels::FeagiIndexQuantization;
@@ -12,6 +12,8 @@ use neurogenesis::by_generator::NeurogenesisByGenerator;
 pub mod model_data;
 pub mod neuron_layout;
 pub mod neurogenesis;
+pub mod metamorphosis;
+pub mod neuron_pattern;
 
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
 /// as the data its dynamics use and the neuron layout it expects. Note that this trait
@@ -22,7 +24,7 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// What neuron layout this neuron model expects
     type NeuronLayoutTag: NeuronLayoutTag;
     
-    type NeurogenesisDefaults<FIQ: FeagiIndexQuantization>: NeurogenesisDefaults<FIQ, Self>;
+    type NeurogenesisDefaults<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisByGenerator<FIQ, Self>;
 

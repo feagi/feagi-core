@@ -3,11 +3,17 @@
 
 pub mod neuron_model;
 pub mod quantization_levels;
-pub mod engine;
 pub mod connectivity_rule;
 pub mod synapse_model;
+
+// Visualization data is backed by a heap allocated `BitBatchParDataVector`
+#[cfg(feature = "alloc")]
 pub mod visualization;
 
-#[cfg(feature = "std")] // TODO some edits are perfectly fine on no-alloc
+#[cfg(feature = "alloc")] // TODO some edits are perfectly fine on no-alloc
 pub mod connectome_editing;
+
+// The burst engine trait depends on both connectome editing and visualization
+#[cfg(feature = "alloc")]
+pub mod engine;
 

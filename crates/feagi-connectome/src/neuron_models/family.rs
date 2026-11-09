@@ -2,7 +2,6 @@
 //! items are reached through [`super::neuron_model`]
 
 pub(super) use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-pub(super) use feagi_connectome_neural::neural_basis::neuron_model::NeuronModelTag;
 use feagi_connectome_proc::{define_model_family_template, expand_model_family};
 
 

@@ -1,4 +1,4 @@
-use crate::cortical_area::CorticalIdentifier;
+use crate::basis::cortical_area::CorticalIdentifier;
 use serde::{Deserialize, Serialize};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;

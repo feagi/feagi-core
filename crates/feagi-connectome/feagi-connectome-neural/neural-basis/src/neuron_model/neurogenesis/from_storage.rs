@@ -1,5 +1,5 @@
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neurogenesis::{NeurogenesisDefaults, NeurogenesisMethod};
+use crate::neuron_model::neurogenesis::{NeurogenesisScratchVarianceGenerator, NeurogenesisMethod};
 use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutTag};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;

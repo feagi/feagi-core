@@ -1,18 +1,25 @@
 use core::cmp::min;
+#[cfg(feature = "alloc")]
 use feagi_basis::collections::quant_indexed::quant_indexed::QuantIndexedVector;
 use feagi_basis::feagi_basis_proc_common::bit_struct_builder;
+#[cfg(feature = "alloc")]
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_basis::prelude::*;
+#[cfg(feature = "alloc")]
 use neural_basis::neuron_model::NeuronModel;
+#[cfg(feature = "alloc")]
 use neural_basis::neuron_model::wrapped_indexing::{CorticalAreaEngineIndex, NeuronEngineIndex, CorticalAreaQuantIndex, NeuronModelNeuronQuantIndex};
 use neural_basis::quantization_levels::FeagiIndexQuantization;
 
 //region Parallel Structs
+// These hold heap allocated `QuantIndexedVector`s, so need alloc
 
+#[cfg(feature = "alloc")]
 pub(crate) struct EnginePerCorticalData<FIQ: FeagiIndexQuantization> {
     pub cortical_flags: QuantIndexedVector<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaUbiquitousFlags>,
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> EnginePerCorticalData<FIQ> {
     pub fn new() -> Self {
         Self {
@@ -21,6 +28,7 @@ impl<FIQ: FeagiIndexQuantization> EnginePerCorticalData<FIQ> {
     }
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) struct ModelQuantPerCorticalDataType<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     pub cortical_level_psp:
         QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaNeuronPotential<NM::MembranePotentialQuant>>,
@@ -29,6 +37,7 @@ pub(crate) struct ModelQuantPerCorticalDataType<FIQ: FeagiIndexQuantization, NM:
     pub model_scratch: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataScratch>,
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> ModelQuantPerCorticalDataType<FIQ, NM> {
     pub fn new() -> Self {
         Self {
@@ -40,12 +49,14 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> ModelQuantPerCorticalDataType
     }
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) struct EnginePerNeuronData<FIQ: FeagiIndexQuantization> {
     pub neuron_model_and_quant: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, ()>,
     pub cortical_index: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
     pub neuron_flags: QuantIndexedVector<NeuronEngineIndex<FIQ::NeuronIndexQuant>, PerNeuronUbiquitousFlags>,
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> EnginePerNeuronData<FIQ> {
     pub fn new() -> Self {
         Self {
@@ -56,6 +67,7 @@ impl<FIQ: FeagiIndexQuantization> EnginePerNeuronData<FIQ> {
     }
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) struct ModelQuantPerNeuronDataType<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     pub membrane_potentials:
         QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, CorticalAreaNeuronPotential<NM::MembranePotentialQuant>>,
@@ -65,6 +77,7 @@ pub(crate) struct ModelQuantPerNeuronDataType<FIQ: FeagiIndexQuantization, NM: N
     pub model_scratch: QuantIndexedVector<NeuronModelNeuronQuantIndex<FIQ::NeuronIndexQuant>, NM::NeuronDataScratch>,
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> ModelQuantPerNeuronDataType<FIQ, NM> {
     pub fn new() -> Self {
         Self {

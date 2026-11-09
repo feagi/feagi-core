@@ -1,7 +1,7 @@
 //! Cortical mappings: the synaptic connection rules between a source and a destination cortical
 //! area. Converted from the old `cortical_mapping` endpoints.
 
-use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
+use crate::basis::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 

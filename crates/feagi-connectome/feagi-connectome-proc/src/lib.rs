@@ -21,22 +21,13 @@ use feagi_macro_components::cortical_dynamics::cortical_dynamics_quantization::C
 ///     // `NL: NeuronLayoutTag`
 ///     NeuronLayout: NeuronLayoutTagVoxel
 ///
-///     // Required, every way of initializing the neurons of this model, at least one. Each is a
-///     // variant name and a type implementing `NeuronInitializer<NM>` for every quantization
-///     // level of the model, generically over `NM`. A `#[cfg]` on one applies to everything
-///     // generated for it
-///     NeuronInitializers: {
-///         /// Every neuron starts with the same data
-///         Uniform: UniformNeuronInit<NM>,
-///         #[cfg(feature = "alloc")]
-///         Stored: StoredNeuronInit<NM>,
-///         Custom: SomeInitializer,
-///     }
+///     // Required, every level's `NeuronModel::NeurogenesisDefaults<FIQ>`, written in terms of `FIQ`
+///     // and `Self` (the level). Implements `NeurogenesisScratchVarianceGenerator<FIQ, Self>`
+///     NeurogenesisDefaults: FeagiAdvancedNeurogenesisDefaults<FIQ, Self>
 ///
-///     // Required, what the neuron init of this model converts into to be stored in a genome.
-///     // Implements `NeuronInitializer<NM>` and `GenomeNeuronInitializer`, and the genome level
-///     // type of every initializer above must convert `Into` it
-///     GenomeNeuronInit: UniformNeuronInit<NM>
+///     // Required, every level's `NeuronModel::NeurogenesisGenerator<FIQ>`, written in terms of
+///     // `FIQ` and `Self` (the level). Implements `NeurogenesisByGenerator<FIQ, Self>`
+///     NeurogenesisGenerator: FeagiAdvancedNeurogenesisGenerator<FIQ, Self>
 ///
 ///     // Optional, each one of QDECIMAL, QUINT or QSINT
 ///     Quantizables: {
@@ -78,16 +69,15 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 /// Expands a cortical dynamics quantization template, as given by its template macro. Generates:
 /// - A wrapper struct per quantizable, through `feagi_basis`'s `create_wrapped_quantized_*!`
 /// - The model's `NeuronModel{Model}` trait, a sub trait of `NeuronModel` fixing (or, for a
-///   generic layout, restricting) its `LayoutTag` and fixing each of its data types to the
+///   generic layout, restricting) its `NeuronLayoutTag` and fixing each of its data types to the
 ///   model's data struct of that type, holding an associated type per quantizable
 /// - One `NeuronModel{Model}{Level}` marker struct per quantization level, implementing
-///   `NeuronModel` and the model trait. For a generic layout, it is generic over the layout,
+///   `NeuronModel` (with the `NeurogenesisDefaults` and `NeurogenesisGenerator` of the template)
+///   and the model trait. For a generic layout, it is generic over the layout,
 ///   `NeuronModel{Model}{Level}<NL>`
-/// - `{Model}NeuronInit<NM>`, the `NeuronModel::NeuronInit` of every level, an enum with a variant
-///   per neuron initializer, `From` each of them, and `NeuronInitializer` forwarded to the one held.
-///   Its genome level form is the `GenomeNeuronInit` type, converted into from the genome level
-///   form of the held initializer. Its error `{Model}NeuronInitError<NM>` has a variant holding the
-///   error of each initializer
+/// - For a single layout type, the tag `NeuronModel{Model}Tag`, naming the model as a whole. It is
+///   an alias of the first quantization level, so its `NeuronModel::NeuronLayoutTag` is the layout
+///   of the model
 /// - `CorticalDataVarianceSpecification` for `{Model}CorticalDataVariance`, if the model gives
 ///   fields for neither variance data type. Otherwise it must be implemented by hand
 /// - A `{Model}{DataType}<NM>` struct for every data type, such as
@@ -103,10 +93,9 @@ pub fn define_cortical_dynamics_quantization_template(input: proc_macro::TokenSt
 ///
 /// Must be in scope where this is expanded: `NeuronModel`, `NeuronLayoutOf`, `MembranePotentialQuantization`, the seven
 /// data specification traits (such as `CorticalDataPropertiesSpecification`), `FeagiIndexQuantization`,
-/// `NeuronInitializer`, the types of the `NeuronInitializers`, any types the data
-/// fields name, any traits or types the `NeuronLayout` names (`NeuronLayoutTag` when it is left as default), and `NeuronModelTag`
-/// (when `NeuronLayout` is a single layout type, which generates the tag `NeuronModel{Model}Tag` of the model). The crate must
-/// depend on `serde` and `half`, which the wrapper structs use
+/// the `NeurogenesisDefaults` and `NeurogenesisGenerator` types, any types the data fields name,
+/// and any traits or types the `NeuronLayout` names (`NeuronLayoutTag` when it is left as default).
+/// The crate must depend on `serde` and `half`, which the wrapper structs use
 #[proc_macro]
 pub fn expand_cortical_dynamics_quantization(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match syn::parse::<CorticalDynamicsQuantizationTemplate>(input) {
@@ -177,10 +166,10 @@ pub fn define_model_family_template(input: proc_macro::TokenStream) -> proc_macr
 ///   `with_{family}_kind!`, which run the same code against whichever member is held, optionally
 ///   aliasing its marker struct
 ///
-/// The base trait `{Family}` and the tag trait `{Family}Tag` must be public where this is expanded.
+/// The base trait `{Family}` must be public where this is expanded.
 /// Next to the file expanding this must be a folder per model named the snake case of the model, such
 /// as `foundation_power`, holding a `data` module with the model trait `{Family}{Model}`, the tag
-/// `{Family}{Model}Tag`, and every marker struct `{Family}{Model}{Level}` of it, and a
+/// `{Family}{Model}Tag` (a type distinct per model implementing `{Family}`), and every marker struct `{Family}{Model}{Level}` of it, and a
 /// `burst_dynamics` module with `{Model}BurstEngineDynamics`.
 /// Marker structs must be unit structs. The dispatch macros expect the family module in scope where
 /// they are called. The crate must depend on `feagi_basis`, which serde is reached through

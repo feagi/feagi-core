@@ -1,9 +1,9 @@
-use feagi_genome::cortical_area::foundation::{Death, Power};
-use feagi_genome::cortical_area::motor::Led;
-use feagi_genome::cortical_area::processing::{Interconnect, Memory};
-use feagi_genome::cortical_area::sensor::Camera;
-use feagi_genome::cortical_area::tunable::BrightnessAdjust;
-use feagi_genome::cortical_area::{
+use feagi_genome::basis::cortical_area::foundation::{Death, Power};
+use feagi_genome::basis::cortical_area::motor::Led;
+use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};
+use feagi_genome::basis::cortical_area::sensor::Camera;
+use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
+use feagi_genome::basis::cortical_area::{
     CorticalAreaTypeKind, CorticalAreaTypeMember, CorticalIdentifier, CorticalIdentifierParseError, CorticalIdentifierPath, FoundationCorticalIdentifierPath,
     MotorCorticalIdentifierPath, ProcessingCorticalIdentifierPath, SensorCorticalIdentifierPath, TunableCorticalIdentifierPath,
 };
@@ -118,7 +118,7 @@ mod custom_inner {
     use feagi_connectome::connectome_basis::neuron_model;
     use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NeuronModelFeagiSimple;
     use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-    use feagi_genome::cortical_area::CorticalAreaInnerID;
+    use feagi_genome::basis::cortical_area::CorticalAreaInnerID;
 
     pub trait TestType {
         type NeuronLayout: NeuronLayoutTag;

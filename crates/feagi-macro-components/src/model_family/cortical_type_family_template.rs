@@ -202,10 +202,11 @@ impl CorticalTypeFamilyTemplate {
         quote!(#model_module::#tag)
     }
 
-    fn model_tag_trait_path(&self) -> proc_macro2::TokenStream {
+    /// The base trait of the model family, which every model tag implements
+    fn model_base_trait_path(&self) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let tag_trait = format_ident!("{}Tag", self.model_family_name);
-        quote!(#module::#tag_trait)
+        let base_trait = &self.model_family_name;
+        quote!(#module::#base_trait)
     }
 
     fn model_quant_enum_path(&self, model: &Ident) -> proc_macro2::TokenStream {
@@ -775,7 +776,7 @@ impl CorticalTypeFamilyTemplate {
     fn generate_uses_traits(&self) -> proc_macro2::TokenStream {
         let family_name = &self.family_name;
         let base_trait = self.base_trait_path();
-        let tag_trait = self.model_tag_trait_path();
+        let model_base_trait = self.model_base_trait_path();
         let basis = basis_path();
         let quantization_error = quote!(#basis::quantization::quantizable::DataValueQuantizationError);
 
@@ -791,7 +792,7 @@ impl CorticalTypeFamilyTemplate {
             );
             quote! {
                 #[doc = #doc]
-                pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #tag_trait>::LayoutTag> {
+                pub trait #uses_trait: #base_trait<NeuronLayout = <#tag as #model_base_trait>::NeuronLayoutTag> {
                     /// The default universal properties of a new area of this type
                     fn default_universal_properties<NM: #model_trait>() -> ::core::result::Result<NeuronModelUniversalCorticalProperties<NM>, #quantization_error>;
 

@@ -1,12 +1,10 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedDecimalTrait;
-use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::NeuronInitializer;
-use crate::neuron_models::initializers::UniformNeuronInit;
-#[cfg(feature = "alloc")]
-use crate::neuron_models::initializers::StoredNeuronInit;
+use super::neurogenesis::FeagiAdvancedNeurogenesisDefaults;
+use crate::neuron_models::defaults_generator::NeurogenesisDefaultsGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
-use feagi_connectome_neural::neural_basis::neuron_model::{NeuronModel, NeuronModelTag};
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
@@ -17,16 +15,11 @@ define_cortical_dynamics_quantization_template! {
 
     NeuronLayout: NeuronLayoutTagVoxel
 
-    NeuronInitializers: {
-        /// Every neuron starts with the same data
-        Uniform: UniformNeuronInit<NM>,
-        /// Every neuron has its own data, such as when loaded from a connectome
-        #[cfg(feature = "alloc")]
-        Stored: StoredNeuronInit<NM>,
-    }
+    // How the scratch and variance data of a neuron is generated
+    NeurogenesisDefaults: FeagiAdvancedNeurogenesisDefaults<FIQ, Self>
 
-    // Stored in a genome as every neuron starting with the same data
-    GenomeNeuronInit: UniformNeuronInit<NM>
+    // How the neurons of a new cortical area are generated, every neuron starting from the same values
+    NeurogenesisGenerator: NeurogenesisDefaultsGenerator<FIQ, Self>
 
     Quantizables: {
         /// For handling timing

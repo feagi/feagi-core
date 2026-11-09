@@ -9,8 +9,8 @@ use syn::{braced, Attribute, Token, Type, TypeParamBound};
 
 mod kw {
     syn::custom_keyword!(NeuronLayout);
-    syn::custom_keyword!(NeuronInitializers);
-    syn::custom_keyword!(GenomeNeuronInit);
+    syn::custom_keyword!(NeurogenesisDefaults);
+    syn::custom_keyword!(NeurogenesisGenerator);
     syn::custom_keyword!(Quantizables);
     syn::custom_keyword!(QuantizationLevels);
     syn::custom_keyword!(DataSpecifications);
@@ -39,10 +39,6 @@ const RESERVED_GENERICS: [&str; 2] = [NEURON_MODEL_GENERIC, FEAGI_INDEX_QUANTIZA
 /// Name of the marker field every generated data struct holds
 const PHANTOM_FIELD: &str = "_p";
 
-/// Name of the hidden variant of the generated neuron init enum and its error, which holds the
-/// neuron model generic for initializers that do not name it, and can never be constructed
-const NEURON_INIT_MARKER_VARIANT: &str = "__Marker";
-
 /// The data types of `NeuronModel` in trait order, with the specification trait each of their
 /// structs implements
 pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
@@ -64,15 +60,9 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 ///
 /// NeuronLayout: NeuronLayoutTagVoxel
 ///
-/// NeuronInitializers: {
-///     /// Optional description
-///     Uniform: UniformNeuronInit<NM>,
-///     #[cfg(feature = "alloc")]
-///     Stored: StoredNeuronInit<NM>,
-///     Custom: SomeInitializer,
-/// }
+/// NeurogenesisDefaults: ModelNameNeurogenesisDefaults<FIQ, Self>
 ///
-/// GenomeNeuronInit: UniformNeuronInit<NM>
+/// NeurogenesisGenerator: ModelNameNeurogenesisGenerator<FIQ, Self>
 ///
 /// Quantizables: {
 ///     /// Optional description
@@ -96,14 +86,11 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 /// ```
 /// The optional `NeuronLayout` entry sets the `NeuronLayoutTag` the model is implemented for (see
 /// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutTag`. The required
-/// `NeuronInitializers` list every way of initializing the model's neurons, at least one, each
-/// as a variant name and a type implementing `NeuronInitializer<NM>` for every quantization level
-/// of the model, generically over `NM`. They become the variants of `{Model}NeuronInit<NM>`, the
-/// `NeuronModel::NeuronInit` of every level (see [`NeuronInitializerTemplate`]). The required
-/// `GenomeNeuronInit` is the type, written in terms of `NM`, that `{Model}NeuronInit<NM>` converts
-/// into to be stored in a genome, its `NeuronInitializer::GenomeLevelNeuronIntoType`. It must
-/// implement `NeuronInitializer<NM>` and `GenomeNeuronInitializer`, and the genome level type of
-/// every listed initializer must convert `Into` it. The optional `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
+/// `NeurogenesisDefaults` and `NeurogenesisGenerator` are the types every quantization level sets
+/// as `NeuronModel::NeurogenesisDefaults<FIQ>` and `NeuronModel::NeurogenesisGenerator<FIQ>`,
+/// written in terms of the generic `FIQ` and `Self`, the quantization level. They must implement
+/// `NeurogenesisScratchVarianceGenerator<FIQ, Self>` and `NeurogenesisByGenerator<FIQ, Self>`
+/// respectively, for every level of the model. The optional `Quantizables` each become a wrapper struct of their kind (see [`QuantizableKind`]) and an
 /// associated type of the model. Every quantization level must set `MembranePotentialQuant` and
 /// each quantizable once. The optional `DataSpecifications` hold, in any order, the fields of the
 /// model's data structs, one per data type of `NeuronModel` (see
@@ -117,8 +104,8 @@ pub struct CorticalDynamicsQuantizationTemplate {
     pub model_attributes: Vec<Attribute>,
     pub model_name: Ident,
     pub layout: ModelLayoutTemplate,
-    pub neuron_initializers: IndexMap<Ident, NeuronInitializerTemplate>,
-    pub genome_neuron_init: Type,
+    pub neurogenesis_defaults: Type,
+    pub neurogenesis_generator: Type,
     pub quantizables: IndexMap<Ident, QuantizableTemplate>,
     pub quantization_levels: IndexMap<Ident, QuantizationLevelTemplate>,
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
@@ -246,21 +233,6 @@ pub struct QuantizationLevelTemplate {
     pub quantizables: IndexMap<Ident, Type>,
 }
 
-/// One way of initializing the neurons of the model, a variant of `{Model}NeuronInit<NM>`. Its
-/// `#[cfg]` attributes also apply to everything generated for it, so an initializer may depend on a
-/// feature
-pub struct NeuronInitializerTemplate {
-    pub attributes: Vec<Attribute>,
-    pub initializer_type: Type,
-}
-
-impl NeuronInitializerTemplate {
-    /// The `#[cfg]` attributes, which everything generated for this initializer carries
-    fn cfg_attributes(&self) -> impl Iterator<Item = &Attribute> {
-        self.attributes.iter().filter(|attribute| attribute.path().is_ident("cfg"))
-    }
-}
-
 /// A field of a model data struct
 pub struct DataFieldTemplate {
     pub attributes: Vec<Attribute>,
@@ -270,14 +242,6 @@ pub struct DataFieldTemplate {
 impl CorticalDynamicsQuantizationTemplate {
     pub fn model_trait_name(&self) -> Ident {
         format_ident!("NeuronModel{}", self.model_name)
-    }
-
-    pub fn neuron_init_name(&self) -> Ident {
-        format_ident!("{}NeuronInit", self.model_name)
-    }
-
-    pub fn neuron_init_error_name(&self) -> Ident {
-        format_ident!("{}NeuronInitError", self.model_name)
     }
 
     pub fn tag_name(&self) -> Ident {
@@ -392,13 +356,13 @@ impl CorticalDynamicsQuantizationTemplate {
         // is a generic of every level
         let (layout_restriction, level_generics, level_struct_body, layout_definition) = match &self.layout {
             ModelLayoutTemplate::Fixed(layout) => (
-                quote!(LayoutTag = #layout),
+                quote!(NeuronLayoutTag = #layout),
                 quote!(),
                 quote!(;),
                 quote!(#layout),
             ),
             ModelLayoutTemplate::Generic { name, bounds } => (
-                quote!(LayoutTag: #bounds),
+                quote!(NeuronLayoutTag: #bounds),
                 quote!(<#name: #bounds>),
                 quote!((::core::marker::PhantomData<#name>);),
                 quote!(#name),
@@ -413,7 +377,9 @@ impl CorticalDynamicsQuantizationTemplate {
         let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| format_ident!("{}", name)).collect();
         let model_data_structs: Vec<Ident> = model_data_names.iter().map(|name| self.data_struct_name(name)).collect();
 
-        let neuron_init = self.neuron_init_name();
+        let neurogenesis_defaults = &self.neurogenesis_defaults;
+        let neurogenesis_generator = &self.neurogenesis_generator;
+        let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
         let quantization_levels = self.quantization_levels.iter().map(|(name, level)| {
             let struct_name = self.quantization_level_struct_name(name);
             let membrane_potential_quant = &level.membrane_potential_quant;
@@ -435,9 +401,10 @@ impl CorticalDynamicsQuantizationTemplate {
                 }
 
                 impl #level_generics NeuronModel for #struct_name #level_generic_names {
-                    type LayoutTag = #layout_definition;
+                    type NeuronLayoutTag = #layout_definition;
+                    type NeurogenesisDefaults<#fiq: FeagiIndexQuantization> = #neurogenesis_defaults;
+                    type NeurogenesisGenerator<#fiq: FeagiIndexQuantization> = #neurogenesis_generator;
                     #( type #model_data_names = #model_data_structs<Self>; )*
-                    type NeuronInit = #neuron_init<Self>;
                 }
 
                 impl #level_generics #model_trait for #struct_name #level_generic_names {
@@ -517,30 +484,31 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
-        // A generic layout has no single layout type for the model as a whole to name
-        let tag = match &self.layout {
-            ModelLayoutTemplate::Fixed(layout) => {
+        // The tag names the model as a whole, a type distinct per model. It is the first
+        // quantization level, so its `NeuronModel::NeuronLayoutTag` is the layout of the model as a
+        // whole, which every level shares. A generic layout has no single layout for the model as a
+        // whole, so has no tag
+        let tag = match (&self.layout, self.quantization_levels.keys().next()) {
+            (ModelLayoutTemplate::Fixed(_), Some(first_level)) => {
                 let tag_name = self.tag_name();
-                let tag_doc = format!("Names the `{}` model as a whole, across its quantization levels", self.model_name);
+                let first_level_struct = self.quantization_level_struct_name(first_level);
+                let tag_doc = format!(
+                    "Names the `{}` model as a whole, across its quantization levels. Its `NeuronModel::NeuronLayoutTag` is the layout of the model",
+                    self.model_name
+                );
                 quote! {
                     #[doc = #tag_doc]
-                    pub struct #tag_name;
-
-                    impl NeuronModelTag for #tag_name {
-                        type LayoutTag = #layout;
-                    }
+                    pub type #tag_name = #first_level_struct;
                 }
             }
-            ModelLayoutTemplate::Generic { .. } => quote!(),
+            _ => quote!(),
         };
-
-        let neuron_init_items = self.generate_neuron_init();
 
         quote! {
             #( #wrappers )*
 
             #( #model_attributes )*
-            pub trait #model_trait: NeuronModel<#layout_restriction, #( #model_data_names = #model_data_structs<Self>, )* NeuronInit = #neuron_init<Self>> {
+            pub trait #model_trait: NeuronModel<#layout_restriction, #( #model_data_names = #model_data_structs<Self>, )*> {
                 #( #associated_types )*
             }
 
@@ -548,184 +516,7 @@ impl CorticalDynamicsQuantizationTemplate {
 
             #( #data_structs )*
 
-            #neuron_init_items
-
             #tag
-        }
-    }
-
-    /// Generate `{Model}NeuronInit<NM>`, holding any one of the model's neuron initializers, with
-    /// `From` each of them and `NeuronInitializer` forwarded to the one held, and
-    /// `{Model}NeuronInitError<NM>`, its error, holding the error of any one of them. Both have a
-    /// hidden variant that cannot be constructed, so `NM` is held even if no initializer names it.
-    /// Its genome level form is the `GenomeNeuronInit` type, which the genome level form of the held
-    /// initializer is converted into. `Clone`, `Debug` and `PartialEq` are written out, as deriving
-    /// them would require them of `NM`
-    fn generate_neuron_init(&self) -> proc_macro2::TokenStream {
-        let model_name = &self.model_name;
-        let genome_neuron_init = &self.genome_neuron_init;
-        let model_trait = self.model_trait_name();
-        let neuron_init = self.neuron_init_name();
-        let neuron_init_error = self.neuron_init_error_name();
-        let nm = format_ident!("{}", NEURON_MODEL_GENERIC);
-        let fiq = format_ident!("{}", FEAGI_INDEX_QUANTIZATION_GENERIC);
-        let marker = format_ident!("{}", NEURON_INIT_MARKER_VARIANT);
-        let basis = basis_path();
-
-        let names: Vec<&Ident> = self.neuron_initializers.keys().collect();
-        let types: Vec<&Type> = self.neuron_initializers.values().map(|initializer| &initializer.initializer_type).collect();
-        let attributes: Vec<&Vec<Attribute>> = self.neuron_initializers.values().map(|initializer| &initializer.attributes).collect();
-        let cfgs: Vec<Vec<&Attribute>> = self.neuron_initializers.values().map(|initializer| initializer.cfg_attributes().collect()).collect();
-        let error_docs: Vec<String> = names.iter().map(|name| format!("The error of the `{name}` initializer")).collect();
-        let marker_arm = quote!(Self::#marker(never, _) => match *never {});
-
-        let init_doc = format!("Any one of the neuron initializers of the `{model_name}` model, its `NeuronModel::NeuronInit`");
-        let error_doc = format!("Why the neuron initializer held by a [`{neuron_init}`] cannot initialize the neurons of a layout");
-
-        quote! {
-            #[doc = #init_doc]
-            pub enum #neuron_init<#nm: #model_trait> {
-                #(
-                    #( #attributes )*
-                    #names(#types),
-                )*
-                #[doc(hidden)]
-                #marker(::core::convert::Infallible, ::core::marker::PhantomData<#nm>),
-            }
-
-            #[doc = #error_doc]
-            pub enum #neuron_init_error<#nm: #model_trait> {
-                #(
-                    #( #cfgs )*
-                    #[doc = #error_docs]
-                    #names(<#types as NeuronInitializer<#nm>>::Error),
-                )*
-                #[doc(hidden)]
-                #marker(::core::convert::Infallible, ::core::marker::PhantomData<#nm>),
-            }
-
-            #(
-                #( #cfgs )*
-                impl<#nm: #model_trait> ::core::convert::From<#types> for #neuron_init<#nm> {
-                    fn from(initializer: #types) -> Self {
-                        Self::#names(initializer)
-                    }
-                }
-            )*
-
-            impl<#nm: #model_trait> NeuronInitializer<#nm> for #neuron_init<#nm> {
-                type Error = #neuron_init_error<#nm>;
-                type GenomeLevelNeuronIntoType = #genome_neuron_init;
-
-                fn as_genome_level_neuron_initializer(&self) -> Self::GenomeLevelNeuronIntoType {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(initializer) => ::core::convert::Into::into(NeuronInitializer::<#nm>::as_genome_level_neuron_initializer(initializer)),
-                        )*
-                        #marker_arm
-                    }
-                }
-
-                fn check_against_layout<#fiq: FeagiIndexQuantization>(&self, layout: &NeuronLayoutOf<#nm, #fiq>) -> ::core::result::Result<(), Self::Error> {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(initializer) => NeuronInitializer::<#nm>::check_against_layout::<#fiq>(initializer, layout).map_err(#neuron_init_error::#names),
-                        )*
-                        #marker_arm
-                    }
-                }
-
-                fn neuron_data_at<#fiq: FeagiIndexQuantization>(
-                    &self,
-                    layout: &NeuronLayoutOf<#nm, #fiq>,
-                    index: &#basis::neurons::CorticalAreaNeuronLocalIndex<#fiq::NeuronIndexQuant>,
-                ) -> (#nm::NeuronDataInternal, #nm::NeuronDataScratch) {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(initializer) => NeuronInitializer::<#nm>::neuron_data_at::<#fiq>(initializer, layout, index),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::clone::Clone for #neuron_init<#nm> {
-                fn clone(&self) -> Self {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(initializer) => Self::#names(::core::clone::Clone::clone(initializer)),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::fmt::Debug for #neuron_init<#nm> {
-                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(initializer) => f.debug_tuple(::core::stringify!(#names)).field(initializer).finish(),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::cmp::PartialEq for #neuron_init<#nm> {
-                #[allow(unreachable_patterns)]
-                fn eq(&self, other: &Self) -> bool {
-                    match (self, other) {
-                        #(
-                            #( #cfgs )*
-                            (Self::#names(this), Self::#names(other)) => this == other,
-                        )*
-                        (Self::#marker(never, _), _) | (_, Self::#marker(never, _)) => match *never {},
-                        _ => false,
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::fmt::Debug for #neuron_init_error<#nm> {
-                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(error) => f.debug_tuple(::core::stringify!(#names)).field(error).finish(),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::fmt::Display for #neuron_init_error<#nm> {
-                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(error) => ::core::fmt::Display::fmt(error, f),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
-
-            impl<#nm: #model_trait> ::core::error::Error for #neuron_init_error<#nm> {
-                // Shown as the error of the initializer, so its source is the initializer's source
-                fn source(&self) -> ::core::option::Option<&(dyn ::core::error::Error + 'static)> {
-                    match self {
-                        #(
-                            #( #cfgs )*
-                            Self::#names(error) => ::core::error::Error::source(error),
-                        )*
-                        #marker_arm
-                    }
-                }
-            }
         }
     }
 }
@@ -746,16 +537,16 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             ModelLayoutTemplate::default()
         };
 
-        // Required, as there is no default way to initialize neurons
-        input.parse::<kw::NeuronInitializers>()?;
+        // Required, as there is no default way to generate scratch and variance data
+        input.parse::<kw::NeurogenesisDefaults>()?;
         input.parse::<Token![:]>()?;
-        let neuron_initializers = parse_neuron_initializers(input)?;
+        let neurogenesis_defaults = input.parse::<Type>()?;
         parse_optional_comma(input)?;
 
-        // Required, as every initializer must have a form that can be stored in a genome
-        input.parse::<kw::GenomeNeuronInit>()?;
+        // Required, as there is no default way to generate neurons
+        input.parse::<kw::NeurogenesisGenerator>()?;
         input.parse::<Token![:]>()?;
-        let genome_neuron_init = input.parse::<Type>()?;
+        let neurogenesis_generator = input.parse::<Type>()?;
         parse_optional_comma(input)?;
 
         let quantizables = if input.peek(kw::Quantizables) {
@@ -791,8 +582,8 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
             model_attributes,
             model_name,
             layout,
-            neuron_initializers,
-            genome_neuron_init,
+            neurogenesis_defaults,
+            neurogenesis_generator,
             quantizables,
             quantization_levels,
             data_specifications,
@@ -807,16 +598,8 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
         let model_attributes = &self.model_attributes;
         let model_name = &self.model_name;
         let layout = &self.layout;
-        let genome_neuron_init = &self.genome_neuron_init;
-
-        let neuron_initializers = self.neuron_initializers.iter().map(|(name, initializer)| {
-            let attributes = &initializer.attributes;
-            let initializer_type = &initializer.initializer_type;
-            quote! {
-                #( #attributes )*
-                #name: #initializer_type,
-            }
-        });
+        let neurogenesis_defaults = &self.neurogenesis_defaults;
+        let neurogenesis_generator = &self.neurogenesis_generator;
 
         let quantizables = self.quantizables.iter().map(|(name, quantizable)| {
             let attributes = &quantizable.attributes;
@@ -861,11 +644,9 @@ impl ToTokens for CorticalDynamicsQuantizationTemplate {
 
             NeuronLayout: #layout,
 
-            NeuronInitializers: {
-                #( #neuron_initializers )*
-            }
+            NeurogenesisDefaults: #neurogenesis_defaults,
 
-            GenomeNeuronInit: #genome_neuron_init,
+            NeurogenesisGenerator: #neurogenesis_generator,
 
             Quantizables: {
                 #( #quantizables )*
@@ -888,34 +669,6 @@ fn bare_ident(field_type: &Type) -> Option<&Ident> {
         Type::Path(path) if path.qself.is_none() => path.path.get_ident(),
         _ => None,
     }
-}
-
-/// `{ #[attr] Name: Type, ... }`, at least one
-fn parse_neuron_initializers(input: ParseStream) -> syn::Result<IndexMap<Ident, NeuronInitializerTemplate>> {
-    let field_input;
-    let brace = braced!(field_input in input);
-    let mut initializers = IndexMap::new();
-    while !field_input.is_empty() {
-        let attributes = field_input.call(Attribute::parse_outer)?;
-        let name = field_input.parse::<Ident>()?;
-        if name == NEURON_INIT_MARKER_VARIANT {
-            return Err(syn::Error::new(name.span(), format!("`{NEURON_INIT_MARKER_VARIANT}` is the hidden variant of the generated neuron init enum, the initializer needs another name")));
-        }
-        field_input.parse::<Token![:]>()?;
-        let initializer_type = field_input.parse::<Type>()?;
-        if initializers.contains_key(&name) {
-            return Err(syn::Error::new(name.span(), format!("neuron initializer `{name}` is defined more than once")));
-        }
-        initializers.insert(name, NeuronInitializerTemplate { attributes, initializer_type });
-        if field_input.is_empty() {
-            break;
-        }
-        field_input.parse::<Token![,]>()?;
-    }
-    if initializers.is_empty() {
-        return Err(syn::Error::new(brace.span.join(), "a neuron model needs at least one neuron initializer"));
-    }
-    Ok(initializers)
 }
 
 /// `{ #[attr] Name: QDECIMAL, ... }`

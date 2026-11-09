@@ -3,4 +3,3 @@ pub mod workers;
 
 #[cfg(feature = "std")]
 pub mod genome;
-pub mod cortical_area;

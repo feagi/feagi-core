@@ -1,7 +1,7 @@
 //! Connectome requests: inspecting, exporting and importing the neurons, synapses and cortical
 //! areas of the running brain. Converted from the old `connectome` endpoints, for reference only
 
-use crate::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
+use crate::basis::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
 

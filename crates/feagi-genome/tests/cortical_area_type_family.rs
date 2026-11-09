@@ -10,17 +10,17 @@ use feagi_connectome::{
     with_neuron_model_feagi_advanced, with_neuron_model_feagi_simple, with_neuron_model_foundation_death, with_neuron_model_foundation_power,
     with_neuron_model_memory_fire_hashing,
 };
-use feagi_genome::cortical_area::cortical_area_type;
-use feagi_genome::cortical_area::cortical_area_type::{
+use feagi_genome::basis::cortical_area::cortical_area_type;
+use feagi_genome::basis::cortical_area::cortical_area_type::{
     CorticalAreaTypeEnum, CorticalAreaTypeKind, CorticalAreaTypeMember, CorticalAreaTypeMemberAt, CorticalAreaTypeSelectionError, FoundationPowerModelEnum, FoundationSuperTypeEnum,
     FoundationSuperTypeKind, MotorSuperTypeKind, ProcessingSuperTypeKind, SensorSuperTypeKind, TunableSuperTypeKind,
 };
-use feagi_genome::cortical_area::foundation::{Death, Power};
-use feagi_genome::cortical_area::motor::Led;
-use feagi_genome::cortical_area::processing::{Interconnect, Memory};
-use feagi_genome::cortical_area::sensor::Camera;
-use feagi_genome::cortical_area::tunable::BrightnessAdjust;
-use feagi_genome::cortical_area::CorticalGenomicDataEnum;
+use feagi_genome::basis::cortical_area::foundation::{Death, Power};
+use feagi_genome::basis::cortical_area::motor::Led;
+use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};
+use feagi_genome::basis::cortical_area::sensor::Camera;
+use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
+use feagi_genome::basis::cortical_area::CorticalGenomicDataEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
 use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInit, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel, UniformNeuronInit};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};

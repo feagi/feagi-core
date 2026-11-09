@@ -1,5 +1,5 @@
-use crate::basis::specifications::brain_regions::BrainRegionID;
-use crate::cortical_area::{CorticalAreaTypeEnum, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalAreaTypeMemberAt, CorticalIdentifier};
+use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::cortical_area::{CorticalAreaTypeEnum, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalAreaTypeMemberAt, CorticalIdentifier};
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use std::collections::HashSet;

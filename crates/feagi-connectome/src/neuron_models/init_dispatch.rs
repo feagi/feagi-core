@@ -3,15 +3,20 @@
 
 use crate::neuron_models::family::{neuron_model, NeuronModelContainer, NeuronModelEnum};
 use core::marker::PhantomData;
-use feagi_connectome_neural::neural_basis::neuron_model::interfacing::cortical_area_init::CorticalAreaInit;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-/// Holds the [`CorticalAreaInit`] of a cortical area
+/// How a cortical area of model `NM` gets spawned: either from stored neuron data, or by that
+/// model's own generator
+pub type CorticalAreaNeurogenesis<FIQ, NM> =
+    NeurogenesisFromStorageOrByGenerator<FIQ, NM, <NM as NeuronModel>::NeurogenesisGenerator<FIQ>>;
+
+/// Holds the [`CorticalAreaNeurogenesis`] of a cortical area
 pub struct CorticalAreaInitContainer<FIQ>(PhantomData<fn() -> FIQ>);
 
 impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for CorticalAreaInitContainer<FIQ> {
-    type Of<M: NeuronModel> = CorticalAreaInit<FIQ, M>;
+    type Of<M: NeuronModel> = CorticalAreaNeurogenesis<FIQ, M>;
 }
 
 /// The init of a cortical area, at whichever member of the `NeuronModel` family it uses

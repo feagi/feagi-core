@@ -1,7 +1,5 @@
-pub mod designer_genome;
-
-
-
+pub mod designer;
+pub mod storage;
 // TODO review and implement
 
 
