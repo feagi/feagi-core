@@ -1,14 +1,14 @@
 use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
-use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedQuantDefaultQuant};
 use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{self, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleQuantDefaultQuant};
 use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{self, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingQuantDefaultQuant};
+use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
+use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::connectome_basis::neuron_model::{NMFeagiAdvancedQuantEnum, NMFeagiSimpleQuantEnum, NMMemoryFireHashingQuantEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
+use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
 use feagi_genome::basis::brain_region_identifiers::BrainRegionID;
 use feagi_genome::basis::cortical_area::foundation::Power;
 use feagi_genome::basis::cortical_area::motor::Led;
@@ -18,8 +18,8 @@ use feagi_genome::basis::cortical_area::{
     CorticalAreaTypeMap, CorticalAreaTypeMapValue, CorticalAreaTypeMember, CorticalAreaTypeRef, CorticalAreaTypeRefMut, CorticalIdentifier, ProcessingInterconnectModelEnum,
     ProcessingMemoryModelEnum, ProcessingSuperTypeRef, ProcessingSuperTypeRefMut, SensorSuperTypeRef,
 };
-use feagi_genome::genome::cortical_area::{CorticalAreaContainerDesigner, CorticalAreaContainersDesigner, NeuronModelDataDesigner};
 use feagi_genome::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
+use feagi_genome::genome::genomes::designer::container_cortical_area::{CorticalAreaContainerDesigner, CorticalAreaContainersDesigner, NeuronModelDataDesigner};
 use feagi_genome::genome::genomes::designer::DesignerGenome;
 use std::collections::HashSet;
 
@@ -117,7 +117,7 @@ fn universal<NM: feagi_connectome::connectome_basis::neuron_model::NeuronModel>(
 
 fn container<CT: CorticalAreaTypeMember>(
     layout_context: <<CT::NeuronLayout as feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTag>::Layout<Fiq> as feagi_connectome::connectome_basis::neuron_model::NeuronLayoutData<Fiq>>::CorticalLevelContext,
-    neuron_model_data: CT::Models<feagi_genome::genome::cortical_area::NeuronModelDataDesignerContainer<Fiq>>,
+    neuron_model_data: CT::Models<feagi_genome::genome::genomes::designer::container_cortical_area::NeuronModelDataDesignerContainer<Fiq>>,
 ) -> CorticalAreaContainerDesigner<Fiq, CT> {
     CorticalAreaContainerDesigner {
         metadata: GenomeObjectMetadata { name: "area".to_string(), description: String::new() },

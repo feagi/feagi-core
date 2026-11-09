@@ -48,12 +48,10 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     pub cortical_data_variance: NM::CorticalDataVariance,
     pub cortical_npu_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     pub burst_engine_index: BurstEngineIndex,
-    /// Where the visualization of this cortical area starts
-    pub visualization_start_index: NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>,
 
-    // TODO NM specific visualization context
-
-
+    // Denotes different things depending on context. For Dimensional, denotes the start neuron voxel bit index. For memory, TODO (blank for now)
+    pub visualization_context: <<NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> as NeuronLayoutData<FIQ>>::VisualizerContext,
+    
 }
 
 

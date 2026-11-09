@@ -134,9 +134,7 @@ define_cortical_type_family_template! {
 
 cortical_area_type_family_template!(expand_cortical_type_family);
 cortical_area_type_family_template!(expand_cortical_identifier);
+
+// TODO why are templates broken?
 #[cfg(feature = "std")]
 cortical_area_type_family_template!(expand_cortical_area_map);
-
-/// How a cortical area gets spawned, from storage or by its model's generator, at whichever cortical
-/// type and model member it is
-pub type NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum<FIQ> = CorticalAreaTypeEnum<NeurogenesisFromStorageOrByGeneratorContainer<FIQ>>;

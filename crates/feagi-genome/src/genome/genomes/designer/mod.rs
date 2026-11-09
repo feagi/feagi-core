@@ -1,15 +1,18 @@
 pub mod container_brain_region;
+pub mod container_cortical_area;
 
-use crate::basis::cortical_area::CorticalAreaTypeMap;
-use crate::basis::brain_region_identifiers::BrainRegionID;
-use std::collections::HashMap;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use container_brain_region::{BrainRegionContainerRuntimeEnumMut, BrainRegionContainerRuntimeEnumRef};
-use crate::genome::containers::BrainRegionContainer;
-use crate::genome::cortical_area::CorticalAreaContainersDesigner;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use std::collections::HashMap;
+
+
+use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::cortical_area::CorticalAreaTypeMap;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
 use crate::genome::genomes::GenomeError;
+use container_cortical_area::CorticalAreaContainersDesigner;
+
 
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
 /// as the interface and translator for modifications to that brain directly on the genome and
