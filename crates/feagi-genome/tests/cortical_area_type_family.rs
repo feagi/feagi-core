@@ -20,10 +20,10 @@ use feagi_genome::basis::cortical_area::motor::Led;
 use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};
 use feagi_genome::basis::cortical_area::sensor::Camera;
 use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
-use feagi_genome::basis::cortical_area::CorticalGenomicDataEnum;
+use feagi_genome::basis::cortical_area::NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
 use feagi_connectome::connectome_basis::neuron_model::{
-    CorticalAreaNeurogenesis, NeurogenesisDefaultsGenerator, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
+    NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisDefaultsGenerator, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{NMFeagiAdvancedDataNeuronInternal, Period};
 use feagi_genome::basis::cortical_area::processing::{InterconnectFeagiAdvancedGenerator, InterconnectFeagiSimpleGenerator};
@@ -244,8 +244,8 @@ fn edited_defaults_become_the_model_generator() {
 #[test]
 fn genomic_data_holds_the_neurogenesis_of_a_cortical_type() {
     let generator = InterconnectFeagiSimpleGenerator::<Fiq, Simple>::new(two_voxels()).unwrap().into_model_generator();
-    let data: CorticalGenomicDataEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(CorticalAreaNeurogenesis::ByGenerator(generator));
+    let data: NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum<Fiq> = CorticalAreaTypeEnum::from_data::<Interconnect, Simple>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator));
     assert_eq!(data.kind(), Interconnect::KIND);
     assert_eq!(data.neuron_model_kind(), Simple::KIND);
-    assert!(matches!(data.try_as::<Interconnect, Simple>(), Ok(CorticalAreaNeurogenesis::ByGenerator(_))));
+    assert!(matches!(data.try_as::<Interconnect, Simple>(), Ok(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(_))));
 }

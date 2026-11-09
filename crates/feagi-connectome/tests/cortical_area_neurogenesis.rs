@@ -405,7 +405,7 @@ mod dispatch {
     use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaNeurogenesisDispatch, CpuCorticalAreaNeurogenesisVisitor};
     use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{BurstEngineDynamics, NMFeagiAdvancedDataCorticalScratch};
     use feagi_connectome::connectome_basis::neuron_model::NMEnum;
-    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaNeurogenesisContainer, CorticalAreaNeurogenesisEnum, CorticalAreaNeurogenesis};
+    use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisFromStorageOrByGeneratorContainer, NeurogenesisFromStorageOrByGeneratorEnum, NeurogenesisFromStorageOrByGeneratorOf};
 
     /// Builds the neurons of the area, then runs the first through the dynamics the dispatch chose
     struct FireFirstNeuron;
@@ -413,7 +413,7 @@ mod dispatch {
     impl<FIQ: FeagiIndexQuantization> CpuCorticalAreaNeurogenesisVisitor<FIQ> for FireFirstNeuron {
         type Output = (usize, bool);
 
-        fn visit<NM, D>(self, neurogenesis: CorticalAreaNeurogenesis<FIQ, NM>) -> Self::Output
+        fn visit<NM, D>(self, neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM>) -> Self::Output
         where
             NM: NeuronModel,
             D: NeuronCPUParallelDynamics<FIQ, NM>,
@@ -439,8 +439,8 @@ mod dispatch {
     #[test]
     #[ignore = "needs the FoundationPower neurogenesis defaults filled in (scratch is todo!())"]
     fn init_enum_dispatches_to_the_dynamics_of_its_model() {
-        let neurogenesis: CorticalAreaNeurogenesisEnum<Fiq> = NMEnum::<CorticalAreaNeurogenesisContainer<Fiq>>::from_data::<Power>(
-            CorticalAreaNeurogenesis::FromStorage(power_storage(4).unwrap()),
+        let neurogenesis: NeurogenesisFromStorageOrByGeneratorEnum<Fiq> = NMEnum::<NeurogenesisFromStorageOrByGeneratorContainer<Fiq>>::from_data::<Power>(
+            NeurogenesisFromStorageOrByGeneratorOf::FromStorage(power_storage(4).unwrap()),
         );
         // The power model always fires
         assert_eq!(neurogenesis.dispatch_cpu(FireFirstNeuron), (4, true));

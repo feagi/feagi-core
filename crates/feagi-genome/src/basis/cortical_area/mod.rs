@@ -5,7 +5,7 @@
 //! also reached through `cortical_area_type`
 
 use feagi_connectome::connectome_basis::neuron_model::{
-    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaNeurogenesisContainer,
+    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, NeurogenesisFromStorageOrByGeneratorContainer,
     NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
 };
 #[cfg(feature = "std")]
@@ -137,5 +137,6 @@ cortical_area_type_family_template!(expand_cortical_identifier);
 #[cfg(feature = "std")]
 cortical_area_type_family_template!(expand_cortical_area_map);
 
-/// The Genomic Data For a given Cortical Area
-pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaNeurogenesisContainer<FIQ>>;
+/// How a cortical area gets spawned, from storage or by its model's generator, at whichever cortical
+/// type and model member it is
+pub type NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum<FIQ> = CorticalAreaTypeEnum<NeurogenesisFromStorageOrByGeneratorContainer<FIQ>>;

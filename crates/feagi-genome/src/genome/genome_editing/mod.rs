@@ -13,7 +13,7 @@ pub(crate) enum GenomePlayWrightItem<FIQ: FeagiIndexQuantization> {
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
         parent_region: BrainRegionID,
-        neurogenesis: CorticalAreaNeurogenesisEnum<FIQ> 
+        neurogenesis: NeurogenesisFromStorageOrByGeneratorEnum<FIQ> 
     },
 }
 

@@ -51,7 +51,7 @@
 //! there:
 //!
 //! - `NMContainer`, a kind of data held per member, as `type Of<M: NeuronModel>`. It is implemented
-//!   on a zero sized struct per kind of data, such as `CorticalAreaNeurogenesisContainer`
+//!   on a zero sized struct per kind of data, such as `NeurogenesisFromStorageOrByGeneratorContainer`
 //! - `NMMember`, implemented by every marker struct, with its model `Tag`, its `KIND`, and
 //!   conversions of its data to and from `NMEnum`
 //! - `NMAccessError`, returned when data is accessed as a member or model it does not hold
@@ -85,8 +85,8 @@
 //!
 //! # Using the family
 //!
-//! [`neurogenesis_dispatch`] puts the family to use. `CorticalAreaNeurogenesisEnum<FIQ>` is
-//! `NMEnum<CorticalAreaNeurogenesisContainer<FIQ>>`, and it dispatches each area to the burst
+//! [`neurogenesis_dispatch`] puts the family to use. `NeurogenesisFromStorageOrByGeneratorEnum<FIQ>` is
+//! `NMEnum<NeurogenesisFromStorageOrByGeneratorContainer<FIQ>>`, and it dispatches each area to the burst
 //! engine with its concrete model through `with_nm!`.
 //!
 //! # Adding a model
@@ -97,16 +97,102 @@
 //! 2. Declare the folder below, and re-export it in `connectome_basis::neuron_model`.
 //! 3. Add the model and its quantization levels to the template in [`family`].
 
-pub mod foundation_power;
-pub mod foundation_death;
 pub mod feagi_advanced;
-pub mod memory_fire_hashing;
 pub mod feagi_simple;
+pub mod foundation_death;
+pub mod foundation_power;
+pub mod memory_fire_hashing;
 
 #[macro_use]
 pub mod family;
-pub mod neurogenesis_dispatch;
 pub mod defaults_generator;
+pub mod neurogenesis_dispatch;
 // Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
 //pub mod initializers;
 
+//region Example: nested enums
+
+// Building a cortical area's neurogenesis for one member of the family, nesting it into the
+// family enums, and getting back down to the per model data fields of its generator. Checked to
+// compile as an integration test of this crate, with these imports:
+//
+
+fn example() {
+    use crate::connectome_basis::neuron_model::feagi_advanced::{
+        NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
+        NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedQuantDefaultQuant, Period,
+    };
+    use crate::connectome_basis::neuron_model::{
+        NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisFromStorageOrByGeneratorEnum, NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisDefaultsGenerator,
+        NeurogenesisMethod, NeuronLayoutData, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties,
+    };
+    use crate::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
+    use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
+    use feagi_basis::prelude::*;
+
+    // 1. The generator of a new area, holding every per model data struct of FeagiAdvanced
+    let layout =
+        NeuronLayoutVoxel::<FeagiIndexQuantizationStandard>::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([2, 2, 1, 1]).unwrap());
+    let generator = NeurogenesisDefaultsGenerator::<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant>::new(
+        layout,
+        NeuronModelUniversalCorticalProperties {
+            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+            is_psp_uniform: false,
+            is_psp_using_neuron_potential: false,
+        },
+        // refractory_period, firing_threshold, leak_coefficient, leak_variability,
+        // postsynaptic_current, postsynaptic_current_max, degeneration
+        NMFeagiAdvancedDataCorticalProperties::new(Period::QUANT_ONE, 10.0, 0.5, 0.0, 1.0, 5.0, 0.0),
+        NMFeagiAdvancedDataCorticalInternal::new(),
+        // firing_threshold_increment_x, _y, _z
+        NMFeagiAdvancedDataCorticalVariance::new(0.0, 0.0, 0.0),
+        // refractory_countdown, which every neuron starts with
+        NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO),
+    );
+
+    // 2. Nest it, innermost first. The container here is NeurogenesisFromStorageOrByGeneratorContainer, so
+    //    the data held for a member is a NeurogenesisFromStorageOrByGeneratorOf: from storage, or by generator
+    let neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant> =
+        NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator);
+    let per_level = NMFeagiAdvancedQuantEnum::DefaultQuant(neurogenesis); // which quantization level
+    let per_model: NeurogenesisFromStorageOrByGeneratorEnum<FeagiIndexQuantizationStandard> = NMEnum::FeagiAdvanced(per_level); // which model
+
+    // The same three steps in one, by the member's marker struct
+    let same: NeurogenesisFromStorageOrByGeneratorEnum<FeagiIndexQuantizationStandard> =
+        NMEnum::from_data::<NMFeagiAdvancedQuantDefaultQuant>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(NeurogenesisDefaultsGenerator::new(
+            layout,
+            NeuronModelUniversalCorticalProperties {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            NMFeagiAdvancedDataCorticalProperties::new(Period::QUANT_ONE, 10.0, 0.5, 0.0, 1.0, 5.0, 0.0),
+            NMFeagiAdvancedDataCorticalInternal::new(),
+            NMFeagiAdvancedDataCorticalVariance::new(0.0, 0.0, 0.0),
+            NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO),
+        )));
+    assert_eq!(per_model.kind(), same.kind());
+    assert_eq!(per_model.kind(), <NMFeagiAdvancedQuantDefaultQuant as NMMember>::KIND);
+
+    // 3. Back down to the per model data fields, by matching every layer
+    match &per_model {
+        NMEnum::FeagiAdvanced(NMFeagiAdvancedQuantEnum::DefaultQuant(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator))) => {
+            let _threshold: f32 = generator.cortical_properties.firing_threshold;
+            let _countdown: Period<f32> = generator.neuron_internal.refractory_countdown;
+        }
+        _ => unreachable!(),
+    }
+
+    //    or by the member, when it is known, which errors if another member is held
+    let neurogenesis: &NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant> =
+        per_model.try_as::<NMFeagiAdvancedQuantDefaultQuant>().unwrap();
+    if let NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator) = neurogenesis {
+        let _leak = generator.cortical_properties.leak_coefficient;
+    }
+
+    //    or generically over whichever member is held, through the NeurogenesisMethod trait
+    let neuron_count = with_nm!(&per_model, |neurogenesis| neurogenesis.get_total_number_neurons_needed().quant_to_usize());
+    assert_eq!(neuron_count, 4);
+}
+
+//endregion

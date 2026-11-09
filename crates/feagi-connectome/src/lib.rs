@@ -37,7 +37,7 @@ pub mod connectome_basis {
         pub use crate::neuron_models::family::*;
         /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
         pub use crate::neuron_models::{feagi_advanced, feagi_simple, foundation_death, foundation_power, memory_fire_hashing};
-        pub use crate::neuron_models::neurogenesis_dispatch::{CorticalAreaNeurogenesisContainer, CorticalAreaNeurogenesisEnum, CorticalAreaNeurogenesis};
+        pub use crate::neuron_models::neurogenesis_dispatch::{NeurogenesisFromStorageOrByGeneratorContainer, NeurogenesisFromStorageOrByGeneratorEnum, NeurogenesisFromStorageOrByGeneratorOf};
         pub use feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing;
         pub use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf, NeuronLayoutTag};

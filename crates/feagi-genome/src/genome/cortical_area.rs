@@ -62,14 +62,14 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 /// defaults of its cortical type, which a client may edit before the area is created. Get one from
 /// the generator wrapper of the cortical type, or generically through
 /// `CorticalAreaTypeMemberAt::new_defaults_generator`
-pub struct CorticalAreaGeneratorContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
+pub struct NeurogenesisDefaultsGeneratorContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> NMContainer for CorticalAreaGeneratorContainer<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMContainer for NeurogenesisDefaultsGeneratorContainer<FIQ> {
     type Of<M: NeuronModel> = NeurogenesisDefaultsGenerator<FIQ, M>;
 }
 
 /// The generator of a new cortical area, at whichever cortical type and model member it is
-pub type CorticalAreaGeneratorEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaGeneratorContainer<FIQ>>;
+pub type NeurogenesisDefaultsGeneratorCorticalTypeEnum<FIQ> = CorticalAreaTypeEnum<NeurogenesisDefaultsGeneratorContainer<FIQ>>;
 
 
 

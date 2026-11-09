@@ -18,6 +18,12 @@ where
     ByGenerator(NBG)
 }
 
+/// How a cortical area of model `NM` gets spawned: either from stored neuron data, or by that
+/// model's own generator. The [`NeurogenesisFromStorageOrByGenerator`] of `NM`, its generator fixed
+/// to `NM::NeurogenesisGenerator`, as `NeuronLayoutOf` is the layout of a model
+pub type NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM> =
+    NeurogenesisFromStorageOrByGenerator<FIQ, NM, <NM as NeuronModel>::NeurogenesisGenerator<FIQ>>;
+
 impl<FIQ, NM, NBG> NeurogenesisMethod<FIQ, NM> for NeurogenesisFromStorageOrByGenerator<FIQ, NM, NBG>
 where
     FIQ: FeagiIndexQuantization,
