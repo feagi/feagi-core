@@ -4,10 +4,10 @@ use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance, NeuronModelFeagiAdvancedDefaultQuant};
-use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{self, FeagiSimpleCorticalDataProperties, FeagiSimpleCorticalDataVariance, NeuronModelFeagiSimpleDefaultQuant};
-use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{self, MemoryFireHashingCorticalDataProperties, MemoryFireHashingCorticalDataVariance, NeuronModelMemoryFireHashingDefaultQuant};
-use feagi_connectome::connectome_basis::neuron_model::{FeagiAdvancedQuantEnum, FeagiSimpleQuantEnum, MemoryFireHashingQuantEnum};
+use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedQuantDefaultQuant};
+use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{self, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleQuantDefaultQuant};
+use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{self, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingQuantDefaultQuant};
+use feagi_connectome::connectome_basis::neuron_model::{NMFeagiAdvancedQuantEnum, NMFeagiSimpleQuantEnum, NMMemoryFireHashingQuantEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_genome::basis::brain_region_identifiers::BrainRegionID;
 use feagi_genome::basis::cortical_area::foundation::Power;
@@ -133,22 +133,22 @@ fn container<CT: CorticalAreaTypeMember>(
     }
 }
 
-fn simple_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiSimpleDefaultQuant> {
+fn simple_data() -> NeuronModelDataDesigner<Fiq, NMFeagiSimpleQuantDefaultQuant> {
     NeuronModelDataDesigner {
         cortical_universal: universal(),
-        cortical_properties: FeagiSimpleCorticalDataProperties::new(feagi_simple::Period::QUANT_ONE, 7.0, 1.0, 1.0),
-        cortical_data_variance: FeagiSimpleCorticalDataVariance::new(),
+        cortical_properties: NMFeagiSimpleDataCorticalProperties::new(feagi_simple::Period::QUANT_ONE, 7.0, 1.0, 1.0),
+        cortical_data_variance: NMFeagiSimpleDataCorticalVariance::new(),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
         visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
     }
 }
 
-fn advanced_data() -> NeuronModelDataDesigner<Fiq, NeuronModelFeagiAdvancedDefaultQuant> {
+fn advanced_data() -> NeuronModelDataDesigner<Fiq, NMFeagiAdvancedQuantDefaultQuant> {
     NeuronModelDataDesigner {
         cortical_universal: universal(),
-        cortical_properties: FeagiAdvancedCorticalDataProperties::new(feagi_advanced::Period::QUANT_ONE, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-        cortical_data_variance: FeagiAdvancedCorticalDataVariance::new(0.0, 0.0, 0.0),
+        cortical_properties: NMFeagiAdvancedDataCorticalProperties::new(feagi_advanced::Period::QUANT_ONE, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+        cortical_data_variance: NMFeagiAdvancedDataCorticalVariance::new(0.0, 0.0, 0.0),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
         visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
@@ -164,15 +164,15 @@ fn dimensions() -> DimensionalCorticalAreaDimensions<<Fiq as feagi_connectome::c
 #[test]
 fn designer_containers_hold_only_what_their_cortical_type_allows() {
     let mut map = CorticalAreaTypeMap::<CorticalAreaContainersDesigner<Fiq>>::default();
-    map.of_mut::<Interconnect>().insert(INNER, container::<Interconnect>(dimensions(), ProcessingInterconnectModelEnum::FeagiSimple(FeagiSimpleQuantEnum::DefaultQuant(simple_data()))));
+    map.of_mut::<Interconnect>().insert(INNER, container::<Interconnect>(dimensions(), ProcessingInterconnectModelEnum::FeagiSimple(NMFeagiSimpleQuantEnum::DefaultQuant(simple_data()))));
     map.of_mut::<Memory>().insert(
         INNER,
         container::<Memory>(
             CorticalAreaNeuronCount::QUANT_ZERO,
-            ProcessingMemoryModelEnum::MemoryFireHashing(MemoryFireHashingQuantEnum::DefaultQuant(NeuronModelDataDesigner::<Fiq, NeuronModelMemoryFireHashingDefaultQuant> {
+            ProcessingMemoryModelEnum::MemoryFireHashing(NMMemoryFireHashingQuantEnum::DefaultQuant(NeuronModelDataDesigner::<Fiq, NMMemoryFireHashingQuantDefaultQuant> {
                 cortical_universal: universal(),
-                cortical_properties: MemoryFireHashingCorticalDataProperties::new(memory_fire_hashing::Period::QUANT_ONE, 3.0, 1.0, 1.0),
-                cortical_data_variance: MemoryFireHashingCorticalDataVariance::new(),
+                cortical_properties: NMMemoryFireHashingDataCorticalProperties::new(memory_fire_hashing::Period::QUANT_ONE, 3.0, 1.0, 1.0),
+                cortical_data_variance: NMMemoryFireHashingDataCorticalVariance::new(),
                 cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
                 burst_engine_index: BurstEngineIndex(0),
                 visualization_start_index: NeuronVisualizationWordIndex::QUANT_ZERO,
@@ -183,15 +183,15 @@ fn designer_containers_hold_only_what_their_cortical_type_allows() {
     // Exhaustive with only the models interconnect allows
     let threshold = match map.get(CorticalIdentifier::new::<Interconnect>(INNER)) {
         Some(CorticalAreaTypeRef::Processing(ProcessingSuperTypeRef::Interconnect(area))) => match &area.neuron_model_data {
-            ProcessingInterconnectModelEnum::FeagiSimple(FeagiSimpleQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
-            ProcessingInterconnectModelEnum::FeagiAdvanced(FeagiAdvancedQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
+            ProcessingInterconnectModelEnum::FeagiSimple(NMFeagiSimpleQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
+            ProcessingInterconnectModelEnum::FeagiAdvanced(NMFeagiAdvancedQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
         },
         _ => panic!("not found as an interconnect"),
     };
     assert_eq!(threshold, 7.0);
 
     let threshold = match &map.of::<Memory>()[&INNER].neuron_model_data {
-        ProcessingMemoryModelEnum::MemoryFireHashing(MemoryFireHashingQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
+        ProcessingMemoryModelEnum::MemoryFireHashing(NMMemoryFireHashingQuantEnum::DefaultQuant(data)) => data.cortical_properties.firing_threshold,
     };
     assert_eq!(threshold, 3.0);
 }
@@ -200,12 +200,12 @@ fn designer_containers_hold_only_what_their_cortical_type_allows() {
 #[test]
 fn a_model_swap_replaces_the_data_in_place() {
     let mut map = CorticalAreaTypeMap::<CorticalAreaContainersDesigner<Fiq>>::default();
-    map.of_mut::<Interconnect>().insert(INNER, container::<Interconnect>(dimensions(), ProcessingInterconnectModelEnum::FeagiSimple(FeagiSimpleQuantEnum::DefaultQuant(simple_data()))));
+    map.of_mut::<Interconnect>().insert(INNER, container::<Interconnect>(dimensions(), ProcessingInterconnectModelEnum::FeagiSimple(NMFeagiSimpleQuantEnum::DefaultQuant(simple_data()))));
 
-    map.of_mut::<Interconnect>().get_mut(&INNER).unwrap().neuron_model_data = ProcessingInterconnectModelEnum::FeagiAdvanced(FeagiAdvancedQuantEnum::DefaultQuant(advanced_data()));
+    map.of_mut::<Interconnect>().get_mut(&INNER).unwrap().neuron_model_data = ProcessingInterconnectModelEnum::FeagiAdvanced(NMFeagiAdvancedQuantEnum::DefaultQuant(advanced_data()));
 
     assert_eq!(map.len(), 1);
-    assert_eq!(map.of::<Interconnect>()[&INNER].neuron_model_data.neuron_model_kind(), <NeuronModelFeagiAdvancedDefaultQuant as feagi_connectome::connectome_basis::neuron_model::NeuronModelMember>::KIND);
+    assert_eq!(map.of::<Interconnect>()[&INNER].neuron_model_data.neuron_model_kind(), <NMFeagiAdvancedQuantDefaultQuant as feagi_connectome::connectome_basis::neuron_model::NMMember>::KIND);
 }
 
 #[test]

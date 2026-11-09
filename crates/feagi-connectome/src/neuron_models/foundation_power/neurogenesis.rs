@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NeuronModelFoundationPower;
+use super::data::NMFoundationPowerTrait;
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
@@ -20,7 +20,7 @@ pub struct FoundationPowerNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ
 impl<FIQ, NM> NeurogenesisScratchVarianceGenerator<FIQ, NM> for FoundationPowerNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationPower,
+    NM: NMFoundationPowerTrait,
 {
     fn static_get_cortical_scratch(
         _layout: &NeuronLayoutOf<NM, FIQ>,

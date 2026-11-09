@@ -1,9 +1,9 @@
-use crate::neuron_models::foundation_death::data::NeuronModelFoundationDeath;
+use crate::neuron_models::foundation_death::data::NMFoundationDeathTrait;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics};
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
-pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath>(
+pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFoundationDeathTrait>(
     core::marker::PhantomData<(FIQ, NM)>,
 );
 
@@ -11,7 +11,7 @@ pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: N
 impl<FIQ, NM> FoundationDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationDeath,
+    NM: NMFoundationDeathTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
@@ -21,7 +21,7 @@ where
 impl<FIQ, NM> Default for FoundationDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationDeath,
+    NM: NMFoundationDeathTrait,
 {
     fn default() -> Self {
         Self::new()
@@ -31,7 +31,7 @@ where
 impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FoundationDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationDeath,
+    NM: NMFoundationDeathTrait,
 {
 }
 //endregion
@@ -43,7 +43,7 @@ impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynami
 for FoundationDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationDeath,
+    NM: NMFoundationDeathTrait,
 {
     fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,

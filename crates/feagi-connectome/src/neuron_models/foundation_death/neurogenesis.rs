@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NeuronModelFoundationDeath;
+use super::data::NMFoundationDeathTrait;
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
@@ -20,7 +20,7 @@ pub struct FoundationDeathNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ
 impl<FIQ, NM> NeurogenesisScratchVarianceGenerator<FIQ, NM> for FoundationDeathNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationDeath,
+    NM: NMFoundationDeathTrait,
 {
     fn static_get_cortical_scratch(
         _layout: &NeuronLayoutOf<NM, FIQ>,

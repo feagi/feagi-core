@@ -60,13 +60,13 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_memory_fire_hashing_template!(expand_cortical_dynamics_quantization);
 
-impl<NM: NeuronModelMemoryFireHashing> CorticalDataVarianceSpecification<NM> for MemoryFireHashingCorticalDataVariance<NM> {
+impl<NM: NMMemoryFireHashingTrait> CorticalDataVarianceSpecification<NM> for NMMemoryFireHashingDataCorticalVariance<NM> {
     fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
         &self,
         _layout: &NeuronLayoutOf<NM, FIQ>,
         _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> MemoryFireHashingNeuronDataVariance<NM> {
-        MemoryFireHashingNeuronDataVariance::new()
+    ) -> NMMemoryFireHashingDataNeuronVariance<NM> {
+        NMMemoryFireHashingDataNeuronVariance::new()
     }
 }
 

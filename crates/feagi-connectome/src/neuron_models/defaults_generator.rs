@@ -60,6 +60,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
         (self.cortical_properties, self.cortical_internal)
     }
 
+    fn clone_model_cortical_data(&self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
+        (self.cortical_properties.clone(), self.cortical_internal.clone())
+    }
+
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
         &self.cortical_variance
     }
@@ -77,17 +81,15 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, 
 
     /// Keeps the cortical data of the stored area, with every neuron starting from `neuron_internal`
     /// rather than its stored data
-    fn new_generator_from_storage(storage: &NeurogenesisFromStorage<FIQ, NM>, neuron_internal: NM::NeuronDataInternal) -> Self {
-        // TODO cloning the storage also clones its neuron data, which is then dropped. Storage has
-        // no way to borrow its cortical properties and internal data
-        let (cortical_properties, cortical_internal) = storage.clone().into_model_cortical_data();
+    fn new_generator_from_storage(storage: &NeurogenesisFromStorage<FIQ, NM>, default_uniform_neuron_internal_data: NM::NeuronDataInternal) -> Self {
+        let (cortical_properties, cortical_internal) = storage.clone_model_cortical_data();
         Self {
             layout: *storage.get_layout(),
             universal_properties: storage.get_universal_cortical_properties(),
             cortical_properties,
             cortical_internal,
             cortical_variance: storage.get_model_cortical_variance().clone(),
-            neuron_internal,
+            neuron_internal: default_uniform_neuron_internal_data,
         }
     }
 }

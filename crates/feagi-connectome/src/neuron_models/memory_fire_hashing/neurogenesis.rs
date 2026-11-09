@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NeuronModelMemoryFireHashing;
+use super::data::NMMemoryFireHashingTrait;
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
@@ -20,7 +20,7 @@ pub struct MemoryFireHashingNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (F
 impl<FIQ, NM> NeurogenesisScratchVarianceGenerator<FIQ, NM> for MemoryFireHashingNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelMemoryFireHashing,
+    NM: NMMemoryFireHashingTrait,
 {
     fn static_get_cortical_scratch(
         _layout: &NeuronLayoutOf<NM, FIQ>,

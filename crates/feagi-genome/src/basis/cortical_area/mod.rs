@@ -5,7 +5,7 @@
 //! also reached through `cortical_area_type`
 
 use feagi_connectome::connectome_basis::neuron_model::{
-    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaInitContainer,
+    self, define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family, CorticalAreaNeurogenesisContainer,
     NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
 };
 #[cfg(feature = "std")]
@@ -92,7 +92,6 @@ define_cortical_type_family_template! {
     Family: CorticalAreaType,
     Error: CorticalAreaTypeSelectionError,
     ModelFamily: NeuronModel,
-    ModelFamilyError: NeuronModelSelectionError,
     Identifier: CorticalIdentifier,
     IdentifierError: CorticalIdentifierParseError,
 
@@ -139,4 +138,4 @@ cortical_area_type_family_template!(expand_cortical_identifier);
 cortical_area_type_family_template!(expand_cortical_area_map);
 
 /// The Genomic Data For a given Cortical Area
-pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaInitContainer<FIQ>>;
+pub type CorticalGenomicDataEnum<FIQ> = CorticalAreaTypeEnum<CorticalAreaNeurogenesisContainer<FIQ>>;

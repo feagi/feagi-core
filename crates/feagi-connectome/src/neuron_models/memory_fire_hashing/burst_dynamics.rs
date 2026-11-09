@@ -1,4 +1,4 @@
-use crate::neuron_models::memory_fire_hashing::data::{NeuronModelMemoryFireHashing, Period};
+use crate::neuron_models::memory_fire_hashing::data::{NMMemoryFireHashingTrait, Period};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
 use feagi_basis::BurstIndex;
@@ -6,14 +6,14 @@ use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynam
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf};
 
-pub struct MemoryFireHashingBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing>(core::marker::PhantomData<(FIQ, NM)>);
+pub struct MemoryFireHashingBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
 //region Common
 
 impl<FIQ, NM> MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelMemoryFireHashing,
+    NM: NMMemoryFireHashingTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
@@ -23,7 +23,7 @@ where
 impl<FIQ, NM> Default for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelMemoryFireHashing,
+    NM: NMMemoryFireHashingTrait,
 {
     fn default() -> Self {
         Self::new()
@@ -33,7 +33,7 @@ where
 impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelMemoryFireHashing,
+    NM: NMMemoryFireHashingTrait,
 {
 }
 
@@ -43,7 +43,7 @@ where
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelMemoryFireHashing,
+    NM: NMMemoryFireHashingTrait,
 {
     fn process_model_cortical_area_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,

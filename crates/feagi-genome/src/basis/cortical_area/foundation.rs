@@ -6,12 +6,12 @@ use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizat
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::foundation_death::{
-    FoundationDeathCorticalDataInternal, FoundationDeathCorticalDataProperties, FoundationDeathCorticalDataVariance,
-    FoundationDeathNeuronDataInternal, NeuronModelFoundationDeath,
+    NMFoundationDeathDataCorticalInternal, NMFoundationDeathDataCorticalProperties, NMFoundationDeathDataCorticalVariance,
+    NMFoundationDeathDataNeuronInternal, NMFoundationDeathTrait,
 };
 use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
-    FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataVariance,
-    FoundationPowerNeuronDataInternal, NeuronModelFoundationPower,
+    NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
+    NMFoundationPowerDataNeuronInternal, NMFoundationPowerTrait,
 };
 
 //region Power
@@ -26,10 +26,10 @@ impl CorticalAreaType for Power {
 
 cortical_type_generator! {
     /// The defaults of a new `Power` area using the `FoundationPower` neuron model
-    PowerFoundationPowerGenerator for Power, UsesFoundationPower, NeuronModelFoundationPower
+    PowerFoundationPowerGenerator for Power, UsesFoundationPower, NMFoundationPowerTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower> PowerFoundationPowerGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFoundationPowerTrait> PowerFoundationPowerGenerator<FIQ, NM> {
     /// A new `Power` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -40,10 +40,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower> PowerFoundatio
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FoundationPowerCorticalDataProperties::new(),
-            FoundationPowerCorticalDataInternal::new(),
-            FoundationPowerCorticalDataVariance::new(),
-            FoundationPowerNeuronDataInternal::new(),
+            NMFoundationPowerDataCorticalProperties::new(),
+            NMFoundationPowerDataCorticalInternal::new(),
+            NMFoundationPowerDataCorticalVariance::new(),
+            NMFoundationPowerDataNeuronInternal::new(),
         )))
     }
 }
@@ -62,10 +62,10 @@ impl CorticalAreaType for Death {
 
 cortical_type_generator! {
     /// The defaults of a new `Death` area using the `FoundationDeath` neuron model
-    DeathFoundationDeathGenerator for Death, UsesFoundationDeath, NeuronModelFoundationDeath
+    DeathFoundationDeathGenerator for Death, UsesFoundationDeath, NMFoundationDeathTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath> DeathFoundationDeathGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFoundationDeathTrait> DeathFoundationDeathGenerator<FIQ, NM> {
     /// A new `Death` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -76,10 +76,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationDeath> DeathFoundatio
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FoundationDeathCorticalDataProperties::new(),
-            FoundationDeathCorticalDataInternal::new(),
-            FoundationDeathCorticalDataVariance::new(),
-            FoundationDeathNeuronDataInternal::new(),
+            NMFoundationDeathDataCorticalProperties::new(),
+            NMFoundationDeathDataCorticalInternal::new(),
+            NMFoundationDeathDataCorticalVariance::new(),
+            NMFoundationDeathDataNeuronInternal::new(),
         )))
     }
 }

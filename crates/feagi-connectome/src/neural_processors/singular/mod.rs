@@ -3,7 +3,7 @@
 pub mod npu_loop;
 pub mod commands;
 
-use crate::neuron_models::init_dispatch::ConnectomeDispatch;
+use crate::neuron_models::neurogenesis_dispatch::ConnectomeDispatch;
 use commands::{NeuronProcessorSingleEngineCommandHandler, NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use core::marker::PhantomData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;

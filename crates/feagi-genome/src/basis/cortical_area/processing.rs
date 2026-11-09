@@ -9,16 +9,16 @@ use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizat
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTagSingleSteppedDynamic, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
-    self, FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance,
-    FeagiAdvancedNeuronDataInternal, NeuronModelFeagiAdvanced,
+    self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
+    NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{
-    self, FeagiSimpleCorticalDataInternal, FeagiSimpleCorticalDataProperties, FeagiSimpleCorticalDataVariance,
-    FeagiSimpleNeuronDataInternal, NeuronModelFeagiSimple,
+    self, NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance,
+    NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait,
 };
 use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{
-    self, MemoryFireHashingCorticalDataInternal, MemoryFireHashingCorticalDataProperties, MemoryFireHashingCorticalDataVariance,
-    MemoryFireHashingNeuronDataInternal, NeuronModelMemoryFireHashing,
+    self, NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance,
+    NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingTrait,
 };
 
 //region Interconnect
@@ -33,10 +33,10 @@ impl CorticalAreaType for Interconnect {
 
 cortical_type_generator! {
     /// The defaults of a new `Interconnect` area using the `FeagiAdvanced` neuron model
-    InterconnectFeagiAdvancedGenerator for Interconnect, UsesFeagiAdvanced, NeuronModelFeagiAdvanced
+    InterconnectFeagiAdvancedGenerator for Interconnect, UsesFeagiAdvanced, NMFeagiAdvancedTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> InterconnectFeagiAdvancedGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> InterconnectFeagiAdvancedGenerator<FIQ, NM> {
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -47,7 +47,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> InterconnectFeag
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FeagiAdvancedCorticalDataProperties {
+            NMFeagiAdvancedDataCorticalProperties {
                 refractory_period: feagi_advanced::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 leak_coefficient: 1.0f32.try_to_quantization()?,
@@ -57,14 +57,14 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> InterconnectFeag
                 degeneration: 1.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiAdvancedCorticalDataInternal::new(),
-            FeagiAdvancedCorticalDataVariance {
+            NMFeagiAdvancedDataCorticalInternal::new(),
+            NMFeagiAdvancedDataCorticalVariance {
                 firing_threshold_increment_x: 0.0f32.try_to_quantization()?,
                 firing_threshold_increment_y: 0.0f32.try_to_quantization()?,
                 firing_threshold_increment_z: 0.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiAdvancedNeuronDataInternal {
+            NMFeagiAdvancedDataNeuronInternal {
                 refractory_countdown: feagi_advanced::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
@@ -74,10 +74,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> InterconnectFeag
 
 cortical_type_generator! {
     /// The defaults of a new `Interconnect` area using the `FeagiSimple` neuron model
-    InterconnectFeagiSimpleGenerator for Interconnect, UsesFeagiSimple, NeuronModelFeagiSimple
+    InterconnectFeagiSimpleGenerator for Interconnect, UsesFeagiSimple, NMFeagiSimpleTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple> InterconnectFeagiSimpleGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> InterconnectFeagiSimpleGenerator<FIQ, NM> {
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -88,16 +88,16 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple> InterconnectFeagiS
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FeagiSimpleCorticalDataProperties {
+            NMFeagiSimpleDataCorticalProperties {
                 refractory_period: feagi_simple::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiSimpleCorticalDataInternal::new(),
-            FeagiSimpleCorticalDataVariance::new(),
-            FeagiSimpleNeuronDataInternal {
+            NMFeagiSimpleDataCorticalInternal::new(),
+            NMFeagiSimpleDataCorticalVariance::new(),
+            NMFeagiSimpleDataNeuronInternal {
                 refractory_countdown: feagi_simple::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
@@ -119,10 +119,10 @@ impl CorticalAreaType for Memory {
 
 cortical_type_generator! {
     /// The defaults of a new `Memory` area using the `MemoryFireHashing` neuron model
-    MemoryMemoryFireHashingGenerator for Memory, UsesMemoryFireHashing, NeuronModelMemoryFireHashing
+    MemoryMemoryFireHashingGenerator for Memory, UsesMemoryFireHashing, NMMemoryFireHashingTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing> MemoryMemoryFireHashingGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait> MemoryMemoryFireHashingGenerator<FIQ, NM> {
     /// A new `Memory` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -133,16 +133,16 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelMemoryFireHashing> MemoryMemory
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            MemoryFireHashingCorticalDataProperties {
+            NMMemoryFireHashingDataCorticalProperties {
                 refractory_period: memory_fire_hashing::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            MemoryFireHashingCorticalDataInternal::new(),
-            MemoryFireHashingCorticalDataVariance::new(),
-            MemoryFireHashingNeuronDataInternal {
+            NMMemoryFireHashingDataCorticalInternal::new(),
+            NMMemoryFireHashingDataCorticalVariance::new(),
+            NMMemoryFireHashingDataNeuronInternal {
                 refractory_countdown: memory_fire_hashing::Period::QUANT_ZERO,
                 _p: PhantomData,
             },

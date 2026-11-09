@@ -4,7 +4,7 @@ use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use std::collections::HashSet;
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutData, NeuronLayoutTag, NeuronModel, NeuronModelContainer, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutData, NeuronLayoutTag, NeuronModel, NMContainer, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
@@ -37,7 +37,7 @@ where
 /// Holds the [`NeuronModelDataDesigner`] of a cortical area
 pub struct NeuronModelDataDesignerContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for NeuronModelDataDesignerContainer<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMContainer for NeuronModelDataDesignerContainer<FIQ> {
     type Of<M: NeuronModel> = NeuronModelDataDesigner<FIQ, M>;
 }
 
@@ -50,7 +50,10 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     pub burst_engine_index: BurstEngineIndex,
     /// Where the visualization of this cortical area starts
     pub visualization_start_index: NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>,
+
     // TODO NM specific visualization context
+
+
 }
 
 
@@ -61,7 +64,7 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 /// `CorticalAreaTypeMemberAt::new_defaults_generator`
 pub struct CorticalAreaGeneratorContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> NeuronModelContainer for CorticalAreaGeneratorContainer<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMContainer for CorticalAreaGeneratorContainer<FIQ> {
     type Of<M: NeuronModel> = NeurogenesisDefaultsGenerator<FIQ, M>;
 }
 

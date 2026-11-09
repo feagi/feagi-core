@@ -66,6 +66,10 @@ where
     fn into_model_cortical_data(self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
         (self.cortical_properties, self.cortical_internal)
     }
+    
+    fn clone_model_cortical_data(&self)-> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
+        (self.cortical_properties.clone(), self.cortical_internal.clone())
+    }
 
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
         &self.cortical_variance

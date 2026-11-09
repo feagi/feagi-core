@@ -60,15 +60,15 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_feagi_simple_template!(expand_cortical_dynamics_quantization);
 
-impl<NM: NeuronModelFeagiSimple> CorticalDataVarianceSpecification<NM> for FeagiSimpleCorticalDataVariance<NM> {
+impl<NM: NMFeagiSimpleTrait> CorticalDataVarianceSpecification<NM> for NMFeagiSimpleDataCorticalVariance<NM> {
     fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
         &self,
         layout: &NeuronLayoutOf<NM, FIQ>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> FeagiSimpleNeuronDataVariance<NM> {
+    ) -> NMFeagiSimpleDataNeuronVariance<NM> {
         let coordinates = layout.get_neuron_layout_context(index);
         let [x, y, z, _d] = coordinates.as_slice();
-        FeagiSimpleNeuronDataVariance::new()
+        NMFeagiSimpleDataNeuronVariance::new()
     }
 }
 

@@ -89,7 +89,7 @@ macro_rules! create_step_and_result_enums {
 }
 
 pub trait ConnectomeVisitorDispatchWrapper<FIQ: FeagiIndexQuantization> {
-    type CorticalAreaInitDispatch: Send;
+    type CorticalAreaNeurogenesisDispatch: Send;
 }
 
 /// Defines some sort of edit step for the connectome, and the result that should be returned
@@ -120,15 +120,15 @@ create_step_and_result_enums!{
 //region Cortical Areas
 
 pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
-    pub cortical_area_init_dispatch: CVDW::CorticalAreaInitDispatch,
+    pub cortical_area_neurogenesis_dispatch: CVDW::CorticalAreaNeurogenesisDispatch,
     _p: core::marker::PhantomData<FIQ>,
 }
 
 impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepCorticalAreaAdd<FIQ, CVDW> {
-    /// Adds a cortical area from its init, at whichever neuron model it uses
-    pub fn new(cortical_area_init_dispatch: CVDW::CorticalAreaInitDispatch) -> Self {
+    /// Adds a cortical area from its neurogenesis, at whichever neuron model it uses
+    pub fn new(cortical_area_neurogenesis_dispatch: CVDW::CorticalAreaNeurogenesisDispatch) -> Self {
         Self {
-            cortical_area_init_dispatch,
+            cortical_area_neurogenesis_dispatch,
             _p: core::marker::PhantomData,
         }
     }

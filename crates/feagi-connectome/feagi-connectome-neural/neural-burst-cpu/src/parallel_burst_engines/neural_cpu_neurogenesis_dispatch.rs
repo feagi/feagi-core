@@ -10,7 +10,7 @@ pub type CpuCorticalAreaNeurogenesis<FIQ, NM> =
 
 /// Something that wants a cortical area's neurogenesis with its concrete neuron model, along with
 /// the CPU dynamics of that model
-pub trait CpuCorticalAreaInitVisitor<FIQ: FeagiIndexQuantization> {
+pub trait CpuCorticalAreaNeurogenesisVisitor<FIQ: FeagiIndexQuantization> {
     type Output;
     fn visit<NM, D>(self, neurogenesis: CpuCorticalAreaNeurogenesis<FIQ, NM>) -> Self::Output
     where
@@ -18,8 +18,8 @@ pub trait CpuCorticalAreaInitVisitor<FIQ: FeagiIndexQuantization> {
         D: NeuronCPUParallelDynamics<FIQ, NM>;
 }
 
-/// Something that holds a cortical area init and can give it, with its concrete neuron model and
+/// Something that holds the neurogenesis of a cortical area and can give it, with its concrete neuron model and
 /// the CPU dynamics of that model, to a visitor
-pub trait CpuCorticalAreaInitDispatch<FIQ: FeagiIndexQuantization>: Send {
-    fn dispatch_cpu<V: CpuCorticalAreaInitVisitor<FIQ>>(self, visitor: V) -> V::Output;
+pub trait CpuCorticalAreaNeurogenesisDispatch<FIQ: FeagiIndexQuantization>: Send {
+    fn dispatch_cpu<V: CpuCorticalAreaNeurogenesisVisitor<FIQ>>(self, visitor: V) -> V::Output;
 }

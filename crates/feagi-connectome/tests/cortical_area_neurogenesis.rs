@@ -7,13 +7,13 @@ use feagi_connectome::connectome_basis::neuron_model::{
     NeurogenesisStorageError,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
-    FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance,
-    FeagiAdvancedNeuronDataInternal, FeagiAdvancedNeuronDataScratch, FeagiAdvancedNeuronDataVariance, NeuronModelFeagiAdvancedDefaultQuant,
+    NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
+    NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedQuantDefaultQuant,
     Period,
 };
 use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
-    FoundationPowerCorticalDataInternal, FoundationPowerCorticalDataProperties, FoundationPowerCorticalDataVariance,
-    FoundationPowerNeuronDataInternal, FoundationPowerNeuronDataVariance, NeuronModelFoundationPowerFloat32,
+    NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
+    NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronVariance, NMFoundationPowerQuantFloat32,
 };
 use feagi_connectome::connectome_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
@@ -22,8 +22,8 @@ use feagi_connectome_neural::neural_basis::quantization_levels::MembranePotentia
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
 
 type Fiq = FeagiIndexQuantizationStandard;
-type Advanced = NeuronModelFeagiAdvancedDefaultQuant;
-type Power = NeuronModelFoundationPowerFloat32;
+type Advanced = NMFeagiAdvancedQuantDefaultQuant;
+type Power = NMFoundationPowerQuantFloat32;
 
 fn voxel_layout(dimensions: [usize; 4]) -> NeuronLayoutVoxel<Fiq> {
     NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize(dimensions).unwrap())
@@ -37,11 +37,11 @@ fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
     }
 }
 
-fn advanced_variance(x: f32, y: f32, z: f32) -> FeagiAdvancedCorticalDataVariance<Advanced> {
-    FeagiAdvancedCorticalDataVariance::new(x, y, z)
+fn advanced_variance(x: f32, y: f32, z: f32) -> NMFeagiAdvancedDataCorticalVariance<Advanced> {
+    NMFeagiAdvancedDataCorticalVariance::new(x, y, z)
 }
 
-fn written_offsets(variance: &FeagiAdvancedCorticalDataVariance<Advanced>, layout: &NeuronLayoutVoxel<Fiq>, into: &mut [FeagiAdvancedNeuronDataVariance<Advanced>]) -> Vec<f32> {
+fn written_offsets(variance: &NMFeagiAdvancedDataCorticalVariance<Advanced>, layout: &NeuronLayoutVoxel<Fiq>, into: &mut [NMFeagiAdvancedDataNeuronVariance<Advanced>]) -> Vec<f32> {
     variance.write_neuron_variance_into_slice::<Fiq>(layout, into);
     into.iter().map(|neuron| neuron.firing_threshold_offset).collect()
 }
@@ -51,7 +51,7 @@ fn written_offsets(variance: &FeagiAdvancedCorticalDataVariance<Advanced>, layou
 #[test]
 fn variance_offset_comes_from_the_neuron_coordinates() {
     let layout = voxel_layout([2, 3, 1, 1]);
-    let mut neurons = vec![FeagiAdvancedNeuronDataVariance::new(0.0); 6];
+    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
     let mut offsets = written_offsets(&advanced_variance(1.0, 10.0, 100.0), &layout, &mut neurons);
     offsets.sort_by(f32::total_cmp);
     assert_eq!(offsets, [0.0, 1.0, 10.0, 11.0, 20.0, 21.0]);
@@ -63,11 +63,11 @@ fn runtime_variance_edits_do_not_compound() {
     let first = advanced_variance(1.0, 10.0, 0.0);
     let second = advanced_variance(5.0, 0.0, 0.0);
 
-    let mut neurons = vec![FeagiAdvancedNeuronDataVariance::new(0.0); 6];
+    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
     let original = written_offsets(&first, &layout, &mut neurons);
 
     let edited = written_offsets(&second, &layout, &mut neurons);
-    let mut fresh = vec![FeagiAdvancedNeuronDataVariance::new(0.0); 6];
+    let mut fresh = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
     assert_eq!(edited, written_offsets(&second, &layout, &mut fresh));
 
     // Editing back lands exactly on where it started
@@ -80,15 +80,15 @@ fn storage_writes_variance_alongside_neuron_data() {
     let storage = NeurogenesisFromStorage::<Fiq, Advanced>::new(
         voxel_layout([2, 1, 1, 1]),
         universal(),
-        FeagiAdvancedCorticalDataProperties::new(Period::QUANT_ONE, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-        FeagiAdvancedCorticalDataInternal::new(),
+        NMFeagiAdvancedDataCorticalProperties::new(Period::QUANT_ONE, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+        NMFeagiAdvancedDataCorticalInternal::new(),
         advanced_variance(3.0, 0.0, 0.0),
-        vec![FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO); 2],
+        vec![NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO); 2],
     )
     .unwrap();
-    let mut internal = vec![FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO); 2];
-    let mut scratch = vec![FeagiAdvancedNeuronDataScratch::new(); 2];
-    let mut variance = vec![FeagiAdvancedNeuronDataVariance::new(-1.0); 2];
+    let mut internal = vec![NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO); 2];
+    let mut scratch = vec![NMFeagiAdvancedDataNeuronScratch::new(); 2];
+    let mut variance = vec![NMFeagiAdvancedDataNeuronVariance::new(-1.0); 2];
     storage.write_into_slices(&mut internal, &mut scratch, &mut variance);
 
     let mut offsets: Vec<f32> = variance.iter().map(|neuron| neuron.firing_threshold_offset).collect();
@@ -102,10 +102,10 @@ fn power_storage(neuron_count: usize) -> Result<NeurogenesisFromStorage<Fiq, Pow
     NeurogenesisFromStorage::new(
         voxel_layout([2, 2, 1, 1]),
         universal(),
-        FoundationPowerCorticalDataProperties::new(),
-        FoundationPowerCorticalDataInternal::new(),
-        FoundationPowerCorticalDataVariance::new(),
-        vec![FoundationPowerNeuronDataInternal::new(); neuron_count],
+        NMFoundationPowerDataCorticalProperties::new(),
+        NMFoundationPowerDataCorticalInternal::new(),
+        NMFoundationPowerDataCorticalVariance::new(),
+        vec![NMFoundationPowerDataNeuronInternal::new(); neuron_count],
     )
 }
 
@@ -120,7 +120,7 @@ fn stored_neuron_data_must_match_the_layout() {
 /// A model without variance fields gets its variance generated, and holds no per neuron memory
 #[test]
 fn model_without_variance_generates_nothing() {
-    assert_eq!(size_of::<FoundationPowerNeuronDataVariance<Power>>(), 0);
+    assert_eq!(size_of::<NMFoundationPowerDataNeuronVariance<Power>>(), 0);
     let storage = power_storage(4).unwrap();
     assert_eq!(storage.iter().len(), 4);
 }
@@ -166,13 +166,13 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_test_custom_template!(expand_cortical_dynamics_quantization);
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisScratchVarianceGenerator<FIQ, NM> for TestCustomDefaults<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMTestCustomTrait> NeurogenesisScratchVarianceGenerator<FIQ, NM> for TestCustomDefaults<FIQ, NM> {
     fn static_get_cortical_scratch(_layout: &NeuronLayoutOf<NM, FIQ>, _cortical_properties: &NM::CorticalDataProperties, _cortical_internal: &NM::CorticalDataInternal) -> NM::CorticalDataScratch {
-        TestCustomCorticalDataScratch::new()
+        NMTestCustomDataCorticalScratch::new()
     }
 
     fn static_get_neuron_scratch(_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, _layout: &NeuronLayoutOf<NM, FIQ>, _internal_neuron_data: &NM::NeuronDataInternal) -> NM::NeuronDataScratch {
-        TestCustomNeuronDataScratch::new()
+        NMTestCustomDataNeuronScratch::new()
     }
 
     fn static_get_neuron_variance(index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, layout: &NeuronLayoutOf<NM, FIQ>, variance: &NM::CorticalDataVariance) -> NM::NeuronDataVariance {
@@ -182,7 +182,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisScratch
 
 /// Generic over every quantization level of the model, converting the index to the level's
 /// membrane potential type
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisMethod<FIQ, NM> for IndexAsValueGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMTestCustomTrait> NeurogenesisMethod<FIQ, NM> for IndexAsValueGenerator<FIQ, NM> {
     fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
         &self.layout
     }
@@ -195,6 +195,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisMethod<
         (self.cortical_properties, self.cortical_internal)
     }
 
+    fn clone_model_cortical_data(&self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
+        (self.cortical_properties.clone(), self.cortical_internal.clone())
+    }
+
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
         &self.cortical_variance
     }
@@ -202,13 +206,13 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisMethod<
     fn spawn_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
         use feagi_basis::prelude::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
         let value = QuantizedDecimalTrait::from_quantization(index.quant_to_usize() as f32);
-        let internal = TestCustomNeuronDataInternal::new(value);
+        let internal = NMTestCustomDataNeuronInternal::new(value);
         let scratch = NM::NeurogenesisDefaults::<FIQ>::static_get_neuron_scratch(index, &self.layout, &internal);
         (internal, scratch)
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisByGenerator<FIQ, NM> for IndexAsValueGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMTestCustomTrait> NeurogenesisByGenerator<FIQ, NM> for IndexAsValueGenerator<FIQ, NM> {
     type OtherDataNeededForFromStorage = ();
 
     /// Regenerates from the stored cortical data, every neuron starting at its index again
@@ -224,13 +228,13 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestCustom> NeurogenesisByGener
     }
 }
 
-fn index_as_value_generator(neuron_count: usize) -> IndexAsValueGenerator<Fiq, NeuronModelTestCustomFloat32> {
+fn index_as_value_generator(neuron_count: usize) -> IndexAsValueGenerator<Fiq, NMTestCustomQuantFloat32> {
     IndexAsValueGenerator {
         layout: voxel_layout([neuron_count, 1, 1, 1]),
         universal_properties: universal(),
-        cortical_properties: TestCustomCorticalDataProperties::new(),
-        cortical_internal: TestCustomCorticalDataInternal::new(),
-        cortical_variance: TestCustomCorticalDataVariance::new(),
+        cortical_properties: NMTestCustomDataCorticalProperties::new(),
+        cortical_internal: NMTestCustomDataCorticalInternal::new(),
+        cortical_variance: NMTestCustomDataCorticalVariance::new(),
     }
 }
 
@@ -244,13 +248,13 @@ fn custom_neurogenesis_runs_through_the_spec() {
 /// Stored neuron data is used as is, while the generator made from that storage generates its own
 #[test]
 fn custom_generator_from_storage_regenerates_neurons() {
-    let storage = NeurogenesisFromStorage::<Fiq, NeuronModelTestCustomFloat32>::new(
+    let storage = NeurogenesisFromStorage::<Fiq, NMTestCustomQuantFloat32>::new(
         voxel_layout([3, 1, 1, 1]),
         universal(),
-        TestCustomCorticalDataProperties::new(),
-        TestCustomCorticalDataInternal::new(),
-        TestCustomCorticalDataVariance::new(),
-        vec![TestCustomNeuronDataInternal::new(7.0); 3],
+        NMTestCustomDataCorticalProperties::new(),
+        NMTestCustomDataCorticalInternal::new(),
+        NMTestCustomDataCorticalVariance::new(),
+        vec![NMTestCustomDataNeuronInternal::new(7.0); 3],
     )
     .unwrap();
     let stored: Vec<f32> = storage.iter().map(|(internal, _, _)| internal.value).collect();
@@ -294,13 +298,13 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_test_uniform_template!(expand_cortical_dynamics_quantization);
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestUniform> NeurogenesisScratchVarianceGenerator<FIQ, NM> for TestUniformDefaults<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait> NeurogenesisScratchVarianceGenerator<FIQ, NM> for TestUniformDefaults<FIQ, NM> {
     fn static_get_cortical_scratch(_layout: &NeuronLayoutOf<NM, FIQ>, _cortical_properties: &NM::CorticalDataProperties, _cortical_internal: &NM::CorticalDataInternal) -> NM::CorticalDataScratch {
-        TestUniformCorticalDataScratch::new()
+        NMTestUniformDataCorticalScratch::new()
     }
 
     fn static_get_neuron_scratch(_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, _layout: &NeuronLayoutOf<NM, FIQ>, _internal_neuron_data: &NM::NeuronDataInternal) -> NM::NeuronDataScratch {
-        TestUniformNeuronDataScratch::new()
+        NMTestUniformDataNeuronScratch::new()
     }
 
     fn static_get_neuron_variance(index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>, layout: &NeuronLayoutOf<NM, FIQ>, variance: &NM::CorticalDataVariance) -> NM::NeuronDataVariance {
@@ -308,16 +312,16 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestUniform> NeurogenesisScratc
     }
 }
 
-type Uniform = NeuronModelTestUniformFloat32;
+type Uniform = NMTestUniformQuantFloat32;
 
 fn uniform_generator(dimensions: [usize; 4], value: f32) -> NeurogenesisDefaultsGenerator<Fiq, Uniform> {
     NeurogenesisDefaultsGenerator::new(
         voxel_layout(dimensions),
         universal(),
-        TestUniformCorticalDataProperties::new(),
-        TestUniformCorticalDataInternal::new(),
-        TestUniformCorticalDataVariance::new(),
-        TestUniformNeuronDataInternal::new(value),
+        NMTestUniformDataCorticalProperties::new(),
+        NMTestUniformDataCorticalInternal::new(),
+        NMTestUniformDataCorticalVariance::new(),
+        NMTestUniformDataNeuronInternal::new(value),
     )
 }
 
@@ -328,9 +332,9 @@ fn defaults_generator_starts_every_neuron_the_same() {
     let values: Vec<f32> = generator.iter().map(|(internal, _, _)| internal.value).collect();
     assert_eq!(values, [5.0; 4]);
 
-    let mut internal = vec![TestUniformNeuronDataInternal::new(-1.0); 4];
-    let mut scratch = vec![TestUniformNeuronDataScratch::new(); 4];
-    let mut variance = vec![TestUniformNeuronDataVariance::new(); 4];
+    let mut internal = vec![NMTestUniformDataNeuronInternal::new(-1.0); 4];
+    let mut scratch = vec![NMTestUniformDataNeuronScratch::new(); 4];
+    let mut variance = vec![NMTestUniformDataNeuronVariance::new(); 4];
     generator.write_into_slices(&mut internal, &mut scratch, &mut variance);
     assert!(internal.iter().all(|neuron| neuron.value == 5.0));
 }
@@ -341,13 +345,13 @@ fn defaults_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
     let storage = NeurogenesisFromStorage::<Fiq, Uniform>::new(
         voxel_layout([3, 1, 1, 1]),
         universal(),
-        TestUniformCorticalDataProperties::new(),
-        TestUniformCorticalDataInternal::new(),
-        TestUniformCorticalDataVariance::new(),
-        [1.0, 2.0, 3.0].map(TestUniformNeuronDataInternal::new).to_vec(),
+        NMTestUniformDataCorticalProperties::new(),
+        NMTestUniformDataCorticalInternal::new(),
+        NMTestUniformDataCorticalVariance::new(),
+        [1.0, 2.0, 3.0].map(NMTestUniformDataNeuronInternal::new).to_vec(),
     )
     .unwrap();
-    let generator = NeurogenesisDefaultsGenerator::new_generator_from_storage(&storage, TestUniformNeuronDataInternal::new(9.0));
+    let generator = NeurogenesisDefaultsGenerator::new_generator_from_storage(&storage, NMTestUniformDataNeuronInternal::new(9.0));
     assert_eq!(generator, uniform_generator([3, 1, 1, 1], 9.0));
     let values: Vec<f32> = generator.iter().map(|(internal, _, _)| internal.value).collect();
     assert_eq!(values, [9.0; 3]);
@@ -355,19 +359,19 @@ fn defaults_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
 
 /// What a cortical type does: wraps the defaults generator to fill in its own defaults, which a
 /// client may edit, then hands it out as the generator of the model
-struct ExampleCorticalTypeGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModelTestUniform>(pub NeurogenesisDefaultsGenerator<FIQ, NM>);
+struct ExampleCorticalTypeGenerator<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait>(pub NeurogenesisDefaultsGenerator<FIQ, NM>);
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelTestUniform> ExampleCorticalTypeGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait> ExampleCorticalTypeGenerator<FIQ, NM> {
     /// Every neuron of this cortical type starts at 2
     fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Self {
         use feagi_basis::prelude::QuantizedDecimalTrait;
         Self(NeurogenesisDefaultsGenerator::new(
             layout,
             universal(),
-            TestUniformCorticalDataProperties::new(),
-            TestUniformCorticalDataInternal::new(),
-            TestUniformCorticalDataVariance::new(),
-            TestUniformNeuronDataInternal::new(QuantizedDecimalTrait::from_quantization(2.0)),
+            NMTestUniformDataCorticalProperties::new(),
+            NMTestUniformDataCorticalInternal::new(),
+            NMTestUniformDataCorticalVariance::new(),
+            NMTestUniformDataNeuronInternal::new(QuantizedDecimalTrait::from_quantization(2.0)),
         ))
     }
 
@@ -384,7 +388,7 @@ fn wrapped_defaults_generator_becomes_the_model_generator() {
     let mut wrapped = ExampleCorticalTypeGenerator::<Fiq, Uniform>::new(voxel_layout([3, 1, 1, 1]));
     assert_eq!(wrapped.0, uniform_generator([3, 1, 1, 1], 2.0));
     // A client edits the defaults before the area is created
-    wrapped.0.neuron_internal = TestUniformNeuronDataInternal::new(4.0);
+    wrapped.0.neuron_internal = NMTestUniformDataNeuronInternal::new(4.0);
     let generator: <Uniform as NeuronModel>::NeurogenesisGenerator<Fiq> = wrapped.into_model_generator();
     let values: Vec<f32> = generator.iter().map(|(internal, _, _)| internal.value).collect();
     assert_eq!(values, [4.0; 3]);
@@ -398,15 +402,15 @@ fn wrapped_defaults_generator_becomes_the_model_generator() {
 mod dispatch {
     use super::*;
     use feagi_basis::BurstIndex;
-    use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaInitDispatch, CpuCorticalAreaInitVisitor};
-    use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{BurstEngineDynamics, FeagiAdvancedCorticalDataScratch};
-    use feagi_connectome::connectome_basis::neuron_model::NeuronModelEnum;
-    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaInitContainer, CorticalAreaInitEnum, CorticalAreaNeurogenesis};
+    use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaNeurogenesisDispatch, CpuCorticalAreaNeurogenesisVisitor};
+    use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{BurstEngineDynamics, NMFeagiAdvancedDataCorticalScratch};
+    use feagi_connectome::connectome_basis::neuron_model::NMEnum;
+    use feagi_connectome::connectome_basis::neuron_model::{CorticalAreaNeurogenesisContainer, CorticalAreaNeurogenesisEnum, CorticalAreaNeurogenesis};
 
     /// Builds the neurons of the area, then runs the first through the dynamics the dispatch chose
     struct FireFirstNeuron;
 
-    impl<FIQ: FeagiIndexQuantization> CpuCorticalAreaInitVisitor<FIQ> for FireFirstNeuron {
+    impl<FIQ: FeagiIndexQuantization> CpuCorticalAreaNeurogenesisVisitor<FIQ> for FireFirstNeuron {
         type Output = (usize, bool);
 
         fn visit<NM, D>(self, neurogenesis: CorticalAreaNeurogenesis<FIQ, NM>) -> Self::Output
@@ -435,11 +439,11 @@ mod dispatch {
     #[test]
     #[ignore = "needs the FoundationPower neurogenesis defaults filled in (scratch is todo!())"]
     fn init_enum_dispatches_to_the_dynamics_of_its_model() {
-        let init: CorticalAreaInitEnum<Fiq> = NeuronModelEnum::<CorticalAreaInitContainer<Fiq>>::from_data::<Power>(
+        let neurogenesis: CorticalAreaNeurogenesisEnum<Fiq> = NMEnum::<CorticalAreaNeurogenesisContainer<Fiq>>::from_data::<Power>(
             CorticalAreaNeurogenesis::FromStorage(power_storage(4).unwrap()),
         );
         // The power model always fires
-        assert_eq!(init.dispatch_cpu(FireFirstNeuron), (4, true));
+        assert_eq!(neurogenesis.dispatch_cpu(FireFirstNeuron), (4, true));
     }
 
     /// A neuron of the advanced model, with a threshold of 10, half of its charge leaking every
@@ -447,16 +451,16 @@ mod dispatch {
     struct AdvancedNeuron {
         /// Carried between bursts, as the engine does
         processing_buffer: CorticalAreaNeuronPotential<f32>,
-        internal: FeagiAdvancedNeuronDataInternal<Advanced>,
-        variance: FeagiAdvancedNeuronDataVariance<Advanced>,
+        internal: NMFeagiAdvancedDataNeuronInternal<Advanced>,
+        variance: NMFeagiAdvancedDataNeuronVariance<Advanced>,
     }
 
     impl AdvancedNeuron {
         fn new(threshold_offset: f32) -> Self {
             Self {
                 processing_buffer: CorticalAreaNeuronPotential::QUANT_ZERO,
-                internal: FeagiAdvancedNeuronDataInternal::new(Period::QUANT_ZERO),
-                variance: FeagiAdvancedNeuronDataVariance::new(threshold_offset),
+                internal: NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO),
+                variance: NMFeagiAdvancedDataNeuronVariance::new(threshold_offset),
             }
         }
 
@@ -469,11 +473,11 @@ mod dispatch {
                 &voxel_layout([1, 1, 1, 1]),
                 &CorticalAreaNeuronLocalIndex::QUANT_ZERO,
                 (
-                    &FeagiAdvancedCorticalDataProperties::new(Period::new(2.0), 10.0, 0.5, 0.0, 1.0, 1.0, 0.0),
-                    &FeagiAdvancedCorticalDataInternal::new(),
-                    &FeagiAdvancedCorticalDataScratch::new(),
+                    &NMFeagiAdvancedDataCorticalProperties::new(Period::new(2.0), 10.0, 0.5, 0.0, 1.0, 1.0, 0.0),
+                    &NMFeagiAdvancedDataCorticalInternal::new(),
+                    &NMFeagiAdvancedDataCorticalScratch::new(),
                 ),
-                (&mut self.internal, &mut FeagiAdvancedNeuronDataScratch::new(), &self.variance),
+                (&mut self.internal, &mut NMFeagiAdvancedDataNeuronScratch::new(), &self.variance),
             );
             (is_firing, self.processing_buffer.dewrap())
         }

@@ -53,6 +53,8 @@ where
         NM::CorticalDataInternal,
     );
 
+    fn clone_model_cortical_data(&self)-> (NM::CorticalDataProperties, NM::CorticalDataInternal);
+
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance;
 
     fn spawn_neuron_data_at(

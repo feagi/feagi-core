@@ -1,5 +1,9 @@
-//pub mod cortical_area_dynamics;
+//! The `FoundationPower` neuron model: its generated quantization items, reached through
+//! `connectome_basis::neuron_model::foundation_power`, and its burst engine dynamics
 
-pub mod data;
-pub mod neurogenesis;
-pub mod burst_dynamics;
+pub(crate) mod data;
+pub(crate) mod neurogenesis;
+pub(crate) mod burst_dynamics;
+
+pub use data::*;
+pub use burst_dynamics::FoundationPowerBurstEngineDynamics as BurstEngineDynamics;

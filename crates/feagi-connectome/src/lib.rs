@@ -23,7 +23,7 @@ pub mod connectome_basis {
     /// The edit steps sent to the connectome, and what each returns
     #[cfg(feature = "std")]
     pub mod connectome_editing {
-        pub use crate::neuron_models::init_dispatch::ConnectomeDispatch;
+        pub use crate::neuron_models::neurogenesis_dispatch::ConnectomeDispatch;
         pub use feagi_connectome_neural::neural_basis::connectome_editing::{
             ConnectomeEditError, ConnectomeEditErrorCorticalAreaAdd, ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum,
             ConnectomeEditStepCorticalAreaAdd, ConnectomeEditStepEnum,
@@ -32,9 +32,12 @@ pub mod connectome_basis {
 
     pub mod neuron_model {
         pub use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-        /// The generated `NeuronModel` family, which the cortical type family macros reach as `neuron_model`
-        pub use crate::neuron_models::neuron_model::*;
-        pub use crate::neuron_models::init_dispatch::{CorticalAreaInitContainer, CorticalAreaInitEnum, CorticalAreaNeurogenesis};
+        /// The `NeuronModel` family, which the cortical type family macros reach as `neuron_model`,
+        /// and the dispatch macros `with_nm!` as `$crate::connectome_basis::neuron_model`
+        pub use crate::neuron_models::family::*;
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::{feagi_advanced, feagi_simple, foundation_death, foundation_power, memory_fire_hashing};
+        pub use crate::neuron_models::neurogenesis_dispatch::{CorticalAreaNeurogenesisContainer, CorticalAreaNeurogenesisEnum, CorticalAreaNeurogenesis};
         pub use feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing;
         pub use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
         pub use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf, NeuronLayoutTag};

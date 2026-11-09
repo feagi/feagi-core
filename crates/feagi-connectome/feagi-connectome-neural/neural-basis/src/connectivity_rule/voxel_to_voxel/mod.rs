@@ -5,7 +5,7 @@ use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalArea
 use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
-pub mod vector;
+//pub mod vector;
 pub mod all_to_voxel;
 pub mod voxel_to_all;
 pub mod single_voxel;

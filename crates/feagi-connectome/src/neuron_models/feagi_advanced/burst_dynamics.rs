@@ -1,18 +1,18 @@
-use crate::neuron_models::feagi_advanced::data::{NeuronModelFeagiAdvanced, Period};
+use crate::neuron_models::feagi_advanced::data::{NMFeagiAdvancedTrait, Period};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedElementBase;
 use feagi_basis::BurstIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics};
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf};
-pub struct FeagiAdvancedBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced>(core::marker::PhantomData<(FIQ, NM)>);
+pub struct FeagiAdvancedBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
 //region Common
 
 impl<FIQ, NM> FeagiAdvancedBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFeagiAdvanced,
+    NM: NMFeagiAdvancedTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
@@ -22,7 +22,7 @@ where
 impl<FIQ, NM> Default for FeagiAdvancedBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFeagiAdvanced,
+    NM: NMFeagiAdvancedTrait,
 {
     fn default() -> Self {
         Self::new()
@@ -32,7 +32,7 @@ where
 impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FeagiAdvancedBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFeagiAdvanced,
+    NM: NMFeagiAdvancedTrait,
 {
 }
 
@@ -42,7 +42,7 @@ where
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for FeagiAdvancedBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFeagiAdvanced,
+    NM: NMFeagiAdvancedTrait,
 {
     fn process_model_cortical_area_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,

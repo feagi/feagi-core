@@ -1,10 +1,10 @@
-use crate::neuron_models::foundation_power::data::NeuronModelFoundationPower;
+use crate::neuron_models::foundation_power::data::NMFoundationPowerTrait;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-pub struct FoundationPowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NeuronModelFoundationPower>(
+pub struct FoundationPowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFoundationPowerTrait>(
     core::marker::PhantomData<(FIQ, NM)>,
 );
 
@@ -12,7 +12,7 @@ pub struct FoundationPowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: N
 impl<FIQ, NM> FoundationPowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationPower,
+    NM: NMFoundationPowerTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
@@ -22,7 +22,7 @@ where
 impl<FIQ, NM> Default for FoundationPowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationPower,
+    NM: NMFoundationPowerTrait,
 {
     fn default() -> Self {
         Self::new()
@@ -32,7 +32,7 @@ where
 impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FoundationPowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationPower,
+    NM: NMFoundationPowerTrait,
 {
 }
 //endregion
@@ -44,7 +44,7 @@ impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynami
 for FoundationPowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NeuronModelFoundationPower,
+    NM: NMFoundationPowerTrait,
 {
     fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,

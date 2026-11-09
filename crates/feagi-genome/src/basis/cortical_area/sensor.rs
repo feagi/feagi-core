@@ -9,12 +9,12 @@ use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizat
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
-    self, FeagiAdvancedCorticalDataInternal, FeagiAdvancedCorticalDataProperties, FeagiAdvancedCorticalDataVariance,
-    FeagiAdvancedNeuronDataInternal, NeuronModelFeagiAdvanced,
+    self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
+    NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{
-    self, FeagiSimpleCorticalDataInternal, FeagiSimpleCorticalDataProperties, FeagiSimpleCorticalDataVariance,
-    FeagiSimpleNeuronDataInternal, NeuronModelFeagiSimple,
+    self, NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance,
+    NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait,
 };
 
 //region Camera
@@ -29,10 +29,10 @@ impl CorticalAreaType for Camera {
 
 cortical_type_generator! {
     /// The defaults of a new `Camera` area using the `FeagiAdvanced` neuron model
-    CameraFeagiAdvancedGenerator for Camera, UsesFeagiAdvanced, NeuronModelFeagiAdvanced
+    CameraFeagiAdvancedGenerator for Camera, UsesFeagiAdvanced, NMFeagiAdvancedTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> CameraFeagiAdvancedGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> CameraFeagiAdvancedGenerator<FIQ, NM> {
     /// A new `Camera` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -43,7 +43,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> CameraFeagiAdvan
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FeagiAdvancedCorticalDataProperties {
+            NMFeagiAdvancedDataCorticalProperties {
                 refractory_period: feagi_advanced::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 leak_coefficient: 1.0f32.try_to_quantization()?,
@@ -53,14 +53,14 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> CameraFeagiAdvan
                 degeneration: 1.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiAdvancedCorticalDataInternal::new(),
-            FeagiAdvancedCorticalDataVariance {
+            NMFeagiAdvancedDataCorticalInternal::new(),
+            NMFeagiAdvancedDataCorticalVariance {
                 firing_threshold_increment_x: 0.0f32.try_to_quantization()?,
                 firing_threshold_increment_y: 0.0f32.try_to_quantization()?,
                 firing_threshold_increment_z: 0.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiAdvancedNeuronDataInternal {
+            NMFeagiAdvancedDataNeuronInternal {
                 refractory_countdown: feagi_advanced::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
@@ -70,10 +70,10 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiAdvanced> CameraFeagiAdvan
 
 cortical_type_generator! {
     /// The defaults of a new `Camera` area using the `FeagiSimple` neuron model
-    CameraFeagiSimpleGenerator for Camera, UsesFeagiSimple, NeuronModelFeagiSimple
+    CameraFeagiSimpleGenerator for Camera, UsesFeagiSimple, NMFeagiSimpleTrait
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple> CameraFeagiSimpleGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> CameraFeagiSimpleGenerator<FIQ, NM> {
     /// A new `Camera` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
@@ -84,16 +84,16 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple> CameraFeagiSimpleG
                 is_psp_uniform: false,
                 is_psp_using_neuron_potential: false,
             },
-            FeagiSimpleCorticalDataProperties {
+            NMFeagiSimpleDataCorticalProperties {
                 refractory_period: feagi_simple::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
                 _p: PhantomData,
             },
-            FeagiSimpleCorticalDataInternal::new(),
-            FeagiSimpleCorticalDataVariance::new(),
-            FeagiSimpleNeuronDataInternal {
+            NMFeagiSimpleDataCorticalInternal::new(),
+            NMFeagiSimpleDataCorticalVariance::new(),
+            NMFeagiSimpleDataNeuronInternal {
                 refractory_countdown: feagi_simple::Period::QUANT_ZERO,
                 _p: PhantomData,
             },

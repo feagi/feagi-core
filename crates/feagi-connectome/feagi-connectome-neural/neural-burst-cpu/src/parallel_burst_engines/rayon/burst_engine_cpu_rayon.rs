@@ -1,4 +1,4 @@
-use crate::parallel_burst_engines::neural_cpu_init_dispatch::CpuCorticalAreaInitDispatch;
+use crate::parallel_burst_engines::neural_cpu_neurogenesis_dispatch::CpuCorticalAreaNeurogenesisDispatch;
 use crate::parallel_burst_engines::rayon::errors::BurstEngineCPURayonInitError;
 use crate::shared_structs::{EnginePerCorticalData, EnginePerNeuronData};
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
@@ -34,7 +34,7 @@ where
     FIQ: FeagiIndexQuantization,
     VisTx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>,
     CVDW: ConnectomeVisitorDispatchWrapper<FIQ>,
-    CVDW::CorticalAreaInitDispatch: CpuCorticalAreaInitDispatch<FIQ>,
+    CVDW::CorticalAreaNeurogenesisDispatch: CpuCorticalAreaNeurogenesisDispatch<FIQ>,
 {
     type InitParameters = ();
     type InitError = BurstEngineCPURayonInitError;

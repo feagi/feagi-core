@@ -74,15 +74,15 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_feagi_advanced_template!(expand_cortical_dynamics_quantization);
 
-impl<NM: NeuronModelFeagiAdvanced> CorticalDataVarianceSpecification<NM> for FeagiAdvancedCorticalDataVariance<NM> {
+impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagiAdvancedDataCorticalVariance<NM> {
     fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
         &self,
         layout: &NeuronLayoutOf<NM, FIQ>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> FeagiAdvancedNeuronDataVariance<NM> {
+    ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
         let coordinates = layout.get_neuron_layout_context(index);
         let [x, y, z, _d] = coordinates.as_slice();
-        FeagiAdvancedNeuronDataVariance::new(
+        NMFeagiAdvancedDataNeuronVariance::new(
             self.firing_threshold_increment_x * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*x)
                 + self.firing_threshold_increment_y * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*y)
                 + self.firing_threshold_increment_z * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*z),

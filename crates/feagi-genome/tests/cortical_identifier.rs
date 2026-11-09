@@ -116,7 +116,7 @@ mod custom_inner {
     };
     use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model;
-    use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NeuronModelFeagiSimple;
+    use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NMFeagiSimpleTrait;
     use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
     use feagi_genome::basis::cortical_area::CorticalAreaInnerID;
 
@@ -164,7 +164,7 @@ mod custom_inner {
 
         /// Never generated, only identified
         impl UsesFeagiSimple for Thing {
-            fn new_defaults_generator<FIQ: FeagiIndexQuantization, NM: NeuronModelFeagiSimple>(
+            fn new_defaults_generator<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait>(
                 _layout: NeuronLayoutOf<NM, FIQ>,
             ) -> Result<NeurogenesisDefaultsGenerator<FIQ, NM>, DataValueQuantizationError> {
                 unimplemented!()
@@ -176,7 +176,6 @@ mod custom_inner {
         Family: TestType,
         Error: TestTypeSelectionError,
         ModelFamily: NeuronModel,
-        ModelFamilyError: NeuronModelSelectionError,
         Identifier: TestIdentifier,
         IdentifierError: TestIdentifierParseError,
 

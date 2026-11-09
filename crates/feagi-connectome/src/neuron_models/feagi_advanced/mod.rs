@@ -1,3 +1,9 @@
-pub mod data;
-pub mod neurogenesis;
-pub mod burst_dynamics;
+//! The `FeagiAdvanced` neuron model: its generated quantization items, reached through
+//! `connectome_basis::neuron_model::feagi_advanced`, and its burst engine dynamics
+
+pub(crate) mod data;
+pub(crate) mod neurogenesis;
+pub(crate) mod burst_dynamics;
+
+pub use data::*;
+pub use burst_dynamics::FeagiAdvancedBurstEngineDynamics as BurstEngineDynamics;

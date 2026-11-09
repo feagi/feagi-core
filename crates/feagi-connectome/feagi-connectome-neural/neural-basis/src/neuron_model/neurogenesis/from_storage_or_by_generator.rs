@@ -45,6 +45,13 @@ where
         }
     }
 
+    fn clone_model_cortical_data(&self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
+        match self {
+            NeurogenesisFromStorageOrByGenerator::FromStorage(s) => {s.clone_model_cortical_data()}
+            NeurogenesisFromStorageOrByGenerator::ByGenerator(g) => {g.clone_model_cortical_data()}
+        }
+    }
+
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
         match &self {
             NeurogenesisFromStorageOrByGenerator::FromStorage(s) => {s.get_model_cortical_variance()}

@@ -1,4 +1,4 @@
-use super::model_family_template::{manual_enum_impls, serde_bounds, serde_derive};
+use super::model_family_template::{self as model_names, manual_enum_impls, serde_bounds, serde_derive};
 use crate::common::{basis_path, parse_optional_comma};
 use heck::ToSnakeCase;
 use indexmap::IndexMap;
@@ -11,7 +11,6 @@ mod kw {
     syn::custom_keyword!(Family);
     syn::custom_keyword!(Error);
     syn::custom_keyword!(ModelFamily);
-    syn::custom_keyword!(ModelFamilyError);
     syn::custom_keyword!(Identifier);
     syn::custom_keyword!(IdentifierError);
     syn::custom_keyword!(Types);
@@ -26,7 +25,6 @@ mod kw {
 /// Family: CorticalAreaType,
 /// Error: CorticalAreaTypeSelectionError,
 /// ModelFamily: NeuronModel,
-/// ModelFamilyError: NeuronModelSelectionError,
 /// Identifier: CorticalIdentifier,
 /// IdentifierError: CorticalIdentifierParseError,
 ///
@@ -55,7 +53,6 @@ pub struct CorticalTypeFamilyTemplate {
     pub family_name: Ident,
     pub error_name: Ident,
     pub model_family_name: Ident,
-    pub model_family_error_name: Ident,
     pub identifier_name: Ident,
     pub identifier_error_name: Ident,
     pub super_types: IndexMap<Ident, SuperTypeTemplate>,
@@ -167,37 +164,37 @@ impl CorticalTypeFamilyTemplate {
 
     fn model_container_path(&self) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let container = format_ident!("{}Container", self.model_family_name);
+        let container = model_names::container_trait_name();
         quote!(#module::#container)
     }
 
     fn model_member_path(&self) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let member = format_ident!("{}Member", self.model_family_name);
+        let member = model_names::member_trait_name();
         quote!(#module::#member)
     }
 
     fn model_model_member_path(&self, model: &Ident) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let member = format_ident!("{}{}Member", self.model_family_name, model);
+        let member = model_names::model_member_trait_name(model);
         quote!(#module::#member)
     }
 
     fn model_module_path(&self, model: &Ident) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let model_module = format_ident!("{}", model.to_string().to_snake_case());
+        let model_module = model_names::model_module_name(model);
         quote!(#module::#model_module)
     }
 
     fn model_trait_path(&self, model: &Ident) -> proc_macro2::TokenStream {
         let model_module = self.model_module_path(model);
-        let model_trait = format_ident!("{}{}", self.model_family_name, model);
+        let model_trait = model_names::model_trait_name(model);
         quote!(#model_module::#model_trait)
     }
 
     fn model_tag_path(&self, model: &Ident) -> proc_macro2::TokenStream {
         let model_module = self.model_module_path(model);
-        let tag = format_ident!("{}{}Tag", self.model_family_name, model);
+        let tag = model_names::model_tag_name(model);
         quote!(#model_module::#tag)
     }
 
@@ -210,19 +207,19 @@ impl CorticalTypeFamilyTemplate {
 
     fn model_quant_enum_path(&self, model: &Ident) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let quant_enum = format_ident!("{}QuantEnum", model);
+        let quant_enum = model_names::quant_enum_name(model);
         quote!(#module::#quant_enum)
     }
 
     fn model_kind_path(&self) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let kind = format_ident!("{}Kind", self.model_family_name);
+        let kind = model_names::kind_name();
         quote!(#module::#kind)
     }
 
     fn model_error_path(&self) -> proc_macro2::TokenStream {
         let module = self.model_family_module();
-        let error = &self.model_family_error_name;
+        let error = model_names::error_name();
         quote!(#module::#error)
     }
 
@@ -1029,7 +1026,6 @@ impl CorticalTypeFamilyTemplate {
         let qualified = quote!(#family_module::);
         let with_macro = self.with_macro_name();
         let enum_name = self.family_enum_name();
-        let model_family_snake = self.model_family_name.to_string().to_snake_case();
         let inner = quote!(__cortical_type_inner);
 
         let leaves = self.cortical_types();
@@ -1044,7 +1040,7 @@ impl CorticalTypeFamilyTemplate {
         let mut model_macro_names: Vec<String> = Vec::new();
         for leaf in &leaves {
             for model in &leaf.template.models {
-                let model_macro = format_ident!("with_{}_{}", model_family_snake, model.to_string().to_snake_case());
+                let model_macro = model_names::with_model_macro_name(model);
                 let macro_name = format!("`{model_macro}!`");
                 if !model_macro_names.contains(&macro_name) {
                     model_macro_names.push(macro_name);
@@ -1109,11 +1105,6 @@ impl Parse for CorticalTypeFamilyTemplate {
         let model_family_name = input.parse::<Ident>()?;
         parse_optional_comma(input)?;
 
-        input.parse::<kw::ModelFamilyError>()?;
-        input.parse::<Token![:]>()?;
-        let model_family_error_name = input.parse::<Ident>()?;
-        parse_optional_comma(input)?;
-
         input.parse::<kw::Identifier>()?;
         input.parse::<Token![:]>()?;
         let identifier_name = input.parse::<Ident>()?;
@@ -1138,7 +1129,6 @@ impl Parse for CorticalTypeFamilyTemplate {
             family_name,
             error_name,
             model_family_name,
-            model_family_error_name,
             identifier_name,
             identifier_error_name,
             super_types,
@@ -1173,7 +1163,6 @@ impl ToTokens for CorticalTypeFamilyTemplate {
         let family_name = &self.family_name;
         let error_name = &self.error_name;
         let model_family_name = &self.model_family_name;
-        let model_family_error_name = &self.model_family_error_name;
         let identifier_name = &self.identifier_name;
         let identifier_error_name = &self.identifier_error_name;
         tokens.extend(quote! {
@@ -1181,7 +1170,6 @@ impl ToTokens for CorticalTypeFamilyTemplate {
             Family: #family_name,
             Error: #error_name,
             ModelFamily: #model_family_name,
-            ModelFamilyError: #model_family_error_name,
             Identifier: #identifier_name,
             IdentifierError: #identifier_error_name,
 

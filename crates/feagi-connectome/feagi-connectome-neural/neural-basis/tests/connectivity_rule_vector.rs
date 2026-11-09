@@ -1,5 +1,6 @@
 #![cfg(feature = "std")]
 
+/*
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
 use feagi_basis::prelude::SpatialCoordinate;
 use feagi_basis::voxels::{CorticalAreaVoxelCoordinateAxisPosition, CorticalAreaVoxelCoordinates};
@@ -278,3 +279,6 @@ fn skipped_elements_do_not_count_toward_overflow() {
 }
 
 //endregion
+
+
+ */

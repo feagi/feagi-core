@@ -1,11 +1,11 @@
 use crate::common::{basis_path, parse_optional_comma};
+use crate::model_family::model_family_template as model_names;
 use heck::ToSnakeCase;
 use indexmap::IndexMap;
 use proc_macro2::Ident;
 use quote::{format_ident, quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::{braced, Attribute, Token, Type, TypeParamBound};
+use syn::{braced, Attribute, Token, Type};
 
 mod kw {
     syn::custom_keyword!(NeuronLayout);
@@ -32,9 +32,6 @@ const NEURON_MODEL_GENERIC: &str = "NM";
 
 /// Name of the `FeagiIndexQuantization` generic of the generated cortical variance specification
 const FEAGI_INDEX_QUANTIZATION_GENERIC: &str = "FIQ";
-
-/// Generic names the generated items use, which the layout generic cannot take
-const RESERVED_GENERICS: [&str; 2] = [NEURON_MODEL_GENERIC, FEAGI_INDEX_QUANTIZATION_GENERIC];
 
 /// Name of the marker field every generated data struct holds
 const PHANTOM_FIELD: &str = "_p";
@@ -84,9 +81,8 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 ///     }
 /// }
 /// ```
-/// The optional `NeuronLayout` entry sets the `NeuronLayoutTag` the model is implemented for (see
-/// [`ModelLayoutTemplate`]), defaulting to any, `NL: NeuronLayoutTag`. The required
-/// `NeurogenesisDefaults` and `NeurogenesisGenerator` are the types every quantization level sets
+/// The required `NeuronLayout` entry is the single `NeuronLayoutTag` of the model, which every
+/// quantization level sets and the model trait fixes. The required `NeurogenesisDefaults` and `NeurogenesisGenerator` are the types every quantization level sets
 /// as `NeuronModel::NeurogenesisDefaults<FIQ>` and `NeuronModel::NeurogenesisGenerator<FIQ>`,
 /// written in terms of the generic `FIQ` and `Self`, the quantization level. They must implement
 /// `NeurogenesisScratchVarianceGenerator<FIQ, Self>` and `NeurogenesisByGenerator<FIQ, Self>`
@@ -99,66 +95,16 @@ pub const MODEL_DATA_STRUCTS: [(&str, &str); 7] = [
 /// is kept as written. Entries keep their template order, except data structs, which keep trait
 /// order. A model giving fields for neither `CorticalDataVariance` nor `NeuronDataVariance` has its
 /// variance generated as nothing, otherwise `CorticalDataVarianceSpecification` must be implemented
-/// by hand for `{Model}CorticalDataVariance`
+/// by hand for `NM{Model}DataCorticalVariance`
 pub struct CorticalDynamicsQuantizationTemplate {
     pub model_attributes: Vec<Attribute>,
     pub model_name: Ident,
-    pub layout: ModelLayoutTemplate,
+    pub layout: Type,
     pub neurogenesis_defaults: Type,
     pub neurogenesis_generator: Type,
     pub quantizables: IndexMap<Ident, QuantizableTemplate>,
     pub quantization_levels: IndexMap<Ident, QuantizationLevelTemplate>,
     pub data_specifications: IndexMap<Ident, IndexMap<Ident, DataFieldTemplate>>,
-}
-
-/// The `NeuronLayoutTag` a model is implemented for, which decides the generics of its
-/// quantization level structs `NeuronModel{Model}{Level}`
-pub enum ModelLayoutTemplate {
-    /// `NeuronLayout: NeuronLayoutTagVoxel`, a single layout type, which the model trait
-    /// `NeuronModel{Model}` fixes. The level structs are `NeuronModel{Model}{Level}`
-    Fixed(Type),
-    /// `NeuronLayout: NL: NeuronLayoutTag`, any layout type within the bounds, which the model
-    /// trait `NeuronModel{Model}` restricts to. The level structs are `NeuronModel{Model}{Level}<NL>`
-    Generic {
-        name: Ident,
-        bounds: Punctuated<TypeParamBound, Token![+]>,
-    },
-}
-
-impl Default for ModelLayoutTemplate {
-    /// Any layout type, `NL: NeuronLayoutTag`
-    fn default() -> Self {
-        Self::Generic {
-            name: format_ident!("NL"),
-            bounds: syn::parse_quote!(NeuronLayoutTag),
-        }
-    }
-}
-
-impl Parse for ModelLayoutTemplate {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // `Name: Bounds` is a generic, while anything else (`Name<..>`, `path::Name`) is a type
-        if input.peek(syn::Ident) && input.peek2(Token![:]) && !input.peek2(Token![::]) {
-            let name = input.parse::<Ident>()?;
-            if RESERVED_GENERICS.iter().any(|reserved| name == reserved) {
-                return Err(syn::Error::new(name.span(), format!("`{name}` is already a generic of the generated model items, the layout generic needs another name")));
-            }
-            input.parse::<Token![:]>()?;
-            let bounds = Punctuated::<TypeParamBound, Token![+]>::parse_separated_nonempty(input)?;
-            Ok(Self::Generic { name, bounds })
-        } else {
-            Ok(Self::Fixed(input.parse::<Type>()?))
-        }
-    }
-}
-
-impl ToTokens for ModelLayoutTemplate {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-            Self::Fixed(layout) => layout.to_tokens(tokens),
-            Self::Generic { name, bounds } => tokens.extend(quote! { #name: #bounds }),
-        }
-    }
 }
 
 /// The kind of a quantizable, deciding its wrapper and the bound of its associated type
@@ -240,21 +186,24 @@ pub struct DataFieldTemplate {
 }
 
 impl CorticalDynamicsQuantizationTemplate {
+    /// `NM{Model}Trait`
     pub fn model_trait_name(&self) -> Ident {
-        format_ident!("NeuronModel{}", self.model_name)
+        model_names::model_trait_name(&self.model_name)
     }
 
+    /// `NM{Model}Tag`
     pub fn tag_name(&self) -> Ident {
-        format_ident!("NeuronModel{}Tag", self.model_name)
+        model_names::model_tag_name(&self.model_name)
     }
 
+    /// `NM{Model}Quant{Level}`
     pub fn quantization_level_struct_name(&self, level: &Ident) -> Ident {
-        format_ident!("NeuronModel{}{}", self.model_name, level)
+        model_names::quantization_level_struct_name(&self.model_name, level)
     }
 
-    /// `data_struct` is one of [`MODEL_DATA_STRUCTS`]
+    /// `NM{Model}Data{DataType}`, where `data_struct` is one of [`MODEL_DATA_STRUCTS`]
     pub fn data_struct_name(&self, data_struct: &Ident) -> Ident {
-        format_ident!("{}{}", self.model_name, data_struct)
+        model_names::model_data_struct_name(&self.model_name, data_struct)
     }
 
     pub fn template_macro_name(&self) -> Ident {
@@ -325,8 +274,7 @@ impl CorticalDynamicsQuantizationTemplate {
     }
 
     /// Generate the model's quantizable wrappers, model trait, a marker struct implementing it per
-    /// quantization level, every data struct of the model, and, for a model fixed to a single layout
-    /// type, the model's tag
+    /// quantization level, every data struct of the model, and the model's tag
     pub fn generate_rust_quantization(&self) -> proc_macro2::TokenStream {
         let model_attributes = &self.model_attributes;
         let model_trait = self.model_trait_name();
@@ -351,27 +299,8 @@ impl CorticalDynamicsQuantizationTemplate {
             }
         });
 
-        // The layout type restriction of the model trait, and the generics of the level structs
-        // with the layout type they set. A fixed layout type is set by every level, a generic one
-        // is a generic of every level
-        let (layout_restriction, level_generics, level_struct_body, layout_definition) = match &self.layout {
-            ModelLayoutTemplate::Fixed(layout) => (
-                quote!(NeuronLayoutTag = #layout),
-                quote!(),
-                quote!(;),
-                quote!(#layout),
-            ),
-            ModelLayoutTemplate::Generic { name, bounds } => (
-                quote!(NeuronLayoutTag: #bounds),
-                quote!(<#name: #bounds>),
-                quote!((::core::marker::PhantomData<#name>);),
-                quote!(#name),
-            ),
-        };
-        let level_generic_names = match &self.layout {
-            ModelLayoutTemplate::Fixed(_) => quote!(),
-            ModelLayoutTemplate::Generic { name, .. } => quote!(<#name>),
-        };
+        // The single layout type of the model, which every level sets and the model trait fixes
+        let layout = &self.layout;
 
         // Every data type of `NeuronModel` is set to the model's data struct of that type
         let model_data_names: Vec<Ident> = MODEL_DATA_STRUCTS.iter().map(|(name, _)| format_ident!("{}", name)).collect();
@@ -387,27 +316,22 @@ impl CorticalDynamicsQuantizationTemplate {
             let quantizable_types = level.quantizables.values();
             let model_data_names = &model_data_names;
             let model_data_structs = &model_data_structs;
-            let level_generics = &level_generics;
-            let level_generic_names = &level_generic_names;
-            let level_struct_body = &level_struct_body;
-            let layout_definition = &layout_definition;
             quote! {
                 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-                #[serde(bound = "")] // A generic layout type is only ever held as PhantomData
-                pub struct #struct_name #level_generics #level_struct_body
+                pub struct #struct_name;
 
-                impl #level_generics MembranePotentialQuantization for #struct_name #level_generic_names {
+                impl MembranePotentialQuantization for #struct_name {
                     type MembranePotentialQuant = #membrane_potential_quant;
                 }
 
-                impl #level_generics NeuronModel for #struct_name #level_generic_names {
-                    type NeuronLayoutTag = #layout_definition;
+                impl NeuronModel for #struct_name {
+                    type NeuronLayoutTag = #layout;
                     type NeurogenesisDefaults<#fiq: FeagiIndexQuantization> = #neurogenesis_defaults;
                     type NeurogenesisGenerator<#fiq: FeagiIndexQuantization> = #neurogenesis_generator;
                     #( type #model_data_names = #model_data_structs<Self>; )*
                 }
 
-                impl #level_generics #model_trait for #struct_name #level_generic_names {
+                impl #model_trait for #struct_name {
                     #( type #quantizable_names = #quantizable_types; )*
                 }
             }
@@ -485,30 +409,26 @@ impl CorticalDynamicsQuantizationTemplate {
         });
 
         // The tag names the model as a whole, a type distinct per model. It is the first
-        // quantization level, so its `NeuronModel::NeuronLayoutTag` is the layout of the model as a
-        // whole, which every level shares. A generic layout has no single layout for the model as a
-        // whole, so has no tag
-        let tag = match (&self.layout, self.quantization_levels.keys().next()) {
-            (ModelLayoutTemplate::Fixed(_), Some(first_level)) => {
-                let tag_name = self.tag_name();
-                let first_level_struct = self.quantization_level_struct_name(first_level);
-                let tag_doc = format!(
-                    "Names the `{}` model as a whole, across its quantization levels. Its `NeuronModel::NeuronLayoutTag` is the layout of the model",
-                    self.model_name
-                );
-                quote! {
-                    #[doc = #tag_doc]
-                    pub type #tag_name = #first_level_struct;
-                }
+        // quantization level (parsing requires at least one), so its `NeuronModel::NeuronLayoutTag`
+        // is the layout of the model, which every level shares
+        let tag = self.quantization_levels.keys().next().map(|first_level| {
+            let tag_name = self.tag_name();
+            let first_level_struct = self.quantization_level_struct_name(first_level);
+            let tag_doc = format!(
+                "Names the `{}` model as a whole, across its quantization levels. Its `NeuronModel::NeuronLayoutTag` is the layout of the model",
+                self.model_name
+            );
+            quote! {
+                #[doc = #tag_doc]
+                pub type #tag_name = #first_level_struct;
             }
-            _ => quote!(),
-        };
+        });
 
         quote! {
             #( #wrappers )*
 
             #( #model_attributes )*
-            pub trait #model_trait: NeuronModel<#layout_restriction, #( #model_data_names = #model_data_structs<Self>, )*> {
+            pub trait #model_trait: NeuronModel<NeuronLayoutTag = #layout, #( #model_data_names = #model_data_structs<Self>, )*> {
                 #( #associated_types )*
             }
 
@@ -527,15 +447,11 @@ impl Parse for CorticalDynamicsQuantizationTemplate {
         let model_name = input.parse::<Ident>()?;
         parse_optional_comma(input)?;
 
-        let layout = if input.peek(kw::NeuronLayout) {
-            input.parse::<kw::NeuronLayout>()?;
-            input.parse::<Token![:]>()?;
-            let layout = input.parse::<ModelLayoutTemplate>()?;
-            parse_optional_comma(input)?;
-            layout
-        } else {
-            ModelLayoutTemplate::default()
-        };
+        // Required, as every model has exactly one layout type
+        input.parse::<kw::NeuronLayout>()?;
+        input.parse::<Token![:]>()?;
+        let layout = input.parse::<Type>()?;
+        parse_optional_comma(input)?;
 
         // Required, as there is no default way to generate scratch and variance data
         input.parse::<kw::NeurogenesisDefaults>()?;
@@ -703,7 +619,7 @@ fn parse_quantization_levels(
     quantizables: &IndexMap<Ident, QuantizableTemplate>,
 ) -> syn::Result<IndexMap<Ident, QuantizationLevelTemplate>> {
     let levels_input;
-    braced!(levels_input in input);
+    let brace = braced!(levels_input in input);
     let mut levels = IndexMap::new();
     while !levels_input.is_empty() {
         let level_name = levels_input.parse::<Ident>()?;
@@ -714,6 +630,9 @@ fn parse_quantization_levels(
         }
         levels.insert(level_name, level);
         parse_optional_comma(&levels_input)?;
+    }
+    if levels.is_empty() {
+        return Err(syn::Error::new(brace.span.join(), "a model needs at least one quantization level"));
     }
     Ok(levels)
 }
