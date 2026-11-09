@@ -102,6 +102,39 @@ pub const MP_LEARNING_ENABLED_KEY: &str = "mp_learning_enabled";
 pub const MEMORY_NEURON_CAP_KEY: &str = "memory_neuron_cap";
 /// Genome key selecting what a memory area does when its cap or the shared pool is full.
 pub const LTM_EVICTION_KEY: &str = "ltm_eviction";
+/// Genome key selecting which fires of a memory neuron replay its stored frames onto its twin.
+pub const REPLAY_TRIGGER_KEY: &str = "replay_trigger";
+
+/// Which fires of a memory neuron replay its stored frames onto its twin area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReplayTrigger {
+    /// Every fire of the memory neuron replays (pattern match, encoding, or recall).
+    #[default]
+    AnyFire,
+    /// Only fires driven by associative recall replay. Fires injected by live episodic
+    /// pattern match or encoding do not. Force-fires that carry no fire kind (legacy kind 0)
+    /// are not counted as recall.
+    RecallOnly,
+}
+
+impl ReplayTrigger {
+    /// Canonical genome string for this trigger.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ReplayTrigger::AnyFire => "any_fire",
+            ReplayTrigger::RecallOnly => "recall_only",
+        }
+    }
+
+    /// Parse a canonical genome string.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "any_fire" => Some(ReplayTrigger::AnyFire),
+            "recall_only" => Some(ReplayTrigger::RecallOnly),
+            _ => None,
+        }
+    }
+}
 
 /// What a memory area does when it cannot get a slot for a new neuron.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -213,6 +246,15 @@ pub fn validate_memory_mp_properties(properties: &HashMap<String, Value>) -> Res
             ))
         }
     }
+    match properties.get(REPLAY_TRIGGER_KEY) {
+        None | Some(Value::Null) => {}
+        Some(Value::String(s)) if ReplayTrigger::parse(s).is_some() => {}
+        Some(other) => {
+            return Err(format!(
+                "{REPLAY_TRIGGER_KEY} must be 'any_fire' or 'recall_only', got {other}"
+            ))
+        }
+    }
     match properties.get(MEMORY_NEURON_CAP_KEY) {
         None | Some(Value::Null) => {}
         Some(value) => {
@@ -274,6 +316,8 @@ pub struct MemoryAreaProperties {
     pub memory_neuron_cap: u32,
     /// What the area does when its cap or the shared pool leaves no free slot.
     pub ltm_eviction: LtmEvictionMode,
+    /// Which fires of a memory neuron replay its frames onto the twin area.
+    pub replay_trigger: ReplayTrigger,
 }
 
 impl Default for MemoryAreaProperties {
@@ -293,6 +337,7 @@ impl Default for MemoryAreaProperties {
             scan_skip_density: 1.0,
             memory_neuron_cap: 0,
             ltm_eviction: LtmEvictionMode::Lru,
+            replay_trigger: ReplayTrigger::AnyFire,
         }
     }
 }
@@ -346,6 +391,20 @@ pub fn extract_memory_properties(
         }),
     };
 
+    let replay_trigger = match properties.get(REPLAY_TRIGGER_KEY).and_then(|v| v.as_str()) {
+        None => defaults.replay_trigger,
+        Some(s) => ReplayTrigger::parse(s).unwrap_or_else(|| {
+            // @architecture:acceptable - emergency fallback; validate_memory_mp_properties
+            // rejects unknown values at genome load and API update.
+            error!(
+                target: "feagi-evolutionary",
+                "Unknown {} '{}'; falling back to '{}'",
+                REPLAY_TRIGGER_KEY, s, defaults.replay_trigger.as_str()
+            );
+            defaults.replay_trigger
+        }),
+    };
+
     Some(MemoryAreaProperties {
         temporal_depth: properties
             .get("temporal_depth")
@@ -395,6 +454,7 @@ pub fn extract_memory_properties(
             .map(|v| v.min(u64::from(u32::MAX)) as u32)
             .unwrap_or(defaults.memory_neuron_cap),
         ltm_eviction,
+        replay_trigger,
     })
 }
 

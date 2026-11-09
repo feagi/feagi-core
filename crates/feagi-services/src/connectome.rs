@@ -39,6 +39,18 @@ const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
 /// Metadata tag holding per-synapse modulation groups outside schema v1 bincode.
 const SYNAPSE_MODULATION_GROUPS_TAG: &str = "synapse_modulation_groups_v1";
 
+/// Metadata tag holding the learning-freeze switches outside schema v1 bincode.
+const LEARNING_FREEZE_TAG: &str = "learning_freeze_v1";
+
+/// JSON record of the learning-freeze switches (base64 cortical IDs).
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct LearningFreezeRecord {
+    #[serde(default)]
+    memory_areas: Vec<String>,
+    #[serde(default)]
+    mappings: Vec<(String, String)>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ClassChannelWeightRecord {
     neuron_id: u32,
@@ -190,6 +202,7 @@ fn write_connectome_to_writer<W: Write>(
     crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
     persist_class_channel_weights_for_schema_v1(&mut export_snapshot)?;
     persist_modulation_groups_for_schema_v1(&mut export_snapshot)?;
+    persist_learning_freeze_for_schema_v1(&mut export_snapshot)?;
     let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
     let manifest_bytes = manifest.as_bytes();
     let manifest_len = u32::try_from(manifest_bytes.len()).map_err(|_| {
@@ -342,6 +355,7 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
     restore_class_channel_weights_for_schema_v1(&mut snapshot)?;
     restore_modulation_groups_for_schema_v1(&mut snapshot)?;
+    restore_learning_freeze_for_schema_v1(&mut snapshot)?;
 
     if let Some(envelope_manifest) = envelope_manifest {
         let snapshot_manifest = crate::brain_artifact::encoded_manifest(&snapshot)?;
@@ -512,6 +526,43 @@ fn restore_modulation_groups_for_schema_v1(snapshot: &mut ConnectomeSnapshot) ->
     Ok(())
 }
 
+/// Keep the learning-freeze switches out of the positional schema v1 body.
+///
+/// The snapshot fields are `serde(skip)`; appending them to the bincode body would make
+/// every older file fail to decode with an unexpected end of file.
+fn persist_learning_freeze_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    if snapshot.learning_frozen_memory_areas.is_empty()
+        && snapshot.learning_frozen_mappings.is_empty()
+    {
+        snapshot.metadata.tags.remove(LEARNING_FREEZE_TAG);
+        return Ok(());
+    }
+    let record = LearningFreezeRecord {
+        memory_areas: snapshot.learning_frozen_memory_areas.clone(),
+        mappings: snapshot.learning_frozen_mappings.clone(),
+    };
+    let encoded = serde_json::to_string(&record).map_err(|error| {
+        ConnectomeError::Serialization(format!("failed to encode learning freeze state: {error}"))
+    })?;
+    snapshot
+        .metadata
+        .tags
+        .insert(LEARNING_FREEZE_TAG.to_string(), encoded);
+    Ok(())
+}
+
+fn restore_learning_freeze_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let Some(encoded) = snapshot.metadata.tags.get(LEARNING_FREEZE_TAG) else {
+        return Ok(());
+    };
+    let record: LearningFreezeRecord = serde_json::from_str(encoded).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!("learning freeze tag is invalid: {error}"))
+    })?;
+    snapshot.learning_frozen_memory_areas = record.memory_areas;
+    snapshot.learning_frozen_mappings = record.mappings;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,6 +629,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -609,6 +662,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -661,6 +716,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -716,6 +773,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite,
             genome_json: Some(serde_json::to_string(&current_genome).unwrap()),
             memory_area_ids: vec!["mmem0001".to_string()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: vec![("csrc0001".to_string(), "cdst0001".to_string())],
             brain_region_ids: vec!["region-1".to_string()],
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
@@ -885,6 +944,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![
@@ -958,5 +1019,114 @@ mod tests {
             .metadata
             .tags
             .contains_key(LTM_CLASS_CHANNEL_WEIGHTS_TAG));
+    }
+
+    #[derive(Serialize)]
+    struct SchemaV1SnapshotBody {
+        version: u32,
+        neurons: SerializableNeuronArray,
+        synapses: SerializableSynapseArray,
+        cortical_area_names: ahash::AHashMap<u32, String>,
+        burst_count: u64,
+        power_amount: f32,
+        fire_ledger_window: usize,
+        metadata: ConnectomeMetadata,
+        persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+        genome_json: Option<String>,
+        memory_area_ids: Vec<String>,
+        plastic_mappings: Vec<(String, String)>,
+        brain_region_ids: Vec<String>,
+        long_term_memory_neurons: Vec<SerializableLongTermMemoryNeuron>,
+        long_term_memory_replay_frames: Vec<(u32, Vec<SerializableMemoryReplayFrame>)>,
+        lite_synapses: Vec<SerializableSemanticSynapse>,
+    }
+
+    fn neutral_snapshot(
+        mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+    ) -> ConnectomeSnapshot {
+        ConnectomeSnapshot {
+            version: feagi_npu_neural::types::connectome::CONNECTOME_SNAPSHOT_SCHEMA_VERSION,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: ahash::AHashMap::new(),
+            burst_count: 3,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: mode,
+            genome_json: Some(feagi_evolutionary::BAREBONES_GENOME_JSON.to_string()),
+            memory_area_ids: vec!["area_mem".to_string()],
+            learning_frozen_memory_areas: vec!["area_mem".to_string()],
+            learning_frozen_mappings: vec![("area_a".to_string(), "area_mem".to_string())],
+            plastic_mappings: vec![("area_a".to_string(), "area_mem".to_string())],
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        }
+    }
+
+    /// A body written in the layout that predates the freeze fields decodes with empty lists.
+    #[test]
+    fn schema_v1_body_deserializes_with_empty_freeze_lists() {
+        let snapshot =
+            neutral_snapshot(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full);
+        let legacy = SchemaV1SnapshotBody {
+            version: snapshot.version,
+            neurons: snapshot.neurons.clone(),
+            synapses: snapshot.synapses.clone(),
+            cortical_area_names: snapshot.cortical_area_names.clone(),
+            burst_count: snapshot.burst_count,
+            power_amount: snapshot.power_amount,
+            fire_ledger_window: snapshot.fire_ledger_window,
+            metadata: snapshot.metadata.clone(),
+            persist_mode: snapshot.persist_mode,
+            genome_json: snapshot.genome_json.clone(),
+            memory_area_ids: snapshot.memory_area_ids.clone(),
+            plastic_mappings: snapshot.plastic_mappings.clone(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        let body = bincode::serialize(&legacy).unwrap();
+        let loaded: ConnectomeSnapshot = bincode::deserialize(&body).unwrap();
+        assert!(loaded.learning_frozen_memory_areas.is_empty());
+        assert!(loaded.learning_frozen_mappings.is_empty());
+        assert_eq!(loaded.memory_area_ids, vec!["area_mem".to_string()]);
+        // The current serialized body is byte-identical to the legacy layout.
+        let mut current = snapshot.clone();
+        current.learning_frozen_memory_areas.clear();
+        current.learning_frozen_mappings.clear();
+        assert!(bincode::serialize(&current).unwrap() == body);
+        assert!(bincode::serialize(&snapshot).unwrap() == body);
+    }
+
+    #[test]
+    fn learning_freeze_round_trips_full_and_lite_and_clears_tag_when_empty() {
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        for mode in [ConnectomePersistMode::Full, ConnectomePersistMode::Lite] {
+            let snapshot = neutral_snapshot(mode);
+            let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+            let loaded = load_connectome_from_bytes(&bytes).unwrap();
+            assert_eq!(loaded.persist_mode, mode);
+            assert_eq!(
+                loaded.learning_frozen_memory_areas,
+                vec!["area_mem".to_string()]
+            );
+            assert_eq!(
+                loaded.learning_frozen_mappings,
+                vec![("area_a".to_string(), "area_mem".to_string())]
+            );
+
+            let mut unfrozen = loaded.clone();
+            unfrozen.learning_frozen_memory_areas.clear();
+            unfrozen.learning_frozen_mappings.clear();
+            let reloaded =
+                load_connectome_from_bytes(&save_connectome_to_bytes(&unfrozen).unwrap()).unwrap();
+            assert!(reloaded.learning_frozen_memory_areas.is_empty());
+            assert!(reloaded.learning_frozen_mappings.is_empty());
+            assert!(!reloaded.metadata.tags.contains_key(LEARNING_FREEZE_TAG));
+        }
     }
 }

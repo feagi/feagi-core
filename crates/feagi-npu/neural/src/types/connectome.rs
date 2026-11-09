@@ -426,6 +426,18 @@ pub struct ConnectomeSnapshotV1 {
     /// Stable memory/plastic edge overlay used only by lite snapshots.
     #[serde(default)]
     pub lite_synapses: Vec<SerializableSemanticSynapse>,
+
+    // Appended last: the binary layout of earlier fields must not move.
+    /// Base64 cortical IDs of memory areas whose learning-freeze switch was on at export.
+    /// Brain-instance runtime state; a genome load never sets it.
+    /// In-memory only (`serde(skip)`): persisted by feagi-services as a metadata tag so the
+    /// positional bincode body keeps its older layout.
+    #[serde(skip)]
+    pub learning_frozen_memory_areas: Vec<String>,
+
+    /// Mappings `(src_base64, dst_base64)` whose learning-freeze switch was on at export.
+    #[serde(skip)]
+    pub learning_frozen_mappings: Vec<(String, String)>,
 }
 
 /// Current connectome snapshot schema.
@@ -868,6 +880,8 @@ impl ConnectomeSnapshot {
             persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
+            learning_frozen_memory_areas: self.learning_frozen_memory_areas.clone(),
+            learning_frozen_mappings: self.learning_frozen_mappings.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
             brain_region_ids: self.brain_region_ids.clone(),
             long_term_memory_neurons,
@@ -945,6 +959,8 @@ impl ConnectomeSnapshot {
             persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
+            learning_frozen_memory_areas: self.learning_frozen_memory_areas.clone(),
+            learning_frozen_mappings: self.learning_frozen_mappings.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
             brain_region_ids: self.brain_region_ids.clone(),
             long_term_memory_neurons,
@@ -1015,6 +1031,8 @@ impl ConnectomeSnapshot {
             persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
+            learning_frozen_memory_areas: self.learning_frozen_memory_areas.clone(),
+            learning_frozen_mappings: self.learning_frozen_mappings.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
             brain_region_ids: self.brain_region_ids.clone(),
             long_term_memory_neurons,
@@ -1264,6 +1282,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Full,
             genome_json: Some("{\"version\":\"3.0\"}".to_string()),
             memory_area_ids: vec!["mmem".to_string()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: vec![("a".to_string(), "b".to_string())],
             brain_region_ids: vec!["root".to_string()],
             long_term_memory_neurons: Vec::new(),

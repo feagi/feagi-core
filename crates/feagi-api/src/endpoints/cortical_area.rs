@@ -147,6 +147,25 @@ pub struct MemoryCorticalAreaQuery {
     /// Page size for `memory_neuron_ids` (clamped to [`MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX`]).
     #[serde(default = "default_memory_cortical_page_size")]
     pub page_size: u32,
+    /// When true, the response also carries `memory_neuron_details` for the same page.
+    /// Off by default; the response is otherwise unchanged.
+    #[serde(default)]
+    pub detail: bool,
+}
+
+/// Per-neuron lifecycle fields for one entry of a `detail=true` memory list page.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryNeuronListItem {
+    pub neuron_id: u64,
+    /// Burst in which the neuron was created.
+    pub creation_burst: u64,
+    /// Burst of the latest match (reactivation) or creation.
+    pub last_activation_burst: u64,
+    /// Number of matches, counting the creation.
+    pub activation_count: u32,
+    /// Remaining lifespan in bursts (current value).
+    pub lifespan: u32,
+    pub is_long_term: bool,
 }
 
 /// Lifecycle values the area record already resolved, plus the keys that stay in
@@ -185,6 +204,10 @@ fn memory_parameters_from_reported_area(
             .ltm_eviction
             .clone()
             .unwrap_or_else(|| extracted.ltm_eviction.as_str().to_string()),
+        replay_trigger: area
+            .replay_trigger
+            .clone()
+            .unwrap_or_else(|| extracted.replay_trigger.as_str().to_string()),
     }
 }
 
@@ -210,6 +233,9 @@ pub struct MemoryCorticalAreaParamsResponse {
     /// What the area does when its cap or the shared pool is full: "lru" evicts one of its
     /// neurons to make room, "none" lets the creation fail.
     pub ltm_eviction: String,
+    /// Which fires of a memory neuron replay its frames onto its twin: "any_fire" replays on
+    /// every fire, "recall_only" only on associative recall.
+    pub replay_trigger: String,
 }
 
 /// Occupancy of the pool shared by all memory areas.
@@ -239,6 +265,8 @@ pub struct MemoryCorticalAreaResponse {
     /// New-pattern creations skipped because a subscribed `memory.formation` modulator is
     /// suppressing formation. Not failures.
     pub formation_suppressed_total: usize,
+    /// Times an existing neuron in this area was matched again (reactivated), on any path.
+    pub reactivated_total: usize,
     /// Occupancy of the pool shared by all memory areas.
     pub memory_pool: MemoryPoolResponse,
     /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
@@ -256,6 +284,9 @@ pub struct MemoryCorticalAreaResponse {
     pub page: u32,
     pub page_size: u32,
     pub memory_neuron_ids: Vec<u64>,
+    /// Lifecycle fields for the same page; present only when requested with `detail=true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_neuron_details: Option<Vec<MemoryNeuronListItem>>,
     pub has_more: bool,
 }
 
@@ -3991,9 +4022,30 @@ pub async fn get_memory_cortical_area(
         .memory_cortical_area_runtime_info(cortical_idx)
         .ok_or_else(|| ApiError::internal("Plasticity service not initialized"))?;
 
-    let (memory_neuron_ids_u32, total_memory_neuron_ids) = ex
-        .paginated_memory_neuron_ids_in_area(cortical_idx, offset, page_size)
-        .unwrap_or((Vec::new(), 0));
+    // One array lock for both the ids and (with `detail`) their fields, so they agree.
+    let (memory_neuron_ids_u32, total_memory_neuron_ids, memory_neuron_details) = if params.detail {
+        let (details, total) = ex
+            .paginated_memory_neuron_details_in_area(cortical_idx, offset, page_size)
+            .unwrap_or((Vec::new(), 0));
+        let ids: Vec<u32> = details.iter().map(|d| d.neuron_id).collect();
+        let items: Vec<MemoryNeuronListItem> = details
+            .iter()
+            .map(|d| MemoryNeuronListItem {
+                neuron_id: d.neuron_id as u64,
+                creation_burst: d.creation_burst,
+                last_activation_burst: d.last_activation_burst,
+                activation_count: d.activation_count,
+                lifespan: d.lifespan_current,
+                is_long_term: d.is_longterm_memory,
+            })
+            .collect();
+        (ids, total, Some(items))
+    } else {
+        let (ids, total) = ex
+            .paginated_memory_neuron_ids_in_area(cortical_idx, offset, page_size)
+            .unwrap_or((Vec::new(), 0));
+        (ids, total, None)
+    };
 
     let has_more = offset.saturating_add(memory_neuron_ids_u32.len()) < total_memory_neuron_ids;
 
@@ -4016,6 +4068,7 @@ pub async fn get_memory_cortical_area(
         evicted_total: runtime.evicted_total,
         creation_failed_total: runtime.creation_failed_total,
         formation_suppressed_total: runtime.formation_suppressed_total,
+        reactivated_total: runtime.reactivated_total,
         memory_pool: MemoryPoolResponse {
             pool_capacity: runtime.memory_pool.pool_capacity,
             pool_in_use: runtime.memory_pool.pool_in_use,
@@ -4031,6 +4084,7 @@ pub async fn get_memory_cortical_area(
         page: params.page,
         page_size: page_size_u32,
         memory_neuron_ids,
+        memory_neuron_details,
         has_more,
     }))
 }
@@ -4776,4 +4830,46 @@ mod classifier_area_id_tests {
         ));
         assert!(classifier_owned_area_id(b'e', "C1", 10, 3).is_err());
     }
+}
+
+/// PUT /v1/cortical_area/learning_frozen
+///
+/// Freeze (`frozen: true`) or resume (`false`) learning in one memory area: mappings into and
+/// out of it do not learn, and its memory neurons keep their snapshot (no creation, ageing,
+/// eviction or conversion). Brain-instance runtime state, saved with the connectome and never
+/// in the genome. A `memory.freeze` modulator has the same effect while it is active.
+///
+/// Body: `{"cortical_area": <base64>, "frozen": <bool>}`.
+/// Response: `{"cortical_area", "frozen"}`; 400 when the area is unknown or not a memory area.
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/learning_frozen",
+    tag = "cortical_area",
+    responses(
+        (status = 200, description = "Learning freeze updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Unknown area or not a memory area")
+    )
+)]
+pub async fn put_learning_frozen(
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let area = req
+        .get("cortical_area")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing cortical_area"))?;
+    let frozen = req
+        .get("frozen")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| ApiError::invalid_input("Missing boolean field frozen"))?;
+
+    state
+        .connectome_service
+        .set_memory_area_learning_frozen(area, frozen)
+        .await?;
+
+    let mut response = HashMap::new();
+    response.insert("cortical_area".to_string(), serde_json::json!(area));
+    response.insert("frozen".to_string(), serde_json::json!(frozen));
+    Ok(Json(response))
 }

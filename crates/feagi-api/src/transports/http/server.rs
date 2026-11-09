@@ -676,6 +676,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(cortical_area::get_memory_cortical_area),
         )
         .route(
+            "/cortical_area/learning_frozen",
+            put(cortical_area::put_learning_frozen),
+        )
+        .route(
             "/cortical_area/cortical_area_index_list",
             get(cortical_area::get_cortical_area_index_list),
         )
@@ -856,6 +860,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_properties_mappings),
         )
         .route("/connectome/snapshot", get(connectome::get_snapshot))
+        .route(
+            "/connectome/learning_frozen",
+            get(connectome::get_learning_frozen),
+        )
         .route("/connectome/stats", get(connectome::get_stats))
         .route(
             "/connectome/batch_neuron_operations",
@@ -959,7 +967,7 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/connectome/memory_neuron",
-            get(connectome::get_memory_neuron),
+            get(connectome::get_memory_neuron).delete(connectome::delete_memory_neurons),
         )
         .route(
             "/connectome/area_neurons",

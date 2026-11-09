@@ -19,7 +19,7 @@
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
-use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
+use feagi_npu_burst_engine::npu::{OneSidedFiring, PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
@@ -137,7 +137,7 @@ fn rstdp_params(mode: PlasticityMode, eligibility_decay_bursts: u32) -> StdpMapp
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
         modulation_group: 1,
-        frozen: false,
+        one_sided_firing: OneSidedFiring::Decrement,
     }
 }
 
@@ -997,4 +997,224 @@ fn test_rstdp_cofire_then_one_sided_leaves_no_potentiation_for_reward() {
     let delta = synapse_weight(&npu, src[0]) - 20.0;
     assert!(delta <= 0.0, "reward must not potentiate, got {delta}");
     assert!(delta > -0.2, "net event count is near zero, got {delta}");
+}
+
+/// Trace of the single test synapse (the first one added, index 0).
+fn trace_of(npu: &RustNPU<StdRuntime, f32, CPUBackend>) -> f32 {
+    npu.get_synapse_eligibility_trace(0)
+        .expect("test synapse index 0 exists")
+}
+
+/// One-sided firing lowers the trace by 1 under `Decrement` and leaves it unchanged under
+/// `Ignore`; co-firing adds 1 under both. Decay 0 resets the trace each burst, so each burst's
+/// value is exactly its own event.
+#[test]
+fn test_one_sided_firing_trace_update() {
+    for (policy, one_sided_expected) in [
+        (OneSidedFiring::Decrement, -1.0_f32),
+        (OneSidedFiring::Ignore, 0.0_f32),
+    ] {
+        let (mut npu, src, dst, _reward, _pain) = create_rstdp_network();
+        wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
+        let mut params = rstdp_params(PlasticityMode::RStdp, 0);
+        params.one_sided_firing = policy;
+        npu.register_stdp_mapping(10, 11, params).unwrap();
+
+        npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+        npu.process_burst().unwrap();
+        assert_eq!(trace_of(&npu), 1.0, "{policy:?}: co-fire adds 1");
+
+        npu.inject_sensory_with_potentials(&[(src[0], 128.0)]);
+        npu.process_burst().unwrap();
+        assert_eq!(
+            trace_of(&npu),
+            one_sided_expected,
+            "{policy:?}: source-only burst"
+        );
+
+        npu.inject_sensory_with_potentials(&[(dst[0], 128.0)]);
+        npu.process_burst().unwrap();
+        assert_eq!(
+            trace_of(&npu),
+            one_sided_expected,
+            "{policy:?}: destination-only burst"
+        );
+    }
+}
+
+/// Reward after a co-fire followed by interleaved one-sided bursts: `Decrement` drives the
+/// trace negative (no potentiation), `Ignore` keeps the co-fire credit (potentiates). Reward
+/// with a positive trace still goes through `delta_plus`; with `Ignore`, R < 0 on the same
+/// trace depresses via `delta_minus` (commit rules unchanged).
+#[test]
+fn test_one_sided_firing_commit_with_reward_and_punishment() {
+    let run = |policy: OneSidedFiring, driver_is_pain: bool| -> f32 {
+        let (mut npu, src, dst, reward, pain) = create_rstdp_network();
+        wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
+        let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+        params.plasticity_constant = 1;
+        params.one_sided_firing = policy;
+        npu.register_stdp_mapping(10, 11, params).unwrap();
+
+        npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+        npu.process_burst().unwrap();
+        for _ in 0..3 {
+            npu.inject_sensory_with_potentials(&[(src[0], 128.0)]);
+            npu.process_burst().unwrap();
+        }
+        assert_eq!(synapse_weight(&npu, src[0]), 20.0, "no reward yet");
+
+        let driver = if driver_is_pain { pain } else { reward };
+        npu.inject_sensory_with_potentials(&[(driver, 128.0)]);
+        npu.process_burst().unwrap();
+        npu.process_burst().unwrap();
+        synapse_weight(&npu, src[0]) - 20.0
+    };
+
+    let decrement = run(OneSidedFiring::Decrement, false);
+    assert!(
+        decrement <= 0.0,
+        "decrement must not potentiate, got {decrement}"
+    );
+    let ignore = run(OneSidedFiring::Ignore, false);
+    assert!(
+        ignore > 0.0,
+        "ignore keeps the co-fire credit, got {ignore}"
+    );
+    // Commit rules are unchanged: punishment on a positive trace applies LTD.
+    let ignore_pain = run(OneSidedFiring::Ignore, true);
+    assert!(
+        ignore_pain < 0.0,
+        "R<0 with e>0 depresses, got {ignore_pain}"
+    );
+}
+
+// ---- learning_rate factor <= 0 is a full stop ----
+
+const LEARNING_STOP_BURSTS: usize = 24;
+
+/// Add a `synaptic.learning_rate` -100% instance driven by a new neuron and return that neuron
+/// with the modulation group `[extra_ids..., "stop"]`. Firing the neuron in a burst drives the
+/// group's learning factor to 0 from the next burst on.
+fn add_learning_stop(
+    npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
+    with_reward: bool,
+) -> (NeuronId, u16) {
+    npu.register_cortical_area(
+        14,
+        CorticalID::try_from_bytes(b"cstp0001")
+            .unwrap()
+            .as_base_64(),
+    );
+    let stopper = npu
+        .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 0, 1.0, 0, 0, true, 14, 0, 0, 0)
+        .unwrap();
+    npu.configure_fire_ledger_window(14, 1).unwrap();
+    let mut bindings = vec![ModulatorBinding {
+        instance_id: "stop".to_string(),
+        kind: ModulatorKind::LearningRate,
+        magnitude_percent: -100.0,
+        graded: false,
+        full_scale_potential: 1.0,
+        driver_cortical_idx: 14,
+    }];
+    let mut ids = vec!["stop".to_string()];
+    if with_reward {
+        bindings.push(ModulatorBinding {
+            instance_id: "pleasure".to_string(),
+            kind: ModulatorKind::Reward,
+            magnitude_percent: 100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: 12,
+        });
+        ids.push("pleasure".to_string());
+    }
+    npu.set_modulator_bindings(bindings);
+    let group = npu.allocate_modulation_group(&ids);
+    assert!(group > 0);
+    (stopper, group)
+}
+
+/// Run R-STDP co-firing with reward for many bursts; `stopped` fires the stop driver each burst.
+/// Returns (weight, trace, synapse count).
+fn run_rstdp_learning_stop(stopped: bool) -> (f32, f32, usize) {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    let (stopper, group) = add_learning_stop(&mut npu, true);
+    wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.modulation_group = group;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    if stopped {
+        // The factor is committed at the end of a burst and read in the next one.
+        npu.inject_sensory_with_potentials(&[(stopper, 128.0)]);
+        npu.process_burst().unwrap();
+    }
+    assert!(npu.set_synapse_eligibility_trace(0, 0.7));
+    for _ in 0..LEARNING_STOP_BURSTS {
+        let mut drive = vec![(src[0], 128.0), (dst[0], 128.0), (reward, 128.0)];
+        if stopped {
+            drive.push((stopper, 128.0));
+        }
+        npu.inject_sensory_with_potentials(&drive);
+        npu.process_burst().unwrap();
+    }
+    (
+        synapse_weight(&npu, src[0]),
+        npu.get_synapse_eligibility_trace(0).unwrap(),
+        npu.get_synapse_count(),
+    )
+}
+
+#[test]
+fn test_learning_rate_factor_zero_stops_rstdp_commit_and_traces() {
+    let (w, trace, count) = run_rstdp_learning_stop(true);
+    assert_eq!(w, 5.0, "weight must not move at learning factor 0");
+    assert_eq!(
+        trace, 0.7,
+        "trace must be neither built, committed nor decayed"
+    );
+    assert_eq!(count, 1, "synapse count must not change");
+
+    let (w_ctl, trace_ctl, _) = run_rstdp_learning_stop(false);
+    assert!(w_ctl > 5.0, "control must learn, got {w_ctl}");
+    assert_ne!(trace_ctl, 0.7, "control trace must move");
+}
+
+/// Plain-STDP associative mapping: no synapse synthesis and no trace work at factor 0.
+fn run_assoc_learning_stop(stopped: bool) -> (usize, usize) {
+    use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
+    let (mut npu, _src, dst, _reward, _pain) = create_rstdp_network();
+    let (stopper, group) = add_learning_stop(&mut npu, false);
+    let mut params = rstdp_params(PlasticityMode::Stdp, 10);
+    params.associative_memory_mapping = true;
+    params.modulation_group = group;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let a = CONSOLIDATION_MEMORY_START + 21;
+    npu.register_dynamic_neuron_mapping(a, CorticalID::try_from_bytes(b"csrc0001").unwrap());
+    let before = npu.get_synapse_count();
+    if stopped {
+        npu.inject_sensory_with_potentials(&[(stopper, 128.0)]);
+        npu.process_burst().unwrap();
+    }
+    for _ in 0..LEARNING_STOP_BURSTS {
+        npu.inject_memory_neuron_to_fcl_with_kind(a, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+        let mut drive = vec![(dst[0], 128.0)];
+        if stopped {
+            drive.push((stopper, 128.0));
+        }
+        npu.inject_sensory_with_potentials(&drive);
+        npu.process_burst().unwrap();
+    }
+    (
+        npu.get_outgoing_synapses(a).len(),
+        npu.get_synapse_count() - before,
+    )
+}
+
+#[test]
+fn test_learning_rate_factor_zero_stops_associative_synthesis() {
+    assert_eq!(run_assoc_learning_stop(true), (0, 0));
+    let (outgoing, added) = run_assoc_learning_stop(false);
+    assert!(outgoing >= 1 && added >= 1, "control must synthesize");
 }

@@ -796,6 +796,10 @@ where
         dispatch_mut!(self, update_synapse_weight(source, target, new_weight))
     }
 
+    pub fn get_synapse_eligibility_trace(&self, synapse_idx: usize) -> Option<f32> {
+        dispatch!(self, get_synapse_eligibility_trace(synapse_idx))
+    }
+
     pub fn set_synapse_eligibility_trace(&mut self, synapse_idx: usize, trace: f32) -> bool {
         dispatch_mut!(self, set_synapse_eligibility_trace(synapse_idx, trace))
     }
@@ -821,6 +825,41 @@ where
 
     pub fn memory_formation_suppressed(&self, cortical_idx: u32) -> bool {
         dispatch!(self, memory_formation_suppressed(cortical_idx))
+    }
+
+    pub fn memory_freeze_active(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, memory_freeze_active(cortical_idx))
+    }
+
+    pub fn memory_area_learning_frozen(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, memory_area_learning_frozen(cortical_idx))
+    }
+
+    pub fn set_area_learning_frozen(&self, cortical_idx: u32, frozen: bool) {
+        dispatch!(self, set_area_learning_frozen(cortical_idx, frozen))
+    }
+
+    pub fn learning_frozen_area_switches(&self) -> Vec<u32> {
+        dispatch!(self, learning_frozen_area_switches())
+    }
+
+    pub fn learning_frozen_mapping_switches(&self) -> Vec<(u32, u32)> {
+        dispatch!(self, learning_frozen_mapping_switches())
+    }
+
+    pub fn restore_learning_frozen(&self, areas: Vec<u32>, mappings: Vec<(u32, u32)>) {
+        dispatch!(self, restore_learning_frozen(areas, mappings))
+    }
+
+    pub fn clear_learning_frozen_for_area(&self, cortical_idx: u32) {
+        dispatch!(self, clear_learning_frozen_for_area(cortical_idx))
+    }
+
+    pub fn clear_learning_frozen_for_mapping(&self, src_cortical_idx: u32, dst_cortical_idx: u32) {
+        dispatch!(
+            self,
+            clear_learning_frozen_for_mapping(src_cortical_idx, dst_cortical_idx)
+        )
     }
 
     pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {

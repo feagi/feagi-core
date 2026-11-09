@@ -41,6 +41,11 @@ pub struct MemoryAreaStats {
     #[serde(default)]
     pub formation_suppressed_total: usize,
 
+    /// Times an existing neuron was matched again (reactivated) by a repeated pattern,
+    /// on any path (episodic pattern or scan kernel).
+    #[serde(default)]
+    pub reactivated_total: usize,
+
     /// Last update timestamp (milliseconds since epoch)
     pub last_updated: u64,
 }
@@ -54,6 +59,7 @@ impl Default for MemoryAreaStats {
             evicted_total: 0,
             creation_failed_total: 0,
             formation_suppressed_total: 0,
+            reactivated_total: 0,
             last_updated: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -113,6 +119,20 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
             .get_core_state()
             .subtract_memory_neuron_count(1);
     }
+}
+
+/// Update stats when existing neurons were matched again (`count` reactivations).
+pub fn on_neuron_reactivated(cache: &MemoryStatsCache, area_name: &str, count: usize) {
+    if count == 0 {
+        return;
+    }
+    let mut stats = cache.write();
+    let area_stats = stats.entry(area_name.to_string()).or_default();
+    area_stats.reactivated_total += count;
+    area_stats.last_updated = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
 }
 
 /// Update stats when a neuron is evicted to make room for a new one.

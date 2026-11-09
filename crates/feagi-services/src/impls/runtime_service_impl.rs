@@ -794,6 +794,27 @@ impl RuntimeService for RuntimeServiceImpl {
 
         Ok(results)
     }
+
+    async fn delete_memory_neurons(
+        &self,
+        cortical_idx: u32,
+        neuron_ids: &[u32],
+    ) -> ServiceResult<usize> {
+        #[cfg(feature = "plasticity")]
+        if let Some(plasticity_any) = &self.plasticity_service {
+            if let Some(plasticity_service) =
+                plasticity_any.downcast_ref::<feagi_npu_plasticity::PlasticityService>()
+            {
+                return plasticity_service
+                    .delete_memory_neurons_by_id(cortical_idx, neuron_ids)
+                    .map_err(ServiceError::InvalidInput);
+            }
+        }
+        let _ = (cortical_idx, neuron_ids);
+        Err(ServiceError::NotImplemented(
+            "Plasticity service not available".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]

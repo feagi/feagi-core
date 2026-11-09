@@ -258,6 +258,7 @@ fn category_for(key: &str) -> &'static str {
         | "mp_ratio_quantization"
         | "memory_neuron_cap"
         | "ltm_eviction"
+        | "replay_trigger"
         | "memory_twin_areas"
         | "is_mem_type" => CATEGORIES[2],
         "neuron_fire_threshold"
@@ -350,6 +351,8 @@ fn raw_specs() -> Vec<AreaParameterSchemaEntry> {
             .hard(Some(0.0), Some(u32::MAX as f64)).only(mem),
         E::new("ltm_eviction", "Long-term eviction", "enum", "Policy when the memory neuron cap is reached.")
             .values(&["lru", "none"]).only(mem),
+        E::new("replay_trigger", "Replay trigger", "enum", "Which memory-neuron fires replay its frames onto the twin: any_fire (default) or recall_only (associative recall only).")
+            .values(&["any_fire", "recall_only"]).only(mem),
         // ---- metadata ----
         E::new("cortical_name", "Name", "string", "Display name of the area.").alias(&["name"]),
         E::new("visible", "Visible", "boolean", "Whether the area is drawn in visualizers."),
@@ -358,7 +361,7 @@ fn raw_specs() -> Vec<AreaParameterSchemaEntry> {
             .alias(&["coordinate_3d", "coordinates", "position"]),
         E::new("visualization_voxel_granularity", "Voxel granularity", "array", "Visualization-only voxel aggregation, [x, y, z] integers.").suggest(1.0, 1_000_000.0),
         E::new("memory_twin_areas", "Memory twin areas", "array", "Cortical ids of the memory areas that twin this area for classifier episodic scans."),
-        E::new("modulators", "Modulators", "array", "Ids of area-level modulators (neuro.* and memory.formation) this area subscribes to; each must exist in the genome.").nullable(),
+        E::new("modulators", "Modulators", "array", "Ids of area-level modulators (neuro.*, memory.formation and memory.freeze) this area subscribes to; each must exist in the genome.").nullable(),
         E::new("spike_train", "Spike train", "boolean", "Mark the area as a spike-train source (limit comes with the modulator driver)."),
         E::new("sensory_hold_last_frame", "Hold last sensory frame", "boolean", "Keep re-injecting the last sensory frame between sensor updates.").only(IO_ONLY),
         E::new("coding_signage", "Coding signage", "string", "IO coding: signed or unsigned.").only(IO_ONLY),

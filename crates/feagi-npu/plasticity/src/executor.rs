@@ -259,6 +259,21 @@ impl AsyncPlasticityExecutor {
         Ok(service.reset_all_memory_state())
     }
 
+    /// Full neuron detail for one page of an area, read under a single array lock:
+    /// `(details, total)`. Same order as [`Self::paginated_memory_neuron_ids_in_area`].
+    pub fn paginated_memory_neuron_details_in_area(
+        &self,
+        cortical_idx: u32,
+        offset: usize,
+        limit: usize,
+    ) -> Option<(Vec<MemoryNeuronDetail>, usize)> {
+        let guard = self.service.lock().ok()?;
+        let service = guard.as_ref()?;
+        let array_arc = service.get_memory_neuron_array();
+        let array = array_arc.lock().ok()?;
+        Some(array.paginated_neuron_details_in_area(cortical_idx, offset, limit))
+    }
+
     /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
     pub fn paginated_memory_neuron_ids_in_area(
         &self,

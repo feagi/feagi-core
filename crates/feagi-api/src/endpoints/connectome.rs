@@ -62,6 +62,22 @@ pub struct MemoryNeuronQuery {
     pub neuron_id: u32,
 }
 
+/// Body for [`delete_memory_neurons`].
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct MemoryNeuronDeleteRequest {
+    /// Base64 cortical id of the memory area that owns the neurons.
+    #[serde(alias = "area")]
+    pub cortical_id: String,
+    /// Global memory neuron ids to delete. All must be active neurons of that area.
+    pub neuron_ids: Vec<u32>,
+}
+
+/// Result of [`delete_memory_neurons`].
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryNeuronDeleteResponse {
+    pub deleted: usize,
+}
+
 /// Query for connectome download persistence mode.
 #[derive(Debug, Clone, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -1444,6 +1460,39 @@ pub async fn get_cortical_area_list_types(
     Ok(Json(response))
 }
 
+/// DELETE /v1/connectome/memory_neuron — delete specific memory neurons of one area by id.
+///
+/// A cleanup for test residue, not a learning mechanism. Ids that are not active neurons of
+/// the named area are refused (400, error names them) and nothing is deleted.
+#[utoipa::path(
+    delete,
+    path = "/v1/connectome/memory_neuron",
+    tag = "connectome",
+    request_body = MemoryNeuronDeleteRequest,
+    responses(
+        (status = 200, description = "Neurons deleted", body = MemoryNeuronDeleteResponse),
+        (status = 400, description = "Invalid area or ids not in that area"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn delete_memory_neurons(
+    State(state): State<ApiState>,
+    Json(body): Json<MemoryNeuronDeleteRequest>,
+) -> ApiResult<Json<MemoryNeuronDeleteResponse>> {
+    let area = state
+        .connectome_service
+        .get_cortical_area(&body.cortical_id)
+        .await
+        .map_err(ApiError::from)?;
+    // Through the runtime service: it takes the plasticity and NPU locks in burst-loop order.
+    let deleted = state
+        .runtime_service
+        .delete_memory_neurons(area.cortical_idx, &body.neuron_ids)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(MemoryNeuronDeleteResponse { deleted }))
+}
+
 /// GET /v1/connectome/memory_neuron — plasticity memory-neuron record and NPU synapse lists.
 #[utoipa::path(
     get,
@@ -1817,6 +1866,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -1900,4 +1951,36 @@ mod tests {
         assert_eq!(loaded.burst_count, 0);
         std::fs::remove_dir_all(&data_root).expect("cleanup temp connectome dir");
     }
+}
+
+/// GET /v1/connectome/learning_frozen
+///
+/// Every learning-freeze switch that is on: `{"memory_areas": [<base64>], "mappings":
+/// [[<src base64>, <dst base64>]]}`. Brain-instance runtime state, not genome content.
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/learning_frozen",
+    tag = "connectome",
+    responses(
+        (status = 200, description = "Learning-freeze switches", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_learning_frozen(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let switches = state.connectome_service.learning_frozen_state().await?;
+    let mut response = HashMap::new();
+    response.insert(
+        "memory_areas".to_string(),
+        serde_json::json!(switches.memory_areas),
+    );
+    response.insert(
+        "mappings".to_string(),
+        serde_json::json!(switches
+            .mappings
+            .iter()
+            .map(|(s, d)| [s, d])
+            .collect::<Vec<_>>()),
+    );
+    Ok(Json(response))
 }

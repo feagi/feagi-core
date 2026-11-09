@@ -86,6 +86,7 @@ effect of a magnitude is unambiguous.
 | Synaptic | Reward | R-STDP reward signal of the mapping | contributes `m x strength` to R(t) |
 | Synaptic | Learning rate | STDP / R-STDP eta of the mapping | eta x (1 + m) |
 | Synaptic | Gate | Transmission of the mapping's synapses | 0 unless the driver signal is active, then the factor is the signal `m x strength` |
+| Memory | Memory freeze (`memory.freeze`) | Whole lifecycle of a subscribed memory area | frozen while the summed signal is above 0; magnitude must be above 0 |
 | Memory | Memory formation (`memory.formation`) | New-memory-neuron creation in a subscribed memory area | factor `clamp(1 + m x strength, 0, 1)`; at 0 the area forms no new memory neurons |
 
 ### Memory formation (`memory.formation`)
@@ -100,6 +101,25 @@ A skipped creation is not a failure: it is counted in the per-area
 and logs no capacity warning. No subscription means no effect. Subscribing a non-memory
 area is rejected by the area update. The plasticity service reads the suppressed set once
 per burst under a single NPU lock.
+
+### Memory freeze (`memory.freeze`)
+
+Subscribes on a memory cortical area only (any other area is rejected by the area update);
+the instance itself is rejected at creation when `magnitude_percent <= 0`. The area is
+frozen while the summed signal of its subscribed instances is above 0 (the engine commits
+one flag per subscribed area at the end of each burst). A frozen area is a full snapshot:
+no new memory neurons (skipped creations are counted in `formation_suppressed_total`), no
+ageing or expiry, no lifespan growth or activation bookkeeping on reactivation, no long-term
+conversion and no reward consolidation. Pattern detection still runs and existing memory
+neurons still fire on reactivation. The plasticity service reads the frozen set once per
+burst through `is_memory_area_learning_frozen`.
+
+### Learning rate at 0
+
+A `synaptic.learning_rate` factor at or below 0 on a plastic mapping's modulation group is a
+full stop, like `plasticity_frozen`: no eligibility-trace update (traces are kept, not
+cleared or decayed), no weight commit and no associative synapse synthesis. Factors above 0
+scale eta as before.
 
 The "Reward" type replaces `reward_source_area` and `punishment_source_area`:
 pleasure is a Reward instance with positive magnitude, pain one with negative

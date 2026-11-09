@@ -253,6 +253,10 @@ use crate::{
         crate::endpoints::cortical_mapping::get_mapping_list,
         crate::endpoints::cortical_mapping::get_twin_diagnostic,
         crate::endpoints::cortical_mapping::delete_mapping,
+        crate::endpoints::cortical_mapping::put_plasticity_frozen,
+        crate::endpoints::cortical_mapping::get_plasticity_frozen,
+        crate::endpoints::cortical_area::put_learning_frozen,
+        crate::endpoints::connectome::get_learning_frozen,
         crate::endpoints::cortical_mapping::post_batch_update,
         crate::endpoints::cortical_mapping::post_mapping,
         crate::endpoints::cortical_mapping::put_mapping,
@@ -316,6 +320,7 @@ use crate::{
         crate::endpoints::connectome::get_neuron_properties_query,
         crate::endpoints::connectome::get_neuron_properties_at_query,
         crate::endpoints::connectome::get_memory_neuron,
+        crate::endpoints::connectome::delete_memory_neurons,
         crate::endpoints::connectome::get_area_neurons_query,
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
@@ -591,6 +596,9 @@ use crate::{
             crate::endpoints::cortical_area::MemoryCorticalAreaResponse,
             crate::endpoints::cortical_area::UpdateClassifierRequest,
             crate::endpoints::connectome::MemoryNeuronQuery,
+            crate::endpoints::connectome::MemoryNeuronDeleteRequest,
+            crate::endpoints::connectome::MemoryNeuronDeleteResponse,
+            crate::endpoints::cortical_area::MemoryNeuronListItem,
             crate::endpoints::connectome::MemoryNeuronDetailResponse,
 
             // Morphology

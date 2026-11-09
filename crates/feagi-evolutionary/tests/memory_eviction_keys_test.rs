@@ -1,14 +1,14 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! `memory_neuron_cap` and `ltm_eviction`: parse, validate, extract, and survive a genome save.
+//! `memory_neuron_cap`, `ltm_eviction` and `replay_trigger`: parse, validate, extract, and survive a genome save.
 
 use std::collections::HashMap;
 
 use feagi_evolutionary::{
     extract_memory_properties, load_genome_from_json, save_genome_to_json,
-    validate_memory_mp_properties, GenomeParser, LtmEvictionMode, LTM_EVICTION_KEY,
-    MEMORY_NEURON_CAP_KEY,
+    validate_memory_mp_properties, GenomeParser, LtmEvictionMode, ReplayTrigger, LTM_EVICTION_KEY,
+    MEMORY_NEURON_CAP_KEY, REPLAY_TRIGGER_KEY,
 };
 use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::{
@@ -175,4 +175,65 @@ fn validation_rejects_bad_values() {
     assert!(check(&[(MEMORY_NEURON_CAP_KEY, json!(-1))]).is_err());
     assert!(check(&[(MEMORY_NEURON_CAP_KEY, json!(2.5))]).is_err());
     assert!(check(&[(MEMORY_NEURON_CAP_KEY, json!("many"))]).is_err());
+}
+
+#[test]
+fn replay_trigger_defaults_to_any_fire_and_survives_save_load() {
+    let props = HashMap::from([("is_mem_type".to_string(), json!(true))]);
+    assert_eq!(
+        extract_memory_properties(&props).unwrap().replay_trigger,
+        ReplayTrigger::AnyFire
+    );
+
+    let id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+    let genome = genome_with(vec![memory_area(
+        id,
+        8,
+        "recall",
+        &[(REPLAY_TRIGGER_KEY, json!("recall_only"))],
+    )]);
+    let saved = save_genome_to_json(&genome).expect("save");
+    let flat: Value = serde_json::from_str(&saved).unwrap();
+    assert_eq!(
+        flat["blueprint"][&format!("_____10c-{}-cx-rplytr-t", id.as_base_64())],
+        json!("recall_only")
+    );
+    let loaded = load_genome_from_json(&saved).expect("load");
+    let mem = extract_memory_properties(&loaded.cortical_areas[&id].properties).unwrap();
+    assert_eq!(mem.replay_trigger, ReplayTrigger::RecallOnly);
+}
+
+#[test]
+fn replay_trigger_hierarchical_parse_and_validation() {
+    let id = CorticalID::try_from_bytes(b"mmem0001")
+        .unwrap()
+        .as_base_64();
+    let text = json!({
+        "version": "2.1",
+        "blueprint": {
+            id.clone(): {
+                "cortical_name": "m",
+                "block_boundaries": [2, 2, 1],
+                "relative_coordinate": [0, 0, 0],
+                "cortical_type": "MEMORY",
+                "is_mem_type": true,
+                "replay_trigger": "recall_only"
+            }
+        },
+        "brain_regions": {}
+    })
+    .to_string();
+    let parsed = GenomeParser::parse(&text).unwrap();
+    assert_eq!(
+        parsed.cortical_areas[0].properties["replay_trigger"],
+        json!("recall_only")
+    );
+
+    let check = |v: Value| {
+        validate_memory_mp_properties(&HashMap::from([(REPLAY_TRIGGER_KEY.to_string(), v)]))
+    };
+    assert!(check(json!("any_fire")).is_ok());
+    assert!(check(json!("recall_only")).is_ok());
+    assert!(check(json!("sometimes")).is_err());
+    assert!(check(json!(true)).is_err());
 }

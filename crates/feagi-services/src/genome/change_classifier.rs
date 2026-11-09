@@ -174,6 +174,7 @@ impl CorticalChangeClassifier {
             // Memory neuron cap and eviction policy (applied live, neurons are kept)
             "memory_neuron_cap",
             "ltm_eviction",
+            "replay_trigger",
             // Membrane potential
             "mp_charge_accumulation",
             "neuron_mp_charge_accumulation",

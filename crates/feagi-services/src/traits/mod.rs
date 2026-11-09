@@ -23,7 +23,7 @@ pub mod system_service;
 // Re-export for convenience
 pub use agent_service::AgentService;
 pub use analytics_service::AnalyticsService;
-pub use connectome_service::ConnectomeService;
+pub use connectome_service::{ConnectomeService, LearningFrozenState};
 pub use genome_service::GenomeService;
 pub use neuron_service::NeuronService;
 pub use runtime_service::RuntimeService;

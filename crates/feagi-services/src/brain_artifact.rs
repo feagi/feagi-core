@@ -556,6 +556,13 @@ fn apply_identifier_remaps(
         remap(source);
         remap(destination);
     }
+    for id in &mut snapshot.learning_frozen_memory_areas {
+        remap(id);
+    }
+    for (source, destination) in &mut snapshot.learning_frozen_mappings {
+        remap(source);
+        remap(destination);
+    }
     for neuron in &mut snapshot.long_term_memory_neurons {
         if let Some(cortical_id) = &mut neuron.cortical_id {
             remap(cortical_id);
@@ -603,6 +610,16 @@ fn validate_snapshot_references(snapshot: &ConnectomeSnapshot, genome: &Value) -
     let mut referenced_ids = BTreeSet::new();
     referenced_ids.extend(snapshot.memory_area_ids.iter().map(String::as_str));
     for (source, destination) in &snapshot.plastic_mappings {
+        referenced_ids.insert(source);
+        referenced_ids.insert(destination);
+    }
+    referenced_ids.extend(
+        snapshot
+            .learning_frozen_memory_areas
+            .iter()
+            .map(String::as_str),
+    );
+    for (source, destination) in &snapshot.learning_frozen_mappings {
         referenced_ids.insert(source);
         referenced_ids.insert(destination);
     }
@@ -698,12 +715,39 @@ mod tests {
             persist_mode: mode,
             genome_json,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
         }
+    }
+
+    #[test]
+    fn identifier_remap_and_validation_cover_learning_freeze_switches() {
+        let mut snap = snapshot(ConnectomePersistMode::Full, None);
+        snap.learning_frozen_memory_areas = vec!["old_mem".to_string()];
+        snap.learning_frozen_mappings = vec![("old_a".to_string(), "keep_b".to_string())];
+        let remaps = BTreeMap::from([
+            ("old_mem".to_string(), "new_mem".to_string()),
+            ("old_a".to_string(), "new_a".to_string()),
+        ]);
+        apply_identifier_remaps(&mut snap, &remaps);
+        assert_eq!(
+            snap.learning_frozen_memory_areas,
+            vec!["new_mem".to_string()]
+        );
+        assert_eq!(
+            snap.learning_frozen_mappings,
+            vec![("new_a".to_string(), "keep_b".to_string())]
+        );
+        let genome = serde_json::json!({"blueprint": {"new_mem": {}, "new_a": {}, "keep_b": {}}});
+        validate_snapshot_references(&snap, &genome).expect("all ids present");
+        snap.learning_frozen_mappings
+            .push(("new_a".into(), "absent".into()));
+        assert!(validate_snapshot_references(&snap, &genome).is_err());
     }
 
     fn legacy_v2_bytes(snapshot: &ConnectomeSnapshot) -> Vec<u8> {
@@ -1451,5 +1495,104 @@ mod tests {
             CURRENT_CONTRACT_VERSION + 1,
             CURRENT_CONTRACT_VERSION,
         );
+    }
+
+    fn unmigrated_manifest() -> BrainArtifactManifest {
+        BrainArtifactManifest {
+            contract_version: CURRENT_CONTRACT_VERSION,
+            container_format_version: CURRENT_CONTAINER_VERSION,
+            connectome_schema_version: CURRENT_CONNECTOME_SCHEMA_VERSION,
+            genome_schema_version: None,
+            genome_sha256: None,
+            producer_version: "test".to_string(),
+            migration_steps: Vec::new(),
+            blocking_errors: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn learning_freeze_survives_validation_with_identifier_remap() {
+        let mut source = snapshot(
+            ConnectomePersistMode::Full,
+            Some(feagi_evolutionary::BAREBONES_GENOME_JSON.to_string()),
+        );
+        source.memory_area_ids = vec!["_power".to_string()];
+        source.learning_frozen_memory_areas = vec!["_power".to_string()];
+        source.learning_frozen_mappings = vec![("_power".to_string(), "_death".to_string())];
+        // A manifest already present keeps the export from migrating the embedded genome, so
+        // the file carries the older genome and its legacy ids, as an older export would.
+        write_manifest(&mut source, &unmigrated_manifest()).expect("manifest");
+        let bytes = save_connectome_to_bytes(&source).expect("serialize");
+
+        let result = validate_and_migrate_brain_artifact(&bytes).expect("validate and migrate");
+        let remaps = &result.report.identifier_remaps;
+        let power = remaps.get("_power").expect("legacy power id is remapped");
+        let death = remaps.get("_death").expect("legacy death id is remapped");
+        let migrated = load_connectome_from_bytes(&result.artifact_bytes).expect("reload");
+        assert_eq!(migrated.learning_frozen_memory_areas, vec![power.clone()]);
+        assert_eq!(
+            migrated.learning_frozen_mappings,
+            vec![(power.clone(), death.clone())]
+        );
+        assert_eq!(migrated.memory_area_ids, vec![power.clone()]);
+    }
+
+    const OLDER_CONTAINER_FIXTURE: &str = "tests/fixtures/neutral_pre_freeze_v3.connectome";
+
+    /// Neutral older-layout file: two areas, a plastic mapping and a memory area, no freeze
+    /// state. Regenerate with `cargo test -p feagi-services -- --ignored regenerate_older`.
+    #[test]
+    #[ignore = "writes the committed fixture"]
+    fn regenerate_older_container_fixture() {
+        let mut source = snapshot(
+            ConnectomePersistMode::Full,
+            Some(feagi_evolutionary::BAREBONES_GENOME_JSON.to_string()),
+        );
+        let (genome, _) = feagi_evolutionary::migrate_genome_json_to_current(
+            feagi_evolutionary::BAREBONES_GENOME_JSON,
+        )
+        .expect("migrate genome");
+        let ids: Vec<String> = genome["blueprint"]
+            .as_object()
+            .expect("blueprint")
+            .keys()
+            .take(2)
+            .cloned()
+            .collect();
+        assert_eq!(ids.len(), 2);
+        for (idx, name) in ["area_a", "area_mem"].iter().enumerate() {
+            source
+                .cortical_area_names
+                .insert(idx as u32, name.to_string());
+        }
+        source.memory_area_ids = vec![ids[1].clone()];
+        source.plastic_mappings = vec![(ids[0].clone(), ids[1].clone())];
+        let bytes = save_connectome_to_bytes(&source).expect("serialize");
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(OLDER_CONTAINER_FIXTURE),
+            bytes,
+        )
+        .expect("write fixture");
+    }
+
+    #[test]
+    fn older_container_without_freeze_fields_loads_and_round_trips() {
+        let bytes = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(OLDER_CONTAINER_FIXTURE),
+        )
+        .expect("read committed fixture");
+        let bytes = bytes.as_slice();
+        let loaded = load_connectome_from_bytes(bytes).expect("older container loads");
+        assert!(loaded.learning_frozen_memory_areas.is_empty());
+        assert!(loaded.learning_frozen_mappings.is_empty());
+        assert_eq!(loaded.cortical_area_names.len(), 2);
+        assert_eq!(loaded.plastic_mappings.len(), 1);
+        assert_eq!(loaded.memory_area_ids.len(), 1);
+
+        let result = validate_and_migrate_brain_artifact(bytes).expect("older container migrates");
+        assert!(result.report.valid);
+        let reloaded = load_connectome_from_bytes(&result.artifact_bytes).expect("reload");
+        assert!(reloaded.learning_frozen_memory_areas.is_empty());
+        assert_eq!(reloaded.plastic_mappings.len(), 1);
     }
 }

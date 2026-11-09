@@ -26,6 +26,7 @@ use crate::contracts::{
 };
 use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
+use crate::memory_counters::{MemoryAreasRecorder, MemoryCounterSource};
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::plasticity_freeze::PlasticityControl;
 use crate::reach_hold::trainer_package_version;
@@ -108,9 +109,26 @@ fn default_hold_after_catch_s() -> f64 {
 fn default_cone_min_deg() -> f64 {
     2.0
 }
+/// Default `loss_margin_fraction`: the cone limit stays 20% inside the learned stance-loss angle.
+fn default_loss_margin_fraction() -> f64 {
+    0.2
+}
+/// Default `fail_tighten`: each fall or lost stance moves the assist halfway back to full.
+fn default_fail_tighten() -> f64 {
+    0.5
+}
+/// Default `loss_window`: the learned stance-loss angle uses the last 5 losses.
+fn default_loss_window() -> u32 {
+    5
+}
 /// Default `lean_grace_s`: a lean beyond the cone is re-centred after 2 s.
 fn default_lean_grace_s() -> f64 {
     2.0
+}
+/// Default `idle_fraction`: the support may push up to 5% of the weight torque while the robot
+/// still counts as standing by itself.
+fn default_idle_fraction() -> f64 {
+    0.05
 }
 /// Default `stance_grace_s`: an attempt ends after 1 s without a standing stance.
 fn default_stance_grace_s() -> f64 {
@@ -338,6 +356,20 @@ pub struct BalanceFeetCriterion {
     pub torso_body: String,
     /// Bodies that must touch the world (any count). Upright needs every one down.
     pub contact_bodies: Vec<String>,
+    /// The body that has to stay over the feet for the robot to count as upright (for example
+    /// the head). Required, no default; distinct from every contact body. Upright is "head over
+    /// feet": the posture tilt is the angle from world vertical of the line from the support
+    /// centre (mean CoM position of the contact bodies touching now; all contact bodies when
+    /// none touch) to this body's CoM. The torso tilt stays reported as `tilt`.
+    ///
+    /// The posture tilt drives the tolerance cone, the lean and success windows, the learned
+    /// stance-loss tilt, and the fall and upright checks (`max_tilt_deg`, `fall_tilt_deg`). It is
+    /// scored only: the support spring is never steered toward it, so the support resists
+    /// falling past the cone and the brain must learn to bring the head over the feet.
+    /// Sizing (`h0`) and `support_need` stay on the torso's own tilt and CoM geometry. Absent in
+    /// an old setup it is empty and `validate` rejects the criterion.
+    #[serde(default)]
+    pub posture_top_body: String,
     /// Keyframe the controller resets to at the start of each attempt; empty = model default.
     #[serde(default)]
     pub reset_keyframe: String,
@@ -457,13 +489,31 @@ pub struct BalanceFeetCriterion {
     /// default 2.
     #[serde(default = "default_cone_min_deg")]
     pub cone_min_deg: f64,
+    /// Adaptive: how far inside this body's measured stance-loss angle the cone may widen. The
+    /// cone limit is `min(max_tilt_deg, learned_loss_tilt * (1 - loss_margin_fraction))`. In
+    /// [0, 1); default 0.2.
+    #[serde(default = "default_loss_margin_fraction")]
+    pub loss_margin_fraction: f64,
+    /// Adaptive: how much each fall or lost stance tightens the assist
+    /// (`a_slow += (1 - a_slow) * fail_tighten`). In [0, 1]; default 0.5.
+    #[serde(default = "default_fail_tighten")]
+    pub fail_tighten: f64,
+    /// Adaptive: how many recent losses the learned stance-loss angle is based on (its 25th
+    /// percentile). >= 1; default 5.
+    #[serde(default = "default_loss_window")]
+    pub loss_window: u32,
     /// Adaptive: assist increase within one burst that counts as a catch. In [0, 1]; default 0.05.
     #[serde(default = "default_catch_threshold")]
     pub catch_threshold: f64,
-    /// Adaptive: seconds the predicted tilt may stay beyond the current cone before the cone
-    /// drops to `cone_min_deg` (the support re-centres the robot). > 0; default 2.
+    /// Adaptive: seconds the predicted tilt may stay beyond the reference cone, without a loss,
+    /// before the assist tightens (`a_slow += (1 - a_slow) * fail_tighten`). > 0; default 2.
     #[serde(default = "default_lean_grace_s")]
     pub lean_grace_s: f64,
+    /// Adaptive: how little the support may push while the robot still counts as standing by
+    /// itself: a success window needs the support effort at or below this fraction (0.05 = 5% of
+    /// the weight torque). In [0, 1]; default 0.05.
+    #[serde(default = "default_idle_fraction")]
+    pub idle_fraction: f64,
     /// Adaptive: seconds without a standing stance (see [`sample_is_upright`]) that end the
     /// attempt as `lost_stance`. > 0; default 1.
     #[serde(default = "default_stance_grace_s")]
@@ -520,6 +570,7 @@ impl BalanceFeetCriterion {
     pub fn new(
         torso_body: impl Into<String>,
         contact_bodies: Vec<String>,
+        posture_top_body: impl Into<String>,
         max_tilt_deg: f64,
         hold_s: f64,
         attempt_cap_s: f64,
@@ -527,6 +578,7 @@ impl BalanceFeetCriterion {
         Self {
             torso_body: torso_body.into(),
             contact_bodies,
+            posture_top_body: posture_top_body.into(),
             reset_keyframe: String::new(),
             max_tilt_deg,
             hold_s,
@@ -561,14 +613,27 @@ impl BalanceFeetCriterion {
             catch_tau_s: default_catch_tau_s(),
             hold_after_catch_s: default_hold_after_catch_s(),
             cone_min_deg: default_cone_min_deg(),
+            loss_margin_fraction: default_loss_margin_fraction(),
+            fail_tighten: default_fail_tighten(),
+            loss_window: default_loss_window(),
             catch_threshold: default_catch_threshold(),
             lean_grace_s: default_lean_grace_s(),
+            idle_fraction: default_idle_fraction(),
             stance_grace_s: default_stance_grace_s(),
             standing_fraction_for_success: default_standing_fraction_for_success(),
             scheduled_events: Vec::new(),
             record_actuators: false,
             walk: None,
         }
+    }
+
+    /// What the posture tilt (and so the saved stance-loss tilts) is measured against: the top
+    /// body and the contact bodies that set the support centre. Changing it makes the saved loss
+    /// history meaningless.
+    pub fn posture_definition(&self) -> String {
+        let mut contacts: Vec<&str> = self.contact_bodies.iter().map(|n| n.trim()).collect();
+        contacts.sort_unstable();
+        format!("{}|{}", self.posture_top_body.trim(), contacts.join(","))
     }
 
     /// The contact bodies satisfy the stance: every one touches the world, or at least one when a
@@ -626,6 +691,20 @@ impl BalanceFeetCriterion {
             return Err(TrainerError::Config(
                 "contact_bodies must name at least one body".to_string(),
             ));
+        }
+        let top = self.posture_top_body.trim();
+        if top.is_empty() {
+            return Err(TrainerError::Config(
+                "posture_top_body is required: name the body that has to stay over the feet for \
+                 the robot to count as upright (for example the head); setups saved before this \
+                 setting existed must set it"
+                    .to_string(),
+            ));
+        }
+        if self.contact_bodies.iter().any(|name| name.trim() == top) {
+            return Err(TrainerError::Config(format!(
+                "posture_top_body {top} must not be one of the contact_bodies"
+            )));
         }
         let mut seen: Vec<&str> = Vec::new();
         for name in &self.contact_bodies {
@@ -702,9 +781,29 @@ impl BalanceFeetCriterion {
                 "cone_min_deg must be finite, >= 0 and < max_tilt_deg".to_string(),
             ));
         }
+        if !self.loss_margin_fraction.is_finite()
+            || !(0.0..1.0).contains(&self.loss_margin_fraction)
+        {
+            return Err(TrainerError::Config(
+                "loss_margin_fraction must be a finite value in [0, 1)".to_string(),
+            ));
+        }
+        if !self.fail_tighten.is_finite() || !(0.0..=1.0).contains(&self.fail_tighten) {
+            return Err(TrainerError::Config(
+                "fail_tighten must be a finite value in [0, 1]".to_string(),
+            ));
+        }
+        if self.loss_window == 0 {
+            return Err(TrainerError::Config("loss_window must be >= 1".to_string()));
+        }
         if !self.catch_threshold.is_finite() || !(0.0..=1.0).contains(&self.catch_threshold) {
             return Err(TrainerError::Config(
                 "catch_threshold must be a finite value in [0, 1]".to_string(),
+            ));
+        }
+        if !self.idle_fraction.is_finite() || !(0.0..=1.0).contains(&self.idle_fraction) {
+            return Err(TrainerError::Config(
+                "idle_fraction must be a finite value in [0, 1]".to_string(),
             ));
         }
         if !positive(self.lean_grace_s) {
@@ -986,7 +1085,7 @@ impl SupportSchedule {
 }
 
 /// How a phase picks the support level of each attempt.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SupportMode {
     /// Follow a [`SupportSchedule`] built from the criterion.
     Schedule,
@@ -1003,13 +1102,45 @@ pub enum SupportMode {
 /// Most points kept in a phase's assist timeline.
 pub const ASSIST_TIMELINE_MAX_POINTS: usize = 3600;
 
-/// The two numbers the adaptive assist carries between attempts and train runs.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// What the adaptive assist carries between attempts and train runs: the level, its slow
+/// average and the tilts at which recent attempts lost their stance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AdaptiveAssistState {
     /// Assist level now, in `[support_min, support_start]`.
     pub a: f64,
     /// Exponential average of `a` with time constant `fade_tau_s`; it sets the cone.
     pub a_slow: f64,
+    /// Tilt, degrees, at which each recent fall or lost stance began (oldest first, at most
+    /// `loss_window` kept). Older saved states have none.
+    #[serde(default)]
+    pub loss_tilts_deg: Vec<f64>,
+    /// What those tilts were measured against (`BalanceFeetCriterion::posture_definition`: the
+    /// posture top body and the contact bodies). When the running criterion's definition
+    /// differs, or an older state has none, the loss history is dropped on resume, because
+    /// tilts of another definition say nothing about this one.
+    #[serde(default)]
+    pub posture_definition: Option<String>,
+}
+
+impl BalanceFeetCriterion {
+    /// The support is idle: its effort (0..1 of the weight torque) is at or below
+    /// `idle_fraction`. An absent effort reading is not idle. The one test behind success
+    /// windows and every number that reports them.
+    pub fn support_is_idle(&self, effort: Option<f64>) -> bool {
+        effort.is_some_and(|e| e <= self.idle_fraction + 1.0e-12)
+    }
+}
+
+impl AdaptiveAssistState {
+    /// A state with a level and its slow average and no recorded losses.
+    pub fn new(a: f64, a_slow: f64) -> Self {
+        Self {
+            a,
+            a_slow,
+            loss_tilts_deg: Vec::new(),
+            posture_definition: None,
+        }
+    }
 }
 
 /// Result of one adaptive-assist update.
@@ -1030,14 +1161,30 @@ pub struct AdaptiveStep {
 /// Continuous "patient parent" assist. It fades slowly while the robot copes (`a` decays with
 /// `fade_tau_s`), rises fast when the predicted tilt overshoots a tolerance cone (time
 /// constant `catch_tau_s`), pauses the fade for `hold_after_catch_s` after a catch, and widens
-/// the cone as the slow average `a_slow` falls. Every time constant is in seconds and meets the
-/// burst rate only through `burst_period_s`, so it means the same at any burst rate. Metrics
-/// observe this state; nothing feeds back into it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// the cone as the slow level `a_slow` falls.
+///
+/// Teaching method: start at a very low allowed angle (`cone_min_deg`) and widen only as the
+/// robot itself succeeds. `a_slow` does not follow `a` over time: it steps toward `a` only per
+/// success window (`success_window`: `hold_s` seconds inside the cone with the support idle),
+/// so a passive lean never widens the cone. A lean past the cone for longer than
+/// `lean_grace_s` tightens it again (`lean_retighten`), as does each fall or lost stance. The
+/// one cone from `cone_deg` is both the spring's dead band and the scored cone. The cone widens toward an effective
+/// maximum `min(max_tilt_deg, learned_loss_tilt * (1 - loss_margin_fraction))`, where the
+/// learned loss tilt is the 25th percentile of the tilts at which the last `loss_window` falls
+/// or lost stances began (no limit from losses before the first loss). Each fall or lost
+/// stance also moves `a_slow` back toward 1 by `fail_tighten` and lifts `a` to it, and the next
+/// attempt starts there. `max_tilt_deg` itself is unchanged: it still defines upright, success
+/// and the support need. Every time constant is in seconds and meets the burst rate only
+/// through `burst_period_s`, so it means the same at any burst rate. Metrics observe the level
+/// and the cone; only losses and the tilt overshoot feed back into them.
+#[derive(Debug, Clone, PartialEq)]
 pub struct AdaptiveAssist {
     a: f64,
     a_slow: f64,
     hold_left_s: f64,
+    loss_tilts_deg: Vec<f64>,
+    posture_definition: String,
+    cone_min_clamped: bool,
 }
 
 impl AdaptiveAssist {
@@ -1047,6 +1194,9 @@ impl AdaptiveAssist {
             a: criterion.support_start,
             a_slow: criterion.support_start,
             hold_left_s: 0.0,
+            loss_tilts_deg: Vec::new(),
+            posture_definition: criterion.posture_definition(),
+            cone_min_clamped: false,
         }
     }
 
@@ -1059,11 +1209,29 @@ impl AdaptiveAssist {
                 fallback
             }
         };
-        Self {
+        let definition = criterion.posture_definition();
+        let same_posture = state.posture_definition.as_deref() == Some(definition.as_str());
+        let mut assist = Self {
             a: clamp(state.a, criterion.support_start),
             a_slow: clamp(state.a_slow, criterion.support_start),
             hold_left_s: 0.0,
-        }
+            loss_tilts_deg: if same_posture {
+                state
+                    .loss_tilts_deg
+                    .into_iter()
+                    .filter(|tilt| tilt.is_finite() && *tilt >= 0.0)
+                    .collect()
+            } else {
+                Vec::new()
+            },
+            posture_definition: definition,
+            cone_min_clamped: false,
+        };
+        assist.trim_losses(criterion);
+        assist.cone_min_clamped = assist
+            .effective_max_raw(criterion)
+            .is_some_and(|raw| raw < criterion.cone_min_deg);
+        assist
     }
 
     /// State to save for a later attempt or run.
@@ -1071,6 +1239,8 @@ impl AdaptiveAssist {
         AdaptiveAssistState {
             a: self.a,
             a_slow: self.a_slow,
+            loss_tilts_deg: self.loss_tilts_deg.clone(),
+            posture_definition: Some(self.posture_definition.clone()),
         }
     }
 
@@ -1084,11 +1254,116 @@ impl AdaptiveAssist {
         self.a_slow
     }
 
-    /// Tolerance cone in degrees: `cone_min + (max_tilt - cone_min) * (1 - a_slow)`.
+    /// `cone_min_deg` was above the learned limit at some point (the limit was held at it).
+    pub fn cone_min_clamped(&self) -> bool {
+        self.cone_min_clamped
+    }
+
+    fn trim_losses(&mut self, criterion: &BalanceFeetCriterion) {
+        let keep = criterion.loss_window.max(1) as usize;
+        if self.loss_tilts_deg.len() > keep {
+            let drop = self.loss_tilts_deg.len() - keep;
+            self.loss_tilts_deg.drain(..drop);
+        }
+    }
+
+    /// Learned stance-loss tilt, degrees: the 25th percentile (linear interpolation) of the
+    /// last `loss_window` loss tilts. `None` before the first loss.
+    pub fn learned_loss_tilt_deg(&self, criterion: &BalanceFeetCriterion) -> Option<f64> {
+        let keep = criterion.loss_window.max(1) as usize;
+        let start = self.loss_tilts_deg.len().saturating_sub(keep);
+        let mut tilts: Vec<f64> = self.loss_tilts_deg[start..].to_vec();
+        if tilts.is_empty() {
+            return None;
+        }
+        tilts.sort_by(f64::total_cmp);
+        let rank = 0.25 * (tilts.len() - 1) as f64;
+        let low = rank.floor() as usize;
+        let high = rank.ceil() as usize;
+        Some(tilts[low] + (tilts[high] - tilts[low]) * (rank - low as f64))
+    }
+
+    /// `learned_loss_tilt * (1 - loss_margin_fraction)` before the `max_tilt_deg` and
+    /// `cone_min_deg` bounds; `None` before the first loss.
+    fn effective_max_raw(&self, criterion: &BalanceFeetCriterion) -> Option<f64> {
+        self.learned_loss_tilt_deg(criterion)
+            .map(|loss| loss * (1.0 - criterion.loss_margin_fraction))
+    }
+
+    /// Effective maximum of the cone, degrees: `max_tilt_deg` until the first loss, then
+    /// `min(max_tilt_deg, learned_loss_tilt * (1 - loss_margin_fraction))`, never below
+    /// `cone_min_deg`.
+    pub fn effective_max_deg(&self, criterion: &BalanceFeetCriterion) -> f64 {
+        let max = criterion.max_tilt_deg;
+        let limit = self
+            .effective_max_raw(criterion)
+            .map_or(max, |raw| raw.min(max));
+        limit.max(criterion.cone_min_deg)
+    }
+
+    /// Tolerance cone in degrees:
+    /// `cone_min + (effective_max - cone_min) * (1 - a_slow)`.
     pub fn cone_deg(&self, criterion: &BalanceFeetCriterion) -> f64 {
         let min = criterion.cone_min_deg;
-        let max = criterion.max_tilt_deg;
+        let max = self.effective_max_deg(criterion);
         (min + (max - min) * (1.0 - self.a_slow)).clamp(min, max)
+    }
+
+    /// One success window completed (`hold_s` seconds inside the cone with the support idle):
+    /// `a_slow` steps toward `a` by `1 - exp(-hold_s / fade_tau_s)`. Only success moves it down.
+    pub fn success_window(&mut self, criterion: &BalanceFeetCriterion) {
+        let share = 1.0 - (-criterion.hold_s / criterion.fade_tau_s).exp();
+        self.a_slow += (self.a - self.a_slow) * share;
+        self.a_slow = self
+            .a_slow
+            .clamp(criterion.support_min, criterion.support_start);
+    }
+
+    /// A lean past the cone outlasted `lean_grace_s` without a loss: `a_slow` moves toward 1
+    /// by `fail_tighten` and `a` rises to it.
+    pub fn lean_retighten(&mut self, criterion: &BalanceFeetCriterion) {
+        let tightened = self.a_slow + (1.0 - self.a_slow) * criterion.fail_tighten;
+        self.a_slow = tightened.clamp(criterion.support_min, criterion.support_start);
+        self.a = self
+            .a
+            .max(self.a_slow)
+            .clamp(criterion.support_min, criterion.support_start);
+        self.hold_left_s = 0.0;
+    }
+
+    /// Apply the end of an attempt. A fall or a lost stance records the tilt at which the
+    /// stance went (`loss_tilt_deg`, when known) and tightens the assist: `a_slow` moves toward
+    /// 1 by `fail_tighten`, `a` rises to it, and the next attempt starts there. Other outcomes
+    /// change nothing.
+    pub fn record_attempt_end(
+        &mut self,
+        criterion: &BalanceFeetCriterion,
+        outcome: BalanceAttemptOutcome,
+        loss_tilt_deg: Option<f64>,
+    ) {
+        if !matches!(
+            outcome,
+            BalanceAttemptOutcome::Fell | BalanceAttemptOutcome::LostStance
+        ) {
+            return;
+        }
+        if let Some(tilt) = loss_tilt_deg.filter(|t| t.is_finite() && *t >= 0.0) {
+            self.loss_tilts_deg.push(tilt);
+            self.trim_losses(criterion);
+        }
+        if self
+            .effective_max_raw(criterion)
+            .is_some_and(|raw| raw < criterion.cone_min_deg)
+        {
+            self.cone_min_clamped = true;
+        }
+        let tightened = self.a_slow + (1.0 - self.a_slow) * criterion.fail_tighten;
+        self.a_slow = tightened.clamp(criterion.support_min, criterion.support_start);
+        self.a = self
+            .a
+            .max(self.a_slow)
+            .clamp(criterion.support_min, criterion.support_start);
+        self.hold_left_s = 0.0;
     }
 
     /// One update from the predicted tilt (degrees) of `bursts` elapsed bursts (normally 1).
@@ -1099,9 +1374,8 @@ impl AdaptiveAssist {
         bursts: u32,
     ) -> AdaptiveStep {
         let dt = criterion.burst_period_s * f64::from(bursts.max(1));
-        self.a_slow += (self.a - self.a_slow) * (1.0 - (-dt / criterion.fade_tau_s).exp());
         let cone = self.cone_deg(criterion);
-        let span = criterion.max_tilt_deg - cone;
+        let span = self.effective_max_deg(criterion) - cone;
         let overshoot = if span > 1.0e-9 {
             ((predicted_deg - cone) / span).clamp(0.0, 1.0)
         } else if predicted_deg > cone {
@@ -1136,10 +1410,67 @@ impl AdaptiveAssist {
     }
 }
 
-/// Predicted tilt in degrees: `tilt + lookahead * |omega_xy|` (the support-need prediction,
-/// not clamped).
-pub fn predicted_tilt_deg(tilt_rad: f64, ang_vel: [f64; 3], lookahead_s: f64) -> f64 {
-    (tilt_rad + lookahead_s * ang_vel[0].hypot(ang_vel[1])).to_degrees()
+/// Predicted tilt in degrees (the support-need prediction, not clamped).
+///
+/// With the signed tilt vector `r = (rx, ry)` (see `TiltComponentsDeg`) the lean is predicted
+/// along its own direction: `|r + lookahead * dr/dt|`. The controller reports `omega` in the
+/// world frame and the tilt vector is `up x z`, so for small tilt `dr/dt = (-wx, -wy)`; a body
+/// swinging back toward upright therefore predicts less than its current tilt and one tipping
+/// further predicts more. Without the tilt vector (older controllers) it falls back to
+/// `tilt + lookahead * |omega_xy|`, which counts the swing in any direction as tipping.
+pub fn predicted_tilt_deg(
+    tilt_rad: f64,
+    tilt_vec: Option<[f64; 2]>,
+    ang_vel: [f64; 3],
+    lookahead_s: f64,
+) -> f64 {
+    match tilt_vec.filter(|r| r.iter().all(|v| v.is_finite())) {
+        Some([rx, ry]) => (rx - lookahead_s * ang_vel[0])
+            .hypot(ry - lookahead_s * ang_vel[1])
+            .to_degrees(),
+        None => (tilt_rad + lookahead_s * ang_vel[0].hypot(ang_vel[1])).to_degrees(),
+    }
+}
+
+/// The head-over-feet reading of one `measure` reply: the support centre is the mean CoM of the
+/// contact bodies touching now (all of them when none touch), the top is the posture top body.
+pub fn measure_posture(
+    reading: &Measurement,
+    criterion: &BalanceFeetCriterion,
+) -> Result<PostureReading, TrainerError> {
+    let com_of = |name: &str| -> Result<[f64; 3], TrainerError> {
+        reading
+            .bodies
+            .get(name.trim())
+            .and_then(|body| body.com)
+            .ok_or_else(|| {
+                TrainerError::Runtime(format!(
+                    "the posture tilt needs the position of {}: the measure reply has no com for it",
+                    name.trim()
+                ))
+            })
+    };
+    let feet = criterion
+        .contact_bodies
+        .iter()
+        .map(|name| com_of(name))
+        .collect::<Result<Vec<_>, _>>()?;
+    let touching: Vec<bool> = reading
+        .contacts
+        .iter()
+        .take(feet.len())
+        .map(|set| set.touching)
+        .collect();
+    let top = com_of(&criterion.posture_top_body)?;
+    let centre = support_centre(&feet, &touching).ok_or_else(|| {
+        TrainerError::Runtime("the posture tilt needs at least one contact body".to_string())
+    })?;
+    posture_reading(centre, top).ok_or_else(|| {
+        TrainerError::Runtime(format!(
+            "posture top body {} sits at the support centre: no line to measure",
+            criterion.posture_top_body.trim()
+        ))
+    })
 }
 
 /// One point of a phase's assist timeline.
@@ -1306,12 +1637,27 @@ pub struct AdaptiveAttemptStats {
     /// Share of the counted bursts with every contact body down.
     #[serde(default)]
     pub feet_down_fraction: f64,
-    /// Times a lean was re-centred (the cone dropped to `cone_min_deg`).
+    /// Success windows completed: `hold_s` seconds inside the cone with the support idle.
     #[serde(default)]
-    pub recenters: u32,
+    pub success_windows: u32,
+    /// Times a lean past the cone outlasted `lean_grace_s` and tightened the assist.
+    #[serde(default)]
+    pub lean_retightens: u32,
     /// The attempt ended as `lost_stance`.
     #[serde(default)]
     pub lost_stance: bool,
+    /// Assist level at the start of the attempt (after any tightening from the last loss).
+    #[serde(default)]
+    pub a_start: f64,
+    /// Slow average of the assist level at the start of the attempt.
+    #[serde(default)]
+    pub a_slow_start: f64,
+    /// Effective maximum of the cone at the start of the attempt, degrees.
+    #[serde(default)]
+    pub effective_max_deg: f64,
+    /// Learned stance-loss tilt at the start of the attempt, degrees. Absent before the first loss.
+    #[serde(default)]
+    pub learned_loss_tilt_deg: Option<f64>,
 }
 
 /// Why one attempt ended.
@@ -1333,6 +1679,113 @@ pub enum BalanceAttemptOutcome {
     LostStance,
 }
 
+/// The support spring an attempt opened with (the values sent in `set_body_spring`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SpringApplied {
+    /// Level the opening spring was set to (0 for a brain-only attempt, where the spring has
+    /// zero gains).
+    pub level: f64,
+    /// Dead band of the rotational spring, rad.
+    pub deadband_rad: f64,
+}
+
+/// Body measures of one observed attempt, in units that carry across bodies: angles are
+/// fractions of the allowed angle (`max_tilt_deg`), times are seconds from the start of scoring.
+/// Only the torso's own tilt, angular velocity and the contact readings feed them; no simulator
+/// centre-of-mass reading is involved.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ObserveBodyMeasures {
+    /// The allowed angle the fractions are taken against, degrees.
+    pub allowed_angle_deg: f64,
+    /// Seconds until the torso tilt first passed the allowed angle. Absent when it never did.
+    pub time_to_limit_s: Option<f64>,
+    /// Largest tilt seen, as a fraction of the allowed angle (above 1 means it passed it).
+    pub peak_tilt_fraction: f64,
+    /// `tilt_sway_deg` as a fraction of the allowed angle. Lower is steadier.
+    #[serde(default)]
+    pub tilt_sway_fraction: Option<f64>,
+    /// `wobble_rad_s` in allowed angles per second. Lower is steadier.
+    #[serde(default)]
+    pub wobble_fraction_per_s: Option<f64>,
+    /// Lean toward the torso's forward at the last scored sample, as a fraction of the allowed
+    /// angle (negative leans back). Present only when that sample was past the allowed angle.
+    #[serde(default)]
+    pub fall_forward_fraction: Option<f64>,
+    /// Lean toward the torso's left at the last scored sample, as a fraction of the allowed
+    /// angle (negative leans right). Present only when that sample was past the allowed angle.
+    #[serde(default)]
+    pub fall_left_fraction: Option<f64>,
+    /// Direction of that lean, degrees: 0 forward, 90 left, 180 back, -90 right.
+    #[serde(default)]
+    pub fall_direction_deg: Option<f64>,
+}
+
+/// What an observed attempt tracks while it runs, to build [`ObserveBodyMeasures`].
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ObserveTrack {
+    time_to_limit_s: Option<f64>,
+    peak_tilt_deg: f64,
+    last_tilt_deg: f64,
+    last_lean: TiltComponentsDeg,
+}
+
+impl ObserveTrack {
+    /// Fold one scored (non-settling) sample, `scored_s` seconds after scoring began.
+    pub fn add(&mut self, sample: &BalanceSample, allowed_angle_deg: f64, scored_s: f64) {
+        if self.time_to_limit_s.is_none() && sample.scored_tilt_deg() > allowed_angle_deg {
+            self.time_to_limit_s = Some(scored_s.max(0.0));
+        }
+        self.peak_tilt_deg = self.peak_tilt_deg.max(sample.scored_tilt_deg());
+        self.last_tilt_deg = sample.scored_tilt_deg();
+        self.last_lean = match sample.posture {
+            Some(p) => TiltComponentsDeg {
+                x: None,
+                y: None,
+                forward: p.forward_deg,
+                left: p.left_deg,
+            },
+            None => sample
+                .stability
+                .as_ref()
+                .map(StabilitySample::tilt_components_deg)
+                .unwrap_or_default(),
+        };
+    }
+
+    /// The measures of the finished attempt `record`, against `allowed_angle_deg` (must be > 0).
+    pub fn measures(
+        &self,
+        record: &BalanceAttemptRecord,
+        allowed_angle_deg: f64,
+    ) -> ObserveBodyMeasures {
+        let finite = |v: f64| v.is_finite().then_some(v);
+        let fall = self.last_tilt_deg > allowed_angle_deg;
+        let lean = |deg: Option<f64>| {
+            deg.filter(|_| fall)
+                .and_then(|deg| finite(deg / allowed_angle_deg))
+        };
+        let forward = lean(self.last_lean.forward);
+        let left = lean(self.last_lean.left);
+        ObserveBodyMeasures {
+            allowed_angle_deg,
+            time_to_limit_s: self.time_to_limit_s,
+            peak_tilt_fraction: self.peak_tilt_deg / allowed_angle_deg,
+            tilt_sway_fraction: record
+                .tilt_sway_deg
+                .and_then(|deg| finite(deg / allowed_angle_deg)),
+            wobble_fraction_per_s: record
+                .wobble_rad_s
+                .and_then(|rad_s| finite(rad_s / allowed_angle_deg.to_radians())),
+            fall_forward_fraction: forward,
+            fall_left_fraction: left,
+            fall_direction_deg: match (forward, left) {
+                (Some(f), Some(l)) => Some(l.atan2(f).to_degrees()),
+                _ => None,
+            },
+        }
+    }
+}
+
 /// One finished attempt.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BalanceAttemptRecord {
@@ -1342,7 +1795,7 @@ pub struct BalanceAttemptRecord {
     pub outcome: BalanceAttemptOutcome,
     /// Non-settling bursts observed, including the terminal burst.
     pub bursts: u32,
-    /// Torso tilt at the terminal burst, in degrees.
+    /// Posture tilt at the terminal burst, in degrees (the tilt the upright and fall rules score).
     pub final_tilt_deg: f64,
     /// Scheduled support level of the attempt. The opening settle spring is not recorded here.
     #[serde(default)]
@@ -1408,12 +1861,24 @@ pub struct BalanceAttemptRecord {
     /// or the reset height is unknown.
     #[serde(default)]
     pub com_sway_fraction: Option<f64>,
+    /// Posture tilt, degrees, on the first burst of the stance loss that was still going on when
+    /// the attempt ended (the first not-standing burst of the final off-stance run). Absent when
+    /// the stance was standing at the end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stance_lost_tilt_deg: Option<f64>,
     /// Adaptive-assist numbers. Absent for a ladder attempt and for probes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive: Option<AdaptiveAttemptStats>,
     /// Walk numbers. Absent for a standing attempt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub walk: Option<WalkAttemptStats>,
+    /// The opening support spring as sent to the controller. Absent only for records not built
+    /// by a phase run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spring_applied: Option<SpringApplied>,
+    /// Body measures of an observe attempt. Absent in every other phase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observe: Option<ObserveBodyMeasures>,
 }
 
 /// Counted support-use samples of one attempt (support > 0, non-settling only).
@@ -1613,8 +2078,9 @@ impl ModelInfo {
     }
 }
 
-/// Inputs of the documented gain-sizing formulas.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Inputs of the documented gain-sizing formulas. Recorded in the run data beside the sized
+/// gains.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SizingInputs {
     /// Whole-robot mass m: subtree mass of the torso's free root, kg.
     pub mass_kg: f64,
@@ -1624,9 +2090,11 @@ pub struct SizingInputs {
     pub h0_m: f64,
     /// Tilt inertia: max(x, y) of the torso root's subtree inertia, kg*m^2.
     pub i_tilt: f64,
-    /// Smallest principal inertia of the torso root's subtree, kg*m^2.
+    /// Smallest principal inertia of the torso root's subtree, kg*m^2 (recorded, not used by the
+    /// sizing formulas).
     pub i_min: f64,
-    /// Smallest principal inertia of the torso body alone (limp-limb stability limit), kg*m^2.
+    /// Smallest principal inertia of the torso body alone, kg*m^2 (recorded, not used by the
+    /// sizing formulas).
     pub i_own_min: f64,
     /// Physics timestep dt, s.
     pub dt_s: f64,
@@ -1647,17 +2115,17 @@ pub struct SpringGains {
 
 /// Size the support harness (documented formulas):
 ///
-/// anti-tilt torque `k_rot = 3 m g h0 / 0.087` (a 5 degree tilt costs about a third of the
-/// weight torque), `d_rot = min(0.4 * 2 sqrt(k_rot I_tilt), 0.9 * 2 I_min / dt)` (the second
-/// term keeps the explicit-force integration stable). `I_tilt` and `I_min` come from the torso
-/// root's subtree inertia; k_rot and d_rot are then capped by the torso body's own inertia
-/// (`d dt / I_own < 2` with 10% margin, `k dt^2 / I_own <= 0.25`) so limp-limb models do
-/// not diverge. There are no linear position springs. Weight support is a constant upward
-/// force `level * bws_max_fraction * m_total * g` on the torso body, with `m_total` the
-/// whole robot's mass; here `gravity_comp` is the default fraction 0.5.
+/// anti-tilt torque `k_rot = 3 m g h0 / 0.087` (so `k_rot * 0.087 = 3 m g h0`: a 5 degree tilt
+/// costs about a third of the weight torque), `d_rot = 0.8 sqrt(k_rot I_tilt)`. `I_tilt` comes
+/// from the torso root's subtree inertia. The simulator applies the rotational torque
+/// implicitly (backward Euler against the body's operational-space inertia), so any `k_rot` and
+/// `d_rot` are stable and no cap by the timestep or the torso's own inertia is needed. There are
+/// no linear position springs. Weight support is a constant upward force
+/// `level * bws_max_fraction * m_total * g` on the torso body, with `m_total` the whole robot's
+/// mass; here `gravity_comp` is the default fraction 0.5.
 pub fn size_spring_gains(inputs: &SizingInputs) -> SpringGains {
     let weight = inputs.mass_kg * inputs.gravity;
-    let k_rot = cap_k_rot(3.0 * weight * inputs.h0_m / 0.087, inputs);
+    let k_rot = 3.0 * weight * inputs.h0_m / 0.087;
     let d_rot = sized_d_rot(k_rot, inputs);
     SpringGains {
         k_rot,
@@ -1666,14 +2134,8 @@ pub fn size_spring_gains(inputs: &SizingInputs) -> SpringGains {
     }
 }
 
-fn cap_k_rot(k_rot: f64, inputs: &SizingInputs) -> f64 {
-    k_rot.min(0.25 * inputs.i_own_min / (inputs.dt_s * inputs.dt_s))
-}
-
 fn sized_d_rot(k_rot: f64, inputs: &SizingInputs) -> f64 {
-    (0.4 * 2.0 * (k_rot * inputs.i_tilt).sqrt())
-        .min(0.9 * 2.0 * inputs.i_min / inputs.dt_s)
-        .min(0.9 * 2.0 * inputs.i_own_min / inputs.dt_s)
+    0.8 * (k_rot * inputs.i_tilt).sqrt()
 }
 
 /// Sized gains with the criterion's explicit overrides and `bws_max_fraction` applied. An overridden `k_rot` feeds the
@@ -1924,8 +2386,13 @@ pub struct BalanceSample {
     pub seq: u64,
     /// Attempt seed.
     pub seed: u64,
-    /// Torso tilt from world up, degrees.
+    /// Torso tilt from world up, degrees. Reported as `tilt`; scoring uses
+    /// [`BalanceSample::scored_tilt_deg`] (the posture tilt).
     pub tilt_deg: f64,
+    /// Head-over-feet posture of this burst (see [`PostureSample`]). The Trainer always sets it;
+    /// absent only on a sample built without it, which then scores on `tilt_deg`.
+    #[serde(default)]
+    pub posture: Option<PostureSample>,
     /// Per contact body, in `contact_bodies` order: touching the world.
     pub contacts: Vec<bool>,
     /// Latched end cause. Absent while the attempt is still open.
@@ -2228,24 +2695,120 @@ pub struct TiltComponentsDeg {
 impl StabilitySample {
     /// The signed lean components of this burst; each is empty when its inputs were not reported.
     pub fn tilt_components_deg(&self) -> TiltComponentsDeg {
-        let Some([rx, ry]) = self.tilt_vec_rad else {
-            return TiltComponentsDeg::default();
-        };
-        let (forward, left) = match self.yaw_rad {
-            Some(yaw) => {
-                let (sin, cos) = yaw.sin_cos();
-                (
-                    Some((-(-rx * sin + ry * cos)).to_degrees()),
-                    Some((rx * cos + ry * sin).to_degrees()),
-                )
+        match self.tilt_vec_rad {
+            Some(vec) => tilt_components_of(vec, self.yaw_rad),
+            None => TiltComponentsDeg::default(),
+        }
+    }
+}
+
+/// Signed lean components of a tilt vector `[rx, ry]` (rad) for a torso heading `yaw_rad`
+/// (the torso-frame `forward` and `left` are empty without it).
+fn tilt_components_of(vec: [f64; 2], yaw_rad: Option<f64>) -> TiltComponentsDeg {
+    let [rx, ry] = vec;
+    let (forward, left) = match yaw_rad {
+        Some(yaw) => {
+            let (sin, cos) = yaw.sin_cos();
+            (
+                Some((-(-rx * sin + ry * cos)).to_degrees()),
+                Some((rx * cos + ry * sin).to_degrees()),
+            )
+        }
+        None => (None, None),
+    };
+    TiltComponentsDeg {
+        x: Some(rx.to_degrees()),
+        y: Some(ry.to_degrees()),
+        forward,
+        left,
+    }
+}
+
+/// Head-over-feet reading of one burst, from world positions only the Trainer reads (never a
+/// brain input): the line from the support centre to the posture top body, against vertical.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PostureReading {
+    /// Angle of the line from world vertical, rad, in `[0, pi]`.
+    pub tilt_rad: f64,
+    /// The rotation that takes the line back onto world up, on the world X and Y axes: the same
+    /// convention as the torso's tilt vector (leaning toward +X gives `(0, -theta)`).
+    pub tilt_vec_rad: [f64; 2],
+}
+
+/// Posture of the burst, as the Trainer scores it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PostureSample {
+    /// Posture tilt, degrees: the angle of the line from the support centre to the top body
+    /// against world vertical.
+    pub tilt_deg: f64,
+    /// Signed posture lean in the torso frame, degrees, positive toward the torso's forward.
+    /// Absent without the torso heading.
+    pub forward_deg: Option<f64>,
+    /// Signed posture lean in the torso frame, degrees, positive toward the torso's left.
+    pub left_deg: Option<f64>,
+}
+
+/// Support centre: the mean of the positions of the contact bodies touching now; when none
+/// touch, the mean of all of them (the stance is judged from where the feet are). `None` for no
+/// positions. `touching[i]` belongs to `positions[i]`.
+pub fn support_centre(positions: &[[f64; 3]], touching: &[bool]) -> Option<[f64; 3]> {
+    let mean = |keep: &dyn Fn(usize) -> bool| {
+        let mut sum = [0.0; 3];
+        let mut n = 0.0;
+        for p in positions
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| keep(*i))
+            .map(|(_, p)| p)
+        {
+            for k in 0..3 {
+                sum[k] += p[k];
             }
-            None => (None, None),
-        };
-        TiltComponentsDeg {
-            x: Some(rx.to_degrees()),
-            y: Some(ry.to_degrees()),
-            forward,
-            left,
+            n += 1.0;
+        }
+        (n > 0.0).then(|| [sum[0] / n, sum[1] / n, sum[2] / n])
+    };
+    mean(&|i| touching.get(i).copied().unwrap_or(false)).or_else(|| mean(&|_| true))
+}
+
+/// The posture reading of a line from `centre` up to `top` (world positions, z up). `None` when
+/// the two coincide.
+pub fn posture_reading(centre: [f64; 3], top: [f64; 3]) -> Option<PostureReading> {
+    let d = [top[0] - centre[0], top[1] - centre[1], top[2] - centre[2]];
+    if !d.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let horizontal = d[0].hypot(d[1]);
+    if horizontal.hypot(d[2]) < 1.0e-12 {
+        return None;
+    }
+    let tilt_rad = horizontal.atan2(d[2]);
+    // up = (sin t cos a, sin t sin a, cos t) with a the lean heading: the rotation back onto
+    // world up is t * (uy, -ux) / sin t.
+    let tilt_vec_rad = if horizontal < 1.0e-12 {
+        if d[2] >= 0.0 {
+            [0.0, 0.0]
+        } else {
+            [std::f64::consts::PI, 0.0]
+        }
+    } else {
+        let scale = tilt_rad / horizontal;
+        [d[1] * scale, -d[0] * scale]
+    };
+    Some(PostureReading {
+        tilt_rad,
+        tilt_vec_rad,
+    })
+}
+
+impl PostureReading {
+    /// The sample the Trainer scores, with the lean split on the torso heading.
+    pub fn sample(&self, yaw_rad: Option<f64>) -> PostureSample {
+        let lean = tilt_components_of(self.tilt_vec_rad, yaw_rad);
+        PostureSample {
+            tilt_deg: self.tilt_rad.to_degrees(),
+            forward_deg: lean.forward,
+            left_deg: lean.left,
         }
     }
 }
@@ -2345,16 +2908,29 @@ impl StabilityAccum {
 }
 
 impl BalanceSample {
+    /// The tilt every scoring rule uses (upright, lean and success windows, fall, stance loss):
+    /// the posture tilt, or the torso tilt for a sample that carries none.
+    pub fn scored_tilt_deg(&self) -> f64 {
+        self.posture.map_or(self.tilt_deg, |p| p.tilt_deg)
+    }
+
     /// Every contact body touches the world.
     pub fn all_contacts_down(&self) -> bool {
         self.contacts.iter().all(|down| *down)
     }
 }
 
-/// Predicted tilt fraction `min(1, (tilt + lookahead * |omega_xy|) / max_tilt)`.
-pub fn support_need(tilt_rad: f64, ang_vel: [f64; 3], max_tilt_deg: f64, lookahead_s: f64) -> f64 {
-    let ahead = tilt_rad + lookahead_s * ang_vel[0].hypot(ang_vel[1]);
-    (ahead / max_tilt_deg.to_radians()).clamp(0.0, 1.0)
+/// Predicted tilt fraction `min(1, predicted_tilt / max_tilt)`, with the prediction of
+/// [`predicted_tilt_deg`] (along the lean when `tilt_vec` is given, else the old
+/// `tilt + lookahead * |omega_xy|`), so need and the cone test agree.
+pub fn support_need(
+    tilt_rad: f64,
+    tilt_vec: Option<[f64; 2]>,
+    ang_vel: [f64; 3],
+    max_tilt_deg: f64,
+    lookahead_s: f64,
+) -> f64 {
+    (predicted_tilt_deg(tilt_rad, tilt_vec, ang_vel, lookahead_s) / max_tilt_deg).clamp(0.0, 1.0)
 }
 
 /// Mean of the clipped torque and force shares of the weight-tipping budget:
@@ -2418,6 +2994,9 @@ pub struct OpenBalanceAttempt {
     pub support_use: SupportUseCounts,
     /// Consecutive elapsed bursts that were not standing, ending at the latest counted burst.
     pub off_stance_bursts: u32,
+    /// Tilt, degrees, on the first burst of the current off-stance run (set when
+    /// `off_stance_bursts` goes from 0 to 1, cleared when the stance stands again).
+    pub stance_lost_tilt_deg: Option<f64>,
     /// Non-settling bursts elapsed when the collapse was first confirmed, if it was.
     pub collapsed_at_bursts: Option<u32>,
     /// Stability statistics over the counted, non-settling, upright bursts so far.
@@ -2462,6 +3041,7 @@ impl OpenBalanceAttempt {
             non_upright: NonUprightCounts::default(),
             support_use: SupportUseCounts::default(),
             off_stance_bursts: 0,
+            stance_lost_tilt_deg: None,
             collapsed_at_bursts: None,
             stability: StabilityAccum::default(),
             walk: WalkAccum::default(),
@@ -2501,7 +3081,7 @@ pub fn non_upright_reasons(
         _ => false,
     };
     NonUprightReasons {
-        tilt: sample.tilt_deg > criterion.max_tilt_deg,
+        tilt: sample.scored_tilt_deg() > criterion.max_tilt_deg,
         contact: !criterion.contacts_satisfied(&sample.contacts),
         other_body_contact: criterion.only_contacts_touch && sample.other_contact_touching,
         height: too_low,
@@ -2526,7 +3106,7 @@ pub fn goal_deviation(
     if criterion.max_tilt_deg <= 0.0 {
         return 1.0;
     }
-    (sample.tilt_deg / criterion.max_tilt_deg).clamp(0.0, 1.0)
+    (sample.scored_tilt_deg() / criterion.max_tilt_deg).clamp(0.0, 1.0)
 }
 
 /// Standing: tilt inside the limit, every contact body down, no other body on the world (when
@@ -2571,6 +3151,14 @@ pub fn observe_balance_sample(
             "tilt_deg must be a finite value >= 0, got {}",
             sample.tilt_deg
         )));
+    }
+    if let Some(posture) = sample.posture {
+        if !posture.tilt_deg.is_finite() || posture.tilt_deg < 0.0 {
+            return Err(TrainerError::Runtime(format!(
+                "posture tilt_deg must be a finite value >= 0, got {}",
+                posture.tilt_deg
+            )));
+        }
     }
     let reset_height_m = open
         .reset_height_m
@@ -2648,7 +3236,12 @@ pub fn observe_balance_sample(
             seed,
             outcome,
             bursts,
-            final_tilt_deg: sample.tilt_deg,
+            final_tilt_deg: sample.scored_tilt_deg(),
+            stance_lost_tilt_deg: if upright {
+                None
+            } else {
+                open.stance_lost_tilt_deg.or(Some(sample.scored_tilt_deg()))
+            },
             support_level: open.params_support_level,
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
@@ -2661,6 +3254,8 @@ pub fn observe_balance_sample(
             tilt_sway_deg: stability.tilt_sway_deg(),
             com_sway_fraction: stability.com_sway_fraction(reset_height_m),
             walk: terminal_walk,
+            spring_applied: None,
+            observe: None,
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -2692,7 +3287,7 @@ pub fn observe_balance_sample(
     if sample.settling {
         let mut next = open.clone();
         next.settling_bursts = open.settling_bursts.saturating_add(new_bursts);
-        next.last_tilt_deg = sample.tilt_deg;
+        next.last_tilt_deg = sample.scored_tilt_deg();
         next.last_seq = sample.seq;
         next.last_burst_seq = Some(anchor);
         next.counted_burst = true;
@@ -2718,12 +3313,17 @@ pub fn observe_balance_sample(
     } else {
         open.off_stance_bursts.saturating_add(new_bursts)
     };
-    let fall_bursts = if criterion.fall_tilt_deg > 0.0 && sample.tilt_deg >= criterion.fall_tilt_deg
-    {
-        open.fall_bursts.saturating_add(new_bursts)
+    let stance_lost_tilt_deg = if upright {
+        None
     } else {
-        0
+        open.stance_lost_tilt_deg.or(Some(sample.scored_tilt_deg()))
     };
+    let fall_bursts =
+        if criterion.fall_tilt_deg > 0.0 && sample.scored_tilt_deg() >= criterion.fall_tilt_deg {
+            open.fall_bursts.saturating_add(new_bursts)
+        } else {
+            0
+        };
     let collapsed_at_bursts = collapse_confirmed_at(
         open.collapsed_at_bursts,
         off_stance_bursts,
@@ -2774,7 +3374,8 @@ pub fn observe_balance_sample(
             seed,
             outcome,
             bursts,
-            final_tilt_deg: sample.tilt_deg,
+            final_tilt_deg: sample.scored_tilt_deg(),
+            stance_lost_tilt_deg,
             support_level: open.params_support_level,
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
@@ -2787,6 +3388,8 @@ pub fn observe_balance_sample(
             tilt_sway_deg: stability.tilt_sway_deg(),
             com_sway_fraction: stability.com_sway_fraction(reset_height_m),
             walk: walk_record,
+            spring_applied: None,
+            observe: None,
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -2845,7 +3448,7 @@ pub fn observe_balance_sample(
     Ok(BalanceAttemptStep::Continue(OpenBalanceAttempt {
         bursts,
         holding_bursts,
-        last_tilt_deg: sample.tilt_deg,
+        last_tilt_deg: sample.scored_tilt_deg(),
         last_seq: sample.seq,
         last_burst_seq: Some(anchor),
         settling_bursts: open.settling_bursts,
@@ -2862,6 +3465,7 @@ pub fn observe_balance_sample(
         non_upright,
         support_use,
         off_stance_bursts,
+        stance_lost_tilt_deg,
         collapsed_at_bursts,
         stability,
         walk: walk_acc,
@@ -2909,8 +3513,11 @@ fn balance_time_fields(
         wobble_rad_s: None,
         tilt_sway_deg: None,
         com_sway_fraction: None,
+        stance_lost_tilt_deg: None,
         adaptive: None,
         walk: None,
+        spring_applied: None,
+        observe: None,
     }
 }
 
@@ -2972,7 +3579,7 @@ impl BalanceAffectReward {
         outcome: Option<&BalanceAttemptOutcome>,
         criterion: &BalanceFeetCriterion,
     ) -> Vec<RewardSignal> {
-        let tilt = burst_sample.tilt_deg;
+        let tilt = burst_sample.scored_tilt_deg();
         let previous = self.previous_tilt_deg;
         self.previous_tilt_deg = tilt;
         let death = matches!(
@@ -3120,12 +3727,14 @@ impl BalanceAssistReward {
     ) -> Vec<RewardSignal> {
         let need = burst_sample
             .support_need
-            .unwrap_or_else(|| burst_sample.tilt_deg / criterion.max_tilt_deg)
+            .unwrap_or_else(|| burst_sample.scored_tilt_deg() / criterion.max_tilt_deg)
             .clamp(0.0, 1.0);
         let previous = self.previous_need.unwrap_or(need);
         self.previous_need = Some(need);
-        let previous_tilt = self.previous_tilt_deg.unwrap_or(burst_sample.tilt_deg);
-        self.previous_tilt_deg = Some(burst_sample.tilt_deg);
+        let previous_tilt = self
+            .previous_tilt_deg
+            .unwrap_or(burst_sample.scored_tilt_deg());
+        self.previous_tilt_deg = Some(burst_sample.scored_tilt_deg());
         let death = matches!(
             outcome,
             Some(BalanceAttemptOutcome::Death | BalanceAttemptOutcome::Fell)
@@ -3144,8 +3753,8 @@ impl BalanceAssistReward {
         }
         let mut signals = Vec::new();
         let upright = sample_is_upright(burst_sample, criterion);
-        if !upright && burst_sample.tilt_deg > previous_tilt {
-            let past = (burst_sample.tilt_deg / criterion.max_tilt_deg).clamp(0.0, 1.0);
+        if !upright && burst_sample.scored_tilt_deg() > previous_tilt {
+            let past = (burst_sample.scored_tilt_deg() / criterion.max_tilt_deg).clamp(0.0, 1.0);
             signals.push(pain(past));
         }
         let mut pleasure = 0.0_f64;
@@ -3211,7 +3820,7 @@ impl BalanceContributionReward {
     ) -> Vec<RewardSignal> {
         let need = burst_sample
             .support_need
-            .unwrap_or_else(|| burst_sample.tilt_deg / criterion.max_tilt_deg)
+            .unwrap_or_else(|| burst_sample.scored_tilt_deg() / criterion.max_tilt_deg)
             .clamp(0.0, 1.0);
         let previous = self.previous_need.unwrap_or(need);
         self.previous_need = Some(need);
@@ -3350,6 +3959,10 @@ pub struct BalancePhaseReport {
     /// Spring gains the Trainer sized for this phase (absent when no attempt ran).
     #[serde(default)]
     pub spring_gains: Option<SpringGains>,
+    /// The sizing inputs behind `spring_gains` (mass, gravity, CoM height, inertias, timestep),
+    /// recorded so a result can show how the gains were sized.
+    #[serde(default)]
+    pub spring_sizing: Option<SizingInputs>,
     /// Success rate at `support_min` >= `graduate_success_rate`; false with no attempt there.
     #[serde(default)]
     pub graduated: bool,
@@ -3391,6 +4004,11 @@ pub struct BalancePhaseReport {
     /// Adaptive assist state at the end of the phase, to resume a later train run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adaptive_state_next: Option<AdaptiveAssistState>,
+    /// Adaptive: at some point `cone_min_deg` was above the learned limit
+    /// `learned_loss_tilt * (1 - loss_margin_fraction)`, so the limit was held at `cone_min_deg`
+    /// (this body lost its stance at a smaller angle than the cone's floor).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cone_min_above_loss_tilt: bool,
     /// Attempts thrown away because the controller's FEAGI link (or a call to it) failed. Each
     /// was re-run with the same seed; none counts in `attempts` or in any score above.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3467,7 +4085,7 @@ pub struct BrainOnlyTest {
     /// Mappings that were frozen.
     #[serde(default)]
     pub mappings_frozen: u32,
-    /// Memory-neuron formation was paused. FEAGI has no route for it, so false.
+    /// Memory-neuron formation was paused (every memory area frozen for the phase).
     #[serde(default)]
     pub memory_formation_paused: bool,
 }
@@ -3661,6 +4279,7 @@ impl BalancePhaseReport {
             mean_com_sway_fraction,
             success_rate_by_support,
             spring_gains: None,
+            spring_sizing: None,
             graduated,
             balanced,
             balanced_by_support,
@@ -3674,6 +4293,7 @@ impl BalancePhaseReport {
             assist_timeline: Vec::new(),
             deviation_assist: None,
             adaptive_state_next: None,
+            cone_min_above_loss_tilt: false,
             discarded_attempts: Vec::new(),
         })
     }
@@ -4002,13 +4622,19 @@ pub trait BalanceController {
     ) -> Result<(), TrainerError>;
 
     /// `update_body_spring`: change the level of a running spring and, when `deadband_rad` is
-    /// `Some`, its tilt deadband and, when `gravity_comp` is `Some`, its weight-support fraction.
+    /// `Some`, its tilt deadband, when `gravity_comp` is `Some`, its weight-support fraction and,
+    /// when `ref_up_world` is `Some`, the world direction the body's up axis is driven toward
+    /// (the deadband is measured from it). The Trainer never sends `ref_up_world`: the spring
+    /// keeps the reference captured at the reset, so the support only resists falling past the
+    /// cone and the brain must learn the posture. The field stays as a generic controller
+    /// primitive.
     fn update_body_spring(
         &mut self,
         body: &str,
         level: f64,
         deadband_rad: Option<f64>,
         gravity_comp: Option<f64>,
+        ref_up_world: Option<[f64; 3]>,
     ) -> Result<(), TrainerError>;
 
     /// `clear_body_spring`.
@@ -4036,7 +4662,7 @@ pub type DeliverReward<'a> = &'a mut (dyn FnMut(&[RewardSignal]) -> Result<(), T
 
 /// One phase of a balance session, plus the run the progress events belong to.
 pub struct BalancePhaseRun<'a> {
-    /// `train` or `test`.
+    /// `train`, `test` or `observe`.
     pub phase: &'a str,
     /// Seeds visited in order.
     pub seeds: &'a [u64],
@@ -4066,6 +4692,9 @@ pub struct BalancePhaseRun<'a> {
     /// The FEAGI burst engine, read at attempt boundaries (paused?) and during attempts (is the
     /// burst counter rising?). Required: FEAGI is outside this crate, so the caller supplies it.
     pub burst: &'a dyn BurstClock,
+    /// Memory-area counters, sampled before the first attempt and after each one into the
+    /// `memory_areas` table. `None` writes no such table. Needs `data`.
+    pub memory_counters: Option<&'a mut dyn MemoryCounterSource>,
 }
 
 /// Per-phase state: model facts and the gains sized once from the first reset.
@@ -4074,7 +4703,14 @@ struct BalanceSession {
     sizing: Option<(SizingInputs, SpringGains)>,
 }
 
-/// Run one phase (`train` or `test`) and emit its progress.
+/// The phase kinds a balance session runs.
+pub const BALANCE_PHASES: [&str; 3] = ["train", "test", "observe"];
+
+/// Run one phase (`train`, `test` or `observe`) and emit its progress.
+///
+/// An `observe` phase is a `test` phase that also writes the `observe` table (body measures as
+/// fractions of the allowed angle) and refuses to run when learning cannot be frozen: it
+/// watches the brain without teaching or changing it.
 ///
 /// A `test` phase measures the brain alone: support 0 for the whole attempt (the spring is set
 /// with zero gains at level 0, settle included), no perturbation pulses, no reward, and
@@ -4087,9 +4723,9 @@ pub fn run_balance_phase(
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
 ) -> Result<BalancePhaseReport, TrainerError> {
-    if run.phase != "train" && run.phase != "test" {
+    if !BALANCE_PHASES.contains(&run.phase) {
         return Err(TrainerError::Config(
-            "balance phase must be train or test".to_string(),
+            "balance phase must be train, test or observe".to_string(),
         ));
     }
     run.criterion.validate()?;
@@ -4102,11 +4738,12 @@ pub fn run_balance_phase(
             run.phase
         )));
     }
-    let brain_only = run.phase == "test";
+    let brain_only = run.phase == "test" || run.phase == "observe";
     if brain_only && !run.criterion.scheduled_events.is_empty() {
-        return Err(TrainerError::Config(
-            "the test phase measures the brain only and takes no scheduled events".to_string(),
-        ));
+        return Err(TrainerError::Config(format!(
+            "the {} phase measures the brain only and takes no scheduled events",
+            run.phase
+        )));
     }
     if !run.criterion.scheduled_events.is_empty() && run.apply_event.is_none() {
         return Err(TrainerError::Config(
@@ -4116,18 +4753,20 @@ pub fn run_balance_phase(
     }
     if brain_only {
         if run.deliver_reward.is_some() {
-            return Err(TrainerError::Config(
-                "the test phase measures the brain only and takes no reward sink".to_string(),
-            ));
+            return Err(TrainerError::Config(format!(
+                "the {} phase measures the brain only and takes no reward sink",
+                run.phase
+            )));
         }
         if !matches!(run.support_mode, None | Some(SupportMode::Fixed(0.0))) {
-            return Err(TrainerError::Config(
-                "the test phase measures the brain only and runs at support 0".to_string(),
-            ));
+            return Err(TrainerError::Config(format!(
+                "the {} phase measures the brain only and runs at support 0",
+                run.phase
+            )));
         }
     }
     let support = run.criterion.support_config();
-    let mode = run.support_mode.unwrap_or(if brain_only {
+    let mode = run.support_mode.clone().unwrap_or(if brain_only {
         SupportMode::Fixed(0.0)
     } else {
         SupportMode::Schedule
@@ -4189,6 +4828,21 @@ pub fn run_balance_phase(
                     Some("no plasticity control was supplied".to_string());
             }
         }
+        // Observe never teaches: an unfrozen brain would learn from the run it only watches.
+        if run.phase == "observe" && !conditions.plasticity_frozen {
+            let reason = conditions
+                .plasticity_reason
+                .clone()
+                .unwrap_or_else(|| "learning was not frozen".to_string());
+            if freeze_attempted {
+                if let Some(control) = run.plasticity.as_deref_mut() {
+                    let _ = control.restore();
+                }
+            }
+            return Err(TrainerError::Runtime(format!(
+                "the observe phase needs learning frozen and could not freeze it: {reason}"
+            )));
+        }
     }
     let result = run_phase_attempts(
         run,
@@ -4241,21 +4895,17 @@ fn run_phase_attempts(
     let info = controller.model_info()?;
     check_model(&info, criterion)?;
     let mut session = BalanceSession { info, sizing: None };
-    let mut schedule = match mode {
-        SupportMode::Resume(level) => SupportSchedule::resume(*support, level),
+    let mut schedule = match &mode {
+        SupportMode::Resume(level) => SupportSchedule::resume(*support, *level),
         SupportMode::ResumeAdaptive(state) => SupportSchedule::resume(*support, state.a),
         _ => SupportSchedule::new(*support),
     };
     let mut adaptive_run = adaptive_on.then(|| {
-        AdaptiveRun::new(match mode {
-            SupportMode::Resume(level) => AdaptiveAssist::resume(
-                criterion,
-                AdaptiveAssistState {
-                    a: level,
-                    a_slow: level,
-                },
-            ),
-            SupportMode::ResumeAdaptive(state) => AdaptiveAssist::resume(criterion, state),
+        AdaptiveRun::new(match &mode {
+            SupportMode::Resume(level) => {
+                AdaptiveAssist::resume(criterion, AdaptiveAssistState::new(*level, *level))
+            }
+            SupportMode::ResumeAdaptive(state) => AdaptiveAssist::resume(criterion, state.clone()),
             _ => AdaptiveAssist::start(criterion),
         })
     });
@@ -4283,13 +4933,22 @@ fn run_phase_attempts(
     };
     if let Some(sink) = run.data.as_deref_mut() {
         sink.declare_table(&attempts_table_spec(criterion.walk.is_some()));
+        if run.phase == "observe" {
+            sink.declare_table(&observe_table_spec());
+        }
         sink.event(EventTime::default(), "phase_start", run.phase);
     }
+    // Baseline of the memory counters, after learning is frozen and before the first attempt.
+    let memory_source = run.memory_counters.take();
+    let mut memory = match (memory_source, run.data.as_deref_mut()) {
+        (Some(source), Some(sink)) => Some(MemoryAreasRecorder::start(source, sink)),
+        _ => None,
+    };
     let mut recovery = RecoveryState::new(run.recovery)?;
     for seed in run.seeds {
-        let level = match (&adaptive_run, mode) {
+        let level = match (&adaptive_run, &mode) {
             (Some(adaptive), _) => adaptive.assist.level(),
-            (None, SupportMode::Fixed(level)) => level,
+            (None, SupportMode::Fixed(level)) => *level,
             (None, _) => schedule.current_level(),
         };
         // An attempt whose controller link failed is discarded and re-run with the same seed;
@@ -4348,11 +5007,27 @@ fn run_phase_attempts(
             walk: record.walk,
         };
         schedule.record_attempt(record.outcome, record.balanced_s);
+        if let Some(adaptive) = adaptive_run.as_mut() {
+            adaptive.assist.record_attempt_end(
+                criterion,
+                record.outcome,
+                record
+                    .stance_lost_tilt_deg
+                    .or((record.outcome == BalanceAttemptOutcome::Fell)
+                        .then_some(record.final_tilt_deg)),
+            );
+        }
         if let Some(sink) = run.data.as_deref_mut() {
             sink.row(
                 ATTEMPTS_TABLE,
                 &attempt_row(run.phase, attempts.len(), &record, criterion.walk.is_some()),
             );
+            if let Some(row) = observe_row(run.phase, attempts.len(), &record) {
+                sink.row(OBSERVE_TABLE, &row);
+            }
+            if let Some(memory) = memory.as_mut() {
+                memory.after_attempt(sink, run.phase, attempts.len());
+            }
         }
         attempts.push(record);
         train_done += 1;
@@ -4469,14 +5144,14 @@ fn run_phase_attempts(
     report.discarded_attempts = recovery.into_discarded();
     report.probe_plasticity_frozen = (probes_run > 0).then_some(probes_frozen);
     // A brain-only test applies no spring (zero gains), so there are no sized gains to report.
-    report.spring_gains = if brain_only {
-        None
-    } else {
-        session.sizing.map(|(_, gains)| gains)
+    (report.spring_sizing, report.spring_gains) = match session.sizing {
+        Some((inputs, gains)) if !brain_only => (Some(inputs), Some(gains)),
+        _ => (None, None),
     };
     if let Some(adaptive) = adaptive_run {
         report.support_level_next = Some(adaptive.assist.level());
         report.adaptive_state_next = Some(adaptive.assist.state());
+        report.cone_min_above_loss_tilt = adaptive.assist.cone_min_clamped();
         report.assist_timeline = adaptive.timeline;
     } else if !matches!(mode, SupportMode::Fixed(_)) {
         report.support_level_next = Some(schedule.current_level());
@@ -4535,7 +5210,9 @@ fn outcome_name(outcome: BalanceAttemptOutcome) -> &'static str {
 
 /// The named bodies and keyframe must exist in the loaded model.
 fn check_model(info: &ModelInfo, criterion: &BalanceFeetCriterion) -> Result<(), TrainerError> {
-    let names = std::iter::once(&criterion.torso_body).chain(criterion.contact_bodies.iter());
+    let names = std::iter::once(&criterion.torso_body)
+        .chain(criterion.contact_bodies.iter())
+        .chain(std::iter::once(&criterion.posture_top_body));
     for name in names {
         if info.body(name.trim()).is_none() {
             return Err(TrainerError::Config(format!(
@@ -4558,9 +5235,25 @@ fn check_model(info: &ModelInfo, criterion: &BalanceFeetCriterion) -> Result<(),
     Ok(())
 }
 
+/// Bodies of the measure request, in order: the torso, the contact bodies (their CoM sets the
+/// support centre) and the posture top body; each name once.
+fn measured_bodies(criterion: &BalanceFeetCriterion) -> Vec<String> {
+    let mut bodies: Vec<String> = Vec::new();
+    for name in std::iter::once(&criterion.torso_body)
+        .chain(criterion.contact_bodies.iter())
+        .chain(std::iter::once(&criterion.posture_top_body))
+    {
+        let name = name.trim().to_string();
+        if !bodies.contains(&name) {
+            bodies.push(name);
+        }
+    }
+    bodies
+}
+
 fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
     MeasureRequest {
-        bodies: vec![criterion.torso_body.trim().to_string()],
+        bodies: measured_bodies(criterion),
         contacts: criterion
             .contact_bodies
             .iter()
@@ -4746,7 +5439,12 @@ struct AdaptiveAttemptTally {
     min_a: Option<f64>,
     catches: u32,
     feet_down_bursts: f64,
-    recenters: u32,
+    lean_retightens: u32,
+    success_windows: u32,
+    /// Seconds in the current, unfinished success window.
+    window_s: f64,
+    /// Scored seconds the completed success windows cover.
+    window_covered_s: f64,
 }
 
 impl AdaptiveAttemptTally {
@@ -4756,12 +5454,23 @@ impl AdaptiveAttemptTally {
         self.min_a = Some(self.min_a.map_or(level, |m| m.min(level)));
     }
 
+    /// Share of the scored time the completed success windows cover.
+    fn window_cover_fraction(&self, burst_period_s: f64) -> f64 {
+        let seconds = self.bursts * burst_period_s;
+        if seconds > 0.0 {
+            self.window_covered_s / seconds
+        } else {
+            0.0
+        }
+    }
+
     fn stats(
         &self,
         end_cone_deg: f64,
         burst_period_s: f64,
         standing_fraction: f64,
         lost_stance: bool,
+        start: &AdaptiveStart,
     ) -> AdaptiveAttemptStats {
         let seconds = self.bursts * burst_period_s;
         AdaptiveAttemptStats {
@@ -4784,8 +5493,33 @@ impl AdaptiveAttemptTally {
             } else {
                 0.0
             },
-            recenters: self.recenters,
+            success_windows: self.success_windows,
+            lean_retightens: self.lean_retightens,
             lost_stance,
+            a_start: start.a,
+            a_slow_start: start.a_slow,
+            effective_max_deg: start.effective_max_deg,
+            learned_loss_tilt_deg: start.learned_loss_tilt_deg,
+        }
+    }
+}
+
+/// The adaptive assist as an attempt began.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct AdaptiveStart {
+    a: f64,
+    a_slow: f64,
+    effective_max_deg: f64,
+    learned_loss_tilt_deg: Option<f64>,
+}
+
+impl AdaptiveStart {
+    fn of(assist: &AdaptiveAssist, criterion: &BalanceFeetCriterion) -> Self {
+        Self {
+            a: assist.level(),
+            a_slow: assist.slow(),
+            effective_max_deg: assist.effective_max_deg(criterion),
+            learned_loss_tilt_deg: assist.learned_loss_tilt_deg(criterion),
         }
     }
 }
@@ -4827,6 +5561,11 @@ fn steps_table_spec(
         ColumnSpec::unitless("seq", "Controller physics-step counter."),
         ColumnSpec::with_unit("sim_time", "s", "Simulated time."),
         ColumnSpec::with_unit("tilt", "deg", "Torso tilt from world up."),
+        ColumnSpec::with_unit(
+            "posture_tilt",
+            "deg",
+            "Posture tilt: the angle from world vertical of the line from the support centre (mean position of the contact bodies touching, all of them when none touch) to the posture top body. This is the tilt the upright, lean, fall and stance-loss rules score.",
+        ),
         ColumnSpec::with_unit("height", "m", "Torso height above world z."),
         ColumnSpec::unitless(
             "height_fraction",
@@ -4856,6 +5595,16 @@ fn steps_table_spec(
             "tilt_left",
             "deg",
             "Signed lean in the torso frame, positive leaning toward the torso's left. Empty when the controller did not report the tilt vector or the heading.",
+        ),
+        ColumnSpec::with_unit(
+            "posture_forward",
+            "deg",
+            "Signed posture lean in the torso frame, positive leaning toward the torso's forward (the head over the feet, not the torso). Empty when the controller did not report the heading.",
+        ),
+        ColumnSpec::with_unit(
+            "posture_left",
+            "deg",
+            "Signed posture lean in the torso frame, positive leaning toward the torso's left. Empty when the controller did not report the heading.",
         ),
     ];
     columns.extend(criterion.contact_bodies.iter().map(|body| {
@@ -4960,6 +5709,46 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
                 "com_sway_fraction",
                 "Root-mean-square horizontal deviation of the centre of mass from its mean over the upright bursts after settling, as a fraction of the reset torso height. Lower is steadier. Empty when no upright burst was measured or the reset height is unknown.",
             ),
+            ColumnSpec::unitless(
+                "spring_level",
+                "Level the opening support spring was set to (0 for a brain-only attempt).",
+            ),
+            ColumnSpec::with_unit(
+                "spring_deadband",
+                "rad",
+                "Dead band of the opening support spring's rotational term.",
+            ),
+            ColumnSpec::with_unit(
+                "effective_max",
+                "deg",
+                "Adaptive: the cone's effective maximum at the start of the attempt, the smaller of the allowed angle and the learned stance-loss angle reduced by the margin. Empty for a non-adaptive attempt.",
+            ),
+            ColumnSpec::with_unit(
+                "learned_loss_tilt",
+                "deg",
+                "Adaptive: the learned stance-loss angle at the start of the attempt (25th percentile of the recent losses). Empty before the first loss.",
+            ),
+            ColumnSpec::with_unit(
+                "stance_lost_tilt",
+                "deg",
+                "Torso tilt on the first burst of the stance loss that ended the attempt. Empty when the stance was standing at the end.",
+            ),
+            ColumnSpec::unitless(
+                "assist_start",
+                "Adaptive: assist level at the start of the attempt, after any tightening from the last loss.",
+            ),
+            ColumnSpec::unitless(
+                "assist_slow_start",
+                "Adaptive: slow average of the assist level at the start of the attempt.",
+            ),
+            ColumnSpec::unitless(
+                "success_windows",
+                "Adaptive: success windows completed (hold time inside the cone with the support idle). Each one widens the cone a step. Empty for a non-adaptive attempt.",
+            ),
+            ColumnSpec::unitless(
+                "lean_retightens",
+                "Adaptive: times a lean past the cone outlasted the lean grace and tightened the assist. Empty for a non-adaptive attempt.",
+            ),
     ];
     if walking {
         columns.extend([
@@ -4992,6 +5781,81 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
     }
 }
 
+/// Name of the per-attempt body measures table an observe phase writes.
+pub const OBSERVE_TABLE: &str = "observe";
+
+/// The `observe` table: one row per attempt of an observe phase, body measures only.
+pub fn observe_table_spec() -> TableSpec {
+    TableSpec {
+        name: OBSERVE_TABLE.to_string(),
+        description: "One row per attempt of an observe phase: how the body behaved, with angles as fractions of the allowed angle."
+            .to_string(),
+        columns: vec![
+            ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
+            ColumnSpec::unitless("attempt", "Attempt index within the phase."),
+            ColumnSpec::unitless("outcome", "How the attempt ended."),
+            ColumnSpec::with_unit("allowed_angle", "deg", "The allowed angle the fractions below are taken against."),
+            ColumnSpec::with_unit(
+                "time_to_limit",
+                "s",
+                "Seconds until the torso tilt first passed the allowed angle. Empty when it never did.",
+            ),
+            ColumnSpec::unitless(
+                "upright_fraction",
+                "Share of scored bursts that were upright (tilt inside the allowed angle, every contact body down).",
+            ),
+            ColumnSpec::unitless(
+                "peak_tilt_fraction",
+                "Largest tilt as a fraction of the allowed angle; above 1 means it passed the limit.",
+            ),
+            ColumnSpec::unitless(
+                "tilt_sway_fraction",
+                "Root-mean-square swing of the tilt around its mean over the upright bursts, as a fraction of the allowed angle. Lower is steadier. Empty when no upright burst was measured.",
+            ),
+            ColumnSpec::with_unit(
+                "wobble_fraction",
+                "1/s",
+                "Root-mean-square horizontal angular velocity over the upright bursts, in allowed angles per second. Lower is steadier. Empty when no upright burst was measured.",
+            ),
+            ColumnSpec::unitless(
+                "fall_forward_fraction",
+                "Lean toward the torso's forward at the last scored sample, as a fraction of the allowed angle (negative leans back). Empty unless that sample was past the allowed angle or the controller did not report the heading.",
+            ),
+            ColumnSpec::unitless(
+                "fall_left_fraction",
+                "Lean toward the torso's left at the last scored sample, as a fraction of the allowed angle (negative leans right). Empty under the same conditions.",
+            ),
+            ColumnSpec::with_unit(
+                "fall_direction",
+                "deg",
+                "Direction of that lean: 0 forward, 90 left, 180 back, -90 right. Empty under the same conditions.",
+            ),
+        ],
+    }
+}
+
+fn observe_row(
+    phase: &str,
+    index: usize,
+    record: &BalanceAttemptRecord,
+) -> Option<Vec<RunDataValue>> {
+    let body = record.observe.as_ref()?;
+    Some(vec![
+        RunDataValue::text(phase),
+        RunDataValue::count(index as u64),
+        RunDataValue::text(outcome_name(record.outcome)),
+        RunDataValue::Float(body.allowed_angle_deg),
+        RunDataValue::opt_float(body.time_to_limit_s),
+        RunDataValue::Float(record.upright_fraction),
+        RunDataValue::Float(body.peak_tilt_fraction),
+        RunDataValue::opt_float(body.tilt_sway_fraction),
+        RunDataValue::opt_float(body.wobble_fraction_per_s),
+        RunDataValue::opt_float(body.fall_forward_fraction),
+        RunDataValue::opt_float(body.fall_left_fraction),
+        RunDataValue::opt_float(body.fall_direction_deg),
+    ])
+}
+
 fn attempt_row(
     phase: &str,
     index: usize,
@@ -5019,7 +5883,23 @@ fn attempt_row(
         RunDataValue::opt_float(record.wobble_rad_s),
         RunDataValue::opt_float(record.tilt_sway_deg),
         RunDataValue::opt_float(record.com_sway_fraction),
+        RunDataValue::opt_float(record.spring_applied.map(|s| s.level)),
+        RunDataValue::opt_float(record.spring_applied.map(|s| s.deadband_rad)),
     ];
+    let adaptive = record.adaptive.as_ref();
+    row.extend([
+        RunDataValue::opt_float(adaptive.map(|a| a.effective_max_deg)),
+        RunDataValue::opt_float(adaptive.and_then(|a| a.learned_loss_tilt_deg)),
+        RunDataValue::opt_float(record.stance_lost_tilt_deg),
+        RunDataValue::opt_float(adaptive.map(|a| a.a_start)),
+        RunDataValue::opt_float(adaptive.map(|a| a.a_slow_start)),
+        adaptive.map_or(RunDataValue::Null, |a| {
+            RunDataValue::count(u64::from(a.success_windows))
+        }),
+        adaptive.map_or(RunDataValue::Null, |a| {
+            RunDataValue::count(u64::from(a.lean_retightens))
+        }),
+    ]);
     if walking {
         let walk = record.walk.as_ref();
         row.extend([
@@ -5089,6 +5969,7 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::count(sample.seq),
             RunDataValue::Float(sim_time_s),
             RunDataValue::Float(sample.tilt_deg),
+            RunDataValue::opt_float(sample.posture.map(|p| p.tilt_deg)),
             RunDataValue::opt_float(sample.torso_height_m),
             RunDataValue::opt_float(sample_height_fraction(sample)),
             RunDataValue::opt_float(
@@ -5108,6 +5989,8 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::opt_float(lean.y),
             RunDataValue::opt_float(lean.forward),
             RunDataValue::opt_float(lean.left),
+            RunDataValue::opt_float(sample.posture.and_then(|p| p.forward_deg)),
+            RunDataValue::opt_float(sample.posture.and_then(|p| p.left_deg)),
         ]);
         row.extend((0..criterion.contact_bodies.len()).map(|i| {
             sample
@@ -5324,13 +6207,19 @@ fn run_balance_attempt(
         criterion.perturb_duration_s,
         criterion.perturb_torque_nm,
     );
+    let spring_applied = SpringApplied {
+        level: settle_level,
+        deadband_rad,
+    };
     let mut spring_level = settle_level;
     let mut spring_cone_deg = criterion.support_deadband_deg;
     let mut tally = AdaptiveAttemptTally::default();
-    // Adaptive only: the spring starts with the criterion's weight support; `recentering` drops
-    // the cone to `cone_min_deg` after a lean that outlasted `lean_grace_s`.
+    let adaptive_start = adaptive
+        .as_deref()
+        .map(|run| AdaptiveStart::of(&run.assist, criterion));
+    // Adaptive only: the spring starts with the criterion's weight support. Its dead band is the
+    // same cone the lean and success-window tests score against.
     let mut spring_gravity_on = true;
-    let mut recentering = false;
     let mut lean_s = 0.0_f64;
     // Settle is only the opening window. A death homes the body and rewinds sim
     // time to the keyframe, so a later reading must not be labeled as settle.
@@ -5351,6 +6240,8 @@ fn run_balance_attempt(
         }
     }
     let mut was_perturbing = false;
+    let observing = hooks.phase == "observe";
+    let mut observe_track = ObserveTrack::default();
     let mut last_sim_time_s: f64;
     let mut result = loop {
         if cancel.is_cancelled() {
@@ -5403,14 +6294,13 @@ fn run_balance_attempt(
                 .map(|set| set.touching)
                 .collect::<Vec<bool>>(),
         );
+        let posture = measure_posture(&reading, criterion)?;
         let mut perturbing = false;
         if reading.terminal.is_none() {
             if let Some(run) = adaptive.as_deref() {
                 // Level, cone and weight support are sent only when they changed enough to matter.
                 let cone_now = if settling {
                     criterion.support_deadband_deg
-                } else if recentering {
-                    criterion.cone_min_deg
                 } else {
                     run.assist.cone_deg(criterion)
                 };
@@ -5432,13 +6322,14 @@ fn run_balance_attempt(
                         } else {
                             0.0
                         }),
+                        None,
                     )?;
                     spring_level = level_now;
                     spring_cone_deg = cone_now;
                     spring_gravity_on = gravity_want;
                 }
             } else if (spring_level - level_now).abs() > 1.0e-12 {
-                controller.update_body_spring(&torso, level_now, None, None)?;
+                controller.update_body_spring(&torso, level_now, None, None, None)?;
                 spring_level = level_now;
             }
             if !settling {
@@ -5488,6 +6379,9 @@ fn run_balance_attempt(
             seq: reading.physics_steps,
             seed,
             tilt_deg: body.tilt_rad.to_degrees(),
+            posture: Some(
+                posture.sample(body.heading.as_ref().and_then(|heading| heading.yaw_rad)),
+            ),
             contacts: reading
                 .contacts
                 .iter()
@@ -5500,6 +6394,7 @@ fn run_balance_attempt(
             perturbing,
             support_need: Some(support_need(
                 body.tilt_rad,
+                body.tilt_vec,
                 // Absent ang_vel means no lookahead term, as when it defaulted to zeros.
                 body.ang_vel.unwrap_or([0.0; 3]),
                 criterion.max_tilt_deg,
@@ -5519,8 +6414,11 @@ fn run_balance_attempt(
             stability: Some(StabilitySample::from_body(body)),
             walk: walk_reading,
         };
-        let step = observe_balance_sample(&open, &sample, criterion, seed)?;
-        let (counted, outcome) = match &step {
+        if observing && !settling {
+            observe_track.add(&sample, criterion.max_tilt_deg, elapsed_s - settle_s);
+        }
+        let mut step = observe_balance_sample(&open, &sample, criterion, seed)?;
+        let (counted, mut outcome) = match &step {
             BalanceAttemptStep::Continue(next) => (next.counted_burst, None),
             BalanceAttemptStep::Finished(record) => (true, Some(record.outcome)),
         };
@@ -5553,27 +6451,49 @@ fn run_balance_attempt(
                 .saturating_sub(open.bursts)
                 .max(1);
                 let mut rise = 0.0;
-                if matches!(step, BalanceAttemptStep::Continue(_)) && reading.terminal.is_none() {
+                // The capped last burst of a standing attempt still counts toward its windows.
+                if matches!(
+                    step,
+                    BalanceAttemptStep::Continue(_)
+                        | BalanceAttemptStep::Finished(BalanceAttemptRecord {
+                            outcome: BalanceAttemptOutcome::Success,
+                            ..
+                        })
+                ) && reading.terminal.is_none()
+                {
+                    // The posture line's lean, carried forward along the torso's swing (the
+                    // torso's angular velocity, not a difference of successive centres, so a
+                    // foot lifting does not read as a jump).
                     let predicted = predicted_tilt_deg(
-                        body.tilt_rad,
+                        posture.tilt_rad,
+                        Some(posture.tilt_vec_rad),
                         // Absent ang_vel means no lookahead term, as before.
                         body.ang_vel.unwrap_or([0.0; 3]),
                         criterion.need_lookahead_s,
                     );
-                    if recentering {
-                        if predicted <= criterion.cone_min_deg {
-                            recentering = false;
-                            lean_s = 0.0;
-                        }
-                    } else if predicted > run.assist.cone_deg(criterion) {
-                        lean_s += f64::from(new_bursts) * criterion.burst_period_s;
+                    // One reference cone for the spring, the lean test and the success window.
+                    let dt_s = f64::from(new_bursts) * criterion.burst_period_s;
+                    if predicted > run.assist.cone_deg(criterion) {
+                        tally.window_s = 0.0;
+                        lean_s += dt_s;
                         if lean_s > criterion.lean_grace_s + 1.0e-9 {
-                            recentering = true;
+                            run.assist.lean_retighten(criterion);
                             lean_s = 0.0;
-                            tally.recenters += 1;
+                            tally.lean_retightens += 1;
                         }
                     } else {
                         lean_s = 0.0;
+                        if criterion.support_is_idle(sample.support_effort) {
+                            tally.window_s += dt_s;
+                            if tally.window_s >= criterion.hold_s - 1.0e-9 {
+                                run.assist.success_window(criterion);
+                                tally.success_windows += 1;
+                                tally.window_covered_s += tally.window_s;
+                                tally.window_s = 0.0;
+                            }
+                        } else {
+                            tally.window_s = 0.0;
+                        }
                     }
                     let moved = run.assist.step(criterion, predicted, new_bursts);
                     rise = moved.rise;
@@ -5587,6 +6507,19 @@ fn run_balance_attempt(
                 sample.support_level = Some(run.assist.level());
                 sample.assist_slow = Some(run.assist.slow());
                 sample.assist_rise = Some(rise);
+            }
+        }
+        // A capped standing attempt is a success only when success windows cover its standing
+        // share: a held passive lean (or a held support) is not success and pays no Pleasure.
+        if adaptive.is_some() && criterion.walk.is_none() {
+            if let BalanceAttemptStep::Finished(record) = &mut step {
+                if record.outcome == BalanceAttemptOutcome::Success
+                    && tally.window_cover_fraction(criterion.burst_period_s)
+                        < criterion.standing_fraction_for_success - 1.0e-9
+                {
+                    record.outcome = BalanceAttemptOutcome::Truncated;
+                    outcome = Some(BalanceAttemptOutcome::Truncated);
+                }
             }
         }
         if counted && !settling {
@@ -5614,6 +6547,7 @@ fn run_balance_attempt(
             criterion.burst_period_s,
             result.upright_fraction,
             result.outcome == BalanceAttemptOutcome::LostStance,
+            &adaptive_start.expect("captured when adaptive is on"),
         ));
     }
     if was_perturbing {
@@ -5622,6 +6556,10 @@ fn run_balance_attempt(
     hooks.marker(last_sim_time_s, "attempt_end", outcome_name(result.outcome));
     // The next reset clears it anyway; a death may already have cleared it.
     let _ = controller.clear_body_spring(&torso);
+    result.spring_applied = Some(spring_applied);
+    if observing && criterion.max_tilt_deg > 0.0 {
+        result.observe = Some(observe_track.measures(&result, criterion.max_tilt_deg));
+    }
     Ok(result)
 }
 
@@ -5675,13 +6613,14 @@ pub fn set_body_spring_request(
     })
 }
 
-/// JSON body of `update_body_spring`. `deadband_rad` and `gravity_comp` are sent only when
-/// `Some`.
+/// JSON body of `update_body_spring`. `deadband_rad`, `gravity_comp` and `ref_up_world` are sent
+/// only when `Some`.
 pub fn update_body_spring_request(
     body: &str,
     level: f64,
     deadband_rad: Option<f64>,
     gravity_comp: Option<f64>,
+    ref_up_world: Option<[f64; 3]>,
 ) -> serde_json::Value {
     let mut request =
         serde_json::json!({"action": "update_body_spring", "body": body, "level": level});
@@ -5690,6 +6629,9 @@ pub fn update_body_spring_request(
     }
     if let Some(fraction) = gravity_comp {
         request["gravity_comp"] = serde_json::json!(fraction);
+    }
+    if let Some(up) = ref_up_world {
+        request["ref_up_world"] = serde_json::json!(up);
     }
     request
 }
@@ -5967,12 +6909,14 @@ impl BalanceController for HttpBalanceController {
         level: f64,
         deadband_rad: Option<f64>,
         gravity_comp: Option<f64>,
+        ref_up_world: Option<[f64; 3]>,
     ) -> Result<(), TrainerError> {
         self.command(&update_body_spring_request(
             body,
             level,
             deadband_rad,
             gravity_comp,
+            ref_up_world,
         ))
         .map(|_| ())
     }
@@ -6111,6 +7055,48 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn support_need_is_lower_when_swinging_back_toward_upright() {
+        let th = 0.1_f64;
+        // Leaning +Y: tilt_vec = (th, 0); omega about -x... swinging back means d(tilt_vec)/dt < 0 on x.
+        let back = [th, 0.0];
+        let om = [1.0, 0.0, 0.0];
+        let old = support_need(th, None, om, 15.0, 0.05);
+        let new = support_need(th, Some(back), om, 15.0, 0.05);
+        assert!(new < old, "{new} vs {old}");
+        assert!(new < support_need(th, Some(back), [0.0; 3], 15.0, 0.05));
+    }
+
+    #[test]
+    fn predicted_tilt_follows_the_lean_direction() {
+        let th = 0.1_f64;
+        let w = 1.0;
+        let la = 0.05;
+        let cur = th.to_degrees();
+        // (lean vector, omega) pairs; tilt_vec = (uy, -ux): +Y lean -> (th, 0), +X lean -> (0, -th).
+        // Tipping further: world omega (wx, wy) with d(tilt_vec)/dt = (-wx, -wy).
+        let tipping = [
+            ([0.0, -th], [0.0, w, 0.0]), // forward (+X) lean, tipping +X
+            ([0.0, th], [0.0, -w, 0.0]), // backward (-X)
+            ([th, 0.0], [-w, 0.0, 0.0]), // left (+Y)
+            ([-th, 0.0], [w, 0.0, 0.0]), // right (-Y)
+        ];
+        for (r, om) in tipping {
+            let tilt = f64::hypot(r[0], r[1]);
+            let p = predicted_tilt_deg(tilt, Some(r), om, la);
+            assert!(p > cur + 1.0e-9, "tipping {r:?}: {p} vs {cur}");
+            let back = [-om[0], -om[1], 0.0];
+            let q = predicted_tilt_deg(tilt, Some(r), back, la);
+            assert!(q < cur - 1.0e-9, "swinging back {r:?}: {q} vs {cur}");
+        }
+    }
+
+    #[test]
+    fn predicted_tilt_without_tilt_vec_keeps_the_old_formula() {
+        let p = predicted_tilt_deg(0.1, None, [0.3, 0.4, 0.0], 0.1);
+        assert!((p - (0.1 + 0.1 * 0.5_f64).to_degrees()).abs() < 1.0e-9);
+    }
+
     use super::*;
     use crate::control::CollectingEventSink;
     use crate::run_actions::ScheduledAction;
@@ -6121,6 +7107,7 @@ mod tests {
         let mut c = BalanceFeetCriterion::new(
             "torso",
             vec!["contact_a".to_string(), "contact_b".to_string()],
+            "head",
             15.0,
             0.1,
             0.2,
@@ -6134,6 +7121,7 @@ mod tests {
             seq,
             seed,
             tilt_deg: tilt,
+            posture: None,
             contacts: vec![true, true],
             terminal: None,
             support_level: Some(0.0),
@@ -6314,6 +7302,7 @@ mod tests {
             outcome,
             bursts: 5,
             final_tilt_deg: 3.0,
+            stance_lost_tilt_deg: None,
             support_level: level,
             upright_fraction: upright,
             perturbations: 0,
@@ -6333,6 +7322,8 @@ mod tests {
             com_sway_fraction: None,
             adaptive: None,
             walk: None,
+            spring_applied: None,
+            observe: None,
         }
     }
 
@@ -7158,6 +8149,10 @@ mod tests {
         deadband_updates: Vec<Option<f64>>,
         /// (gravity_comp, seconds since reset when it was sent)
         gravity_updates: Vec<(f64, f64)>,
+        /// `ref_up_world` sent with each update that carried one.
+        ref_up_updates: Vec<[f64; 3]>,
+        /// The posture tilt the top body reports is the scripted tilt times this.
+        posture_tilt_factor: f64,
         /// (torque, force, duration_s, seconds since reset)
         pulses: Vec<([f64; 3], [f64; 3], f64, f64)>,
         measure_requests: Vec<MeasureRequest>,
@@ -7272,6 +8267,7 @@ mod tests {
                 body("contact_a", "base", 0.05, [1e-5; 3]),
                 body("contact_b", "base", 0.05, [1e-5; 3]),
                 body("contact_c", "base", 0.05, [1e-5; 3]),
+                body("top", "base", 0.1, [1e-5; 3]),
             ],
             free_roots: vec!["base".to_string()],
             keyframes: vec![serde_json::json!("home"), serde_json::json!("stand")],
@@ -7292,6 +8288,8 @@ mod tests {
                 level_updates: Vec::new(),
                 deadband_updates: Vec::new(),
                 gravity_updates: Vec::new(),
+                ref_up_updates: Vec::new(),
+                posture_tilt_factor: 1.0,
                 pulses: Vec::new(),
                 measure_requests: Vec::new(),
                 other_touching: Vec::new(),
@@ -7385,10 +8383,14 @@ mod tests {
             level: f64,
             deadband_rad: Option<f64>,
             gravity_comp: Option<f64>,
+            ref_up_world: Option<[f64; 3]>,
         ) -> Result<(), TrainerError> {
             self.calls.push("update_body_spring".to_string());
             self.level_updates.push((level, self.seconds()));
             self.deadband_updates.push(deadband_rad);
+            if let Some(up) = ref_up_world {
+                self.ref_up_updates.push(up);
+            }
             if let Some(fraction) = gravity_comp {
                 self.gravity_updates.push((fraction, self.seconds()));
             }
@@ -7459,7 +8461,8 @@ mod tests {
                 request.bodies[0].clone(),
                 BodyMeasure {
                     tilt_rad: scripted.tilt_deg.to_radians(),
-                    tilt_vec: Some([0.0, 0.0]),
+                    // Lean along the first horizontal axis, consistent with tilt_rad.
+                    tilt_vec: Some([scripted.tilt_deg.to_radians(), 0.0]),
                     ang_vel: Some([0.0; 3]),
                     com: Some([self.torso_speed_x * seconds, 0.0, torso_z]),
                     subtree_com: Some([0.0, 0.0, 0.150]),
@@ -7469,6 +8472,24 @@ mod tests {
                     }),
                 },
             );
+            // Contact bodies stand at the origin on the floor and the last requested body (the
+            // posture top) stands over them, leaning along +Y like the torso's tilt vector: the
+            // posture tilt is the scripted tilt times `posture_tilt_factor`.
+            if let Some((top, feet)) = request.bodies[1..].split_last() {
+                let bare = |com: [f64; 3]| BodyMeasure {
+                    tilt_rad: 0.0,
+                    tilt_vec: None,
+                    ang_vel: None,
+                    com: Some(com),
+                    subtree_com: None,
+                    heading: None,
+                };
+                for foot in feet {
+                    bodies.insert(foot.clone(), bare([0.0, 0.0, 0.0]));
+                }
+                let lean = (scripted.tilt_deg * self.posture_tilt_factor).to_radians();
+                bodies.insert(top.clone(), bare([0.0, lean.sin(), lean.cos()]));
+            }
             let mut springs = BTreeMap::new();
             if let Some(level) = self.spring_level {
                 springs.insert(
@@ -7511,7 +8532,8 @@ mod tests {
     }
 
     fn criterion_for(contacts: usize, period_s: f64) -> BalanceFeetCriterion {
-        let mut c = BalanceFeetCriterion::new("torso", contact_names(contacts), 15.0, 1.0, 3.0);
+        let mut c =
+            BalanceFeetCriterion::new("torso", contact_names(contacts), "top", 15.0, 1.0, 3.0);
         c.burst_period_s = period_s;
         c
     }
@@ -7537,6 +8559,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         run_balance_phase(
             &mut run,
@@ -7766,30 +8789,35 @@ mod tests {
     }
 
     #[test]
-    fn d_rot_is_capped_for_explicit_force_stability() {
+    fn d_rot_follows_the_tilt_inertia_not_the_smallest_inertia() {
         let mut info = generic_body_info();
         info.bodies[0].subtree_inertia = [5e-3, 4e-3, 1.0e-5];
         let inputs = sizing_inputs(&info, "torso", 0.140).expect("inputs");
         let g = size_spring_gains(&inputs);
+        let expected = 0.8 * (g.k_rot * 5e-3_f64).sqrt();
         assert!(
-            (g.d_rot - 0.9 * 2.0 * 1.0e-5 / 0.002).abs() < 1e-12,
-            "{}",
+            (g.d_rot - expected).abs() < 1e-12,
+            "{} vs {expected}",
             g.d_rot
         );
     }
 
     #[test]
-    fn limp_torso_inertia_caps_k_rot_and_d_rot() {
+    fn limp_torso_inertia_does_not_cap_k_rot_or_d_rot() {
         let mut info = generic_body_info();
         info.bodies[1].inertia = [1e-5, 1e-5, 1e-5];
         let inputs = sizing_inputs(&info, "torso", 0.140).expect("inputs");
         let g = size_spring_gains(&inputs);
-        assert!(
-            (g.k_rot - 0.25 * 1e-5 / (0.002 * 0.002)).abs() < 1e-9,
-            "{}",
-            g.k_rot
-        );
-        assert!(g.d_rot * 0.002 / 1e-5 < 2.0, "d dt / I < 2: {}", g.d_rot);
+        let k_expected = 3.0 * 1.0 * 9.81 * 0.140 / 0.087;
+        assert!((g.k_rot - k_expected).abs() < 1e-9, "k_rot {}", g.k_rot);
+        // Far above the old explicit-force limit k <= 0.25 I_own / dt^2.
+        assert!(g.k_rot > 0.25 * 1e-5 / (0.002 * 0.002));
+        let d_expected = 0.8 * (k_expected * 5e-3_f64).sqrt();
+        assert!((g.d_rot - d_expected).abs() < 1e-9, "d_rot {}", g.d_rot);
+        // The inputs are recorded with the run data.
+        let json = serde_json::to_value(inputs).expect("sizing inputs serialize");
+        assert_eq!(json["i_own_min"], 1e-5);
+        assert_eq!(json["dt_s"], 0.002);
     }
 
     #[test]
@@ -7900,6 +8928,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         let report = run_balance_phase(
             &mut run,
@@ -7938,7 +8967,17 @@ mod tests {
         let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
         assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
         let request = &mock.measure_requests[0];
-        assert_eq!(request.bodies, vec!["torso".to_string()]);
+        assert_eq!(
+            request.bodies,
+            vec![
+                "torso".to_string(),
+                "contact_a".to_string(),
+                "contact_b".to_string(),
+                "contact_c".to_string(),
+                "top".to_string(),
+            ],
+            "the torso, every contact body (their CoM sets the support centre) and the top body"
+        );
         assert_eq!(
             request.contacts,
             vec![
@@ -8145,6 +9184,14 @@ mod tests {
         // h0 = subtree com z 0.150 - contact z 0.01 = 0.140
         let k_expected = 3.0 * 1.0 * 9.81 * 0.140 / 0.087;
         assert!((mock.spring_sets[0].0.k_rot - k_expected).abs() < 1e-9);
+        // The run data carries the sizing inputs and, per attempt, the spring applied.
+        let sizing = report.spring_sizing.expect("sizing inputs recorded");
+        assert!((sizing.h0_m - 0.140).abs() < 1e-9);
+        for (record, set) in report.attempts.iter().zip(&mock.spring_sets) {
+            let applied = record.spring_applied.expect("spring recorded per attempt");
+            assert_eq!(applied.level, set.1);
+            assert_eq!(applied.deadband_rad, set.2);
+        }
     }
 
     #[test]
@@ -8284,6 +9331,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         run_balance_phase(
             &mut run,
@@ -8331,7 +9379,8 @@ mod tests {
             self.frozen.set(true);
             Ok(crate::plasticity_freeze::PlasticityFreezeOutcome {
                 mappings_frozen: 3,
-                memory_formation_paused: false,
+                memory_areas_frozen: 1,
+                memory_formation_paused: true,
             })
         }
 
@@ -8382,6 +9431,7 @@ mod tests {
                 apply_event: None,
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
+                memory_counters: None,
             };
             run_balance_phase(
                 &mut run,
@@ -8425,7 +9475,7 @@ mod tests {
         let test = report.brain_only.as_ref().expect("record");
         assert!(test.plasticity_frozen && test.plasticity_reason.is_none());
         assert_eq!(test.mappings_frozen, 3);
-        assert!(!test.memory_formation_paused);
+        assert!(test.memory_formation_paused);
         let metrics = balance_phase_metrics(&report);
         assert_eq!(metrics["test_support"], 0.0);
         assert_eq!(metrics["test_plasticity_frozen"], 1.0);
@@ -8454,6 +9504,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         let error = run_balance_phase(
             &mut run,
@@ -8504,6 +9555,7 @@ mod tests {
                 apply_event: None,
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
+                memory_counters: None,
             };
             run_balance_phase(
                 &mut run,
@@ -8586,6 +9638,7 @@ mod tests {
                 apply_event: None,
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
+                memory_counters: None,
             };
             run_balance_phase(
                 &mut run,
@@ -8605,13 +9658,303 @@ mod tests {
         assert_eq!(plasticity.restores, 1, "restore is still attempted");
     }
 
+    // ---- observe phase ----
+
+    struct ScriptedMemory(Vec<Vec<crate::memory_counters::MemoryAreaCounters>>);
+
+    impl MemoryCounterSource for ScriptedMemory {
+        fn sample(
+            &mut self,
+        ) -> Result<Vec<crate::memory_counters::MemoryAreaCounters>, TrainerError> {
+            Ok(self.0.remove(0))
+        }
+    }
+
+    fn memory_at(
+        created: u64,
+        reactivated: u64,
+    ) -> Vec<crate::memory_counters::MemoryAreaCounters> {
+        vec![crate::memory_counters::MemoryAreaCounters {
+            area: "mem".to_string(),
+            created_total: Some(created),
+            reactivated_total: Some(reactivated),
+            creation_failed_total: Some(0),
+            formation_suppressed_total: Some(0),
+        }]
+    }
+
+    /// An observe phase over `seeds`, with a run-data sink and optional memory counters.
+    fn run_observe_phase(
+        c: &BalanceFeetCriterion,
+        mock: &mut MockController,
+        plasticity: &mut MockPlasticity,
+        memory: Option<&mut dyn MemoryCounterSource>,
+        data: &mut RecordingRunDataSink,
+        seeds: &[u64],
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-observe".to_string());
+        let frozen = plasticity.frozen.clone();
+        let mut seen_frozen = Vec::new();
+        let result = {
+            let mut run = BalancePhaseRun {
+                phase: "observe",
+                seeds,
+                criterion: c,
+                run_id: &run_id,
+                support_mode: None,
+                deliver_reward: None,
+                plasticity: Some(plasticity),
+                reward_policy: BalanceRewardPolicy::Affect,
+                data: Some(data),
+                apply_event: None,
+                recovery: &TEST_RECOVERY,
+                burst: &RUNNING_CLOCK,
+                memory_counters: memory.map(|source| -> &mut dyn MemoryCounterSource { source }),
+            };
+            run_balance_phase(
+                &mut run,
+                mock,
+                &mut |_| {
+                    seen_frozen.push(frozen.get());
+                    Ok(())
+                },
+                &mut events,
+                &CancelToken::new(),
+            )
+        };
+        assert!(
+            seen_frozen.iter().all(|f| *f),
+            "learning was live during an observe burst"
+        );
+        result
+    }
+
+    #[test]
+    fn observe_phase_is_frozen_unassisted_unrewarded_and_writes_its_tables() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity::default();
+        let mut memory = ScriptedMemory(vec![memory_at(4, 10), memory_at(4, 12), memory_at(5, 15)]);
+        let mut data = RecordingRunDataSink::default();
+        let report = run_observe_phase(
+            &c,
+            &mut mock,
+            &mut plasticity,
+            Some(&mut memory),
+            &mut data,
+            &[1, 2],
+        )
+        .expect("phase");
+        assert_eq!(report.attempts.len(), 2, "N attempts, one per seed");
+        // Test's brain-only path: zero spring at level 0, no pulses, no support, frozen.
+        assert_eq!(mock.spring_sets.len(), 2);
+        for (gains, level, deadband) in &mock.spring_sets {
+            assert_eq!((*level, *deadband), (0.0, 0.0));
+            assert_eq!(*gains, zero_gains());
+        }
+        assert!(mock.level_updates.is_empty() && mock.pulses.is_empty());
+        assert!(report.attempts.iter().all(|a| a.support_level == 0.0));
+        assert!(report.spring_gains.is_none(), "no support was sized");
+        assert_eq!((plasticity.freezes, plasticity.restores), (1, 1));
+        let conditions = report.brain_only.as_ref().expect("brain-only record");
+        assert!(conditions.plasticity_frozen);
+        assert_eq!(conditions.reward, "none");
+        assert!(!conditions.perturbation);
+        // No reward was delivered: the phase has no sink and refuses one.
+        assert_eq!(data.errors, Vec::<String>::new());
+        // The attempts table, the observe table and the memory table.
+        assert_eq!(data.rows_of("attempts").len(), 2);
+        assert_eq!(data.rows_of(OBSERVE_TABLE).len(), 2);
+        let observe = &data.rows_of(OBSERVE_TABLE)[0];
+        let col = |name: &str| data.column_index(OBSERVE_TABLE, name).expect(name);
+        assert_eq!(observe[col("phase")], RunDataValue::text("observe"));
+        assert_eq!(observe[col("allowed_angle")], RunDataValue::Float(15.0));
+        // Tilt stays at 2 degrees of a 15 degree allowance: never reaches the limit.
+        assert_eq!(observe[col("time_to_limit")], RunDataValue::Null);
+        match observe[col("peak_tilt_fraction")] {
+            RunDataValue::Float(v) => assert!((v - 2.0 / 15.0).abs() < 1e-9, "{v}"),
+            ref other => panic!("{other:?}"),
+        }
+        assert_eq!(observe[col("fall_direction")], RunDataValue::Null);
+        let memory_rows = data.rows_of(crate::memory_counters::MEMORY_AREAS_TABLE);
+        assert_eq!(memory_rows.len(), 2, "one row per area per attempt");
+        let mcol = |name: &str| {
+            data.column_index(crate::memory_counters::MEMORY_AREAS_TABLE, name)
+                .expect(name)
+        };
+        assert_eq!(
+            memory_rows[0][mcol("reactivated_delta")],
+            RunDataValue::count(2)
+        );
+        assert_eq!(
+            memory_rows[0][mcol("created_delta")],
+            RunDataValue::count(0)
+        );
+        assert_eq!(
+            memory_rows[0][mcol("rematch_rate")],
+            RunDataValue::Float(1.0)
+        );
+        assert_eq!(
+            memory_rows[1][mcol("created_delta")],
+            RunDataValue::count(1)
+        );
+        match memory_rows[1][mcol("rematch_rate")] {
+            RunDataValue::Float(v) => assert!((v - 0.75).abs() < 1e-9, "{v}"),
+            ref other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn observe_measures_time_to_limit_as_a_fraction_of_the_allowed_angle() {
+        let c = brain_only_criterion();
+        // Upright for 0.15 s, then tipping past the 15 degree allowance.
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, seconds| Scripted {
+                tilt_deg: if seconds < 0.15 { 3.0 } else { 30.0 },
+                down: true,
+                terminal: None,
+                sim_time_s: None,
+            }),
+        );
+        let mut plasticity = MockPlasticity::default();
+        let mut data = RecordingRunDataSink::default();
+        let report = run_observe_phase(&c, &mut mock, &mut plasticity, None, &mut data, &[1])
+            .expect("phase");
+        let body = report.attempts[0].observe.expect("observe measures");
+        assert_eq!(body.allowed_angle_deg, 15.0);
+        let limit = body.time_to_limit_s.expect("passed the limit");
+        assert!((0.1..=0.25).contains(&limit), "{limit}");
+        assert!(
+            (body.peak_tilt_fraction - 2.0).abs() < 1e-9,
+            "{}",
+            body.peak_tilt_fraction
+        );
+        assert!(
+            data.rows_of(crate::memory_counters::MEMORY_AREAS_TABLE)
+                .is_empty(),
+            "no source, no memory table"
+        );
+        assert!(data
+            .table(crate::memory_counters::MEMORY_AREAS_TABLE)
+            .is_none());
+    }
+
+    #[test]
+    fn observe_fall_direction_comes_from_the_torso_frame_lean() {
+        let allowed = 15.0;
+        let mut track = ObserveTrack::default();
+        // yaw 0: forward = -ry, left = rx (see TiltComponentsDeg).
+        let leaning = |forward_deg: f64, left_deg: f64, tilt_deg: f64| {
+            let mut s = sample(1, 1, tilt_deg);
+            s.stability = Some(StabilitySample {
+                horizontal_ang_vel_rad_s: None,
+                tilt_vec_rad: Some([left_deg.to_radians(), (-forward_deg).to_radians()]),
+                com_xy_m: None,
+                yaw_rad: Some(0.0),
+            });
+            s
+        };
+        track.add(&leaning(30.0, 0.0, 30.0), allowed, 1.0);
+        let record = record(BalanceAttemptOutcome::Fell, 0.0, 0.0);
+        let measures = track.measures(&record, allowed);
+        assert!((measures.fall_forward_fraction.unwrap() - 2.0).abs() < 1e-9);
+        assert!(measures.fall_left_fraction.unwrap().abs() < 1e-9);
+        assert!(
+            measures.fall_direction_deg.unwrap().abs() < 1e-9,
+            "forward is 0 degrees"
+        );
+        track.add(&leaning(0.0, 30.0, 30.0), allowed, 1.0);
+        let left = track.measures(&record, allowed);
+        assert!((left.fall_direction_deg.unwrap() - 90.0).abs() < 1e-9);
+        // A last sample inside the allowance reports no fall direction.
+        track.add(&leaning(5.0, 0.0, 5.0), allowed, 1.0);
+        assert_eq!(track.measures(&record, allowed).fall_direction_deg, None);
+    }
+
+    #[test]
+    fn observe_refuses_to_run_when_learning_cannot_be_frozen() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity {
+            fail_freeze: true,
+            ..Default::default()
+        };
+        let mut data = RecordingRunDataSink::default();
+        let error = run_observe_phase(&c, &mut mock, &mut plasticity, None, &mut data, &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("needs learning frozen"), "{error}");
+        assert_eq!(mock.count("reset_episode"), 0, "no attempt ran");
+    }
+
+    #[test]
+    fn observe_refuses_events_rewards_and_support_like_test() {
+        let mut c = brain_only_criterion();
+        c.scheduled_events = vec![crate::run_actions::ScheduledEvent {
+            at_s: 0.1,
+            label: "x".to_string(),
+            action: ScheduledAction::SetMappingPsc {
+                src: "area_a".to_string(),
+                dst: "area_b".to_string(),
+                psc_multiplier: 0.5,
+            },
+        }];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity::default();
+        let mut data = RecordingRunDataSink::default();
+        let error = run_observe_phase(&c, &mut mock, &mut plasticity, None, &mut data, &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("observe phase measures the brain only"),
+            "{error}"
+        );
+        let c = brain_only_criterion();
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-observe".to_string());
+        let mut sink = |_: &[RewardSignal]| -> Result<(), TrainerError> { Ok(()) };
+        let mut run = BalancePhaseRun {
+            phase: "observe",
+            seeds: &[1],
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: Some(SupportMode::Fixed(0.5)),
+            deliver_reward: Some(&mut sink),
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
+            memory_counters: None,
+        };
+        let error = run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("no reward sink"), "{error}");
+    }
+
     #[test]
     fn support_need_and_effort_follow_the_documented_formulas() {
         // (tilt + 0.1 s * |omega_xy|) / max_tilt, clamped
-        let need = support_need(5.0_f64.to_radians(), [0.1, 0.0, 9.0], 15.0, 0.1);
+        let need = support_need(5.0_f64.to_radians(), None, [0.1, 0.0, 9.0], 15.0, 0.1);
         let expected = (5.0_f64.to_radians() + 0.01) / 15.0_f64.to_radians();
         assert!((need - expected).abs() < 1e-12);
-        assert_eq!(support_need(1.0, [0.0; 3], 15.0, 0.1), 1.0);
+        assert_eq!(support_need(1.0, None, [0.0; 3], 15.0, 0.1), 1.0);
+        // The need is the torso's: its inputs are the torso tilt, tilt vector and angular
+        // velocity only, so a different posture cannot change it (contract: trunk geometry).
+        let torso = 5.0_f64.to_radians();
+        let along = support_need(torso, Some([torso, 0.0]), [0.0; 3], 15.0, 0.1);
+        assert!((along - 5.0 / 15.0).abs() < 1e-12);
         let sizing = sizing_inputs(&generic_body_info(), "torso", 0.140).unwrap();
         let weight = 1.0 * 9.81;
         let wrench = SpringMeasure {
@@ -8683,7 +10026,7 @@ mod tests {
         assert_eq!(body["ref"], "current");
         assert_eq!(body["deadband_rad"], 0.1);
         assert_eq!(
-            update_body_spring_request("torso", 0.4, None, None)["level"],
+            update_body_spring_request("torso", 0.4, None, None, None)["level"],
             0.4
         );
         assert_eq!(
@@ -9149,6 +10492,7 @@ mod tests {
             apply_event: None,
             recovery: config,
             burst: clock,
+            memory_counters: None,
         };
         run_balance_phase(&mut run, mock, present, events, cancel)
     }
@@ -9743,6 +11087,7 @@ mod tests {
                 apply_event: None,
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
+                memory_counters: None,
             };
             run_balance_phase(
                 &mut run,
@@ -9913,6 +11258,291 @@ mod tests {
         settling.settling = true;
         let open = fed(&OpenBalanceAttempt::fresh(), &settling, &c);
         assert_eq!(open.reset_height_m, Some(0.20));
+        // the posture does not move the reference either
+        let mut leaning = standing_sample(1, 0.30, None);
+        leaning.posture = Some(PostureSample {
+            tilt_deg: 40.0,
+            forward_deg: None,
+            left_deg: None,
+        });
+        let open = fed(&OpenBalanceAttempt::fresh(), &leaning, &c);
+        assert_eq!(open.reset_height_m, Some(0.30));
+    }
+
+    #[test]
+    fn reset_height_and_sizing_ignore_the_posture() {
+        // The reference height is the torso's, whatever the posture says; a posture past the
+        // limit counts as a tilt failure and leaves the height rule alone.
+        let c = fall_criterion();
+        let mut first = standing_sample(1, 0.10, None);
+        first.posture = Some(PostureSample {
+            tilt_deg: 40.0,
+            forward_deg: None,
+            left_deg: None,
+        });
+        assert_eq!(first.tilt_deg, 2.0);
+        let open = fed(&OpenBalanceAttempt::fresh(), &first, &c);
+        assert_eq!(open.reset_height_m, Some(0.10));
+        assert_eq!(
+            open.non_upright.tilt, 1,
+            "scored on the posture, not the torso"
+        );
+        assert_eq!(open.non_upright.height, 0);
+        // Sizing reads the torso geometry from the model and the first reading; the posture
+        // criterion fields take no part in it.
+        let sizing = sizing_inputs(&generic_body_info(), "torso", 0.140).unwrap();
+        assert!((sizing.h0_m - 0.140).abs() < 1e-12);
+    }
+
+    #[test]
+    fn posture_tilt_is_read_from_three_known_positions() {
+        let centre = [0.0, 0.0, 0.0];
+        let straight = posture_reading(centre, [0.0, 0.0, 1.0]).expect("line");
+        assert!(straight.tilt_rad.abs() < 1e-12);
+        assert_eq!(straight.tilt_vec_rad, [0.0, 0.0]);
+        // Over +X by one height: 45 degrees; the rotation back onto up is (0, -theta).
+        let toward_x = posture_reading(centre, [1.0, 0.0, 1.0]).expect("line");
+        assert!((toward_x.tilt_rad.to_degrees() - 45.0).abs() < 1e-9);
+        assert!(toward_x.tilt_vec_rad[0].abs() < 1e-12);
+        assert!((toward_x.tilt_vec_rad[1] + std::f64::consts::FRAC_PI_4).abs() < 1e-12);
+        // Over +Y, from a raised centre: 30 degrees, rotation (theta, 0).
+        let toward_y =
+            posture_reading([1.0, 2.0, 0.5], [1.0, 3.0, 0.5 + 3.0_f64.sqrt()]).expect("line");
+        assert!((toward_y.tilt_rad.to_degrees() - 30.0).abs() < 1e-9);
+        assert!((toward_y.tilt_vec_rad[0] - std::f64::consts::FRAC_PI_6).abs() < 1e-12);
+        assert!(toward_y.tilt_vec_rad[1].abs() < 1e-12);
+        // Torso frame: leaning toward +X is forward for yaw 0 and to the right for yaw 90 deg.
+        let forward = toward_x.sample(Some(0.0));
+        assert!((forward.forward_deg.unwrap() - 45.0).abs() < 1e-9);
+        assert!(forward.left_deg.unwrap().abs() < 1e-9);
+        let turned = toward_x.sample(Some(std::f64::consts::FRAC_PI_2));
+        assert!(turned.forward_deg.unwrap().abs() < 1e-9);
+        assert!((turned.left_deg.unwrap() + 45.0).abs() < 1e-9);
+        assert_eq!(toward_x.sample(None).forward_deg, None);
+        assert!((forward.tilt_deg - 45.0).abs() < 1e-9);
+        // A top body on the centre has no line.
+        assert!(posture_reading(centre, centre).is_none());
+    }
+
+    #[test]
+    fn support_centre_is_the_touching_contacts_or_all_when_none_touch() {
+        let feet = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [8.0, 0.0, 0.0]];
+        assert_eq!(
+            support_centre(&feet, &[true, true, false]),
+            Some([1.0, 0.0, 0.0])
+        );
+        assert_eq!(
+            support_centre(&feet, &[false, false, true]),
+            Some([8.0, 0.0, 0.0])
+        );
+        let all = support_centre(&feet, &[false, false, false]).expect("fallback");
+        assert!((all[0] - 10.0 / 3.0).abs() < 1e-12);
+        assert_eq!(support_centre(&[], &[]), None);
+        // Through a measure reply: one foot up, so the centre is the other foot, and the posture
+        // line leans by the scripted angle from that foot.
+        let c = criterion_for(2, 0.05);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut reading = mock.measure(&measure_request(&c)).expect("measure");
+        reading.bodies.get_mut("contact_a").unwrap().com = Some([0.0, 0.0, 0.0]);
+        reading.bodies.get_mut("contact_b").unwrap().com = Some([4.0, 0.0, 0.0]);
+        reading.bodies.get_mut("top").unwrap().com = Some([4.0, 0.0, 1.0]);
+        reading.contacts[0].touching = false;
+        let touching_only = measure_posture(&reading, &c).expect("posture");
+        assert!(
+            touching_only.tilt_rad.abs() < 1e-12,
+            "over the foot that touches"
+        );
+        reading.contacts[0].touching = true;
+        reading.contacts[1].touching = true;
+        let both = measure_posture(&reading, &c).expect("posture");
+        assert!((both.tilt_rad.to_degrees() - 63.434_948_8).abs() < 1e-6);
+        reading.contacts[0].touching = false;
+        reading.contacts[1].touching = false;
+        let none = measure_posture(&reading, &c).expect("posture");
+        assert!(
+            (none.tilt_rad - both.tilt_rad).abs() < 1e-12,
+            "all contacts when none touch"
+        );
+        reading.bodies.get_mut("top").unwrap().com = None;
+        let missing = measure_posture(&reading, &c).unwrap_err().to_string();
+        assert!(
+            missing.contains("top") && missing.contains("com"),
+            "{missing}"
+        );
+    }
+
+    #[test]
+    fn posture_definition_change_clears_the_saved_loss_history() {
+        let c = quick_adaptive();
+        let mut state = AdaptiveAssistState::new(0.4, 0.6);
+        state.loss_tilts_deg = vec![10.0, 12.0];
+        // A state saved before the definition existed is dropped: its tilts were the torso's.
+        let old = AdaptiveAssist::resume(&c, state.clone());
+        assert!(old.state().loss_tilts_deg.is_empty());
+        assert_eq!(old.state().posture_definition, Some(c.posture_definition()));
+        state.posture_definition = Some(c.posture_definition());
+        let same = AdaptiveAssist::resume(&c, state.clone());
+        assert_eq!(same.state().loss_tilts_deg, vec![10.0, 12.0]);
+        // A different top body, or a different set of contact bodies, clears it; the level and
+        // slow average carry over.
+        let mut other_top = c.clone();
+        other_top.posture_top_body = "head".to_string();
+        let resumed = AdaptiveAssist::resume(&other_top, state.clone()).state();
+        assert!(resumed.loss_tilts_deg.is_empty());
+        assert_eq!((resumed.a, resumed.a_slow), (0.4, 0.6));
+        assert_eq!(
+            resumed.posture_definition,
+            Some(other_top.posture_definition())
+        );
+        let mut fewer = c.clone();
+        fewer.contact_bodies.pop();
+        assert!(AdaptiveAssist::resume(&fewer, state.clone())
+            .state()
+            .loss_tilts_deg
+            .is_empty());
+        assert_ne!(c.posture_definition(), other_top.posture_definition());
+        // Contact order does not change the definition.
+        let mut swapped = c.clone();
+        swapped.contact_bodies.reverse();
+        assert_eq!(c.posture_definition(), swapped.posture_definition());
+    }
+
+    #[test]
+    fn posture_tilt_scores_while_need_and_the_report_stay_on_the_torso() {
+        // Torso 2 deg, posture factor 1: upright and a success.
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 1.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        // Posture 10x the torso (20 deg > 15): never upright, though the torso reads 2 deg.
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.posture_tilt_factor = 10.0;
+        let mut tape = RecordingRunDataSink::default();
+        let report = run_with_hooks(&c, &mut mock, "train", &[1], &rid(), Some(&mut tape), None)
+            .expect("phase");
+        assert_ne!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        assert!((report.attempts[0].final_tilt_deg - 20.0).abs() < 1e-6);
+        let col = |name: &str| tape.column_index("steps", name).expect(name);
+        let float = |row: &Vec<RunDataValue>, i: usize| match row[i] {
+            RunDataValue::Float(v) => v,
+            ref other => panic!("{other:?}"),
+        };
+        let (tilt, posture, need) = (col("tilt"), col("posture_tilt"), col("support_need"));
+        assert!(col("posture_forward") > posture && col("posture_left") > posture);
+        let rows = tape.rows_of("steps");
+        assert!(!rows.is_empty());
+        for row in rows {
+            assert!((float(row, tilt) - 2.0).abs() < 1e-6);
+            assert!((float(row, posture) - 20.0).abs() < 1e-6);
+            // support_need stays on the trunk: 2 deg over the 15 deg limit.
+            assert!(
+                (float(row, need) - 2.0 / 15.0).abs() < 1e-6,
+                "{}",
+                float(row, need)
+            );
+        }
+        // The posture is scored only: the Trainer never re-targets the spring, in train or test.
+        assert!(mock.ref_up_updates.is_empty());
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.posture_tilt_factor = 10.0;
+        run_phase(&c, &mut mock, "train", &[1]).expect("train phase");
+        assert!(mock.ref_up_updates.is_empty());
+    }
+
+    #[test]
+    fn the_learned_loss_tilt_is_the_posture_tilt() {
+        let c = quick_adaptive();
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, t| Scripted {
+                down: t < 1.0,
+                ..upright_step()
+            }),
+        );
+        mock.posture_tilt_factor = 2.0;
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert_eq!(
+            report.attempts[0].outcome,
+            BalanceAttemptOutcome::LostStance
+        );
+        assert!((report.attempts[0].stance_lost_tilt_deg.unwrap() - 4.0).abs() < 1e-6);
+        let next = report.adaptive_state_next.expect("state");
+        assert!(
+            (next.loss_tilts_deg[0] - 4.0).abs() < 1e-6,
+            "{:?}",
+            next.loss_tilts_deg
+        );
+        assert_eq!(next.posture_definition, Some(c.posture_definition()));
+    }
+
+    #[test]
+    fn posture_top_body_is_required_distinct_and_in_the_model() {
+        let c = criterion_for(2, 0.05);
+        assert!(c.validate().is_ok());
+        let mut missing = c.clone();
+        missing.posture_top_body = String::new();
+        let message = missing.validate().unwrap_err().to_string();
+        assert!(
+            message.contains("posture_top_body is required"),
+            "{message}"
+        );
+        let old: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "torso", "contact_bodies": ["contact_a"],
+            "max_tilt_deg": 15.0, "hold_s": 1.0, "attempt_cap_s": 3.0
+        }))
+        .expect("an old setup still parses");
+        assert!(old
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("posture_top_body is required"));
+        let mut same = c.clone();
+        same.posture_top_body = "contact_b".to_string();
+        assert!(same
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("must not be one of"));
+        let mut ghost = c.clone();
+        ghost.posture_top_body = "ghost".to_string();
+        assert!(ghost.validate().is_ok());
+        let message = check_model(&generic_body_info(), &ghost)
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("ghost"), "{message}");
+        assert!(check_model(&generic_body_info(), &c).is_ok());
+        // The measure request lists each body once: torso, contacts, top.
+        let mut torso_top = c.clone();
+        torso_top.posture_top_body = "torso".to_string();
+        assert_eq!(
+            measure_request(&torso_top).bodies,
+            vec![
+                "torso".to_string(),
+                "contact_a".to_string(),
+                "contact_b".to_string()
+            ]
+        );
+        assert_eq!(
+            measure_request(&c).bodies,
+            vec![
+                "torso".to_string(),
+                "contact_a".to_string(),
+                "contact_b".to_string(),
+                "top".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -10258,7 +11888,7 @@ mod tests {
     }
 
     fn at(c: &BalanceFeetCriterion, a: f64, a_slow: f64) -> AdaptiveAssist {
-        AdaptiveAssist::resume(c, AdaptiveAssistState { a, a_slow })
+        AdaptiveAssist::resume(c, AdaptiveAssistState::new(a, a_slow))
     }
 
     #[test]
@@ -10318,7 +11948,7 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_cone_widens_as_a_slow_falls_and_stays_in_range() {
+    fn adaptive_cone_widens_per_success_window_and_stays_in_range() {
         let c = adaptive_criterion(0.05);
         let mut assist = AdaptiveAssist::start(&c);
         assert!(
@@ -10326,11 +11956,16 @@ mod tests {
             "full assist, narrowest cone"
         );
         let mut last = assist.cone_deg(&c);
-        for _ in 0..4000 {
-            let step = assist.step(&c, 0.0, 1);
+        for i in 0..4000 {
+            let mut step = assist.step(&c, 0.0, 1);
+            // The slow level moves only per success window (every 10 s of idle standing here).
+            if i % 200 == 199 {
+                assist.success_window(&c);
+                step.cone_deg = assist.cone_deg(&c);
+            }
             assert!(
                 step.cone_deg >= last - 1e-12,
-                "cone never narrows while fading"
+                "cone never narrows while windows complete"
             );
             assert!(
                 step.cone_deg >= c.cone_min_deg - 1e-12 && step.cone_deg <= c.max_tilt_deg + 1e-12,
@@ -10340,8 +11975,8 @@ mod tests {
             last = step.cone_deg;
         }
         assert!(
-            last > 10.0,
-            "after 200 s of fading the cone is wide: {last}"
+            last > 9.0,
+            "after 20 success windows the cone is wide: {last}"
         );
         // Fully faded: cone == max_tilt, and the overshoot stays finite.
         let mut gone = at(&c, 0.0, 0.0);
@@ -10470,6 +12105,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         run_balance_phase(
             &mut run,
@@ -10488,6 +12124,8 @@ mod tests {
         c.settle_s = 0.2;
         c.fade_tau_s = 1.0;
         c.probe_every = 0;
+        // Scripted bodies carry no real support effort; the idle test is exercised on its own.
+        c.idle_fraction = 1.0;
         c
     }
 
@@ -10525,7 +12163,24 @@ mod tests {
         );
         assert!(stats.mean_a < 1.0 && stats.min_a <= stats.mean_a);
         assert!(stats.end_cone_deg > c.cone_min_deg && stats.end_cone_deg <= c.max_tilt_deg);
+        // No loss yet: the limit is the allowed angle, and the attempt starts at full assist.
+        assert_eq!(stats.a_start, 1.0);
+        assert_eq!(stats.a_slow_start, 1.0);
+        assert_eq!(stats.effective_max_deg, c.max_tilt_deg);
+        assert_eq!(stats.learned_loss_tilt_deg, None);
+        assert_eq!(first.stance_lost_tilt_deg, None);
+        let second_stats = second.adaptive.expect("adaptive numbers");
+        assert!((second_stats.a_start - second.support_level).abs() < 1e-12);
+        assert!(second_stats.a_slow_start < 1.0 + 1e-12);
+        assert_eq!(second_stats.effective_max_deg, c.max_tilt_deg);
+        assert!(!report.cone_min_above_loss_tilt);
         assert_eq!(stats.catches, 0);
+        // Windows widen the cone; no lean, so no re-tightening. Both reach the run data.
+        assert!(stats.success_windows >= 5, "{stats:?}");
+        assert_eq!(stats.lean_retightens, 0);
+        assert!(second_stats.success_windows >= 5, "{second_stats:?}");
+        // The slow level only moved per window: first-attempt end equals the second's start.
+        assert!(second_stats.a_slow_start < 1.0 - 1e-6, "{second_stats:?}");
         // Group by attempt, not by level.
         assert_eq!(
             report
@@ -10554,6 +12209,7 @@ mod tests {
         let next = report.adaptive_state_next.expect("state to resume");
         assert_eq!(report.support_level_next, Some(next.a));
         assert!(next.a < second.support_level && next.a_slow > next.a);
+        assert!(next.loss_tilts_deg.is_empty(), "successes record no loss");
         // The first non-settling update changed level and cone together; deadband in radians.
         assert!(!mock.level_updates.is_empty());
         assert!(mock
@@ -10572,10 +12228,7 @@ mod tests {
     #[test]
     fn adaptive_resume_continues_from_a_saved_state() {
         let c = quick_adaptive();
-        let state = AdaptiveAssistState {
-            a: 0.4,
-            a_slow: 0.6,
-        };
+        let state = AdaptiveAssistState::new(0.4, 0.6);
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
         let mut delivered = Vec::new();
         let report = adaptive_train(
@@ -10600,6 +12253,225 @@ mod tests {
         assert_eq!(report.attempts[0].support_level, 0.5);
         let state = report.adaptive_state_next.expect("state");
         assert!(state.a <= 0.5 && state.a_slow <= 0.5);
+        // The saved state keeps a_slow exactly when no success window completes (support never
+        // idle): time alone does not widen the cone.
+        let mut busy = c.clone();
+        busy.idle_fraction = 0.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = adaptive_train(
+            &busy,
+            &mut mock,
+            &[1],
+            Some(SupportMode::ResumeAdaptive(AdaptiveAssistState::new(
+                0.4, 0.6,
+            ))),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let saved = report.adaptive_state_next.expect("state");
+        assert_eq!(saved.a_slow, 0.6, "{saved:?}");
+        assert_eq!(
+            report.attempts[0].adaptive.expect("stats").success_windows,
+            0
+        );
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            Some(SupportMode::ResumeAdaptive(saved)),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        // With windows allowed the resumed run widens from the saved slow level.
+        assert!(report.adaptive_state_next.expect("state").a_slow < 0.6);
+        // A saved state resumes with its learned losses: 25th percentile of [10, 12] is 10.5,
+        // so the limit is 10.5 * 0.8 = 8.4 deg.
+        let mut with_losses = AdaptiveAssistState::new(0.4, 0.6);
+        with_losses.loss_tilts_deg = vec![10.0, 12.0];
+        with_losses.posture_definition = Some(c.posture_definition());
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            Some(SupportMode::ResumeAdaptive(with_losses)),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let stats = report.attempts[0].adaptive.expect("stats");
+        assert!((stats.learned_loss_tilt_deg.expect("learned") - 10.5).abs() < 1e-9);
+        assert!(
+            (stats.effective_max_deg - 8.4).abs() < 1e-9,
+            "{}",
+            stats.effective_max_deg
+        );
+        assert_eq!(
+            report.adaptive_state_next.expect("state").loss_tilts_deg,
+            vec![10.0, 12.0]
+        );
+        // An older saved state (no loss list) still loads.
+        let older: AdaptiveAssistState =
+            serde_json::from_value(serde_json::json!({"a": 0.4, "a_slow": 0.6})).expect("older");
+        assert!(older.loss_tilts_deg.is_empty());
+    }
+
+    #[test]
+    fn adaptive_cone_never_exceeds_the_learned_loss_tilt_inside_the_margin() {
+        let c = adaptive_criterion(0.05);
+        assert_eq!(c.max_tilt_deg, 15.0);
+        assert_eq!(
+            (c.loss_margin_fraction, c.fail_tighten, c.loss_window),
+            (0.2, 0.5, 5)
+        );
+        // No loss: the limit is max_tilt_deg and the widest cone reaches it.
+        let mut state = AdaptiveAssistState::new(0.0, 0.0);
+        assert_eq!(AdaptiveAssist::resume(&c, state.clone()).cone_deg(&c), 15.0);
+        // Losses at 10 deg: the limit is 8 deg, whatever the slow average.
+        state.loss_tilts_deg = vec![10.0; 5];
+        state.posture_definition = Some(c.posture_definition());
+        for a_slow in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            state.a_slow = a_slow;
+            let assist = AdaptiveAssist::resume(&c, state.clone());
+            let cone = assist.cone_deg(&c);
+            assert!(
+                cone <= 10.0 * (1.0 - c.loss_margin_fraction) + 1e-12,
+                "{cone}"
+            );
+            assert!(cone >= c.cone_min_deg - 1e-12);
+            assert_eq!(assist.effective_max_deg(&c), 8.0);
+        }
+        // Losses past the allowed angle never widen it.
+        state.loss_tilts_deg = vec![40.0; 5];
+        state.a_slow = 0.0;
+        assert_eq!(AdaptiveAssist::resume(&c, state).cone_deg(&c), 15.0);
+        // The window keeps only the last 3 losses.
+        let mut windowed = c.clone();
+        windowed.loss_window = 3;
+        let mut state = AdaptiveAssistState::new(0.0, 0.0);
+        state.loss_tilts_deg = vec![1.0, 1.0, 12.0, 12.0, 12.0];
+        state.posture_definition = Some(windowed.posture_definition());
+        let assist = AdaptiveAssist::resume(&windowed, state);
+        assert_eq!(assist.learned_loss_tilt_deg(&windowed), Some(12.0));
+    }
+
+    #[test]
+    fn adaptive_loss_raises_both_levels_and_the_next_attempt_starts_there() {
+        let c = quick_adaptive();
+        // Exact numbers on the assist itself: 0.2 + 0.8 * 0.5 = 0.6 for the slow average, the
+        // level follows it up.
+        let mut assist = at(&c, 0.2, 0.2);
+        assist.record_attempt_end(&c, BalanceAttemptOutcome::LostStance, Some(9.0));
+        assert!((assist.slow() - 0.6).abs() < 1e-12 && (assist.level() - 0.6).abs() < 1e-12);
+        assert_eq!(assist.learned_loss_tilt_deg(&c), Some(9.0));
+        // A level already above the slow average stays where it is; a success changes nothing.
+        let mut assist = at(&c, 0.9, 0.2);
+        assist.record_attempt_end(&c, BalanceAttemptOutcome::Fell, Some(30.0));
+        assert!((assist.slow() - 0.6).abs() < 1e-12 && (assist.level() - 0.9).abs() < 1e-12);
+        let before = assist.clone();
+        assist.record_attempt_end(&c, BalanceAttemptOutcome::Success, Some(1.0));
+        assert_eq!(assist, before);
+        // In a phase: the stance goes at 1 s, the next attempt starts at the tightened level.
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, t| Scripted {
+                down: t < 1.0,
+                ..upright_step()
+            }),
+        );
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1, 2],
+            Some(SupportMode::ResumeAdaptive(AdaptiveAssistState::new(
+                0.2, 0.2,
+            ))),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let (first, second) = (&report.attempts[0], &report.attempts[1]);
+        assert_eq!(first.outcome, BalanceAttemptOutcome::LostStance);
+        let first_stats = first.adaptive.expect("stats");
+        assert_eq!(first_stats.a_start, 0.2);
+        assert_eq!(first.stance_lost_tilt_deg, Some(2.0));
+        let second_stats = second.adaptive.expect("stats");
+        // The slow average fades during the attempt, then a loss moves it at least halfway to 1.
+        assert!(
+            second_stats.a_slow_start >= 0.5 - 1e-9,
+            "{}",
+            second_stats.a_slow_start
+        );
+        assert!(second_stats.a_slow_start > first_stats.a_slow_start);
+        assert!(second_stats.a_start >= second_stats.a_slow_start - 1e-9);
+        assert!((second.support_level - second_stats.a_start).abs() < 1e-12);
+        assert_eq!(second_stats.learned_loss_tilt_deg, Some(2.0));
+        let next = report.adaptive_state_next.expect("state");
+        assert_eq!(next.loss_tilts_deg, vec![2.0, 2.0]);
+        assert!(next.a_slow >= second_stats.a_slow_start);
+    }
+
+    #[test]
+    fn adaptive_flags_a_cone_min_above_the_learned_loss_tilt() {
+        let c = quick_adaptive();
+        assert_eq!(c.cone_min_deg, 2.0);
+        // A loss at 1.5 deg puts the limit (1.2) below cone_min: held at cone_min and flagged.
+        let mut state = AdaptiveAssistState::new(0.5, 0.5);
+        state.loss_tilts_deg = vec![1.5];
+        state.posture_definition = Some(c.posture_definition());
+        let assist = AdaptiveAssist::resume(&c, state.clone());
+        assert_eq!(assist.effective_max_deg(&c), c.cone_min_deg);
+        assert_eq!(assist.cone_deg(&c), c.cone_min_deg);
+        assert!(assist.cone_min_clamped());
+        // A loss above cone_min does not flag it.
+        let assist = at(&c, 0.5, 0.5);
+        assert!(!assist.cone_min_clamped());
+        let mut ok = at(&c, 0.5, 0.5);
+        ok.record_attempt_end(&c, BalanceAttemptOutcome::Fell, Some(10.0));
+        assert!(!ok.cone_min_clamped());
+        let mut low = at(&c, 0.5, 0.5);
+        low.record_attempt_end(&c, BalanceAttemptOutcome::Fell, Some(1.0));
+        assert!(low.cone_min_clamped());
+        // It reaches the phase report.
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            Some(SupportMode::ResumeAdaptive(state)),
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert!(report.cone_min_above_loss_tilt);
+    }
+
+    #[test]
+    fn adaptive_overshoot_reaches_one_at_the_loss_angle() {
+        let mut c = adaptive_criterion(0.05);
+        c.loss_margin_fraction = 0.0;
+        let mut state = AdaptiveAssistState::new(0.5, 0.5);
+        state.loss_tilts_deg = vec![10.0];
+        state.posture_definition = Some(c.posture_definition());
+        // Cone 2 + 8 * 0.5 = 6 deg, limit 10 deg: at the loss angle the overshoot is 1, so the
+        // level rises by the full fast step toward 1.
+        let fast = 0.5 * (1.0 - (-c.burst_period_s / c.catch_tau_s).exp());
+        let mut assist = AdaptiveAssist::resume(&c, state.clone());
+        assert_eq!(assist.cone_deg(&c), 6.0);
+        let step = assist.step(&c, 10.0, 1);
+        assert!((step.rise - fast).abs() < 1e-9, "{} vs {fast}", step.rise);
+        // Halfway between the cone and the limit the overshoot is 0.5: no rise.
+        let mut assist = AdaptiveAssist::resume(&c, state.clone());
+        assert_eq!(assist.step(&c, 8.0, 1).rise, 0.0);
+        // With the default margin the limit is 8 deg and the overshoot reaches 1 there.
+        let c = adaptive_criterion(0.05);
+        let mut assist = AdaptiveAssist::resume(&c, state);
+        assert_eq!(assist.effective_max_deg(&c), 8.0);
+        assert_eq!(assist.cone_deg(&c), 5.0);
+        let fast = 0.5 * (1.0 - (-c.burst_period_s / c.catch_tau_s).exp());
+        let step = assist.step(&c, 8.0, 1);
+        assert!((step.rise - fast).abs() < 1e-9, "{} vs {fast}", step.rise);
     }
 
     #[test]
@@ -10731,60 +12603,173 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_recenters_after_lean_grace_and_ends_once_tilt_is_inside_cone_min() {
+    fn adaptive_lean_retightens_after_grace_and_the_spring_cone_is_the_scored_cone() {
         let c = stance_adaptive();
-        // A wide cone (slow average well below the level's ceiling), then a lean inside the tilt
-        // limit but beyond that cone for 4 s, then upright again.
-        let state = AdaptiveAssistState {
-            a: 0.3,
-            a_slow: 0.3,
-        };
+        // A wide cone (slow level well below the ceiling), then a lean inside the tilt limit
+        // but beyond that cone for 4 s, then upright again.
+        let state = AdaptiveAssistState::new(0.3, 0.3);
         let (report, mock, _) = one_adaptive_attempt(
             &c,
-            Some(SupportMode::ResumeAdaptive(state)),
+            Some(SupportMode::ResumeAdaptive(state.clone())),
             BalanceRewardPolicy::Affect,
             Box::new(|_, t| Scripted {
                 tilt_deg: if (1.0..5.0).contains(&t) { 13.0 } else { 1.0 },
                 ..upright_step()
             }),
         );
-        let stats = report.attempts[0].adaptive.expect("adaptive numbers");
-        assert_eq!(stats.recenters, 1, "{stats:?}");
-        let cone_min_rad = c.cone_min_deg.to_radians();
-        let at_min: Vec<usize> = mock
+        let attempt = &report.attempts[0];
+        let stats = attempt.adaptive.expect("adaptive numbers");
+        // Cone 2 + 13 * 0.7 = 11.1 deg; the lean (13 deg) outlasts the 2 s grace twice in 4 s.
+        assert!(stats.lean_retightens >= 1, "{stats:?}");
+        // The spring dead band is the one scored cone: first update is the opening cone, and
+        // every update lies inside [cone_min, effective max]. After the lean the cone is
+        // narrower than at the start (no separate recentering state).
+        let deg: Vec<f64> = mock
             .deadband_updates
             .iter()
-            .enumerate()
-            .filter(|(_, d)| d.is_some_and(|rad| (rad - cone_min_rad).abs() < 1e-9))
-            .map(|(i, _)| i)
-            .collect();
-        assert!(!at_min.is_empty(), "{:?}", mock.deadband_updates);
-        // One continuous stretch at cone_min (the level moves, so it is re-sent each burst).
-        assert!(at_min.windows(2).all(|w| w[1] == w[0] + 1), "{at_min:?}");
-        // Not before the grace: the lean starts at 1.0 s, so the cone drops after 3.0 s.
-        let at = mock.level_updates[at_min[0]].1;
-        assert!(
-            at >= 1.0 + c.lean_grace_s - 1e-6 && at <= 1.0 + c.lean_grace_s + 0.3,
-            "{at}"
-        );
-        // Tilt is back inside cone_min at 5.0 s: the adaptive cone returns.
-        let restored = mock.deadband_updates[at_min[at_min.len() - 1] + 1..]
-            .iter()
             .flatten()
-            .any(|rad| *rad > cone_min_rad + 0.01);
-        assert!(restored, "{:?}", mock.deadband_updates);
-        assert!(stats.end_cone_deg > c.cone_min_deg);
-        // A short lean (shorter than the grace) never recenters.
+            .map(|rad| rad.to_degrees())
+            .collect();
+        assert!(!deg.is_empty());
+        assert!(deg
+            .iter()
+            .all(|d| *d >= c.cone_min_deg - 1e-9 && *d <= c.max_tilt_deg + 1e-9));
+        assert!((deg[0] - 11.1).abs() < 0.11, "{deg:?}");
+        assert!(
+            deg.iter().cloned().fold(f64::MAX, f64::min) < deg[0] - 1.0,
+            "{deg:?}"
+        );
+        // The last update matches the cone the attempt ended in (updates send only moves > 0.1).
+        assert!(
+            (deg[deg.len() - 1] - stats.end_cone_deg).abs() < 0.11,
+            "{} vs {}",
+            deg[deg.len() - 1],
+            stats.end_cone_deg
+        );
+        // A short lean (shorter than the grace) never retightens.
         let (report, _, _) = one_adaptive_attempt(
             &c,
-            Some(SupportMode::ResumeAdaptive(state)),
+            Some(SupportMode::ResumeAdaptive(state.clone())),
             BalanceRewardPolicy::Affect,
             Box::new(|_, t| Scripted {
                 tilt_deg: if (1.0..2.5).contains(&t) { 13.0 } else { 1.0 },
                 ..upright_step()
             }),
         );
-        assert_eq!(report.attempts[0].adaptive.expect("stats").recenters, 0);
+        assert_eq!(
+            report.attempts[0].adaptive.expect("stats").lean_retightens,
+            0
+        );
+    }
+
+    #[test]
+    fn a_passive_lean_beyond_cone_min_never_widens_the_cone() {
+        let mut c = stance_adaptive();
+        c.idle_fraction = 1.0;
+        c.cone_min_deg = 5.0;
+        // Full assist, cone at cone_min; the robot leans at 4 deg (inside the 5 deg cone)
+        // without ever being idle (effort is never reported), so no window completes.
+        let mut c_busy = c.clone();
+        c_busy.idle_fraction = 0.0;
+        let (report, _, _) = one_adaptive_attempt(
+            &c_busy,
+            Some(SupportMode::ResumeAdaptive(AdaptiveAssistState::new(
+                1.0, 1.0,
+            ))),
+            BalanceRewardPolicy::Affect,
+            Box::new(|_, _| Scripted {
+                tilt_deg: 4.0,
+                ..upright_step()
+            }),
+        );
+        let attempt = &report.attempts[0];
+        let stats = attempt.adaptive.expect("stats");
+        let next = report.adaptive_state_next.as_ref().expect("state");
+        assert_eq!(stats.success_windows, 0, "{stats:?}");
+        assert_eq!(next.a_slow, 1.0, "the slow level did not move: {next:?}");
+        assert!(
+            (stats.end_cone_deg - c.cone_min_deg).abs() < 1e-9,
+            "{stats:?}"
+        );
+        // The attempt held a passive lean at the cap: not a success.
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Truncated);
+    }
+
+    #[test]
+    fn a_success_window_widens_the_cone_by_the_stated_step() {
+        let mut c = quick_adaptive();
+        c.hold_s = 0.5;
+        c.fade_tau_s = 2.0;
+        let mut assist = AdaptiveAssist::resume(&c, AdaptiveAssistState::new(0.2, 0.8));
+        let before = assist.cone_deg(&c);
+        assist.success_window(&c);
+        let share = 1.0 - (-c.hold_s / c.fade_tau_s).exp();
+        let expected = 0.8 + (0.2 - 0.8) * share;
+        assert!(
+            (assist.slow() - expected).abs() < 1e-12,
+            "{}",
+            assist.slow()
+        );
+        assert!(assist.cone_deg(&c) > before);
+        // Time alone never moves the slow level.
+        for _ in 0..200 {
+            assist.step(&c, 0.0, 1);
+        }
+        assert!((assist.slow() - expected).abs() < 1e-12);
+        // Through a phase: idle holds inside the cone widen it window by window.
+        let mut idle = quick_adaptive();
+        idle.attempt_cap_s = 3.0;
+        let (report, _, _) = one_adaptive_attempt(
+            &idle,
+            None,
+            BalanceRewardPolicy::Affect,
+            Box::new(|_, _| upright_step()),
+        );
+        let stats = report.attempts[0].adaptive.expect("stats");
+        assert!(stats.success_windows >= 5, "{stats:?}");
+        assert!(stats.end_cone_deg > idle.cone_min_deg + 0.5, "{stats:?}");
+    }
+
+    #[test]
+    fn a_capped_attempt_is_a_success_only_with_idle_success_windows() {
+        // Support effort in the scripted body follows the level; with an idle limit of 0 no
+        // window can complete, so standing the whole cap is not a success.
+        let mut c = quick_adaptive();
+        c.idle_fraction = 0.0;
+        let mut delivered = Vec::new();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(attempt.adaptive.expect("stats").success_windows, 0);
+        assert!(
+            !delivered
+                .iter()
+                .any(|s| s.channel == AffectChannel::Pleasure && s.magnitude >= 1.0 - 1e-9),
+            "no success Pleasure: {delivered:?}"
+        );
+        // With the idle limit open the same body succeeds at the cap.
+        let mut open = quick_adaptive();
+        open.idle_fraction = 1.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &open,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        assert!(report.attempts[0].adaptive.expect("stats").success_windows >= 5);
     }
 
     #[test]
@@ -10810,6 +12795,25 @@ mod tests {
         );
         let stats = attempt.adaptive.expect("stats");
         assert!(stats.lost_stance && stats.standing_fraction < 1.0);
+        // The tilt at the first burst off the stance is kept (the scripted tilt is 2 deg), and
+        // the loss feeds the learned limit the next attempt starts from.
+        assert_eq!(attempt.stance_lost_tilt_deg, Some(2.0));
+        assert_eq!(
+            stats.learned_loss_tilt_deg, None,
+            "learned only after the loss"
+        );
+        assert_eq!(
+            report
+                .adaptive_state_next
+                .as_ref()
+                .expect("state")
+                .loss_tilts_deg,
+            vec![2.0]
+        );
+        assert!(
+            report.cone_min_above_loss_tilt,
+            "2 * 0.8 is below cone_min 2"
+        );
         assert!(stats.feet_down_fraction < 1.0 && stats.feet_down_fraction > 0.0);
         assert_eq!(
             delivered.last().map(|s| (s.channel, s.magnitude)),
@@ -10824,6 +12828,10 @@ mod tests {
         );
         assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
         assert!(!report.attempts[0].adaptive.expect("stats").lost_stance);
+        assert_eq!(
+            report.attempts[0].stance_lost_tilt_deg, None,
+            "standing again at the end clears it"
+        );
         // The next attempt starts again from the reset keyframe.
         let mut c2 = c.clone();
         c2.reset_keyframe = "stand".to_string();
@@ -11041,6 +13049,7 @@ mod tests {
             apply_event: None,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         run_balance_phase(
             &mut run,
@@ -11243,9 +13252,18 @@ mod tests {
         assert!(bad(&|c| c.hold_after_catch_s = -0.1));
         assert!(bad(&|c| c.cone_min_deg = -1.0));
         assert!(bad(&|c| c.cone_min_deg = 15.0), "must be < max_tilt_deg");
+        assert!(bad(&|c| c.loss_margin_fraction = -0.1));
+        assert!(bad(&|c| c.loss_margin_fraction = 1.0));
+        assert!(bad(&|c| c.fail_tighten = 1.5));
+        assert!(bad(&|c| c.fail_tighten = f64::NAN));
+        assert!(bad(&|c| c.loss_window = 0));
         assert!(bad(&|c| c.catch_threshold = 1.1));
         assert!(bad(&|c| c.catch_threshold = -0.1));
         assert!(bad(&|c| c.lean_grace_s = 0.0));
+        assert!(bad(&|c| c.idle_fraction = -0.1));
+        assert!(bad(&|c| c.idle_fraction = 1.1));
+        assert!(bad(&|c| c.idle_fraction = f64::NAN));
+        assert!(!bad(&|c| c.idle_fraction = 0.0));
         assert!(bad(&|c| c.lean_grace_s = f64::NAN));
         assert!(bad(&|c| c.stance_grace_s = 0.0));
         assert!(bad(&|c| c.stance_grace_s = -1.0));
@@ -11296,7 +13314,11 @@ mod tests {
         }))
         .expect("older adaptive stats");
         assert_eq!(
-            (stats.recenters, stats.lost_stance, stats.standing_fraction),
+            (
+                stats.lean_retightens,
+                stats.lost_stance,
+                stats.standing_fraction
+            ),
             (0, false, 0.0)
         );
         let outcome: BalanceAttemptOutcome =
@@ -11306,12 +13328,15 @@ mod tests {
 
     #[test]
     fn update_body_spring_request_carries_the_deadband_only_when_given() {
-        assert!(update_body_spring_request("torso", 0.4, None, None)
+        assert!(update_body_spring_request("torso", 0.4, None, None, None)
             .get("deadband_rad")
             .is_none());
-        let with = update_body_spring_request("torso", 0.4, Some(0.1), None);
+        let with = update_body_spring_request("torso", 0.4, Some(0.1), None, None);
         assert_eq!(with["deadband_rad"], 0.1);
         assert_eq!(with["level"], 0.4);
+        assert!(with.get("ref_up_world").is_none());
+        let steered = update_body_spring_request("torso", 0.4, None, None, Some([0.0, 0.1, 0.9]));
+        assert_eq!(steered["ref_up_world"], serde_json::json!([0.0, 0.1, 0.9]));
     }
 
     #[test]
@@ -11513,6 +13538,7 @@ mod tests {
             apply_event,
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
+            memory_counters: None,
         };
         run_balance_phase(
             &mut run,
@@ -11766,6 +13792,7 @@ mod tests {
         let json = serde_json::json!({
             "torso_body": "torso",
             "contact_bodies": ["contact_a"],
+            "posture_top_body": "head",
             "max_tilt_deg": 15.0,
             "hold_s": 1.0,
             "attempt_cap_s": 3.0,
@@ -11823,6 +13850,7 @@ mod walk_tests {
         let mut c = BalanceFeetCriterion::new(
             "torso",
             vec!["foot_a".to_string(), "foot_b".to_string()],
+            "head",
             30.0,
             1.0,
             cap_s,
@@ -11852,6 +13880,7 @@ mod walk_tests {
             seq,
             seed: 1,
             tilt_deg: 2.0,
+            posture: None,
             contacts: contacts.to_vec(),
             terminal: None,
             support_level: Some(0.0),
@@ -12223,7 +14252,7 @@ mod walk_tests {
 
     #[test]
     fn a_standing_criterion_serialises_without_walk_keys_effect() {
-        let stand = BalanceFeetCriterion::new("torso", vec!["foot".into()], 30.0, 3.0, 10.0);
+        let stand = BalanceFeetCriterion::new("torso", vec!["foot".into()], "top", 30.0, 3.0, 10.0);
         let json = serde_json::to_value(&stand).unwrap();
         let back: BalanceFeetCriterion = serde_json::from_value(json.clone()).unwrap();
         assert_eq!(back, stand);

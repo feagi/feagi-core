@@ -1167,6 +1167,9 @@ impl ConnectomeManager {
         if let Some(npu) = &self.npu {
             if let Ok(mut npu_lock) = npu.lock() {
                 npu_lock.remove_rate_modulated_leak(area.cortical_idx);
+                // Learning-freeze switches naming the area go with it, so a recreated area
+                // (which may reuse the idx) starts unfrozen.
+                npu_lock.clear_learning_frozen_for_area(area.cortical_idx);
             }
         }
 
@@ -4242,7 +4245,7 @@ impl ConnectomeManager {
     /// Rule keys that only configure plasticity. Changing them never changes which synapses
     /// exist or their stored weights (the initial weight comes from
     /// `postSynapticCurrent_multiplier`, which is structural and not listed here).
-    const PLASTICITY_ONLY_RULE_KEYS: [&'static str; 13] = [
+    const PLASTICITY_ONLY_RULE_KEYS: [&'static str; 14] = [
         "plasticity_flag",
         "plasticity_mode",
         "plasticity_window",
@@ -4252,6 +4255,7 @@ impl ConnectomeManager {
         "eligibility_decay_bursts",
         "plasticity_eta",
         "max_weight",
+        "one_sided_firing",
         "modulators",
         "classifier_instance_reward",
         "reward_source_area",
@@ -4373,46 +4377,39 @@ impl ConnectomeManager {
 
     /// Freeze or unfreeze plasticity on `src -> dst` without changing its rule parameters.
     ///
-    /// `plasticity_frozen` is written onto every plastic rule of the mapping (so it survives
-    /// genome save/load and is visible in the mapping listing) and the NPU registration is
-    /// flipped so the end-of-burst plasticity pass skips the mapping. No synapse is pruned
-    /// or regenerated, so learned weights are kept.
+    /// The switch is brain-instance runtime state held by the NPU (saved with the connectome,
+    /// never written to the genome). The end-of-burst plasticity pass skips a frozen mapping;
+    /// no synapse is pruned or regenerated, so learned weights are kept, and the switch
+    /// survives a mapping update because it is keyed by the area pair.
     ///
-    /// Returns the number of plastic rules updated; errors when the mapping has none.
+    /// Returns the number of plastic rules of the mapping; errors when it has none.
     pub fn set_mapping_plasticity_frozen(
         &mut self,
         src_area_id: &CorticalID,
         dst_area_id: &CorticalID,
         frozen: bool,
     ) -> BduResult<usize> {
-        let mut plastic_rules = 0usize;
-        {
-            let src_area = self.cortical_areas.get_mut(src_area_id).ok_or_else(|| {
-                BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        })?;
+        let rules = src_area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&dst_area_id.as_base_64()))
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "No mapping from {} to {}",
+                    src_area_id.as_base_64(),
+                    dst_area_id.as_base_64()
+                ))
             })?;
-            let rules = src_area
-                .properties
-                .get_mut("cortical_mapping_dst")
-                .and_then(|v| v.as_object_mut())
-                .and_then(|map| map.get_mut(&dst_area_id.as_base_64()))
-                .and_then(|v| v.as_array_mut())
-                .ok_or_else(|| {
-                    BduError::InvalidArea(format!(
-                        "No mapping from {} to {}",
-                        src_area_id.as_base_64(),
-                        dst_area_id.as_base_64()
-                    ))
-                })?;
-            for rule in rules.iter_mut() {
-                let Some(obj) = rule.as_object_mut() else {
-                    continue;
-                };
-                if Self::mapping_rule_is_plastic(obj) {
-                    obj.insert("plasticity_frozen".to_string(), serde_json::json!(frozen));
-                    plastic_rules += 1;
-                }
-            }
-        }
+        let plastic_rules = rules
+            .iter()
+            .filter_map(|rule| rule.as_object())
+            .filter(|obj| Self::mapping_rule_is_plastic(obj))
+            .count();
         if plastic_rules == 0 {
             return Err(BduError::InvalidMorphology(format!(
                 "Mapping {} -> {} has no plastic rule to freeze",
@@ -4420,7 +4417,6 @@ impl ConnectomeManager {
                 dst_area_id.as_base_64()
             )));
         }
-        self.refresh_cortical_mappings_hash();
 
         let src_idx = self.cortical_id_to_idx.get(src_area_id).copied();
         let dst_idx = self.cortical_id_to_idx.get(dst_area_id).copied();
@@ -4431,11 +4427,11 @@ impl ConnectomeManager {
                 .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
                 .set_stdp_mapping_frozen(src_idx, dst_idx, frozen);
             if !registered {
-                // A plastic rule whose plasticity_mode is `off` is not registered; the flag is
-                // still stored so it applies when the mode is switched on.
+                // A plastic rule whose plasticity_mode is `off` is not registered; the switch
+                // is still stored so it applies when the mode is switched on.
                 tracing::warn!(
                     target: "feagi-bdu",
-                    "Mapping {} -> {} is not registered for plasticity in the NPU; plasticity_frozen={} stored on the rule only",
+                    "Mapping {} -> {} is not registered for plasticity in the NPU; learning_frozen={} stored for the pair",
                     src_area_id.as_base_64(),
                     dst_area_id.as_base_64(),
                     frozen
@@ -4452,19 +4448,108 @@ impl ConnectomeManager {
         Ok(plastic_rules)
     }
 
-    /// `Some(true)` when any plastic rule of `src -> dst` carries `plasticity_frozen: true`,
-    /// `Some(false)` for a mapping without the flag, `None` when there is no mapping.
+    /// `Some(frozen)` from the NPU's learning-freeze switch for an existing mapping,
+    /// `None` when there is no mapping.
     pub fn mapping_plasticity_frozen(
         &self,
         src_area_id: &CorticalID,
         dst_area_id: &CorticalID,
     ) -> Option<bool> {
-        let rules = self.get_mapping_rules(src_area_id, dst_area_id)?;
-        Some(rules.iter().any(|rule| {
-            rule.get("plasticity_frozen")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        }))
+        self.get_mapping_rules(src_area_id, dst_area_id)?;
+        let src_idx = self.cortical_id_to_idx.get(src_area_id).copied()?;
+        let dst_idx = self.cortical_id_to_idx.get(dst_area_id).copied()?;
+        let npu = self.npu.as_ref()?.lock().ok()?;
+        Some(
+            npu.learning_frozen_mapping_switches()
+                .contains(&(src_idx, dst_idx)),
+        )
+    }
+
+    /// Switch a memory area's learning freeze on or off (brain-instance runtime state in the
+    /// NPU). Errors when the area does not exist or is not a memory area.
+    pub fn set_memory_area_learning_frozen(
+        &mut self,
+        area_id: &CorticalID,
+        frozen: bool,
+    ) -> BduResult<()> {
+        let area = self
+            .cortical_areas
+            .get(area_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Area not found: {}", area_id)))?;
+        if !matches!(area.cortical_type, CorticalAreaType::Memory(_)) {
+            return Err(BduError::InvalidArea(format!(
+                "Area {} is not a memory area",
+                area_id.as_base_64()
+            )));
+        }
+        let idx = self
+            .cortical_id_to_idx
+            .get(area_id)
+            .copied()
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!("Area {} has no NPU index", area_id.as_base_64()))
+            })?;
+        if let Some(npu_arc) = self.npu.as_ref() {
+            npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
+                .set_area_learning_frozen(idx, frozen);
+        }
+        Ok(())
+    }
+
+    /// Learning-freeze switches as cortical ids: `(memory areas, mappings)`.
+    pub fn learning_frozen_switches(&self) -> (Vec<CorticalID>, Vec<(CorticalID, CorticalID)>) {
+        let Some(npu_arc) = self.npu.as_ref() else {
+            return (Vec::new(), Vec::new());
+        };
+        let Ok(npu) = npu_arc.lock() else {
+            return (Vec::new(), Vec::new());
+        };
+        let areas = npu
+            .learning_frozen_area_switches()
+            .into_iter()
+            .filter_map(|idx| self.cortical_idx_to_id.get(&idx).copied())
+            .collect();
+        let mappings = npu
+            .learning_frozen_mapping_switches()
+            .into_iter()
+            .filter_map(|(s, d)| {
+                Some((
+                    self.cortical_idx_to_id.get(&s).copied()?,
+                    self.cortical_idx_to_id.get(&d).copied()?,
+                ))
+            })
+            .collect();
+        (areas, mappings)
+    }
+
+    /// Restore learning-freeze switches from ids (connectome import). Unknown ids are skipped.
+    pub fn restore_learning_frozen_switches(
+        &self,
+        areas: &[CorticalID],
+        mappings: &[(CorticalID, CorticalID)],
+    ) {
+        let Some(npu_arc) = self.npu.as_ref() else {
+            return;
+        };
+        let Ok(npu) = npu_arc.lock() else {
+            return;
+        };
+        let area_idx = areas
+            .iter()
+            .filter_map(|id| self.cortical_id_to_idx.get(id).copied())
+            .collect();
+        let mapping_idx = mappings
+            .iter()
+            .filter_map(|(s, d)| {
+                Some((
+                    self.cortical_id_to_idx.get(s).copied()?,
+                    self.cortical_id_to_idx.get(d).copied()?,
+                ))
+            })
+            .collect();
+        npu.restore_learning_frozen(area_idx, mapping_idx);
     }
 
     /// Clear every mapping rule into and out of `area_id` and prune the synapses they created.
@@ -4642,6 +4727,30 @@ impl ConnectomeManager {
             .unwrap_or(0)
     }
 
+    /// Reads a rule's `one_sided_firing` (`"decrement"` default, or `"ignore"`). Absent or null
+    /// resolves to the default; any other value is an error naming the mapping.
+    pub fn parse_one_sided_firing(
+        rule: &serde_json::Map<String, serde_json::Value>,
+        src: &str,
+        dst: &str,
+    ) -> Result<feagi_npu_burst_engine::npu::OneSidedFiring, String> {
+        match rule.get("one_sided_firing") {
+            None | Some(serde_json::Value::Null) => {
+                Ok(feagi_npu_burst_engine::npu::OneSidedFiring::default())
+            }
+            Some(serde_json::Value::String(s)) => {
+                feagi_npu_burst_engine::npu::OneSidedFiring::parse(s).ok_or_else(|| {
+                    format!(
+                        "Unknown one_sided_firing '{s}' in mapping rule {src} -> {dst}; expected 'decrement' or 'ignore'"
+                    )
+                })
+            }
+            Some(other) => Err(format!(
+                "one_sided_firing must be the string 'decrement' or 'ignore' (got {other}) on mapping {src} -> {dst}"
+            )),
+        }
+    }
+
     /// Checks the plasticity options of one plastic mapping rule that the synapse build would
     /// reject, so a caller can refuse the update before anything is stored. `src` and `dst`
     /// only label the messages.
@@ -4663,6 +4772,7 @@ impl ConnectomeManager {
             }
             None => "stdp",
         };
+        Self::parse_one_sided_firing(rule, src, dst)?;
         let present = |key: &str| rule.get(key).is_some_and(|v| !v.is_null());
         let eligibility = rule
             .get("eligibility_decay_bursts")
@@ -5118,6 +5228,8 @@ impl ConnectomeManager {
             // Ensure any STDP mapping parameters for this pair are removed when the mapping is gone.
             let mut npu = npu_arc.lock().unwrap();
             let _was_registered = npu.unregister_stdp_mapping(src_idx, dst_idx);
+            // The freeze switch belongs to the mapping: a mapping created later starts unfrozen.
+            npu.clear_learning_frozen_for_mapping(src_idx, dst_idx);
         }
 
         debug!(
@@ -5298,6 +5410,14 @@ impl ConnectomeManager {
         synapse_type: feagi_npu_neural::SynapseType,
         synapse_delay_bursts: u8,
     ) -> BduResult<()> {
+        if rule_obj.contains_key("plasticity_frozen") {
+            tracing::info!(
+                target: "feagi-bdu",
+                "Mapping {} -> {}: ignoring `plasticity_frozen` in the rule; the learning freeze is brain-instance state (PUT /v1/cortical_mapping/plasticity_frozen)",
+                src_area_id.as_base_64(),
+                dst_area_id.as_base_64()
+            );
+        }
         let plasticity_window = rule_obj
             .get("plasticity_window")
             .and_then(Self::json_number_as_usize_for_stdp)
@@ -5442,6 +5562,13 @@ impl ConnectomeManager {
             1.0
         };
 
+        let one_sided_firing = Self::parse_one_sided_firing(
+            rule_obj,
+            &src_area_id.to_string(),
+            &dst_area_id.to_string(),
+        )
+        .map_err(BduError::Internal)?;
+
         // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
         if !matches!(
             plasticity_mode,
@@ -5510,10 +5637,7 @@ impl ConnectomeManager {
             eligibility_decay_bursts,
             max_weight,
             plasticity_eta,
-            frozen: rule_obj
-                .get("plasticity_frozen")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+            one_sided_firing,
             modulation_group: {
                 let ids = rule_modulator_ids(rule_obj);
                 let group = npu_lock.allocate_modulation_group(&ids);
@@ -7589,6 +7713,8 @@ impl ConnectomeManager {
                 consecutive
             },
             snooze_period: area.snooze_period(),
+            replay_recall_only: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .is_some_and(|p| p.replay_trigger == feagi_evolutionary::ReplayTrigger::RecallOnly),
         };
         match npu.lock() {
             Ok(mut npu) => npu.set_memory_associative_lif_params(idx, params),
@@ -13328,6 +13454,10 @@ pub(crate) mod tests {
             .insert("consecutive_fire_limit".to_string(), serde_json::json!(0));
         area.properties
             .insert("snooze_period".to_string(), serde_json::json!(4));
+        area.properties.insert(
+            "replay_trigger".to_string(),
+            serde_json::json!("recall_only"),
+        );
         let idx = manager.add_cortical_area(area).unwrap();
 
         let p = dyn_npu
@@ -13341,6 +13471,7 @@ pub(crate) mod tests {
         assert_eq!(p.refractory_period, 2);
         assert_eq!(p.consecutive_fire_limit, u16::MAX);
         assert_eq!(p.snooze_period, 4);
+        assert!(p.replay_recall_only, "replay_trigger must reach the NPU");
 
         // Live update through the regular per-area setter takes effect without restart.
         dyn_npu
@@ -16285,6 +16416,59 @@ pub(crate) mod tests {
         assert!(
             check(serde_json::json!({"plasticity_mode": "off", "plasticity_eta": 2.0})).is_err()
         );
+    }
+
+    #[test]
+    fn one_sided_firing_rule_option_defaults_validates_and_is_plasticity_only() {
+        use feagi_npu_burst_engine::npu::OneSidedFiring;
+        let parse = |rule: serde_json::Value| {
+            ConnectomeManager::parse_one_sided_firing(rule.as_object().unwrap(), "src", "dst")
+        };
+        // Missing (or null) field resolves to the default; known values parse.
+        assert_eq!(parse(serde_json::json!({})), Ok(OneSidedFiring::Decrement));
+        assert_eq!(
+            parse(serde_json::json!({"one_sided_firing": null})),
+            Ok(OneSidedFiring::Decrement)
+        );
+        assert_eq!(
+            parse(serde_json::json!({"one_sided_firing": "decrement"})),
+            Ok(OneSidedFiring::Decrement)
+        );
+        assert_eq!(
+            parse(serde_json::json!({"one_sided_firing": "ignore"})),
+            Ok(OneSidedFiring::Ignore)
+        );
+        // Unknown values and wrong types are refused with a message naming the mapping.
+        let unknown = parse(serde_json::json!({"one_sided_firing": "increment"})).unwrap_err();
+        assert!(unknown.contains("Unknown one_sided_firing 'increment'"));
+        assert!(unknown.contains("src -> dst"));
+        assert!(parse(serde_json::json!({"one_sided_firing": 1})).is_err());
+        // The same check guards a mapping update before anything is stored.
+        let validate = |rule: serde_json::Value| {
+            ConnectomeManager::validate_plastic_rule_options(
+                rule.as_object().unwrap(),
+                "src",
+                "dst",
+            )
+        };
+        assert!(validate(serde_json::json!({"one_sided_firing": "ignore"})).is_ok());
+        assert!(validate(serde_json::json!({"one_sided_firing": "bogus"})).is_err());
+        // Changing only this option re-registers plasticity in place (no synapse rebuild) and
+        // the value survives a JSON round trip of the stored rule.
+        let rule = |value: &str| {
+            serde_json::json!({
+                "morphology_id": "projector", "plasticity_flag": true,
+                "plasticity_constant": 1, "ltp_multiplier": 1, "ltd_multiplier": 1,
+                "plasticity_window": 1, "one_sided_firing": value
+            })
+        };
+        assert!(ConnectomeManager::mapping_rules_differ_only_in_plasticity(
+            &[rule("decrement")],
+            &[rule("ignore")]
+        ));
+        let round_trip: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&rule("ignore")).unwrap()).unwrap();
+        assert_eq!(round_trip["one_sided_firing"], "ignore");
     }
 
     /// One mapping that cannot be applied (a rule naming a modulator the genome never defined)

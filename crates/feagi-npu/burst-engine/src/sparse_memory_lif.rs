@@ -22,6 +22,10 @@ pub struct MemoryAssociativeLifParams {
     pub refractory_period: u16,
     pub consecutive_fire_limit: u16,
     pub snooze_period: u16,
+    /// When true, this area's neurons replay their stored frames onto the twin area only when
+    /// they fired by associative recall (`replay_trigger = "recall_only"`). Fires injected by
+    /// live episodic pattern match, and force-fires with no fire kind, do not replay.
+    pub replay_recall_only: bool,
 }
 
 impl Default for MemoryAssociativeLifParams {
@@ -33,6 +37,7 @@ impl Default for MemoryAssociativeLifParams {
             refractory_period: 0,
             consecutive_fire_limit: u16::MAX,
             snooze_period: 0,
+            replay_recall_only: false,
         }
     }
 }

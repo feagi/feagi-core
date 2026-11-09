@@ -727,6 +727,7 @@ mod tests {
             _level: f64,
             _deadband_rad: Option<f64>,
             _gravity_comp: Option<f64>,
+            _ref_up_world: Option<[f64; 3]>,
         ) -> Result<(), TrainerError> {
             unsupported()
         }

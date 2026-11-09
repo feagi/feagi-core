@@ -15,6 +15,13 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 
 /// Connectome management service (transport-agnostic)
+/// Learning-freeze switches of a brain instance (base64 cortical ids).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LearningFrozenState {
+    pub memory_areas: Vec<String>,
+    pub mappings: Vec<(String, String)>,
+}
+
 #[async_trait]
 pub trait ConnectomeService: Send + Sync {
     // ========================================================================
@@ -372,7 +379,7 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Freeze (`true`) or resume (`false`) weight commits and associative synapse
     /// synthesis on `src -> dst`, keeping the rule and learned weights in place.
-    /// Stored as `plasticity_frozen` on the mapping's plastic rules.
+    /// Brain-instance runtime state (NPU, saved with the connectome); not stored in the genome.
     async fn set_mapping_plasticity_frozen(
         &self,
         _src_area_id: &str,
@@ -381,6 +388,28 @@ pub trait ConnectomeService: Send + Sync {
     ) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "set_mapping_plasticity_frozen is not available on this transport".to_string(),
+        ))
+    }
+
+    /// Freeze (`true`) or resume (`false`) learning in one memory area: mappings into and out of
+    /// it do not learn and its memory neurons keep their snapshot. Brain-instance runtime state.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidInput` - Unknown area id or the area is not a memory area
+    async fn set_memory_area_learning_frozen(
+        &self,
+        _area_id: &str,
+        _frozen: bool,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "set_memory_area_learning_frozen is not available on this transport".to_string(),
+        ))
+    }
+
+    /// Every learning-freeze switch that is on right now (base64 cortical ids).
+    async fn learning_frozen_state(&self) -> ServiceResult<LearningFrozenState> {
+        Err(ServiceError::NotImplemented(
+            "learning_frozen_state is not available on this transport".to_string(),
         ))
     }
 

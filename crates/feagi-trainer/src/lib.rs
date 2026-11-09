@@ -20,6 +20,7 @@ pub mod error;
 pub mod executor;
 pub mod executor_stream;
 pub mod genome_changes;
+pub mod memory_counters;
 pub mod metrics;
 pub mod planned_samples;
 pub mod plasticity_freeze;

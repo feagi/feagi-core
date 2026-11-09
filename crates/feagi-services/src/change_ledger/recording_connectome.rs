@@ -15,7 +15,7 @@ use super::snapshot::{
     region_snapshot,
 };
 use super::types::GenomeChangeOperation;
-use crate::traits::ConnectomeService;
+use crate::traits::{ConnectomeService, LearningFrozenState};
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_structures::genomic::classifiers::Classifier;
@@ -291,31 +291,31 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(synapses)
     }
 
+    // Learning-freeze switches are brain-instance runtime state, not genome edits: forwarded
+    // without a ledger record.
     async fn set_mapping_plasticity_frozen(
         &self,
         src_area_id: &str,
         dst_area_id: &str,
         frozen: bool,
     ) -> ServiceResult<()> {
-        let before = mapping_rules(self.inner.as_ref(), src_area_id, dst_area_id).await;
         self.inner
             .set_mapping_plasticity_frozen(src_area_id, dst_area_id, frozen)
-            .await?;
-        let after = mapping_rules(self.inner.as_ref(), src_area_id, dst_area_id).await;
-        let mapping_data = after
-            .as_ref()
-            .and_then(|rules| rules.as_array().cloned())
-            .unwrap_or_default();
-        self.record(
-            GenomeChangeOperation::UpdateCorticalMapping {
-                src_area_id: src_area_id.to_string(),
-                dst_area_id: dst_area_id.to_string(),
-                mapping_data,
-            },
-            before,
-            after,
-        );
-        Ok(())
+            .await
+    }
+
+    async fn set_memory_area_learning_frozen(
+        &self,
+        area_id: &str,
+        frozen: bool,
+    ) -> ServiceResult<()> {
+        self.inner
+            .set_memory_area_learning_frozen(area_id, frozen)
+            .await
+    }
+
+    async fn learning_frozen_state(&self) -> ServiceResult<LearningFrozenState> {
+        self.inner.learning_frozen_state().await
     }
 
     #[cfg(feature = "connectome-io")]

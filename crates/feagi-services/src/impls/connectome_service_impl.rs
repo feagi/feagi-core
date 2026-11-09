@@ -8,7 +8,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use crate::traits::ConnectomeService;
+use crate::traits::{ConnectomeService, LearningFrozenState};
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
@@ -154,6 +154,9 @@ fn merge_memory_area_properties(
     defaults
         .entry(feagi_evolutionary::LTM_EVICTION_KEY.to_string())
         .or_insert(Value::from(memory_defaults.ltm_eviction.as_str()));
+    defaults
+        .entry(feagi_evolutionary::REPLAY_TRIGGER_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.replay_trigger.as_str()));
     defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
@@ -1873,6 +1876,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ltm_eviction: memory_props
                 .as_ref()
                 .map(|p| p.ltm_eviction.as_str().to_string()),
+            replay_trigger: memory_props
+                .as_ref()
+                .map(|p| p.replay_trigger.as_str().to_string()),
             properties: filtered_properties,
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype,
@@ -3018,40 +3024,47 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let dst_id = CorticalID::try_from_base_64(dst_area_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
         })?;
-        let rules = {
-            let mut manager = self.connectome.write();
-            manager
-                .set_mapping_plasticity_frozen(&src_id, &dst_id, frozen)
-                .map_err(|e| match e {
-                    feagi_brain_development::types::BduError::InvalidArea(msg)
-                    | feagi_brain_development::types::BduError::InvalidMorphology(msg) => {
-                        ServiceError::InvalidInput(msg)
-                    }
-                    other => {
-                        ServiceError::Backend(format!("Failed to set plasticity_frozen: {}", other))
-                    }
-                })?;
-            manager
-                .get_mapping_rules(&src_id, &dst_id)
-                .unwrap_or_default()
-        };
-        // Mirror the flag into the RuntimeGenome so a save/load keeps the mapping frozen.
-        if let Some(genome) = self.current_genome.write().as_mut() {
-            if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
-                update_cortical_mapping_dst_in_properties(
-                    &mut src_area.properties,
-                    dst_area_id,
-                    &rules,
-                )?;
-            } else {
-                warn!(
-                    target: "feagi-services",
-                    "[GENOME-UPDATE] Source area {} not found in RuntimeGenome while storing plasticity_frozen",
-                    src_area_id
-                );
-            }
-        }
+        // Brain-instance runtime state only: nothing is written to the genome.
+        self.connectome
+            .write()
+            .set_mapping_plasticity_frozen(&src_id, &dst_id, frozen)
+            .map_err(|e| match e {
+                feagi_brain_development::types::BduError::InvalidArea(msg)
+                | feagi_brain_development::types::BduError::InvalidMorphology(msg) => {
+                    ServiceError::InvalidInput(msg)
+                }
+                other => ServiceError::Backend(format!("Failed to set learning freeze: {}", other)),
+            })?;
         Ok(())
+    }
+
+    async fn set_memory_area_learning_frozen(
+        &self,
+        area_id: &str,
+        frozen: bool,
+    ) -> ServiceResult<()> {
+        let id = CorticalID::try_from_base_64(area_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        self.connectome
+            .write()
+            .set_memory_area_learning_frozen(&id, frozen)
+            .map_err(|e| match e {
+                feagi_brain_development::types::BduError::InvalidArea(msg) => {
+                    ServiceError::InvalidInput(msg)
+                }
+                other => ServiceError::Backend(format!("Failed to set learning freeze: {}", other)),
+            })
+    }
+
+    async fn learning_frozen_state(&self) -> ServiceResult<LearningFrozenState> {
+        let (areas, mappings) = self.connectome.read().learning_frozen_switches();
+        Ok(LearningFrozenState {
+            memory_areas: areas.iter().map(|id| id.as_base_64()).collect(),
+            mappings: mappings
+                .iter()
+                .map(|(s, d)| (s.as_base_64(), d.as_base_64()))
+                .collect(),
+        })
     }
 
     async fn update_cortical_mapping(
@@ -3155,13 +3168,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     plasticity_flag = true;
                 }
                 if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
-                    // Carry over per-rule state a caller is unlikely to resend: the delay and
-                    // the freeze flag set through `set_mapping_plasticity_frozen`.
-                    for key in ["synaptic_delay_bursts", "plasticity_frozen"] {
-                        if !normalized.contains_key(key) && existing.contains_key(key) {
-                            if let Some(value) = existing.get(key) {
-                                normalized.insert(key.to_string(), value.clone());
-                            }
+                    // Carry over per-rule state a caller is unlikely to resend: the delay.
+                    // The learning freeze is brain-instance state keyed by the area pair and
+                    // is not part of the rule.
+                    let key = "synaptic_delay_bursts";
+                    if !normalized.contains_key(key) {
+                        if let Some(value) = existing.get(key) {
+                            normalized.insert(key.to_string(), value.clone());
                         }
                     }
                 }
@@ -3870,6 +3883,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
             snapshot.neurons.count, snapshot.synapses.count);
 
         let mut snapshot = snapshot;
+        {
+            // Brain-instance runtime state: saved here, never in the genome.
+            let (areas, mappings) = self.connectome.read().learning_frozen_switches();
+            snapshot.learning_frozen_memory_areas =
+                areas.iter().map(|id| id.as_base_64()).collect();
+            snapshot.learning_frozen_mappings = mappings
+                .iter()
+                .map(|(s, d)| (s.as_base_64(), d.as_base_64()))
+                .collect();
+        }
         if let Some(mut genome) = self.current_genome.read().clone() {
             {
                 let manager = self.connectome.read();
@@ -4153,6 +4176,25 @@ impl ConnectomeServiceImpl {
 
         if lite_overlay_needed {
             apply_lite_synapse_overlay(&self.connectome, &snapshot)?;
+        }
+
+        {
+            // Learning-freeze switches come back exactly as saved (empty when the snapshot
+            // carries none), after the areas and mappings they name exist.
+            let parse = |id: &String| CorticalID::try_from_base_64(id).ok();
+            let areas: Vec<CorticalID> = snapshot
+                .learning_frozen_memory_areas
+                .iter()
+                .filter_map(parse)
+                .collect();
+            let mappings: Vec<(CorticalID, CorticalID)> = snapshot
+                .learning_frozen_mappings
+                .iter()
+                .filter_map(|(s, d)| Some((parse(s)?, parse(d)?)))
+                .collect();
+            self.connectome
+                .read()
+                .restore_learning_frozen_switches(&areas, &mappings);
         }
 
         restore_episodic_runtime_from_snapshot(&self.connectome, &snapshot)?;
@@ -7492,9 +7534,8 @@ mod tests {
         Ok(())
     }
 
-    /// Freezing a mapping stores `plasticity_frozen` on the rule and in the NPU, a later PUT of
-    /// the same rule without the flag carries it over and does not regenerate (so learned
-    /// weights survive), and `reset_mapping_weights` puts the weight back to the rule's value.
+    /// Freezing a mapping sets the NPU's brain-instance switch (no genome field), a later PUT of
+    /// the same rule keeps it and does not regenerate (so learned weights survive), and `reset_mapping_weights` puts the weight back to the rule's value.
     #[tokio::test]
     async fn freeze_and_reset_weights_keep_rule_and_synapses() -> ServiceResult<()> {
         use super::ConnectomeServiceImpl;
@@ -7564,7 +7605,20 @@ mod tests {
             assert_eq!(npu.is_stdp_mapping_frozen(src_idx, dst_idx), Some(true));
         }
 
-        // Simulate learning, then re-PUT the same rule (no flag): carried over, no regeneration.
+        // The freeze is brain-instance state: the genome rule carries no flag.
+        {
+            let mgr = connectome.read();
+            let rules = mgr.get_mapping_rules(&src_id, &dst_id).unwrap();
+            assert!(rules.iter().all(|r| r.get("plasticity_frozen").is_none()));
+        }
+        let state = svc.learning_frozen_state().await?;
+        assert_eq!(
+            state.mappings,
+            vec![(src_id.as_base_64(), dst_id.as_base_64())]
+        );
+        assert!(state.memory_areas.is_empty());
+
+        // Simulate learning, then re-PUT the same rule: the freeze survives, no regeneration.
         {
             let mut npu = dyn_npu.lock().unwrap();
             let target = npu.get_outgoing_synapses(s0 as u32)[0].0;
@@ -7579,8 +7633,8 @@ mod tests {
             .await?;
         assert_eq!(
             regenerated, 1,
-            "identical rule plus carried-over flag reports the existing synapse count; the \
-             unchanged weight below proves nothing was regenerated"
+            "identical rule reports the existing synapse count; the unchanged weight below \
+             proves nothing was regenerated"
         );
         {
             let npu = dyn_npu.lock().unwrap();
@@ -7610,6 +7664,28 @@ mod tests {
             .set_mapping_plasticity_frozen(&dst_id.as_base_64(), &src_id.as_base_64(), true)
             .await
             .is_err());
+
+        // Deleting the mapping (empty rules: the delete route and PUT-with-empty-rules both
+        // take this path) drops its freeze; a mapping created later starts unfrozen.
+        svc.set_mapping_plasticity_frozen(&src_id.as_base_64(), &dst_id.as_base_64(), true)
+            .await?;
+        assert_eq!(svc.learning_frozen_state().await?.mappings.len(), 1);
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), Vec::new())
+            .await?;
+        assert!(
+            svc.learning_frozen_state().await?.mappings.is_empty(),
+            "deleted mapping no longer listed as frozen"
+        );
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule.clone()])
+            .await?;
+        assert_eq!(
+            connectome
+                .read()
+                .mapping_plasticity_frozen(&src_id, &dst_id),
+            Some(false),
+            "recreated mapping is unfrozen"
+        );
+        assert!(svc.learning_frozen_state().await?.mappings.is_empty());
         Ok(())
     }
 
@@ -8247,6 +8323,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Lite,
             genome_json: Some(feagi_evolutionary::save_genome_to_json(genome).unwrap()),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -9161,6 +9239,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: Some(genome_json),
             memory_area_ids: vec![mem_id.as_base_64()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: vec![(src_id.as_base_64(), mem_id.as_base_64())],
             brain_region_ids: vec![region_key.clone()],
             long_term_memory_neurons: Vec::new(),
@@ -9337,6 +9417,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: Some(genome_json),
             memory_area_ids: vec![kernel_mem_id.as_base_64(), class_mem_id.as_base_64()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: vec![root_key.clone(), region_key.clone()],
             long_term_memory_neurons: Vec::new(),
@@ -9582,6 +9664,99 @@ mod tests {
         assert_import_binds_reward_modulator(exported, src_id, dst_id).await
     }
 
+    /// Learning-freeze switches are brain-instance state: both persist modes save and restore
+    /// them, the genome never carries them, a genome rebuild empties them, and deleting an
+    /// area drops its entries so a recreated area starts unfrozen.
+    #[cfg(feature = "connectome-io")]
+    async fn assert_learning_freeze_roundtrip(
+        mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+    ) -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+
+        let (genome, src_id, dst_id, _) = reward_modulated_rstdp_genome("joy");
+        let connectome = Arc::new(RwLock::new(connectome_manager_for_import_tests()));
+        super::rebuild_connectome_from_genome(&connectome, &genome)?;
+        let svc = ConnectomeServiceImpl::new(
+            connectome.clone(),
+            Arc::new(RwLock::new(Some(genome.clone()))),
+        );
+        let (src_b64, dst_b64) = (src_id.as_base_64(), dst_id.as_base_64());
+        svc.set_mapping_plasticity_frozen(&src_b64, &dst_b64, true)
+            .await?;
+        // A switch on a non-memory area is refused by the service ...
+        assert!(svc
+            .set_memory_area_learning_frozen(&dst_b64, true)
+            .await
+            .is_err());
+        // ... so the area half of the snapshot is exercised with the NPU switch directly.
+        let dst_idx = connectome.read().get_cortical_idx(&dst_id).unwrap();
+        connectome
+            .read()
+            .get_npu()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .set_area_learning_frozen(dst_idx, true);
+        let before = svc.learning_frozen_state().await?;
+        assert_eq!(before.mappings, vec![(src_b64.clone(), dst_b64.clone())]);
+        assert_eq!(before.memory_areas, vec![dst_b64.clone()]);
+
+        let exported = svc.export_connectome(mode).await?;
+        assert_eq!(exported.learning_frozen_memory_areas, before.memory_areas);
+        assert_eq!(exported.learning_frozen_mappings, before.mappings);
+        assert!(
+            !exported
+                .genome_json
+                .as_deref()
+                .expect("export embeds genome")
+                .contains("plasticity_frozen"),
+            "the genome never carries the freeze"
+        );
+
+        let other = Arc::new(RwLock::new(connectome_manager_for_import_tests()));
+        let other_svc = ConnectomeServiceImpl::new(other.clone(), Arc::new(RwLock::new(None)));
+        assert_eq!(other_svc.learning_frozen_state().await?, Default::default());
+        other_svc.import_connectome(exported).await?;
+        assert_eq!(other_svc.learning_frozen_state().await?, before);
+
+        // A genome rebuild starts every switch off.
+        super::rebuild_connectome_from_genome(&other, &genome)?;
+        assert_eq!(other_svc.learning_frozen_state().await?, Default::default());
+
+        // Delete + recreate: the area's entries are gone and the new area is not frozen.
+        super::rebuild_connectome_from_genome(&connectome, &genome)?;
+        svc.set_mapping_plasticity_frozen(&src_b64, &dst_b64, true)
+            .await?;
+        connectome
+            .read()
+            .get_npu()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .set_area_learning_frozen(dst_idx, true);
+        connectome.write().remove_cortical_area(&dst_id).ok();
+        assert_eq!(svc.learning_frozen_state().await?, Default::default());
+        Ok(())
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn learning_freeze_switches_roundtrip_in_full_snapshots() -> ServiceResult<()> {
+        assert_learning_freeze_roundtrip(
+            feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+        )
+        .await
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn learning_freeze_switches_roundtrip_in_lite_snapshots() -> ServiceResult<()> {
+        assert_learning_freeze_roundtrip(
+            feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite,
+        )
+        .await
+    }
+
     #[cfg(feature = "connectome-io")]
     #[tokio::test]
     async fn import_connectome_full_syncs_modulator_subscriptions_to_npu() -> ServiceResult<()> {
@@ -9650,6 +9825,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: Some(genome_json),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -9747,6 +9924,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: Some(genome_json),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -9922,6 +10101,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -10008,6 +10189,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Lite,
             genome_json: Some(genome_json),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -10112,6 +10295,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Lite,
             genome_json: Some(genome_json),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -10247,6 +10432,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: Some(genome_json),
             memory_area_ids: vec![mem_id.as_base_64()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: vec![(src_id.as_base_64(), mem_id.as_base_64())],
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -11442,6 +11629,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -11524,6 +11713,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -11595,6 +11786,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Full,
             genome_json: Some("{\"version\":\"3.0\"}".to_string()),
             memory_area_ids: vec![dst.as_base_64()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: vec![(src.as_base_64(), dst.as_base_64())],
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![
@@ -11707,6 +11900,8 @@ mod tests {
             persist_mode: ConnectomePersistMode::Full,
             genome_json: Some("{\"version\":\"3.0\"}".to_string()),
             memory_area_ids: vec![dst.as_base_64()],
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -11881,6 +12076,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
@@ -12212,6 +12409,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -12242,6 +12441,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
@@ -12324,6 +12525,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
@@ -12472,6 +12675,8 @@ mod tests {
                 persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
                 genome_json: None,
                 memory_area_ids: Vec::new(),
+                learning_frozen_memory_areas: Vec::new(),
+                learning_frozen_mappings: Vec::new(),
                 plastic_mappings: Vec::new(),
                 brain_region_ids: Vec::new(),
                 long_term_memory_neurons: Vec::new(),
@@ -12593,6 +12798,8 @@ mod tests {
                 persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
                 genome_json: None,
                 memory_area_ids: Vec::new(),
+                learning_frozen_memory_areas: Vec::new(),
+                learning_frozen_mappings: Vec::new(),
                 plastic_mappings: Vec::new(),
                 brain_region_ids: Vec::new(),
                 long_term_memory_neurons: Vec::new(),

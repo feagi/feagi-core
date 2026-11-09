@@ -229,6 +229,10 @@ pub struct CorticalAreaInfo {
     /// Omitted for non-memory areas.
     #[serde(rename = "ltm_eviction", skip_serializing_if = "Option::is_none")]
     pub ltm_eviction: Option<String>,
+    /// Which fires of a memory neuron replay its frames onto its twin: "any_fire" or
+    /// "recall_only". Omitted for non-memory areas.
+    #[serde(rename = "replay_trigger", skip_serializing_if = "Option::is_none")]
+    pub replay_trigger: Option<String>,
     /// Set on an update response when the change altered the memory area's pattern shape
     /// (temporal depth, episodic upstream set or MP encoding mode) and neurons that no longer
     /// fit were removed. Absent on reads and on updates that removed nothing.

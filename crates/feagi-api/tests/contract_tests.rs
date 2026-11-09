@@ -3651,6 +3651,8 @@ async fn test_connectome_upload_with_blocking_genome_error_imports_in_degraded_m
         persist_mode: ConnectomePersistMode::Lite,
         genome_json: Some(genome_json),
         memory_area_ids: Vec::new(),
+        learning_frozen_memory_areas: Vec::new(),
+        learning_frozen_mappings: Vec::new(),
         plastic_mappings: Vec::new(),
         brain_region_ids: Vec::new(),
         long_term_memory_neurons: Vec::new(),
@@ -3746,6 +3748,8 @@ async fn test_rolled_back_connectome_upload_keeps_health_loaded() {
             persist_mode: ConnectomePersistMode::Lite,
             genome_json: Some(genome_json),
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -4898,6 +4902,86 @@ fn plastic_projector_rule(weight: f64) -> Value {
     })
 }
 
+/// `PUT /v1/cortical_area/learning_frozen` and `GET /v1/connectome/learning_frozen`:
+/// 200 on a memory area, 400 on a non-memory or unknown area, bulk GET lists the switch.
+#[tokio::test]
+async fn test_cortical_area_learning_frozen_routes() {
+    let state = build_test_state();
+    let plain = create_plain_custom_area(&state, b"cfrzplA1", "plain", (0, 0, 0)).await;
+    let memory_id = general_purpose::STANDARD.encode(b"mfrzmmA1");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: memory_id.clone(),
+            name: "mem".to_string(),
+            dimensions: (1, 1, 1),
+            position: (10, 0, 0),
+            area_type: "Memory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: Some(1.0),
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: None,
+        }])
+        .await
+        .expect("create memory area");
+
+    let put = |area: String, frozen: bool| {
+        let state = state.clone();
+        async move {
+            request_json(
+                create_http_server(state),
+                "PUT",
+                "/v1/cortical_area/learning_frozen",
+                Some(json!({"cortical_area": area, "frozen": frozen})),
+            )
+            .await
+        }
+    };
+    let (status, body) = put(memory_id.clone(), true).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(true));
+    assert_eq!(body["cortical_area"], json!(memory_id));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/connectome/learning_frozen",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["memory_areas"], json!([memory_id]));
+    assert_eq!(body["mappings"], json!([]));
+
+    let (status, _) = put(plain, true).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "non-memory area");
+    let (status, _) = put(general_purpose::STANDARD.encode(b"cnosuch1"), true).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "unknown area");
+
+    let (status, _) = put(memory_id, false).await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/connectome/learning_frozen",
+        None,
+    )
+    .await;
+    assert_eq!(body["memory_areas"], json!([]));
+}
+
 /// `GET|PUT /v1/cortical_mapping/plasticity_frozen`
 /// drive one plastic mapping end to end through the real connectome service and NPU.
 #[tokio::test]
@@ -4971,7 +5055,7 @@ async fn test_cortical_mapping_plasticity_frozen_routes() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["frozen"], json!(true));
 
-    // The flag is visible on the rule itself through the mapping listing.
+    // The switch is brain-instance state: the rule carries no flag, the bulk GET lists it.
     let (status, body) = request_json(
         create_http_server(state.clone()),
         "GET",
@@ -4980,8 +5064,28 @@ async fn test_cortical_mapping_plasticity_frozen_routes() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["connections"][0]["plasticity_frozen"], json!(true));
+    assert!(body["connections"][0].get("plasticity_frozen").is_none());
     assert_eq!(body["connections"][0]["morphology_id"], json!("projector"));
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/connectome/learning_frozen",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["mappings"], json!([[src, dst]]));
+    assert_eq!(body["memory_areas"], json!([]));
+
+    // Non-memory area: 400.
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/learning_frozen",
+        Some(json!({"cortical_area": src, "frozen": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "non-memory area");
 
     // Validation: unknown mapping.
     let (status, _) = request_json(

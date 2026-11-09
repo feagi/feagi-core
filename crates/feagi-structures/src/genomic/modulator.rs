@@ -31,6 +31,11 @@ pub enum ModulatorKind {
     /// Memory formation switch on a subscribed memory area. Factor is
     /// `clamp(1 + signal, 0, 1)`; at 0 the area forms no new memory neurons.
     MemoryFormation,
+    /// Memory freeze switch on a subscribed memory area. While the combined signal is
+    /// above 0 the area is a full snapshot: no creation, ageing, lifespan growth,
+    /// long-term conversion or reward consolidation. Existing memory neurons still fire.
+    /// Magnitude must be above 0.
+    MemoryFreeze,
 }
 
 impl ModulatorKind {
@@ -45,6 +50,7 @@ impl ModulatorKind {
             Self::LearningRate => "synaptic.learning_rate",
             Self::Gate => "synaptic.gate",
             Self::MemoryFormation => "memory.formation",
+            Self::MemoryFreeze => "memory.freeze",
         }
     }
 
@@ -59,6 +65,7 @@ impl ModulatorKind {
             "synaptic.learning_rate" => Ok(Self::LearningRate),
             "synaptic.gate" => Ok(Self::Gate),
             "memory.formation" => Ok(Self::MemoryFormation),
+            "memory.freeze" => Ok(Self::MemoryFreeze),
             other => Err(format!("unknown modulator type '{other}'")),
         }
     }
@@ -74,6 +81,7 @@ impl ModulatorKind {
             Self::LearningRate,
             Self::Gate,
             Self::MemoryFormation,
+            Self::MemoryFreeze,
         ]
     }
 
@@ -85,9 +93,9 @@ impl ModulatorKind {
         )
     }
 
-    /// Kinds that subscribe on cortical areas: `neuro.*` and `memory.formation`.
+    /// Kinds that subscribe on cortical areas: `neuro.*`, `memory.formation`, `memory.freeze`.
     pub fn is_area_level(self) -> bool {
-        self.is_neuromodulator() || self == Self::MemoryFormation
+        self.is_neuromodulator() || matches!(self, Self::MemoryFormation | Self::MemoryFreeze)
     }
 
     /// Synaptic modulators subscribe on mapping rules.
@@ -206,6 +214,11 @@ pub fn memory_formation_factor(signals: &[f32]) -> f32 {
     multiplicative_factor(signals).clamp(0.0, 1.0)
 }
 
+/// Memory freeze: the area is frozen while the summed signal is above 0.
+pub fn memory_freeze_active(signals: &[f32]) -> bool {
+    signals.iter().sum::<f32>() > 0.0
+}
+
 /// Sum of reward signals. Reward does not use the multiplicative factor.
 pub fn summed_reward(signals: &[f32]) -> f32 {
     signals.iter().sum()
@@ -223,7 +236,8 @@ pub fn scale_baseline(kind: ModulatorKind, baseline: f32, factor: f32) -> f32 {
         | ModulatorKind::TransmissionGain
         | ModulatorKind::LearningRate
         | ModulatorKind::Gate
-        | ModulatorKind::MemoryFormation => value.max(0.0),
+        | ModulatorKind::MemoryFormation
+        | ModulatorKind::MemoryFreeze => value.max(0.0),
         ModulatorKind::Reward => value,
     }
 }
@@ -283,6 +297,19 @@ mod tests {
         assert!(validate_spike_train(true, 0).is_err());
         assert!(validate_spike_train(true, 1).is_ok());
         assert!(validate_spike_train(false, 0).is_ok());
+    }
+
+    #[test]
+    fn memory_freeze_is_area_level_and_active_above_zero() {
+        assert_eq!(
+            ModulatorKind::parse("memory.freeze").unwrap(),
+            ModulatorKind::MemoryFreeze
+        );
+        assert!(ModulatorKind::MemoryFreeze.is_area_level());
+        assert!(!ModulatorKind::MemoryFreeze.is_synaptic());
+        assert!(!memory_freeze_active(&[]));
+        assert!(!memory_freeze_active(&[0.0]));
+        assert!(memory_freeze_active(&[0.5]));
     }
 
     #[test]

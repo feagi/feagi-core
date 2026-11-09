@@ -7,7 +7,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
-use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
+use feagi_npu_burst_engine::npu::{OneSidedFiring, PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
@@ -63,7 +63,7 @@ fn stdp_params(mode: PlasticityMode, group: u16) -> StdpMappingParams {
         max_weight: 3.0,
         plasticity_eta: 1.0,
         modulation_group: group,
-        frozen: false,
+        one_sided_firing: OneSidedFiring::Decrement,
     }
 }
 
@@ -340,4 +340,66 @@ fn frozen_stdp_mapping_commits_no_weight_change() {
         "unregistered pair"
     );
     assert_eq!(npu.is_stdp_mapping_frozen(10, 12), None);
+}
+
+/// 200 co-firing bursts: a frozen mapping keeps every weight and its synapse count, the
+/// unfrozen control of the same wiring learns, and the switch is NPU runtime state only.
+#[test]
+fn frozen_mapping_keeps_weights_and_synapse_count_over_200_bursts() {
+    let (mut frozen_npu, fsrc, _fdst) = potentiating_pair();
+    let (mut control_npu, csrc, cdst) = potentiating_pair();
+    assert!(frozen_npu.set_stdp_mapping_frozen(10, 11, true));
+    let before = frozen_npu.get_outgoing_synapses(fsrc.0);
+    let (src, dst) = (fsrc, _fdst);
+    cofire(&mut frozen_npu, src, dst, 200);
+    cofire(&mut control_npu, csrc, cdst, 200);
+    assert_eq!(
+        frozen_npu.get_outgoing_synapses(fsrc.0),
+        before,
+        "frozen: no weight or synapse change"
+    );
+    assert!(
+        control_npu.get_outgoing_synapses(csrc.0)[0].1 > before[0].1,
+        "unfrozen control must learn"
+    );
+}
+
+/// A memory area frozen by the switch stops learning on mappings into and out of it, the
+/// area reports frozen, and clearing the switch (or a new genome) resumes / empties it.
+#[test]
+fn area_learning_switch_blocks_mappings_in_and_out() {
+    for frozen_idx in [10u32, 11u32] {
+        let (mut npu, src, dst) = potentiating_pair();
+        cofire(&mut npu, src, dst, 1);
+        let learned = npu.get_outgoing_synapses(src.0)[0].1;
+        assert!(!npu.memory_area_learning_frozen(frozen_idx));
+        npu.set_area_learning_frozen(frozen_idx, true);
+        assert!(npu.memory_area_learning_frozen(frozen_idx));
+        cofire(&mut npu, src, dst, 5);
+        assert_eq!(
+            npu.get_outgoing_synapses(src.0)[0].1,
+            learned,
+            "mapping touching frozen area {frozen_idx} must not learn"
+        );
+        npu.set_area_learning_frozen(frozen_idx, false);
+        cofire(&mut npu, src, dst, 1);
+        assert!(npu.get_outgoing_synapses(src.0)[0].1 > learned);
+    }
+}
+
+/// `reset_for_new_genome` empties both switch sets; `clear_learning_frozen_for_area` drops
+/// the entries naming one area.
+#[test]
+fn learning_switches_clear_on_genome_reset_and_area_removal() {
+    let (mut npu, _src, _dst) = potentiating_pair();
+    assert!(npu.set_stdp_mapping_frozen(10, 11, true));
+    npu.set_area_learning_frozen(10, true);
+    npu.set_area_learning_frozen(12, true);
+    npu.clear_learning_frozen_for_area(10);
+    assert_eq!(npu.learning_frozen_area_switches(), vec![12]);
+    assert!(npu.learning_frozen_mapping_switches().is_empty());
+    assert!(npu.set_stdp_mapping_frozen(10, 11, true));
+    npu.reset_for_new_genome().unwrap();
+    assert!(npu.learning_frozen_area_switches().is_empty());
+    assert!(npu.learning_frozen_mapping_switches().is_empty());
 }

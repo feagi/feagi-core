@@ -11,8 +11,8 @@ use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_runtime::NeuronStorage;
 use feagi_structures::genomic::{
-    gate_factor, memory_formation_factor, modulator_signal, multiplicative_factor, scale_baseline,
-    summed_reward, ModulatorKind,
+    gate_factor, memory_formation_factor, memory_freeze_active, modulator_signal,
+    multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
 };
 
 use crate::fire_structures::FireQueue;
@@ -66,6 +66,8 @@ struct ActiveFactors {
     area_factor: AHashMap<(u32, NeuronParam), f32>,
     /// cortical idx -> memory formation factor in `[0, 1]`, for subscribed areas only.
     memory_formation_by_area: AHashMap<u32, f32>,
+    /// cortical idx -> whether a subscribed `memory.freeze` signal sum is above 0.
+    memory_freeze_by_area: AHashMap<u32, bool>,
 }
 
 /// Burst-engine side of the modulator system.
@@ -187,6 +189,16 @@ impl ModulatorEngine {
                 .memory_formation_by_area
                 .get(&cortical_idx)
                 .is_some_and(|factor| *factor <= 0.0)
+    }
+
+    /// Whether a subscribed `memory.freeze` modulator is active (combined signal > 0) for
+    /// this area. No subscription means false.
+    pub fn memory_freeze_active(&self, cortical_idx: u32) -> bool {
+        self.active
+            .memory_freeze_by_area
+            .get(&cortical_idx)
+            .copied()
+            .unwrap_or(false)
     }
 
     pub fn set_spike_train_areas(&mut self, areas: AHashSet<u32>) {
@@ -549,6 +561,25 @@ impl ModulatorEngine {
                     .insert(*area, memory_formation_factor(&formation));
             }
         }
+        for (area, ids) in &self.area_subscriptions {
+            let freeze: Vec<f32> = ids
+                .iter()
+                .filter_map(|id| {
+                    let binding = self.binding(id)?;
+                    (binding.kind == ModulatorKind::MemoryFreeze).then(|| {
+                        signals
+                            .get(&binding.driver_cortical_idx)
+                            .copied()
+                            .unwrap_or(0.0)
+                    })
+                })
+                .collect();
+            if !freeze.is_empty() {
+                active
+                    .memory_freeze_by_area
+                    .insert(*area, memory_freeze_active(&freeze));
+            }
+        }
         let needed = self.needed_params();
         for (area, params) in needed {
             for param in params {
@@ -852,6 +883,24 @@ mod tests {
         let step = step_spike_train(SpikeTrainPhase::Idle, 0, 1, 4.0);
         assert!(step.train_ended);
         assert!(!step.schedule_next);
+    }
+
+    #[test]
+    fn memory_freeze_is_active_only_while_a_subscribed_driver_signals() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![ModulatorBinding {
+            instance_id: "hold".into(),
+            kind: ModulatorKind::MemoryFreeze,
+            magnitude_percent: 100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: 1,
+        }]);
+        let mut subs = AHashMap::new();
+        subs.insert(7u32, vec!["hold".to_string()]);
+        engine.set_area_subscriptions(subs);
+        assert!(!engine.memory_freeze_active(7), "nothing committed yet");
+        assert!(!engine.memory_freeze_active(8), "unsubscribed area");
     }
 
     #[test]

@@ -122,6 +122,9 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::LTM_EVICTION_KEY.to_string())
         .or_insert(Value::from(memory_defaults.ltm_eviction.as_str()));
     defaults
+        .entry(feagi_evolutionary::REPLAY_TRIGGER_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.replay_trigger.as_str()));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -141,13 +144,14 @@ fn validate_mp_encoding_update(
     current: &HashMap<String, Value>,
     changes: &HashMap<String, Value>,
 ) -> ServiceResult<()> {
-    const MP_KEYS: [&str; 6] = [
+    const MP_KEYS: [&str; 7] = [
         feagi_evolutionary::MP_LEARNING_ENABLED_KEY,
         feagi_evolutionary::MP_CHANGE_MODE_KEY,
         feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY,
         feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY,
         feagi_evolutionary::MEMORY_NEURON_CAP_KEY,
         feagi_evolutionary::LTM_EVICTION_KEY,
+        feagi_evolutionary::REPLAY_TRIGGER_KEY,
     ];
     if !changes.keys().any(|k| MP_KEYS.contains(&k.as_str())) {
         return Ok(());
@@ -1430,17 +1434,19 @@ impl GenomeService for GenomeServiceImpl {
                     Some(kind) if !kind.is_area_level() => {
                         return Err(ServiceError::InvalidInput(format!(
                             "modulator '{id}' ({}) on area {cortical_id} is synaptic; areas \
-                             subscribe to `neuro.*` and `memory.formation` modulators only. Put it \
+                             subscribe to `neuro.*`, `memory.formation` and `memory.freeze` modulators only. Put it \
                              on a mapping rule instead.",
                             kind.as_str()
                         )));
                     }
-                    Some(feagi_structures::genomic::ModulatorKind::MemoryFormation)
-                        if !area_is_memory(genome.as_ref(), &cortical_id_typed_for_lock) =>
-                    {
+                    Some(
+                        feagi_structures::genomic::ModulatorKind::MemoryFormation
+                        | feagi_structures::genomic::ModulatorKind::MemoryFreeze,
+                    ) if !area_is_memory(genome.as_ref(), &cortical_id_typed_for_lock) => {
                         return Err(ServiceError::InvalidInput(format!(
-                            "modulator '{id}' (memory.formation) cannot subscribe area \
-                             {cortical_id}: it is not a memory area"
+                            "modulator '{id}' ({}) cannot subscribe area \
+                             {cortical_id}: it is not a memory area",
+                            kind.map(|k| k.as_str()).unwrap_or_default()
                         )));
                     }
                     Some(_) => {}
@@ -2645,7 +2651,8 @@ impl GenomeServiceImpl {
                         | "mp_delta_quantization"
                         | "mp_ratio_quantization"
                         | "memory_neuron_cap"
-                        | "ltm_eviction" => {
+                        | "ltm_eviction"
+                        | "replay_trigger" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
 
@@ -2973,7 +2980,8 @@ impl GenomeServiceImpl {
                         | "mp_delta_quantization"
                         | "mp_ratio_quantization"
                         | "memory_neuron_cap"
-                        | "ltm_eviction" => {
+                        | "ltm_eviction"
+                        | "replay_trigger" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -3363,6 +3371,7 @@ impl GenomeServiceImpl {
                         | "mp_ratio_quantization"
                         | "memory_neuron_cap"
                         | "ltm_eviction"
+                        | "replay_trigger"
                 )
             });
 
@@ -5404,6 +5413,8 @@ impl GenomeServiceImpl {
                     .map(|p| p.memory_neuron_cap),
                 ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
                     .map(|p| p.ltm_eviction.as_str().to_string()),
+                replay_trigger: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.replay_trigger.as_str().to_string()),
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
@@ -5617,6 +5628,8 @@ impl GenomeServiceImpl {
                 .map(|p| p.memory_neuron_cap),
             ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.ltm_eviction.as_str().to_string()),
+            replay_trigger: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.replay_trigger.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -5831,6 +5844,8 @@ impl GenomeServiceImpl {
                 .map(|p| p.memory_neuron_cap),
             ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.ltm_eviction.as_str().to_string()),
+            replay_trigger: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.replay_trigger.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -6316,6 +6331,19 @@ mod tests {
             .unwrap();
         assert_eq!(before.memory_neuron_cap, 0);
         assert_eq!(before.ltm_eviction.as_str(), "lru");
+        assert_eq!(before.replay_trigger.as_str(), "any_fire");
+
+        let bad_trigger = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([("replay_trigger".to_string(), serde_json::json!("sometimes"))]),
+            )
+            .await
+            .expect_err("unknown replay trigger must be rejected");
+        assert!(
+            matches!(bad_trigger, super::ServiceError::InvalidInput(_)),
+            "{bad_trigger:?}"
+        );
 
         // A bad value is rejected and changes nothing.
         let bad = svc
@@ -6336,10 +6364,15 @@ mod tests {
                 HashMap::from([
                     ("memory_neuron_cap".to_string(), serde_json::json!(120)),
                     ("ltm_eviction".to_string(), serde_json::json!("none")),
+                    (
+                        "replay_trigger".to_string(),
+                        serde_json::json!("recall_only"),
+                    ),
                 ]),
             )
             .await
             .expect("update memory cap and eviction");
+        assert_eq!(info.replay_trigger.as_deref(), Some("recall_only"));
         assert_eq!(info.memory_neuron_cap, Some(120));
         assert_eq!(info.ltm_eviction.as_deref(), Some("none"));
         let wire = serde_json::to_value(&info).unwrap();
@@ -6353,6 +6386,7 @@ mod tests {
             .unwrap();
         assert_eq!(after.memory_neuron_cap, 120);
         assert_eq!(after.ltm_eviction.as_str(), "none");
+        assert_eq!(after.replay_trigger.as_str(), "recall_only");
 
         // Serialized back out through the genome save (it rebuilds from the live areas).
         *svc.get_current_genome_arc().write() = Some(feagi_evolutionary::RuntimeGenome {
@@ -6393,6 +6427,7 @@ mod tests {
         .unwrap();
         assert_eq!(reloaded.memory_neuron_cap, 120);
         assert_eq!(reloaded.ltm_eviction.as_str(), "none");
+        assert_eq!(reloaded.replay_trigger.as_str(), "recall_only");
     }
 
     #[tokio::test]
@@ -7586,6 +7621,51 @@ mod tests {
         match err {
             ServiceError::InvalidInput(message) => {
                 assert!(message.contains("not a memory area"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_freeze_is_listed_and_rejected_on_non_memory_areas() {
+        use crate::traits::GenomeService;
+        use crate::types::ServiceError;
+
+        let (svc, _npu, area_id, _idx) = modulator_runtime_fixture();
+        let types = svc.list_modulator_types().await.unwrap();
+        assert!(types.contains(&"memory.freeze".to_string()), "{types:?}");
+        {
+            let arc = svc.get_current_genome_arc();
+            let mut guard = arc.write();
+            let genome = guard.as_mut().unwrap();
+            genome.modulators.insert(
+                "hold".to_string(),
+                feagi_evolutionary::ModulatorInstance {
+                    kind: feagi_structures::genomic::ModulatorKind::MemoryFreeze,
+                    magnitude_percent: 100.0,
+                    effect_duration_bursts: 1,
+                    rest_bursts: 0,
+                    graded: false,
+                    full_scale_potential: None,
+                    driver_cortical_id:
+                        feagi_structures::genomic::cortical_area::CorticalID::modulator_driver(1),
+                },
+            );
+        }
+        let err = svc
+            .update_cortical_area(
+                &area_id.as_base_64(),
+                std::collections::HashMap::from([(
+                    "modulators".to_string(),
+                    serde_json::json!(["hold"]),
+                )]),
+            )
+            .await
+            .expect_err("a non-memory area must not subscribe to memory.freeze");
+        match err {
+            ServiceError::InvalidInput(message) => {
+                assert!(message.contains("not a memory area"), "{message}");
+                assert!(message.contains("memory.freeze"), "{message}");
             }
             other => panic!("expected InvalidInput, got {other:?}"),
         }

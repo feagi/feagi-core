@@ -294,3 +294,76 @@ fn test_mp_driven_memory_replay_stamps_firing_potential_on_twin() {
         "twin potentials {potentials:?} should equal the memory neuron firing potential {firing_potential}"
     );
 }
+
+/// Fire one memory neuron with `fire_kind` and report whether its replay fired the twin on the
+/// next burst. `recall_only` sets the memory area's `replay_trigger` flag.
+fn replay_fires_twin(recall_only: bool, fire_kind: u8) -> bool {
+    use feagi_npu_burst_engine::MemoryAssociativeLifParams;
+
+    let mut npu = create_npu();
+    npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+    let memory_area_idx = 40u32;
+    let upstream_area_idx = 50u32;
+    let twin_area_idx = 51u32;
+
+    let memory_id = CorticalID::try_from_bytes(b"mmem0010").unwrap();
+    let upstream_id = CorticalID::try_from_bytes(b"csrc0010").unwrap();
+    let twin_id = CorticalID::try_from_bytes(b"csrc0011").unwrap();
+
+    npu.register_cortical_area(memory_area_idx, memory_id.as_base_64());
+    npu.register_cortical_area(upstream_area_idx, upstream_id.as_base_64());
+    npu.register_cortical_area(twin_area_idx, twin_id.as_base_64());
+    npu.configure_fire_ledger_window(twin_area_idx, 1)
+        .expect("Failed to configure fire ledger window");
+    npu.set_memory_associative_lif_params(
+        memory_area_idx,
+        MemoryAssociativeLifParams {
+            replay_recall_only: recall_only,
+            ..Default::default()
+        },
+    );
+
+    let twin = add_neuron_at(&mut npu, twin_area_idx, 0, 0, 0);
+    let memory_neuron_id = 50_000_100u32;
+    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+    npu.register_memory_twin_mapping(memory_area_idx, upstream_area_idx, twin_area_idx, 10.0);
+    npu.register_memory_replay_frames(
+        memory_neuron_id,
+        vec![MemoryReplayFrame {
+            offset: 0,
+            upstream_area_idx,
+            coords: vec![(0, 0, 0)],
+            membrane_potentials: None,
+        }],
+    );
+
+    npu.inject_memory_neuron_to_fcl_with_kind(memory_neuron_id, memory_area_idx, 5.0, fire_kind);
+    let burst1 = npu.process_burst().expect("Burst failed").burst;
+    let burst2 = npu.process_burst().expect("Burst failed").burst;
+    assert_eq!(burst2, burst1 + 1);
+    npu.get_fire_ledger_dense_window_bitmaps(twin_area_idx, burst2, 1)
+        .expect("Missing FireLedger window for twin area")
+        .iter()
+        .any(|(_, bm)| bm.contains(twin.0))
+}
+
+#[test]
+fn test_replay_trigger_recall_only_skips_episodic_fire() {
+    use feagi_npu_burst_engine::FIRE_KIND_EPISODIC_MEMORY;
+    assert!(!replay_fires_twin(true, FIRE_KIND_EPISODIC_MEMORY));
+}
+
+#[test]
+fn test_replay_trigger_recall_only_replays_associative_fire() {
+    use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
+    assert!(replay_fires_twin(true, FIRE_KIND_STDP_ELIGIBLE));
+}
+
+#[test]
+fn test_replay_trigger_any_fire_replays_both_kinds() {
+    use feagi_npu_burst_engine::{FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
+    assert!(replay_fires_twin(false, FIRE_KIND_EPISODIC_MEMORY));
+    assert!(replay_fires_twin(false, FIRE_KIND_STDP_ELIGIBLE));
+}

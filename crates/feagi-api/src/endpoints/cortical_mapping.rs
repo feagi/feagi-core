@@ -160,6 +160,13 @@ fn format_dict_mapping_rule(
         obj.get("plasticity_eta")
             .and_then(|v| if v.is_null() { None } else { v.as_f64() });
 
+    // `one_sided_firing` ("decrement" default | "ignore"): passed through as given and validated
+    // downstream so an unknown value is refused with a clear error rather than dropped.
+    let one_sided_firing = obj
+        .get("one_sided_firing")
+        .filter(|v| !v.is_null())
+        .cloned();
+
     let mut rule = serde_json::json!({
         "morphology_id": morphology_id,
         "morphology_scalar": morphology_scalar,
@@ -172,6 +179,9 @@ fn format_dict_mapping_rule(
         "synaptic_delay_bursts": synaptic_delay_bursts,
     });
     let rule_obj = rule.as_object_mut().unwrap();
+    if let Some(value) = one_sided_firing {
+        rule_obj.insert("one_sided_firing".to_string(), value);
+    }
     if let Some(mode) = plasticity_mode {
         rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
     }
@@ -754,6 +764,29 @@ mod tests {
     }
 
     #[test]
+    fn dict_rule_echoes_one_sided_firing_and_omits_it_when_absent() {
+        let mut stored = serde_json::json!({
+            "morphology_id": "block_to_block",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 1,
+            "one_sided_firing": "ignore",
+        });
+        let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
+        assert_eq!(out["one_sided_firing"], "ignore");
+        // Unknown values are carried through so the downstream check can refuse them.
+        let again = format_dict_mapping_rule(out.as_object().unwrap()).unwrap();
+        assert_eq!(out, again);
+        stored.as_object_mut().unwrap().remove("one_sided_firing");
+        let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
+        assert!(out.get("one_sided_firing").is_none());
+    }
+
+    #[test]
     fn dict_rule_omits_absent_subscription_keys() {
         let stored = serde_json::json!({
             "morphology_id": "block_to_block",
@@ -770,9 +803,8 @@ mod tests {
 ///
 /// Freeze (`frozen: true`) or resume (`false`) plasticity on one mapping without changing
 /// its rule: no weight commits, no eligibility-trace updates and no associative synapse
-/// synthesis while frozen; learned weights are kept. The flag is stored as
-/// `plasticity_frozen` on the mapping's plastic rules, so it shows in the mapping listing
-/// and survives genome save/load.
+/// synthesis while frozen; learned weights are kept. The switch is brain-instance runtime
+/// state (saved with the connectome, never in the genome); a mapping update keeps it.
 ///
 /// Body: `{"src_cortical_area": <base64>, "dst_cortical_area": <base64>, "frozen": <bool>}`.
 /// Response: `{"src_cortical_area", "dst_cortical_area", "frozen": <bool>}`.
@@ -841,20 +873,24 @@ pub async fn get_plasticity_frozen(
         .get("dst_cortical_area")
         .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
 
+    // `null` when there is no mapping; otherwise the brain's learning-freeze switch.
     let src_info = state.connectome_service.get_cortical_area(src_area).await?;
-    let frozen = src_info
+    let has_mapping = src_info
         .properties
         .get("cortical_mapping_dst")
         .and_then(|v| v.as_object())
-        .and_then(|map| map.get(dst_area))
-        .and_then(|v| v.as_array())
-        .map(|rules| {
-            rules.iter().any(|rule| {
-                rule.get("plasticity_frozen")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-            })
-        });
+        .is_some_and(|map| map.contains_key(dst_area));
+    let frozen = if has_mapping {
+        let switches = state.connectome_service.learning_frozen_state().await?;
+        Some(
+            switches
+                .mappings
+                .iter()
+                .any(|(s, d)| s == src_area && d == dst_area),
+        )
+    } else {
+        None
+    };
 
     let mut response = HashMap::new();
     response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));

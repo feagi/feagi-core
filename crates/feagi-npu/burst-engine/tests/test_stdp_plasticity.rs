@@ -3,7 +3,7 @@
 //! STDP integration tests for synaptic plasticity behavior.
 
 use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
+use feagi_npu_burst_engine::npu::{OneSidedFiring, PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
@@ -79,7 +79,7 @@ fn stdp_params(
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
         modulation_group: 0,
-        frozen: false,
+        one_sided_firing: OneSidedFiring::Decrement,
     }
 }
 
@@ -611,9 +611,7 @@ fn associative_delivery_latency(delay: u8) -> u64 {
     );
 
     // Stop plasticity from re-synthesizing while measuring delivery.
-    let mut frozen = params;
-    frozen.frozen = true;
-    npu.register_stdp_mapping(10, 11, frozen).unwrap();
+    assert!(npu.set_stdp_mapping_frozen(10, 11, true));
     // Let any pending PSP drain.
     for _ in 0..8 {
         npu.process_burst().unwrap();

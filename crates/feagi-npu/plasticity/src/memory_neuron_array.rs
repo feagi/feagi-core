@@ -103,6 +103,8 @@ pub enum MemoryNeuronRemovalReason {
     /// Removed because its area's pattern shape (temporal depth, episodic upstream set or MP
     /// encoding mode) changed and the neuron no longer fits.
     ShapeChanged,
+    /// Removed on explicit request (delete by id), not by the lifecycle.
+    Requested,
 }
 
 /// A memory neuron that left the array and whose NPU-side footprint still has to be removed.
@@ -230,6 +232,8 @@ pub struct MemoryNeuronArray {
     ltm_count: usize,
     /// Neurons removed since the last drain, waiting for NPU-side cleanup.
     removed: Vec<RemovedMemoryNeuron>,
+    /// Reactivations per area index since the last drain (every match of an existing neuron).
+    reactivated: HashMap<u32, usize>,
 }
 
 impl MemoryNeuronArray {
@@ -268,6 +272,7 @@ impl MemoryNeuronArray {
             active_count: 0,
             ltm_count: 0,
             removed: Vec::new(),
+            reactivated: HashMap::new(),
         }
     }
 
@@ -332,6 +337,17 @@ impl MemoryNeuronArray {
         std::mem::take(&mut self.removed)
     }
 
+    /// Take the per-area reactivation tallies recorded since the last call.
+    pub fn drain_reactivations(&mut self) -> HashMap<u32, usize> {
+        std::mem::take(&mut self.reactivated)
+    }
+
+    /// Area index of an active memory neuron, or `None` when the id is not an active one.
+    pub fn active_neuron_area_idx(&self, neuron_id: u32) -> Option<u32> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        (self.is_valid_index(idx) && self.is_active[idx]).then(|| self.cortical_area_ids[idx])
+    }
+
     fn pool_full(&self) -> bool {
         self.reusable_indices.is_empty() && self.next_available_index >= self.capacity
     }
@@ -378,11 +394,16 @@ impl MemoryNeuronArray {
 
     /// The lru-policy area holding the most neurons; ties go to the lowest area idx.
     /// `creator` uses `creator_policy` because the stored policy may lag its config.
-    fn most_populated_lru_area(&self, creator: u32, creator_policy: LtmEviction) -> Option<u32> {
+    fn most_populated_lru_area(
+        &self,
+        creator: u32,
+        creator_policy: LtmEviction,
+        frozen_areas: &HashSet<u32>,
+    ) -> Option<u32> {
         let mut best: Option<(usize, u32)> = None;
         for (&area, indices) in &self.area_neuron_indices {
             let count = indices.len();
-            if count == 0 {
+            if count == 0 || frozen_areas.contains(&area) {
                 continue;
             }
             let policy = if area == creator {
@@ -475,6 +496,26 @@ impl MemoryNeuronArray {
         current_burst: u64,
         config: &MemoryNeuronLifecycleConfig,
     ) -> Option<usize> {
+        self.create_memory_neuron_except(
+            pattern_hash,
+            cortical_area_id,
+            current_burst,
+            config,
+            &HashSet::new(),
+        )
+    }
+
+    /// Like [`Self::create_memory_neuron`], but neurons in `frozen_areas` are never evicted
+    /// (neither as the pool-full victim area nor as the creating area's own cap victim), and
+    /// a reactivation inside a frozen area only counts, it does not change the neuron.
+    pub fn create_memory_neuron_except(
+        &mut self,
+        pattern_hash: u64,
+        cortical_area_id: u32,
+        current_burst: u64,
+        config: &MemoryNeuronLifecycleConfig,
+        frozen_areas: &HashSet<u32>,
+    ) -> Option<usize> {
         // Check if pattern already exists in this area
         if let Some(&existing_idx) = self
             .pattern_hash_to_index
@@ -482,6 +523,11 @@ impl MemoryNeuronArray {
         {
             if self.is_active[existing_idx] {
                 // Reactivate existing neuron instead
+                if frozen_areas.contains(&cortical_area_id) {
+                    return self
+                        .note_frozen_reactivation(existing_idx)
+                        .then_some(existing_idx);
+                }
                 return self.reactivate_memory_neuron_internal(existing_idx, current_burst);
             }
         }
@@ -496,8 +542,11 @@ impl MemoryNeuronArray {
             let victim_area = if area_at_cap {
                 cortical_area_id
             } else {
-                self.most_populated_lru_area(cortical_area_id, config.ltm_eviction)?
+                self.most_populated_lru_area(cortical_area_id, config.ltm_eviction, frozen_areas)?
             };
+            if frozen_areas.contains(&victim_area) {
+                return None;
+            }
             let victim = self.pick_victim(victim_area, current_burst)?;
             self.evict_neuron(victim);
         }
@@ -544,6 +593,20 @@ impl MemoryNeuronArray {
         Some(neuron_idx)
     }
 
+    /// Count a reactivation in a frozen area without changing the neuron: its activation
+    /// count, last-activation burst and lifespan stay as they are. Returns `false` when the
+    /// index is not an active neuron.
+    pub fn note_frozen_reactivation(&mut self, neuron_idx: usize) -> bool {
+        if !self.is_valid_index(neuron_idx) || !self.is_active[neuron_idx] {
+            return false;
+        }
+        *self
+            .reactivated
+            .entry(self.cortical_area_ids[neuron_idx])
+            .or_default() += 1;
+        true
+    }
+
     /// Reactivate an existing memory neuron
     pub fn reactivate_memory_neuron(&mut self, neuron_idx: usize, current_burst: u64) -> bool {
         self.reactivate_memory_neuron_internal(neuron_idx, current_burst)
@@ -566,6 +629,10 @@ impl MemoryNeuronArray {
         // Update activation tracking
         self.last_activation_burst[neuron_idx] = current_burst;
         self.activation_count[neuron_idx] += 1;
+        *self
+            .reactivated
+            .entry(self.cortical_area_ids[neuron_idx])
+            .or_default() += 1;
 
         // Grow lifespan if not long-term memory
         if !self.is_longterm_memory[neuron_idx] {
@@ -583,6 +650,16 @@ impl MemoryNeuronArray {
     /// A neuron matched this burst keeps its full lifespan, so `init_lifespan` is the
     /// number of later bursts it survives unseen and each repeat adds the growth rate.
     pub fn age_memory_neurons(&mut self, current_burst: u64) -> Vec<usize> {
+        self.age_memory_neurons_except(current_burst, &HashSet::new())
+    }
+
+    /// Like [`Self::age_memory_neurons`], but neurons in `frozen_areas` do not age: their
+    /// lifespans, order keys and survival are left exactly as they are.
+    pub fn age_memory_neurons_except(
+        &mut self,
+        current_burst: u64,
+        frozen_areas: &HashSet<u32>,
+    ) -> Vec<usize> {
         let n = self.next_available_index;
         if n == 0 {
             return Vec::new();
@@ -595,7 +672,11 @@ impl MemoryNeuronArray {
         // Age eligible neurons
         for i in 0..n {
             if self.is_active[i] && !self.is_longterm_memory[i] && self.lifespan_current[i] > 0 {
-                if self.last_activation_burst[i] == current_burst {
+                // Frozen neurons do not age; like matched ones, their key rises with the epoch.
+                if self.last_activation_burst[i] == current_burst
+                    || (!frozen_areas.is_empty()
+                        && frozen_areas.contains(&self.cortical_area_ids[i]))
+                {
                     skipped.push(i);
                     continue;
                 }
@@ -679,6 +760,21 @@ impl MemoryNeuronArray {
         lifecycle_configs: &HashMap<u32, MemoryNeuronLifecycleConfig>,
         default_threshold: u32,
     ) -> Vec<usize> {
+        self.check_longterm_conversion_by_area_except(
+            lifecycle_configs,
+            default_threshold,
+            &HashSet::new(),
+        )
+    }
+
+    /// Like [`Self::check_longterm_conversion_by_area`], but areas in `frozen_areas` convert
+    /// nothing.
+    pub fn check_longterm_conversion_by_area_except(
+        &mut self,
+        lifecycle_configs: &HashMap<u32, MemoryNeuronLifecycleConfig>,
+        default_threshold: u32,
+        frozen_areas: &HashSet<u32>,
+    ) -> Vec<usize> {
         let n = self.next_available_index;
         if n == 0 {
             return Vec::new();
@@ -692,6 +788,9 @@ impl MemoryNeuronArray {
 
         let mut converted_indices = Vec::new();
         for (area_id, indices) in area_indices {
+            if frozen_areas.contains(&area_id) {
+                continue;
+            }
             let threshold = lifecycle_configs
                 .get(&area_id)
                 .map(|config| config.longterm_threshold)
@@ -770,6 +869,21 @@ impl MemoryNeuronArray {
         let total = ids.len();
         let page = ids.into_iter().skip(offset).take(limit).collect();
         (page, total)
+    }
+
+    /// One page of full neuron detail for an area (same order as [`Self::paginated_neuron_ids_in_area`]).
+    pub fn paginated_neuron_details_in_area(
+        &self,
+        cortical_area_id: u32,
+        offset: usize,
+        limit: usize,
+    ) -> (Vec<MemoryNeuronDetail>, usize) {
+        let (ids, total) = self.paginated_neuron_ids_in_area(cortical_area_id, offset, limit);
+        let details = ids
+            .into_iter()
+            .filter_map(|id| self.get_memory_neuron_detail(id))
+            .collect();
+        (details, total)
     }
 
     fn find_neuron_index_by_global_id(&self, neuron_id: u32) -> Option<usize> {
@@ -2232,6 +2346,44 @@ mod tests {
         assert_map_consistent(&restored, &[a, b]);
     }
 
+    #[test]
+    fn create_path_match_is_tallied_per_area_and_drained() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = evict_cfg(5, 1000, 0, LtmEviction::Lru);
+        let a = array.create_memory_neuron(1, 7, 10, &config).unwrap();
+        array.create_memory_neuron(2, 8, 10, &config).unwrap();
+        // Same pattern in the same area again: reactivation through create (scan/kernel path).
+        assert_eq!(array.create_memory_neuron(1, 7, 11, &config), Some(a));
+        assert_eq!(array.create_memory_neuron(1, 7, 12, &config), Some(a));
+        // Direct reactivation (episodic path).
+        assert!(array.reactivate_memory_neuron(a, 13));
+        let tally = array.drain_reactivations();
+        assert_eq!(tally.get(&7), Some(&3));
+        assert_eq!(tally.get(&8), None);
+        assert!(array.drain_reactivations().is_empty(), "drained");
+    }
+
+    #[test]
+    fn detail_page_carries_lifecycle_fields_in_id_order() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = evict_cfg(5, 1000, 0, LtmEviction::Lru);
+        let first = array.create_memory_neuron(1, 7, 10, &config).unwrap();
+        array.create_memory_neuron(2, 7, 12, &config).unwrap();
+        array.create_memory_neuron(3, 7, 13, &config).unwrap();
+        array.reactivate_memory_neuron(first, 20);
+        let (page, total) = array.paginated_neuron_details_in_area(7, 0, 2);
+        assert_eq!((page.len(), total), (2, 3));
+        let (ids, _) = array.paginated_neuron_ids_in_area(7, 0, 2);
+        assert_eq!(page.iter().map(|d| d.neuron_id).collect::<Vec<_>>(), ids);
+        let d = page.iter().find(|d| d.creation_burst == 10).unwrap();
+        assert_eq!(d.last_activation_burst, 20);
+        assert_eq!(d.activation_count, 2);
+        assert!(d.lifespan_current > 5, "lifespan grew on reactivation");
+        assert!(!d.is_longterm_memory);
+        let (tail, _) = array.paginated_neuron_details_in_area(7, 2, 2);
+        assert_eq!(tail.len(), 1);
+    }
+
     // ---- Area cap, pool-full eviction, ordered indexes ----
 
     fn evict_cfg(
@@ -2365,6 +2517,56 @@ mod tests {
         array.create_memory_neuron(79, 20, 8, &cfg).unwrap();
         assert_eq!(array.area_neuron_count(10), 1);
         assert_eq!(array.area_neuron_count(20), 3);
+    }
+
+    #[test]
+    fn frozen_area_is_never_an_eviction_victim_and_reactivation_only_counts() {
+        let mut array = MemoryNeuronArray::new(4);
+        let cfg = evict_cfg(5, 5, 0, LtmEviction::Lru);
+        let frozen: HashSet<u32> = [10u32].into_iter().collect();
+        for (pattern, burst) in [(1u64, 1u64), (2, 2), (3, 3), (4, 4)] {
+            array
+                .create_memory_neuron(pattern, 10, burst, &cfg)
+                .unwrap();
+        }
+        assert!(array.pool_full());
+        // The only populated area is frozen: another area's creation finds no victim.
+        assert!(array
+            .create_memory_neuron_except(77, 20, 6, &cfg, &frozen)
+            .is_none());
+        assert_eq!(array.area_neuron_count(10), 4);
+        assert!(array.drain_removed_neurons().is_empty(), "evicted = 0");
+        // The same call with no frozen area evicts, proving the guard is what held it back.
+        assert!(array
+            .create_memory_neuron_except(77, 20, 6, &cfg, &HashSet::new())
+            .is_some());
+        assert_eq!(array.drain_removed_neurons().len(), 1);
+
+        // Reactivation inside a frozen area counts but changes nothing on the neuron.
+        let idx = array.find_neuron_by_pattern(10, &2).unwrap();
+        let (last, count, life) = (
+            array.last_activation_burst[idx],
+            array.activation_count[idx],
+            array.lifespan_current[idx],
+        );
+        array.drain_reactivations();
+        array
+            .create_memory_neuron_except(2, 10, 50, &cfg, &frozen)
+            .unwrap();
+        assert_eq!(array.drain_reactivations().get(&10), Some(&1));
+        assert_eq!(
+            (
+                array.last_activation_burst[idx],
+                array.activation_count[idx],
+                array.lifespan_current[idx]
+            ),
+            (last, count, life)
+        );
+        // An unfrozen area's own cap eviction is refused for a frozen creator too.
+        let capped = evict_cfg(5, 100, 1, LtmEviction::Lru);
+        assert!(array
+            .create_memory_neuron_except(900, 10, 51, &capped, &frozen)
+            .is_none());
     }
 
     #[test]

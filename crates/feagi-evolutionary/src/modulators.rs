@@ -44,7 +44,13 @@ impl ModulatorInstance {
             self.effect_duration_bursts,
             self.graded,
             self.full_scale_potential,
-        )
+        )?;
+        if self.kind == ModulatorKind::MemoryFreeze && self.magnitude_percent <= 0.0 {
+            return Err(ModulatorValidationError(
+                "memory.freeze requires magnitude_percent > 0".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     /// Hierarchical genome object for this instance.
@@ -342,5 +348,40 @@ mod memory_formation_tests {
         assert_eq!(instance.kind, ModulatorKind::MemoryFormation);
         assert_eq!(instance.magnitude_percent, -100.0);
         assert_eq!(parsed.to_json(), json);
+    }
+}
+
+#[cfg(test)]
+mod memory_freeze_tests {
+    use super::*;
+
+    fn freeze_instance(magnitude_percent: f32) -> ModulatorInstance {
+        ModulatorInstance {
+            kind: ModulatorKind::MemoryFreeze,
+            magnitude_percent,
+            effect_duration_bursts: 1,
+            rest_bursts: 0,
+            graded: false,
+            full_scale_potential: None,
+            driver_cortical_id: CorticalID::modulator_driver(1),
+        }
+    }
+
+    #[test]
+    fn memory_freeze_rejects_non_positive_magnitude() {
+        assert!(freeze_instance(0.0).validate().is_err());
+        assert!(freeze_instance(-50.0).validate().is_err());
+        assert!(freeze_instance(100.0).validate().is_ok());
+    }
+
+    #[test]
+    fn memory_freeze_round_trips_through_genome_json() {
+        let mut registry = ModulatorRegistry::new();
+        registry.insert("hold".to_string(), freeze_instance(100.0));
+        let parsed = parse_modulator_registry(Some(&registry.to_json())).unwrap();
+        assert_eq!(
+            parsed.get("hold").unwrap().kind,
+            ModulatorKind::MemoryFreeze
+        );
     }
 }

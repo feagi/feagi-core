@@ -410,6 +410,24 @@ pub trait RuntimeService: Send + Sync {
         cortical_indices: &[u32],
     ) -> ServiceResult<Vec<(u32, usize)>>;
 
+    /// Delete specific memory neurons of one memory area by global neuron id.
+    ///
+    /// Every id must be an active memory neuron of `cortical_idx`, otherwise nothing is
+    /// deleted and the error names the offending ids. Removes the neurons' synapses, replay
+    /// frames and runtime state; other neurons of the area are untouched.
+    ///
+    /// # Returns
+    /// Number of memory neurons deleted.
+    async fn delete_memory_neurons(
+        &self,
+        _cortical_idx: u32,
+        _neuron_ids: &[u32],
+    ) -> ServiceResult<usize> {
+        Err(ServiceError::NotImplemented(
+            "delete_memory_neurons is not supported by this runtime service".to_string(),
+        ))
+    }
+
     /// Remove all motor subscriptions.
     ///
     /// Used by strict genome transitions to ensure no stale agent-session

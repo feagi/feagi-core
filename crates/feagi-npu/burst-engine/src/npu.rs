@@ -150,6 +150,39 @@ pub enum PlasticityMode {
     RStdp,
 }
 
+/// How a plastic mapping treats one-sided firing (only one end of a synapse fired in the
+/// plasticity window) when updating the eligibility trace `e_ij`.
+///
+/// - `Decrement` (default): one-sided firing lowers the trace by 1 (the historical behavior).
+/// - `Ignore`: one-sided firing leaves the trace unchanged; only co-firing (+1) and decay act.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OneSidedFiring {
+    #[default]
+    Decrement,
+    Ignore,
+}
+
+impl OneSidedFiring {
+    /// Parses the rule value `"decrement"` or `"ignore"` (case-insensitive).
+    pub fn parse(value: &str) -> Option<Self> {
+        if value.eq_ignore_ascii_case("decrement") {
+            Some(Self::Decrement)
+        } else if value.eq_ignore_ascii_case("ignore") {
+            Some(Self::Ignore)
+        } else {
+            None
+        }
+    }
+
+    /// The rule value this variant is stored as.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Decrement => "decrement",
+            Self::Ignore => "ignore",
+        }
+    }
+}
+
 /// STDP / R-STDP parameters for a plastic cortical mapping A→B.
 ///
 /// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
@@ -213,10 +246,9 @@ pub struct StdpMappingParams {
     pub plasticity_eta: f32,
     /// Synaptic modulator group stamped onto this mapping's synapses. `0` means none.
     pub modulation_group: u16,
-    /// When `true` the end-of-burst plasticity pass skips this mapping entirely: no
-    /// eligibility-trace update, no weight commit, no associative synapse synthesis. The
-    /// rule and its registration stay in place so unfreezing resumes learning in place.
-    pub frozen: bool,
+    /// Effect of one-sided firing on the eligibility trace. See `OneSidedFiring`. Associative
+    /// memory mappings never decrement regardless of this setting.
+    pub one_sided_firing: OneSidedFiring,
 }
 
 impl Default for StdpMappingParams {
@@ -236,7 +268,7 @@ impl Default for StdpMappingParams {
             max_weight: f32::INFINITY,
             plasticity_eta: 1.0,
             modulation_group: 0,
-            frozen: false,
+            one_sided_firing: OneSidedFiring::Decrement,
         }
     }
 }
@@ -356,6 +388,13 @@ pub struct RustNPU<
     // STDP configuration/index (RwLock: burst reads, rare writes on genome/mapping updates)
     pub(crate) stdp_mappings: std::sync::RwLock<AHashMap<CorticalMappingKey, StdpMappingParams>>,
     pub(crate) stdp_mapping_index: std::sync::RwLock<AHashMap<CorticalMappingKey, Vec<usize>>>,
+    /// Brain-instance learning-freeze switches (runtime state, saved with the connectome, not
+    /// the genome). A frozen mapping skips the whole plasticity pass: no trace update, no
+    /// weight commit, no associative synthesis. A frozen memory area takes no part in
+    /// learning: mappings into and out of it are skipped and its neurons keep their snapshot.
+    pub(crate) learning_frozen_mappings:
+        std::sync::RwLock<std::collections::HashSet<CorticalMappingKey>>,
+    pub(crate) learning_frozen_areas: std::sync::RwLock<std::collections::HashSet<u32>>,
 
     // Compute backend (Mutex: exclusive access during burst processing)
     // No longer Box<dyn> - monomorphized for better performance
@@ -591,6 +630,8 @@ impl<
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
+            learning_frozen_mappings: std::sync::RwLock::new(std::collections::HashSet::new()),
+            learning_frozen_areas: std::sync::RwLock::new(std::collections::HashSet::new()),
             backend: std::sync::Mutex::new(backend),
             memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
             memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
@@ -805,6 +846,8 @@ impl<
         *self.propagation_engine.write().unwrap() = SynapticPropagationEngine::new();
         self.stdp_mappings.write().unwrap().clear();
         self.stdp_mapping_index.write().unwrap().clear();
+        self.learning_frozen_mappings.write().unwrap().clear();
+        self.learning_frozen_areas.write().unwrap().clear();
         self.memory_replay_frames.write().unwrap().clear();
         self.memory_replay_twin_map.write().unwrap().clear();
         self.burst_count
@@ -1903,6 +1946,15 @@ impl<
         true
     }
 
+    /// Read the R-STDP eligibility trace of a synapse index (`None` when out of range).
+    pub fn get_synapse_eligibility_trace(&self, synapse_idx: usize) -> Option<f32> {
+        let synapse_storage = self.synapse_storage.read().unwrap();
+        if synapse_idx >= synapse_storage.count() {
+            return None;
+        }
+        Some(synapse_storage.eligibility_traces()[synapse_idx])
+    }
+
     /// Rebuild indexes after modifications (call after bulk modifications)
     pub fn rebuild_indexes(&mut self) {
         // ZERO-COPY: Pass synapse_storage by reference
@@ -2526,7 +2578,17 @@ impl<
 
         let mut scheduled = 0usize;
         for (cortical_idx, neurons) in &fire_queue.neurons_by_area {
+            // `replay_trigger = "recall_only"`: episodic pattern-match / encoding injections
+            // (FIRE_KIND_EPISODIC_MEMORY) do not replay. Associative recall and the legacy
+            // force-fire share FIRE_KIND_STDP_ELIGIBLE in the queue, so they cannot be told apart.
+            let recall_only = fire_structures
+                .memory_associative_lif_params
+                .get(cortical_idx)
+                .is_some_and(|p| p.replay_recall_only);
             for neuron in neurons {
+                if recall_only && neuron.fire_kind == FIRE_KIND_EPISODIC_MEMORY {
+                    continue;
+                }
                 let neuron_id = neuron.neuron_id.0;
                 let frames = match replay_frames.get(&neuron_id) {
                     Some(frames) => frames,
@@ -3887,6 +3949,8 @@ impl<
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
@@ -4222,6 +4286,8 @@ impl<
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
+            learning_frozen_mappings: std::sync::RwLock::new(std::collections::HashSet::new()),
+            learning_frozen_areas: std::sync::RwLock::new(std::collections::HashSet::new()),
             backend: std::sync::Mutex::new(backend),
             memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
             memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
@@ -4644,6 +4710,88 @@ impl<
             .lock()
             .map(|m| m.memory_formation_suppressed(cortical_idx))
             .unwrap_or(false)
+    }
+
+    /// Whether a subscribed `memory.freeze` modulator is active for this area right now.
+    /// Read once per area per burst by the plasticity service.
+    pub fn memory_freeze_active(&self, cortical_idx: u32) -> bool {
+        self.modulator_engine
+            .lock()
+            .map(|m| m.memory_freeze_active(cortical_idx))
+            .unwrap_or(false)
+    }
+
+    /// Whether a memory area is held as a full snapshot right now: the brain's learning-freeze
+    /// switch for the area, or an active `memory.freeze` modulator. One answer for both.
+    pub fn memory_area_learning_frozen(&self, cortical_idx: u32) -> bool {
+        self.learning_frozen_areas
+            .read()
+            .unwrap()
+            .contains(&cortical_idx)
+            || self.memory_freeze_active(cortical_idx)
+    }
+
+    /// Set or clear the learning-freeze switch of one area (modulator state is separate).
+    pub fn set_area_learning_frozen(&self, cortical_idx: u32, frozen: bool) {
+        let mut set = self.learning_frozen_areas.write().unwrap();
+        if frozen {
+            set.insert(cortical_idx);
+        } else {
+            set.remove(&cortical_idx);
+        }
+    }
+
+    /// Areas whose learning-freeze switch is on (sorted), without the modulator state.
+    pub fn learning_frozen_area_switches(&self) -> Vec<u32> {
+        let mut v: Vec<u32> = self
+            .learning_frozen_areas
+            .read()
+            .unwrap()
+            .iter()
+            .copied()
+            .collect();
+        v.sort_unstable();
+        v
+    }
+
+    /// Mappings whose learning-freeze switch is on (sorted).
+    pub fn learning_frozen_mapping_switches(&self) -> Vec<(u32, u32)> {
+        let mut v: Vec<(u32, u32)> = self
+            .learning_frozen_mappings
+            .read()
+            .unwrap()
+            .iter()
+            .copied()
+            .collect();
+        v.sort_unstable();
+        v
+    }
+
+    /// Replace both switch sets (snapshot restore). Does not require registered mappings.
+    pub fn restore_learning_frozen(&self, areas: Vec<u32>, mappings: Vec<(u32, u32)>) {
+        *self.learning_frozen_areas.write().unwrap() = areas.into_iter().collect();
+        *self.learning_frozen_mappings.write().unwrap() = mappings.into_iter().collect();
+    }
+
+    /// Drop every switch that names this area (area delete).
+    pub fn clear_learning_frozen_for_area(&self, cortical_idx: u32) {
+        self.learning_frozen_areas
+            .write()
+            .unwrap()
+            .remove(&cortical_idx);
+        self.learning_frozen_mappings
+            .write()
+            .unwrap()
+            .retain(|(src, dst)| *src != cortical_idx && *dst != cortical_idx);
+    }
+
+    /// Drop the freeze switch of one mapping A->B (mapping delete), so a mapping created later
+    /// for the same pair starts unfrozen.
+    pub fn clear_learning_frozen_for_mapping(&self, src_cortical_idx: u32, dst_cortical_idx: u32) {
+        self.learning_frozen_mappings
+            .write()
+            .unwrap()
+            .remove(&(src_cortical_idx, dst_cortical_idx));
     }
 
     /// Cortical indices whose neurons run the spike-train state machine.
@@ -6152,7 +6300,9 @@ impl<
 
     /// Freeze or unfreeze plasticity on a registered mapping A→B without touching its rule.
     ///
-    /// Returns `false` when no plastic mapping is registered for the pair.
+    /// The switch is stored for the pair even when it is not registered (a plastic rule with
+    /// `plasticity_mode: off`), so it applies once the mode is switched on. Returns whether
+    /// a plastic mapping is registered for the pair.
     pub fn set_stdp_mapping_frozen(
         &mut self,
         src_cortical_idx: u32,
@@ -6160,13 +6310,14 @@ impl<
         frozen: bool,
     ) -> bool {
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
-        match self.stdp_mappings.write().unwrap().get_mut(&key) {
-            Some(params) => {
-                params.frozen = frozen;
-                true
-            }
-            None => false,
+        let registered = self.stdp_mappings.read().unwrap().contains_key(&key);
+        let mut set = self.learning_frozen_mappings.write().unwrap();
+        if frozen {
+            set.insert(key);
+        } else {
+            set.remove(&key);
         }
+        registered
     }
 
     /// `Some(frozen)` for a registered plastic mapping A→B, `None` when none is registered.
@@ -6176,11 +6327,10 @@ impl<
         dst_cortical_idx: u32,
     ) -> Option<bool> {
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
-        self.stdp_mappings
-            .read()
-            .unwrap()
-            .get(&key)
-            .map(|params| params.frozen)
+        if !self.stdp_mappings.read().unwrap().contains_key(&key) {
+            return None;
+        }
+        Some(self.learning_frozen_mappings.read().unwrap().contains(&key))
     }
 
     fn rebuild_stdp_mapping_index(&self) {
@@ -6290,12 +6440,46 @@ impl<
     ) -> Result<()> {
         // Frozen mappings keep their registration (and ledger tracking) but are invisible
         // to this pass, so their weights, traces and synapse set stay exactly as they are.
+        //
+        // A `synaptic.learning_rate` factor at or below 0 is a full stop, the same as frozen:
+        // traces, commits and synthesis all pause (traces are neither cleared nor decayed).
+        // The decision is made once per mapping per burst, here, and both the trace/commit
+        // loop and the synthesis loop below only see the mappings that remain.
+        let learning_factors: AHashMap<u16, f32> = {
+            let modulators = self.modulator_engine.lock().map_err(|_| {
+                FeagiError::RuntimeError("modulator engine lock poisoned".to_string())
+            })?;
+            self.stdp_mappings
+                .read()
+                .unwrap()
+                .values()
+                .map(|params| {
+                    (
+                        params.modulation_group,
+                        modulators.learning_factor(params.modulation_group),
+                    )
+                })
+                .collect()
+        };
+        let frozen_mappings = self.learning_frozen_mappings.read().unwrap().clone();
+        let frozen_areas = self.learning_frozen_areas.read().unwrap().clone();
+        let area_frozen = |idx: u32| frozen_areas.contains(&idx) || self.memory_freeze_active(idx);
         let mappings: AHashMap<CorticalMappingKey, StdpMappingParams> = self
             .stdp_mappings
             .read()
             .unwrap()
             .iter()
-            .filter(|(_, params)| !params.frozen)
+            .filter(|(key, params)| {
+                let learning_blocked = frozen_mappings.contains(*key)
+                    || area_frozen(key.0)
+                    || area_frozen(key.1)
+                    || learning_factors
+                        .get(&params.modulation_group)
+                        .copied()
+                        .unwrap_or(1.0)
+                        <= 0.0;
+                !learning_blocked
+            })
             .map(|(key, params)| (*key, *params))
             .collect();
         if mappings.is_empty() {
@@ -6503,6 +6687,7 @@ impl<
         //   1. e_ij <- e_ij * decay
         //   2. if co-fire across the plasticity window:                e_ij += 1
         //      else if uncorrelated firing across the window:          e_ij -= 1
+        //        (skipped when the mapping's `one_sided_firing` is `Ignore`)
         //      (e_ij is a unitless event count; LTP/LTD magnitudes apply at commit)
         //   3. w_ij += eta * R(t) * e_ij * step, step chosen by sign (clamp at 0 on negative
         //      deltas): R>0,e>0 -> delta_plus; R>0,e<0 -> delta_minus; R<0,e>0 -> delta_minus;
@@ -6639,6 +6824,7 @@ impl<
                     if co_fired_within_window {
                         e_ij += 1.0;
                     } else if !params.associative_memory_mapping
+                        && params.one_sided_firing == OneSidedFiring::Decrement
                         && (src_any_present || dst_any_present)
                         && delta_minus > 0.0
                     {
@@ -10004,6 +10190,8 @@ mod tests {
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
             plastic_mappings: Vec::new(),
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),

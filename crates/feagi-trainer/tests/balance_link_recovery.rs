@@ -88,7 +88,7 @@ fn model_info() -> Value {
     };
     json!({
         "timestep_s": STEP_S, "gravity": [0.0, 0.0, -9.81],
-        "bodies": [body("base", 1.0), body("torso", 0.6), body("contact_a", 0.05), body("contact_b", 0.05)],
+        "bodies": [body("base", 1.0), body("torso", 0.6), body("contact_a", 0.05), body("contact_b", 0.05), body("head", 0.1)],
         "free_roots": ["base"], "keyframes": ["home"]
     })
 }
@@ -140,7 +140,10 @@ fn answer(state: &mut State, request: &Value) -> (u16, Value) {
                 "bodies": {"torso": {
                     "tilt_rad": 0.03, "ang_vel": [0.0, 0.0, 0.0],
                     "com": [0.0, 0.0, 0.1], "subtree_com": [0.0, 0.0, 0.15]
-                }},
+                },
+                "contact_a": {"tilt_rad": 0.0, "com": [0.0, 0.05, 0.0]},
+                "contact_b": {"tilt_rad": 0.0, "com": [0.0, -0.05, 0.0]},
+                "head": {"tilt_rad": 0.0, "com": [0.0, 0.0, 0.3]}},
                 "contacts": [contact.clone(), contact],
                 "springs": {},
                 "link": state.link()
@@ -220,6 +223,7 @@ fn criterion() -> BalanceFeetCriterion {
     let mut c = BalanceFeetCriterion::new(
         "torso",
         vec!["contact_a".to_string(), "contact_b".to_string()],
+        "head",
         15.0,
         0.5,
         2.0,
@@ -253,6 +257,7 @@ fn run_phase(
         apply_event: None,
         recovery,
         burst: &RunningClock(std::sync::atomic::AtomicU64::new(0)),
+        memory_counters: None,
     };
     run_balance_phase(
         &mut run,
