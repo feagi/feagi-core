@@ -9,11 +9,15 @@ pub mod storage;
 #[derive(Debug, thiserror::Error)]
 pub enum GenomeError {
     #[error("Unable to find brain region of given ID!")]
+    InvalidRegionID,
+    #[error("Unable to the parent brain region of the given ID!")]
     InvalidParentRegionID,
     #[error("Given region ID already exists!")]
     DuplicateParentRegionID,
     #[error("This operation cannot be applied to the root region!")]
     InvalidRootIDOperation,
+    #[error("This operation cannot be applied to a non-root region!")]
+    InvalidInnerIDOperation,
 }
 
 

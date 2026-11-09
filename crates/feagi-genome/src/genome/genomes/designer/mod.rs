@@ -4,7 +4,7 @@ use crate::basis::cortical_area::CorticalAreaTypeMap;
 use crate::basis::brain_region_identifiers::BrainRegionID;
 use std::collections::HashMap;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use container_brain_region::{BrainRegionContainerRuntimeMut, BrainRegionContainerRuntimeRef};
+use container_brain_region::{BrainRegionContainerRuntimeEnumMut, BrainRegionContainerRuntimeEnumRef};
 use crate::genome::containers::BrainRegionContainer;
 use crate::genome::cortical_area::CorticalAreaContainersDesigner;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
@@ -22,8 +22,8 @@ pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     // TODO NPU
 
     // TODO
-    // connectivity rules (id -> rule)
-    // cortical mappings (id -> cortical mapping set (mapping id -> mapping) )
+    // connectivity rules cache (id -> rule)
+    // cortical mappings cache  (id -> cortical mapping set (mapping id -> mapping) )
     _p: core::marker::PhantomData<FIQ>,
 }
 
@@ -41,15 +41,29 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
         }
     }
 
-    pub fn get_brain_region(&self, id: &BrainRegionID) -> Result<BrainRegionContainerRuntimeRef<'_>, GenomeError> {
+    pub fn get_brain_region(&self, id: &BrainRegionID) -> Result<BrainRegionContainerRuntimeEnumRef<'_>, GenomeError> {
         if &self.root_brain_region.root_id == id {
-            return Ok(BrainRegionContainerRuntimeRef::Root(&self.root_brain_region))
+            return Ok(BrainRegionContainerRuntimeEnumRef::Root(&self.root_brain_region))
         }
         if let Some(brain_region) = self.inner_brain_regions.get(id) {
-            return Ok(BrainRegionContainerRuntimeRef::Inner(brain_region))
+            return Ok(BrainRegionContainerRuntimeEnumRef::Inner(brain_region))
         }
-        Err(GenomeError::InvalidParentRegionID)
+        Err(GenomeError::InvalidRegionID)
     }
+
+    // Some methods, while mutables, will have no dependents and thus can be executed safely independently
+    //region Safe Mutable methods
+
+
+    pub fn reposition_brain_region(&mut self, region_id: &BrainRegionID, new_pos: GenomeObjectPositioning) -> Result<(), GenomeError> {
+        let mut region_enum = self.get_brain_region_mut(region_id)?;
+        let region = region_enum.try_unwrap_as_inner_mut()?;
+        region.positioning = new_pos;
+        Ok(())
+    }
+
+    //endregion
+
 
     pub fn add_new_brain_region(&mut self, parent_region_id: &BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> Result<(), GenomeError> {
         let (new_region, new_id) = BrainRegionContainerInnerRuntime::new_now(parent_region_id.clone(), metadata, positioning);
@@ -58,21 +72,16 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
         Ok(())
     }
 
-    pub fn reposition_brain_region(&mut self, region_id: &BrainRegionID, new_pos: GenomeObjectPositioning) -> Result<(), GenomeError> {
-        let region = self.get_brain_region_mut(region_id)?;
-        let region = region.unwrap_as_inner()?;
-        region.positioning = new_pos;
-        Ok(())
-    }
 
-    pub(crate) fn get_brain_region_mut(&mut self, id: &BrainRegionID) -> Result<BrainRegionContainerRuntimeMut<'_>, GenomeError> {
+
+    pub(crate) fn get_brain_region_mut(&mut self, id: &BrainRegionID) -> Result<BrainRegionContainerRuntimeEnumMut<'_>, GenomeError> {
         if &self.root_brain_region.root_id == id {
-            return Ok(BrainRegionContainerRuntimeMut::Root(&mut self.root_brain_region))
+            return Ok(BrainRegionContainerRuntimeEnumMut::Root(&mut self.root_brain_region))
         }
         if let Some(brain_region) = self.inner_brain_regions.get_mut(id) {
-            return Ok(BrainRegionContainerRuntimeMut::Inner(brain_region))
+            return Ok(BrainRegionContainerRuntimeEnumMut::Inner(brain_region))
         }
-        Err(GenomeError::InvalidParentRegionID)
+        Err(GenomeError::InvalidRegionID)
     }
 
 
