@@ -2,6 +2,7 @@ use crate::common_systems::neurogenesis_generator_uniform_defaults::Neurogenesis
 use crate::connectome_basis::neuron_model::foundation_death::{NMFoundationDeathDataCorticalInternal, NMFoundationDeathDataCorticalProperties, NMFoundationDeathDataCorticalScratch, NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronInternal, NMFoundationDeathDataNeuronScratch, NMFoundationDeathDataNeuronVariance, NMFoundationDeathTrait};
 use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
 use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 use half::{bf16, f16};
 
 //region enums
@@ -13,6 +14,69 @@ pub enum NMFoundationDeathQuantKind {
     BFloat16,
     Float32,
     Float64,
+}
+
+/// Allows Neurogenesis of the Foundation Death Neuron Model by its generator for a given quantization
+#[derive(Clone, Debug)]
+pub enum NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ> {
+    /// The quantization of the generator held
+    pub const fn quant_kind(&self) -> NMFoundationDeathQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationDeathQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationDeathQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationDeathQuantKind::Float32,
+            Self::Float64(_) => NMFoundationDeathQuantKind::Float64,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Foundation Death Neuron Model from its stored data for a given quantization
+#[derive(Clone, Debug)] // TODO add serde
+pub enum NMFoundationDeathNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageQuanted<FIQ> {
+    /// The quantization of the storage held
+    pub const fn quant_kind(&self) -> NMFoundationDeathQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationDeathQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationDeathQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationDeathQuantKind::Float32,
+            Self::Float64(_) => NMFoundationDeathQuantKind::Float64,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Foundation Death Neuron Model from either its stored data or by its
+/// generator, for a given quantization
+pub enum NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ> {
+    /// The quantization of the storage or generator held
+    pub const fn quant_kind(&self) -> NMFoundationDeathQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationDeathQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationDeathQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationDeathQuantKind::Float32,
+            Self::Float64(_) => NMFoundationDeathQuantKind::Float64,
+        }
+    }
 }
 
 

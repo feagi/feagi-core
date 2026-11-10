@@ -2,6 +2,7 @@ use crate::common_systems::neurogenesis_generator_uniform_defaults::Neurogenesis
 use crate::connectome_basis::neuron_model::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
 use crate::connectome_basis::neuron_model::{NeuronLayoutTagSingleSteppedDynamic, NeuronModel};
 use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 
 //region enums
 
@@ -9,6 +10,51 @@ use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, Membr
 /// Describes the quantization of the Memory Fire Hashing Neuron Model
 pub enum NMMemoryFireHashingQuantKind {
     Standard32Bit,
+}
+
+/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model by its generator for a given quantization
+#[derive(Clone, Debug)]
+pub enum NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ> {
+    /// The quantization of the generator held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from its stored data for a given quantization
+#[derive(Clone, Debug)] // TODO add serde
+pub enum NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ> {
+    /// The quantization of the storage held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from either its stored data or by its
+/// generator, for a given quantization
+pub enum NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ> {
+    /// The quantization of the storage or generator held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
 }
 
 

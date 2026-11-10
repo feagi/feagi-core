@@ -2,6 +2,7 @@ use crate::common_systems::neurogenesis_generator_uniform_defaults::Neurogenesis
 use crate::connectome_basis::neuron_model::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalScratch, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronScratch, NMFoundationPowerDataNeuronVariance, NMFoundationPowerTrait};
 use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
 use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 use half::{bf16, f16};
 
 //region enums
@@ -13,6 +14,69 @@ pub enum NMFoundationPowerQuantKind {
     BFloat16,
     Float32,
     Float64,
+}
+
+/// Allows Neurogenesis of the Foundation Power Neuron Model by its generator for a given quantization
+#[derive(Clone, Debug)]
+pub enum NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ> {
+    /// The quantization of the generator held
+    pub const fn quant_kind(&self) -> NMFoundationPowerQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationPowerQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationPowerQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationPowerQuantKind::Float32,
+            Self::Float64(_) => NMFoundationPowerQuantKind::Float64,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Foundation Power Neuron Model from its stored data for a given quantization
+#[derive(Clone, Debug)] // TODO add serde
+pub enum NMFoundationPowerNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageQuanted<FIQ> {
+    /// The quantization of the storage held
+    pub const fn quant_kind(&self) -> NMFoundationPowerQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationPowerQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationPowerQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationPowerQuantKind::Float32,
+            Self::Float64(_) => NMFoundationPowerQuantKind::Float64,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Foundation Power Neuron Model from either its stored data or by its
+/// generator, for a given quantization
+pub enum NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
+    /// The quantization of the storage or generator held
+    pub const fn quant_kind(&self) -> NMFoundationPowerQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationPowerQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationPowerQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationPowerQuantKind::Float32,
+            Self::Float64(_) => NMFoundationPowerQuantKind::Float64,
+        }
+    }
 }
 
 

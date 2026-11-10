@@ -11,6 +11,43 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+use crate::neuron_models::models::memory_fire_hashing::quantizations::{NMMemoryFireHashingNeurogenesisGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageQuanted, NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingQuantKind, NMMemoryFireHashingQuantStandard32Bit};
+use crate::neuron_models::{NeuronModelEnumConversionError, ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+
+//region Generator
+
+// NOTE: we are using NeurogenesisGeneratorUniformDefault, not a specific impl for this model
+
+//region Impls
+
+impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+        NMMemoryFireHashingNeurogenesisGeneratorQuanted::Standard32Bit(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMMemoryFireHashingQuantKind>;
+
+    fn try_from(value: NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMMemoryFireHashingNeurogenesisGeneratorQuanted::Standard32Bit(v) => {
+                Ok(v)
+            },
+        }
+    }
+}
+
+//endregion
+
+//endregion
 
 //region Defaults
 
@@ -58,5 +95,79 @@ impl<NM: NMMemoryFireHashingTrait> CorticalDataVarianceSpecification<NM> for NMM
         NMMemoryFireHashingDataNeuronVariance::new()
     }
 }
+
+//endregion
+
+//region Storage and StorageOrGenerator Conversions
+
+//region Storage
+
+impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+        NMMemoryFireHashingNeurogenesisStorageQuanted::Standard32Bit(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMMemoryFireHashingQuantKind>;
+
+    fn try_from(value: NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMMemoryFireHashingNeurogenesisStorageQuanted::Standard32Bit(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMMemoryFireHashingQuantStandard32Bit::QUANT_KIND,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+//endregion
+
+//region Storage Or Generator
+
+impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+        NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMMemoryFireHashingQuantKind>;
+
+    fn try_from(value: NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMMemoryFireHashingQuantStandard32Bit::QUANT_KIND,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+//endregion
 
 //endregion

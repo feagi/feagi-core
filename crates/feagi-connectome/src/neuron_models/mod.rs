@@ -97,14 +97,69 @@
 //! 2. Declare the folder below, and re-export it in `connectome_basis::neuron_model`.
 //! 3. Add the model and its quantization levels to the template in [`family`].
 
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisFromStorage;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
 
-#[macro_use]
-pub mod family;
-pub mod neurogenesis_dispatch;
+//#[macro_use]
+//pub mod family;
+//pub mod neurogenesis_dispatch;
+
+
 pub mod models;
+
+
+// These are types that allow easy referencing to certain structs
+//region Proxies
+
+/// A struct of stored data for a neuron models data that can be used to generate that cortical area
+/// as it was saved.
+type ProxyNMNeuroGenesisFromStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+    = NeurogenesisFromStorage<FIQ, NM>;
+
+/// A struct for a given neuron model that allows creating it from minimal cortical level data.
+/// This can be saved in the genome. Note implementation differs by Neuron Model
+type ProxyNMNeuroGenesisFromGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+    = NM::NeurogenesisByGeneratorType<FIQ>;
+
+/// An enum that that acts as a generator for a neuron model, that underneath can be of a storage
+/// type or of the neuron models specific generator. Useful for exports where we may want
+/// to optionally allow the use of storage, or not, to control export sizes
+type ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+    = NeurogenesisFromStorageOrByGenerator<FIQ, NM, NM::NeurogenesisByGeneratorType<FIQ>>;
+
+
+//endregion
+
+/// when going from some enums to others. `K` is the kind enum of the enum being unwrapped, such
+/// as the `QuantKind` of a neuron model
+#[derive(Debug, thiserror::Error)]
+pub enum NeuronModelEnumConversionError<K: core::fmt::Debug> {
+    #[error("Unable to unwrap given enum to neuron model and / or quantization! Expected {expected:?}, but the enum holds {actual:?}")]
+    IncompatibleUnwrap {
+        /// The kind the enum was asked to unwrap to
+        expected: K,
+        /// The kind the enum actually holds
+        actual: K,
+    }
+}
+
+
+
+
+
+
+
+
+
+
 // Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
 //pub mod initializers;
+
+
+
 
 //region Example: nested enums
 
@@ -113,6 +168,9 @@ pub mod models;
 // compile as an integration test of this crate, with these imports:
 //
 
+
+
+/*
 fn example() {
     use crate::connectome_basis::neuron_model::{
         NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisFromStorageOrByGeneratorEnum,
@@ -192,4 +250,6 @@ fn example() {
     assert_eq!(neuron_count, 4);
 }
 
+
+ */
 //endregion

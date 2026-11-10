@@ -2,6 +2,7 @@ use crate::common_systems::neurogenesis_generator_uniform_defaults::Neurogenesis
 use crate::connectome_basis::neuron_model::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait};
 use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
 use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 
 //region enums
 
@@ -9,6 +10,51 @@ use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, Membr
 /// Describes the quantization of the Feagi Advanced Neuron Model
 pub enum NMFeagiAdvancedQuantKind {
     Standard32Bit,
+}
+
+/// Allows Neurogenesis of the Feagi Advanced Neuron Model by its generator for a given quantization
+#[derive(Clone, Debug)]
+pub enum NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ> {
+    /// The quantization of the generator held
+    pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Feagi Advanced Neuron Model from its stored data for a given quantization
+#[derive(Clone, Debug)] // TODO add serde
+pub enum NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ> {
+    /// The quantization of the storage held
+    pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// Allows Neurogenesis of the Feagi Advanced Neuron Model from either its stored data or by its
+/// generator, for a given quantization
+pub enum NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ> {
+    /// The quantization of the storage or generator held
+    pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit,
+        }
+    }
 }
 
 
@@ -25,7 +71,7 @@ impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
-        super::neurogenesis::FeagiAdvancedNeurogenesisDefaults<FIQ, Self>;
+        super::neurogenesis::FeagiAdvancedScratchVarianceGenerator<FIQ, Self>;
 
     type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
