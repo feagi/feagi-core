@@ -6,25 +6,28 @@ use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CorticalAreaGenomeCorticalTypedMap<FIQ: FeagiIndexQuantization>
 {
     pub foundation: CorticalAreaGenomeCorticalFoundationSubtypedMap<FIQ>,
     pub processing: CorticalAreaGenomeCorticalProcessingSubtypedMap<FIQ>,
 }
 
-
-
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CorticalAreaGenomeCorticalFoundationSubtypedMap<FIQ: FeagiIndexQuantization>
 {
     pub power: HashMap<[u8; 6], CorticalAreaContainerCommon<CTGeneratorFoundationPowerModeled<FIQ>>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CorticalAreaGenomeCorticalProcessingSubtypedMap<FIQ: FeagiIndexQuantization>
 {
     pub interconnect: HashMap<[u8; 6], CorticalAreaContainerCommon<CTGeneratorProcessingInterconnectModeled<FIQ>>>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CorticalAreaContainerCommon<CorticalGeneratorEnum> {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,

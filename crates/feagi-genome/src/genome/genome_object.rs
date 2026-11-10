@@ -44,6 +44,7 @@ SignedIntegerSpatial<i64, 2>;
 
 // TODO sizing limits?
 /// Stores data that all genome objects have. Bears no computational consequence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenomeObjectMetadata {
     pub name: String,
     pub description: String,

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait};
 use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
@@ -5,6 +6,8 @@ use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisG
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+
+
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -14,7 +17,7 @@ pub enum NMFeagiAdvancedQuantKind {
 }
 
 /// Allows Neurogenesis of the Feagi Advanced Neuron Model by its generator for a given quantization
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
@@ -29,7 +32,7 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorQuanted<FI
 }
 
 /// Allows Neurogenesis of the Feagi Advanced Neuron Model from its stored data for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
@@ -45,7 +48,7 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>
 
 /// Allows Neurogenesis of the Feagi Advanced Neuron Model from either its stored data or by its
 /// generator, for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }

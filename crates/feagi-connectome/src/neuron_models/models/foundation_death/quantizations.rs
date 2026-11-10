@@ -6,6 +6,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::N
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use half::{bf16, f16};
+use serde::{Deserialize, Serialize};
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -18,7 +19,7 @@ pub enum NMFoundationDeathQuantKind {
 }
 
 /// Allows Neurogenesis of the Foundation Death Neuron Model by its generator for a given quantization
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
@@ -39,7 +40,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisGeneratorQuanted<
 }
 
 /// Allows Neurogenesis of the Foundation Death Neuron Model from its stored data for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFoundationDeathNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>),
@@ -61,7 +62,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageQuanted<FI
 
 /// Allows Neurogenesis of the Foundation Death Neuron Model from either its stored data or by its
 /// generator, for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>),

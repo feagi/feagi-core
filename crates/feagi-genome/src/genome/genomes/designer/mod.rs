@@ -13,6 +13,7 @@ use crate::genome::genomes::designer::container_cortical_area::CorticalAreaGenom
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
 /// as the interface and translator for modifications to that brain directly on the genome and
 /// through the NPU
+
 pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     root_brain_region: BrainRegionContainerRootRuntime,
     inner_brain_regions: HashMap<BrainRegionID, BrainRegionContainerInnerRuntime>,

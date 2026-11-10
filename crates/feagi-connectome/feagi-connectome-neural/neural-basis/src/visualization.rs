@@ -1,11 +1,16 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "alloc")]
 use feagi_basis::collections::bit_packed_bool::par_data::BitBatchParDataVector;
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
+#[cfg(feature = "alloc")]
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
+#[cfg(feature = "alloc")]
 use crate::quantization_levels::FeagiIndexQuantization;
 
 pub const VISUALIZATION_VERSION: u8 = 0;
 
+/// Backed by a heap allocated `BitBatchParDataVector`, so requires alloc
+#[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BurstVisualizationData<FIQ: FeagiIndexQuantization> {
     pub version: u8,
@@ -17,6 +22,7 @@ pub struct BurstVisualizationData<FIQ: FeagiIndexQuantization> {
     >
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> BurstVisualizationData<FIQ> {
     pub fn new() -> Self {
         Self {
@@ -29,6 +35,7 @@ impl<FIQ: FeagiIndexQuantization> BurstVisualizationData<FIQ> {
 
 /// Each channel slot keeps its allocation between bursts. Every burst sending visualization
 /// overwrites it, so nothing is cleared on recycling
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> Recyclable for BurstVisualizationData<FIQ> {
     fn new_for_recycler() -> Self {
         Self::new()

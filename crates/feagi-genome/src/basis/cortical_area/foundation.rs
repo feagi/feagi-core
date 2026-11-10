@@ -1,4 +1,5 @@
-use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
+use serde::{Deserialize, Serialize};
+use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalIdentifierParseError, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -28,16 +29,19 @@ pub enum CorticalTypeFoundationSubtypeKind {
 
 //region Cortical Subtype Enums
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTGeneratorFoundationPowerModeled<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTStorageFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTStorageFoundationPowerModeled<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTStorageOrGeneratorFoundationPowerModeled<FIQ>)
@@ -48,7 +52,7 @@ pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 //region CorticalIdentifier
 
 #[repr(C, u8)]
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub(in crate::basis) enum CorticalIdentifierFoundation {
     Power([u8; 6]) = 0
 }
@@ -57,7 +61,7 @@ impl CorticalIdentifierFoundation {
 
     /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
     /// correct inner!
-    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
+    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
     {
         debug_assert_eq!(bytes[0], 0);
         Ok(CorticalIdentifier::Foundation(
@@ -66,8 +70,8 @@ impl CorticalIdentifierFoundation {
                     let [_, _, last_six @ ..] = bytes;
                     CorticalIdentifierFoundation::Power(last_six)
                 },
-                _ => {
-                    return Err(())
+                err => {
+                    return Err(CorticalIdentifierParseError::InvalidCorticalSubtype(err))
                 }
             }
         ))
@@ -118,14 +122,17 @@ impl CorticalTypeFoundationPowerSupportedNeuronModels for NMFoundationPowerQuant
 
 // NOTE: these only have 1 neuron model
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTStorageFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisStorageQuanted<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CTStorageOrGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>)
 }

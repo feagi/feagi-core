@@ -1,9 +1,9 @@
 //! Morphologies: named connection patterns (vectors, patterns, functions, composite) used by
 //! cortical mappings. Converted from the old `morphology` endpoints.
 
-use crate::basis::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use crate::basis::cortical_area::CorticalIdentifierBase64;
 
 /// A morphology definition, as listed by `Morphologies`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

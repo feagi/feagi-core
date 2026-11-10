@@ -6,6 +6,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::N
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use half::{bf16, f16};
+use serde::{Deserialize, Serialize};
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -39,7 +40,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorQuanted<
 }
 
 /// Allows Neurogenesis of the Foundation Power Neuron Model from its stored data for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFoundationPowerNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantBFloat16>),
@@ -61,7 +62,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageQuanted<FI
 
 /// Allows Neurogenesis of the Foundation Power Neuron Model from either its stored data or by its
 /// generator, for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat16>),
     BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantBFloat16>),

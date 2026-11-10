@@ -1,9 +1,9 @@
 //! Brain regions: hierarchical groupings of cortical areas (and child regions), with their
 //! layout coordinates and IO designations. Converted from the old `region` endpoints.
 
-use crate::basis::cortical_area::cortical_identifier_base64::CorticalIdentifierBase64;
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use crate::basis::cortical_area::CorticalIdentifierBase64;
 
 /// Summary of one brain region and its members, as listed by `RegionsMembers`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

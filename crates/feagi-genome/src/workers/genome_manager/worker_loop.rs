@@ -10,7 +10,8 @@ use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use core::ops::ControlFlow;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::genome::genome_object::GenomeObjectMetadata;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
 /// request is answered while idle
@@ -35,7 +36,11 @@ pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
 )
 {
 
-    let mut graph = DesignerGenome::<FIQ>::new_genome_now("Genome Test Name".to_string());
+    let root_metadata = GenomeObjectMetadata {
+        name: "Genome Test Name".to_string(),
+        description: "".to_string(),
+    };
+    let mut graph = DesignerGenome::<FIQ>::new_genome_now(root_metadata);
 
     let mut commands = FeagiWorkerCommandRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;

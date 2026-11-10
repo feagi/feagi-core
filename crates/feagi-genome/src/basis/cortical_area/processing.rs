@@ -1,4 +1,5 @@
-use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
+use serde::{Deserialize, Serialize};
+use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalIdentifierParseError, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -46,7 +47,7 @@ pub enum CTStorageOrGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
 //region CorticalIdentifier
 
 #[repr(C, u8)]
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CorticalIdentifierProcessing {
     Interconnect([u8; 6])
 }
@@ -54,7 +55,7 @@ pub enum CorticalIdentifierProcessing {
 impl CorticalIdentifierProcessing {
     /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
     /// correct inner!
-    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
+    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
     {
         debug_assert_eq!(bytes[0], 1);
         Ok(CorticalIdentifier::Processing(
@@ -63,8 +64,8 @@ impl CorticalIdentifierProcessing {
                     let [_, _, last_six @ ..] = bytes;
                     CorticalIdentifierProcessing::Interconnect(last_six)
                 },
-                _ => {
-                    return Err(())
+                err => {
+                    return Err(CorticalIdentifierParseError::InvalidCorticalSubtype(err))
                 }
             }
         ))
@@ -106,16 +107,19 @@ impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiSimpleQu
 
 //endregion
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CTGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CTStorageProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
