@@ -1,8 +1,8 @@
-use std::collections::HashSet;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::cortical_area::faux_cortical_identifier::FauxCorticalIdentifier;
+use crate::basis::cortical_area::FauxCorticalIdentifier;
 use crate::genome::genome_editing::genome_edit_sequence::brain_region::GenomeEditStepBrainRegionEnum;
 use crate::genome::genome_editing::genome_edit_sequence::cortical_area::GenomeEditStepCorticalAreaEnum;
+use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use std::collections::HashSet;
 
 
 pub mod brain_region;

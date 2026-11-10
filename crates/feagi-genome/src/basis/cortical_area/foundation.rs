@@ -1,10 +1,10 @@
+use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::models::foundation_power::NMFoundationPowerTrait;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
-use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
 
+//region Cortical Subtype
 
 /// These are the core cortical areas of FEAGI, that typically have some unique functionality
 /// that are highly specific and possibly integrate with underlying systems. This Cortical Type
@@ -18,16 +18,38 @@ where
     NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel>
 {}
 
-
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Hash, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub enum CorticalTypeFoundationSubtypeKind {
     Power = 0,
 }
 
+//endregion
+
+//region Cortical Subtype Enums
+
+pub enum CTGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Power(CTGeneratorFoundationPowerModeled<FIQ>)
+}
+
+pub enum CTStorageFoundationSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Power(CTStorageFoundationPowerModeled<FIQ>)
+}
+
+pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Power(CTStorageOrGeneratorFoundationPowerModeled<FIQ>)
+}
+
+//endregion
+
+//region CorticalIdentifier
+
 #[repr(C, u8)]
-#[derive(Copy, Clone, Debug)]
-pub enum CorticalIdentifierFoundation {
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub(in crate::basis) enum CorticalIdentifierFoundation {
     Power([u8; 6]) = 0
 }
 
@@ -35,7 +57,7 @@ impl CorticalIdentifierFoundation {
 
     /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
     /// correct inner!
-    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
+    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
     {
         debug_assert_eq!(bytes[0], 0);
         Ok(CorticalIdentifier::Foundation(
@@ -53,7 +75,9 @@ impl CorticalIdentifierFoundation {
 
 }
 
+//endregion
 
+//region Subtypes
 
 //region Power
 
@@ -107,4 +131,4 @@ pub enum CTStorageOrGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization>
 
 //endregion
 
-
+//endregion

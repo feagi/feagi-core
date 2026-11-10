@@ -1,7 +1,8 @@
-use crate::basis::cortical_area::CorticalIdentifier;
 
 
 //region Mapping ID
+
+use crate::basis::cortical_area::CorticalIdentifier;
 
 /// Defines a directional mapping between 2 cortical areas (or to itself)
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]

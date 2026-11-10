@@ -1,9 +1,8 @@
-use feagi_connectome::connectome_basis::neuron_model::{NMEnum, NeurogenesisFromStorageOrByGeneratorContainer};
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region_identifiers::BrainRegionID;
-use crate::basis::cortical_area::faux_cortical_identifier::FauxCorticalIdentifier;
+use crate::basis::cortical_area::{CTStorageOrGeneratorTyped, FauxCorticalIdentifier};
 use crate::genome::genome_editing::genome_edit_sequence::{GenomeEditSequence, GenomeEditSequenceIntensity, GenomeEditSequenceStep, GenomeEditSequenceStepEnum};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
+use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
 pub struct GenomeEditStepCorticalAreaBuilder<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
 
@@ -15,7 +14,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepCorticalAreaBuilder<'a, FIQ>
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
         faux_cortical_identifier: FauxCorticalIdentifier,
-        generator: NMEnum<NeurogenesisFromStorageOrByGeneratorContainer<FIQ>>,
+        generator: CTStorageOrGeneratorTyped<FIQ>
     ) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
         // true if not contained, false if did
         if self.0.contained_faux_cortical_ids.insert(faux_cortical_identifier) {
@@ -66,7 +65,7 @@ pub(crate) struct GenomeEditStepCorticalAreaAddArea<FIQ: FeagiIndexQuantization>
     pub(crate) metadata: GenomeObjectMetadata,
     pub(crate) positioning: GenomeObjectPositioning,
     pub(crate) faux_cortical_identifier: FauxCorticalIdentifier,
-    pub(crate) generator: NMEnum<NeurogenesisFromStorageOrByGeneratorContainer<FIQ>>,
+    pub(crate) generator: CTStorageOrGeneratorTyped<FIQ>
 }
 
 impl<FIQ: FeagiIndexQuantization> Into<GenomeEditSequenceStepEnum<FIQ>> for GenomeEditStepCorticalAreaAddArea<FIQ> {

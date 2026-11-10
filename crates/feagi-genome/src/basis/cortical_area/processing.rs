@@ -1,9 +1,11 @@
+use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantStandard32Bit};
 use feagi_connectome::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantStandard32Bit};
-use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
+
+//region Cortical Subtype
 
 pub trait CorticalTypeProcessing<NM>: CorticalType<
     NM,
@@ -15,12 +17,36 @@ where
 
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Hash, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub enum CorticalTypeProcessingSubtypeKind {
     Interconnect = 0,
 }
+
+//endregion
+
+//region Cortical Subtype Enums
+
+pub enum CTGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Interconnect(CTGeneratorProcessingInterconnectModeled<FIQ>)
+}
+
+pub enum CTStorageProcessingSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Interconnect(CTStorageProcessingInterconnectModeled<FIQ>)
+}
+
+pub enum CTStorageOrGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
+{
+    Interconnect(CTStorageOrGeneratorProcessingInterconnectModeled<FIQ>)
+}
+
+//endregion
+
+//region CorticalIdentifier
+
 #[repr(C, u8)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum CorticalIdentifierProcessing {
     Interconnect([u8; 6])
 }
@@ -45,6 +71,9 @@ impl CorticalIdentifierProcessing {
     }
 }
 
+//endregion
+
+//region Subtypes
 
 //region Interconnect
 
@@ -94,5 +123,5 @@ pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuanti
 
 //endregion
 
-
+//endregion
 

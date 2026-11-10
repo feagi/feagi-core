@@ -1,14 +1,11 @@
-use std::collections::HashSet;
 use crate::basis::brain_region_identifiers::{BrainRegionAncestryID, BrainRegionID};
 use crate::basis::cortical_area::CorticalIdentifier;
-use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
-use crate::genome::genomes::designer::container_brain_region::BrainRegionContainerInnerRuntime;
-use crate::genome::genomes::GenomeError;
+use crate::genome::genome_object::GenomeObjectMetadata;
+use std::collections::HashSet;
 
 // Note: no positioning as the root region doesnt have it
 
 pub trait BrainRegionContainer {
-
     fn is_root(&self) -> bool;
 
     fn get_metadata(&self) -> &GenomeObjectMetadata;

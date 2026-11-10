@@ -1,9 +1,9 @@
-use std::collections::HashSet;
 use crate::basis::brain_region_identifiers::{BrainRegionAncestryID, BrainRegionID};
 use crate::basis::cortical_area::CorticalIdentifier;
 use crate::genome::containers::{BrainRegionContainer, BrainRegionContainerMut};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::GenomeError;
+use std::collections::HashSet;
 
 /// A borrowed brain region of the designer genome, either the root or an inner region
 #[derive(Clone, Copy)]
