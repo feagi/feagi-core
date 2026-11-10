@@ -1,4 +1,4 @@
-use crate::neuron_models::models::foundation_power::data::NMFoundationPowerTrait;
+use crate::neuron_models::models::foundation_power::NMFoundationPowerTrait;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;

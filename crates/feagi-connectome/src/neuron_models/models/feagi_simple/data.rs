@@ -1,63 +1,11 @@
+use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use crate::neuron_models::family::NeuronModel;
 
 create_wrapped_quantized_decimal!(
     /// For handling timing
     pub Period
 );
-
-/// Quantization For the Feagi Simple type
-pub trait NMFeagiSimpleTrait: NeuronModel<
-    NeuronLayoutTag=NeuronLayoutTagVoxel,
-    CorticalDataProperties=NMFeagiSimpleDataCorticalProperties<Self>,
-    CorticalDataInternal=NMFeagiSimpleDataCorticalInternal<Self>,
-    CorticalDataScratch=NMFeagiSimpleDataCorticalScratch<Self>,
-    CorticalDataVariance=NMFeagiSimpleDataCorticalVariance<Self>,
-    NeuronDataInternal=NMFeagiSimpleDataNeuronInternal<Self>,
-    NeuronDataScratch=NMFeagiSimpleDataNeuronScratch<Self>,
-    NeuronDataVariance=NMFeagiSimpleDataNeuronVariance<Self>
->
-{
-    #[doc = " For handling timing"]
-    type Period: ::feagi_basis::quantization::quantizable::QuantizedDecimalUnwrappedTrait;
-}
-
-//region Quant levels
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFeagiSimpleQuantDefaultQuant;
-
-impl NMFeagiSimpleTrait for NMFeagiSimpleQuantDefaultQuant {
-    type Period = f32;
-}
-
-impl NeuronModel for NMFeagiSimpleQuantDefaultQuant {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> = 
-        super::neurogenesis::FeagiSimpleNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> = 
-        NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMFeagiSimpleDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMFeagiSimpleDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMFeagiSimpleDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMFeagiSimpleDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMFeagiSimpleDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMFeagiSimpleDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMFeagiSimpleDataNeuronVariance<Self>;
-}
-
-impl MembranePotentialQuantization for NMFeagiSimpleQuantDefaultQuant
-{
-    type MembranePotentialQuant = f32;
-}
-
-//endregion
 
 //region Cortical Properties
 

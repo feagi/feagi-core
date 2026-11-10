@@ -1,63 +1,11 @@
+use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use crate::neuron_models::family::NeuronModel;
 
 create_wrapped_quantized_decimal!(
     /// For handling timing
     pub Period
 );
-
-/// Quantization For the Memory type
-pub trait NMMemoryFireHashingTrait: NeuronModel<
-    NeuronLayoutTag=NeuronLayoutTagSingleSteppedDynamic,
-    CorticalDataProperties=NMMemoryFireHashingDataCorticalProperties<Self>,
-    CorticalDataInternal=NMMemoryFireHashingDataCorticalInternal<Self>,
-    CorticalDataScratch=NMMemoryFireHashingDataCorticalScratch<Self>,
-    CorticalDataVariance=NMMemoryFireHashingDataCorticalVariance<Self>,
-    NeuronDataInternal=NMMemoryFireHashingDataNeuronInternal<Self>,
-    NeuronDataScratch=NMMemoryFireHashingDataNeuronScratch<Self>,
-    NeuronDataVariance=NMMemoryFireHashingDataNeuronVariance<Self>
->
-{
-    #[doc = " For handling timing"]
-    type Period: ::feagi_basis::quantization::quantizable::QuantizedDecimalUnwrappedTrait;
-}
-
-//region Quant levels
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMMemoryFireHashingQuantDefaultQuant;
-
-impl NMMemoryFireHashingTrait for NMMemoryFireHashingQuantDefaultQuant {
-    type Period = f32;
-}
-
-impl NeuronModel for NMMemoryFireHashingQuantDefaultQuant {
-    type NeuronLayoutTag = NeuronLayoutTagSingleSteppedDynamic;
-
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> = 
-        super::neurogenesis::MemoryFireHashingNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> = 
-        NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMMemoryFireHashingDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMMemoryFireHashingDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMMemoryFireHashingDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMMemoryFireHashingDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMMemoryFireHashingDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMMemoryFireHashingDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMMemoryFireHashingDataNeuronVariance<Self>;
-}
-
-impl MembranePotentialQuantization for NMMemoryFireHashingQuantDefaultQuant
-{
-    type MembranePotentialQuant = f32;
-}
-
-//endregion
 
 //region Cortical Properties
 

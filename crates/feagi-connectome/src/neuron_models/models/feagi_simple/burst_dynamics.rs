@@ -1,4 +1,5 @@
-use crate::neuron_models::models::feagi_simple::data::{NMFeagiSimpleTrait, Period};
+use crate::neuron_models::models::feagi_simple::data::Period;
+use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
 use feagi_basis::BurstIndex;

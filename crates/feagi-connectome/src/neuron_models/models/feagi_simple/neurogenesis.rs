@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NMFeagiSimpleTrait;
+use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
 use crate::connectome_basis::neuron_model::NeuronLayoutData;
 use crate::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronVariance};
 use core::marker::PhantomData;

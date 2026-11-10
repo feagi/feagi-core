@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NMFoundationDeathTrait;
+use crate::neuron_models::models::foundation_death::NMFoundationDeathTrait;
 use crate::neuron_models::models::foundation_death::{NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronVariance};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;

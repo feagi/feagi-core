@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use super::data::NMMemoryFireHashingTrait;
+use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronVariance};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
