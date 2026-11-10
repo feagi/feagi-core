@@ -1,9 +1,10 @@
-use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use crate::neuron_models::models::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalScratch, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronScratch, NMFoundationPowerDataNeuronVariance, NMFoundationPowerTrait};
+use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 use half::{bf16, f16};
 //region enums
 
@@ -210,3 +211,125 @@ impl MembranePotentialQuantization for NMFoundationPowerQuantFloat64
 {
     type MembranePotentialQuant = f64;
 }
+
+//region Model Level Conversions
+
+impl From<NMFoundationPowerQuantKind> for NMKind {
+    fn from(value: NMFoundationPowerQuantKind) -> Self {
+        NMKind::FoundationPower(value)
+    }
+}
+
+impl TryFrom<NMKind> for NMFoundationPowerQuantKind {
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMKind) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMKind::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>) -> Self {
+        NMNeurogenesisGeneratorModeled::FoundationPower(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisGeneratorModeled::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFoundationPowerNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFoundationPowerNeurogenesisStorageQuanted<FIQ>) -> Self {
+        NMNeurogenesisStorageModeled::FoundationPower(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMFoundationPowerNeurogenesisStorageQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisStorageModeled::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
+        NMNeurogenesisStorageOrGeneratorModeled::FoundationPower(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisStorageOrGeneratorModeled::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+//endregion

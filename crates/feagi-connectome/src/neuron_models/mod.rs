@@ -106,19 +106,7 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 
 pub mod models;
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub mod neurogenesis_generator_uniform_defaults;
 // Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
 //pub mod initializers;
 

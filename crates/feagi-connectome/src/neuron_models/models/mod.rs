@@ -28,6 +28,29 @@ pub enum NMKind {
     MemoryFireHashing(NMMemoryFireHashingQuantKind),
 }
 
+/// Describes the neuron model alone, without its quantization
+#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+pub enum NMModelKind {
+    FeagiAdvanced,
+    FeagiSimple,
+    FoundationDeath,
+    FoundationPower,
+    MemoryFireHashing,
+}
+
+impl NMKind {
+    /// The neuron model, without its quantization
+    pub const fn model_kind(&self) -> NMModelKind {
+        match self {
+            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
+            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
+            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
+            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
+        }
+    }
+}
+
 /// Narrows the Generator of a neuron model, down to the neuron model, with a nested enum
 /// specifying the generator of that quant
 #[derive(Clone, Debug)]
@@ -37,6 +60,19 @@ pub enum NMNeurogenesisGeneratorModeled<FIQ: FeagiIndexQuantization> {
     FoundationDeath(NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>),
     FoundationPower(NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMNeurogenesisGeneratorModeled<FIQ> {
+    /// The neuron model held, without its quantization
+    pub const fn model_kind(&self) -> NMModelKind {
+        match self {
+            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
+            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
+            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
+            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
+        }
+    }
 }
 
 /// Narrows the Storage of a neuron model, down to the neuron model, with a nested enum
@@ -50,6 +86,19 @@ pub enum NMNeurogenesisStorageModeled<FIQ: FeagiIndexQuantization> {
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>)
 }
 
+impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageModeled<FIQ> {
+    /// The neuron model held, without its quantization
+    pub const fn model_kind(&self) -> NMModelKind {
+        match self {
+            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
+            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
+            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
+            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
+        }
+    }
+}
+
 /// Narrows the StorageOrGenerator enum of a neuron model, down to the neuron model, with a nested enum
 /// specifying the storage or generator enum of that quant
 #[derive(Clone, Debug)]
@@ -59,6 +108,19 @@ pub enum NMNeurogenesisStorageOrGeneratorModeled<FIQ: FeagiIndexQuantization> {
     FoundationDeath(NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FoundationPower(NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageOrGeneratorModeled<FIQ> {
+    /// The neuron model held, without its quantization
+    pub const fn model_kind(&self) -> NMModelKind {
+        match self {
+            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
+            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
+            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
+            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
+        }
+    }
 }
 
 
