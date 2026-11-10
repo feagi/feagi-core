@@ -6,7 +6,9 @@ use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+// Every field is serializable through the traits of FIQ and NM, not the bounds serde infers
+#[serde(bound = "")]
 pub struct NeurogenesisFromStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,

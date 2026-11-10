@@ -16,6 +16,7 @@ pub enum NMMemoryFireHashingQuantKind {
 
 /// Allows Neurogenesis of the Memory Fire Hashing Neuron Model by its generator for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
@@ -31,6 +32,7 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuante
 
 /// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from its stored data for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
@@ -47,6 +49,7 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<
 /// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from either its stored data or by its
 /// generator, for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }

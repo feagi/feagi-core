@@ -16,7 +16,9 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 /// internal data. Its scratch and variance data come from the model's
 /// `NeuronModel::NeurogenesisDefaults`. This allows different cortical models to specify their own
 /// default cortical 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+// Every field is serializable through the traits of FIQ and NM, not the bounds serde infers
+#[serde(bound = "")]
 pub struct NeurogenesisGeneratorUniformDefault<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     /// How the neurons of the area are laid out
     pub layout: NeuronLayoutOf<NM, FIQ>,

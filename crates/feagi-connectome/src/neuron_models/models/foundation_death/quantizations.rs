@@ -20,6 +20,7 @@ pub enum NMFoundationDeathQuantKind {
 
 /// Allows Neurogenesis of the Foundation Death Neuron Model by its generator for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
@@ -41,6 +42,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisGeneratorQuanted<
 
 /// Allows Neurogenesis of the Foundation Death Neuron Model from its stored data for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>),
@@ -63,6 +65,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageQuanted<FI
 /// Allows Neurogenesis of the Foundation Death Neuron Model from either its stored data or by its
 /// generator, for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>),
     BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>),

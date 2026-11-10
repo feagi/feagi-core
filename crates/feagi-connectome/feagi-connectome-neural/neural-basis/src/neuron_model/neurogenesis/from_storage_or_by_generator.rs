@@ -7,7 +7,9 @@ use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+// Storage is serializable through the traits of FIQ and NM, only the generator needs a bound
+#[serde(bound(serialize = "NBG: ::serde::Serialize", deserialize = "NBG: ::serde::Deserialize<'de>"))]
 pub enum NeurogenesisFromStorageOrByGenerator<FIQ, NM, NBG>
 where
     FIQ: FeagiIndexQuantization,

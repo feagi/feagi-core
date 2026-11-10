@@ -8,7 +8,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 /// Data used by all Neuron Models
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+// Serializable through the quantization of NM, not the bounds serde infers
+#[serde(bound = "")]
 pub struct NeuronModelUniversalCorticalProperties<NM>
 where
     NM: NeuronModel

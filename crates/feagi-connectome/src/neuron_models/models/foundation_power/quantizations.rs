@@ -19,7 +19,9 @@ pub enum NMFoundationPowerQuantKind {
 }
 
 /// Allows Neurogenesis of the Foundation Power Neuron Model by its generator for a given quantization
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+
+#[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantBFloat16>),
@@ -41,6 +43,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorQuanted<
 
 /// Allows Neurogenesis of the Foundation Power Neuron Model from its stored data for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat16>),
     BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantBFloat16>),
@@ -63,6 +66,7 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageQuanted<FI
 /// Allows Neurogenesis of the Foundation Power Neuron Model from either its stored data or by its
 /// generator, for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat16>),
     BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantBFloat16>),

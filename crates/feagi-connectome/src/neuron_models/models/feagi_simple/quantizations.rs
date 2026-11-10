@@ -16,6 +16,7 @@ pub enum NMFeagiSimpleQuantKind {
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model by its generator for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
@@ -30,7 +31,8 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>
 }
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model from its stored data for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
@@ -46,7 +48,8 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageQuanted<FIQ> {
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model from either its stored data or by its
 /// generator, for a given quantization
-#[derive(Clone, Debug)] // TODO add serde
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
     Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
