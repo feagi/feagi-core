@@ -1,8 +1,4 @@
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
-use feagi_basis::prelude::QuantizedDecimalTrait;
-use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
@@ -41,10 +37,10 @@ impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantDefaultQuant {
 impl NeuronModel for NMFeagiAdvancedQuantDefaultQuant {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> = 
+    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FeagiAdvancedNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> = 
+    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
@@ -395,25 +391,6 @@ for NMFeagiAdvancedDataNeuronVariance<NM> {}
 
 //endregion
 
-
-
-
-
-impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagiAdvancedDataCorticalVariance<NM> {
-    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
-        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
-        let coordinates = layout.get_neuron_layout_context(index);
-        let [x, y, z, _d] = coordinates.as_slice();
-        NMFeagiAdvancedDataNeuronVariance::new(
-            self.firing_threshold_increment_x * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*x)
-                + self.firing_threshold_increment_y * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*y)
-                + self.firing_threshold_increment_z * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*z),
-        )
-    }
-}
 
 
 /*

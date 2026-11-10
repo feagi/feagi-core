@@ -10,6 +10,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::neuron_models::foundation_power::{NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronVariance};
 
 //region Defaults
 
@@ -45,6 +46,16 @@ where
         variance: &NM::CorticalDataVariance,
     ) -> NM::NeuronDataVariance {
         variance.neuron_variance_at::<FIQ>(layout, index)
+    }
+}
+
+impl<NM: NMFoundationPowerTrait> CorticalDataVarianceSpecification<NM> for NMFoundationPowerDataCorticalVariance<NM> {
+    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
+        &self,
+        _layout: &NeuronLayoutOf<NM, FIQ>,
+        _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> NMFoundationPowerDataNeuronVariance<NM> {
+        NMFoundationPowerDataNeuronVariance::new()
     }
 }
 

@@ -1,7 +1,4 @@
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
@@ -346,19 +343,6 @@ impl<NM: NMFeagiSimpleTrait> feagi_connectome_neural::neural_basis::neuron_model
 for NMFeagiSimpleDataNeuronVariance<NM> {}
 
 //endregion
-
-
-impl<NM: NMFeagiSimpleTrait> CorticalDataVarianceSpecification<NM> for NMFeagiSimpleDataCorticalVariance<NM> {
-    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
-        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> NMFeagiSimpleDataNeuronVariance<NM> {
-        let coordinates = layout.get_neuron_layout_context(index);
-        let [x, y, z, _d] = coordinates.as_slice();
-        NMFeagiSimpleDataNeuronVariance::new()
-    }
-}
 
 
 /*

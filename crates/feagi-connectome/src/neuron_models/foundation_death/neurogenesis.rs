@@ -10,6 +10,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::neuron_models::foundation_death::{NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronVariance};
 
 //region Defaults
 
@@ -45,6 +46,16 @@ where
         variance: &NM::CorticalDataVariance,
     ) -> NM::NeuronDataVariance {
         variance.neuron_variance_at::<FIQ>(layout, index)
+    }
+}
+
+impl<NM: NMFoundationDeathTrait> CorticalDataVarianceSpecification<NM> for NMFoundationDeathDataCorticalVariance<NM> {
+    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
+        &self,
+        _layout: &NeuronLayoutOf<NM, FIQ>,
+        _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> NMFoundationDeathDataNeuronVariance<NM> {
+        NMFoundationDeathDataNeuronVariance::new()
     }
 }
 

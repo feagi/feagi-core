@@ -1,5 +1,3 @@
-use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
@@ -388,17 +386,6 @@ impl<NM: NMFoundationPowerTrait> feagi_connectome_neural::neural_basis::neuron_m
 for NMFoundationPowerDataNeuronVariance<NM> {}
 
 //endregion
-
-
-impl<NM: NMFoundationPowerTrait> CorticalDataVarianceSpecification<NM> for NMFoundationPowerDataCorticalVariance<NM> {
-    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        _layout: &NeuronLayoutOf<NM, FIQ>,
-        _index: &::feagi_basis::neurons::CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> NMFoundationPowerDataNeuronVariance<NM> {
-        NMFoundationPowerDataNeuronVariance::new()
-    }
-}
 
 
 /*

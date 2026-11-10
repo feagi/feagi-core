@@ -1,7 +1,4 @@
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
@@ -346,17 +343,6 @@ impl<NM: NMMemoryFireHashingTrait> feagi_connectome_neural::neural_basis::neuron
 for NMMemoryFireHashingDataNeuronVariance<NM> {}
 
 //endregion
-
-
-impl<NM: NMMemoryFireHashingTrait> CorticalDataVarianceSpecification<NM> for NMMemoryFireHashingDataCorticalVariance<NM> {
-    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        _layout: &NeuronLayoutOf<NM, FIQ>,
-        _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> NMMemoryFireHashingDataNeuronVariance<NM> {
-        NMMemoryFireHashingDataNeuronVariance::new()
-    }
-}
 
 
 /*
