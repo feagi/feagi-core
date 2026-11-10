@@ -110,13 +110,13 @@ fn json_round_trips_and_rejects_invalid_bytes() {
 /// A family of its own, as every real cortical type has plain bytes as its inner ID for now
 mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
+    use feagi_connectome::connectome_basis::neuron_model;
     use feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTagVoxel;
+    use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model::{
         NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTag,
     };
-    use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
-    use feagi_connectome::connectome_basis::neuron_model;
-    use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NMFeagiSimpleTrait;
+    use feagi_connectome::neuron_models::models::::NMFeagiSimpleTrait;
     use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
     use feagi_genome::basis::cortical_area::CorticalAreaInnerID;
 

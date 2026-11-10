@@ -5,18 +5,19 @@
 use super::{CorticalAreaType, UsesFeagiAdvanced, UsesFeagiSimple, UsesMemoryFireHashing};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTagSingleSteppedDynamic, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::neuron_models::models::;
+use feagi_connectome::neuron_models::models::::{
     self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
     NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
 };
-use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{
+use feagi_connectome::neuron_models::models::::{
     self, NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance,
     NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait,
 };
-use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{
+use feagi_connectome::neuron_models::models::::{
     self, NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance,
     NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingTrait,
 };
@@ -48,7 +49,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> InterconnectFeagiAdv
                 is_psp_using_neuron_potential: false,
             },
             NMFeagiAdvancedDataCorticalProperties {
-                refractory_period: feagi_advanced::Period::QUANT_ONE,
+                refractory_period: ::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 leak_coefficient: 1.0f32.try_to_quantization()?,
                 leak_variability: 1.0f32.try_to_quantization()?,
@@ -65,7 +66,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> InterconnectFeagiAdv
                 _p: PhantomData,
             },
             NMFeagiAdvancedDataNeuronInternal {
-                refractory_countdown: feagi_advanced::Period::QUANT_ZERO,
+                refractory_countdown: ::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
         )))
@@ -89,7 +90,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> InterconnectFeagiSimpl
                 is_psp_using_neuron_potential: false,
             },
             NMFeagiSimpleDataCorticalProperties {
-                refractory_period: feagi_simple::Period::QUANT_ONE,
+                refractory_period: ::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
@@ -98,7 +99,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> InterconnectFeagiSimpl
             NMFeagiSimpleDataCorticalInternal::new(),
             NMFeagiSimpleDataCorticalVariance::new(),
             NMFeagiSimpleDataNeuronInternal {
-                refractory_countdown: feagi_simple::Period::QUANT_ZERO,
+                refractory_countdown: ::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
         )))
@@ -134,7 +135,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait> MemoryMemoryFire
                 is_psp_using_neuron_potential: false,
             },
             NMMemoryFireHashingDataCorticalProperties {
-                refractory_period: memory_fire_hashing::Period::QUANT_ONE,
+                refractory_period: ::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
@@ -143,7 +144,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait> MemoryMemoryFire
             NMMemoryFireHashingDataCorticalInternal::new(),
             NMMemoryFireHashingDataCorticalVariance::new(),
             NMMemoryFireHashingDataNeuronInternal {
-                refractory_countdown: memory_fire_hashing::Period::QUANT_ZERO,
+                refractory_countdown: ::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
         )))

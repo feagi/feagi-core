@@ -97,15 +97,12 @@
 //! 2. Declare the folder below, and re-export it in `connectome_basis::neuron_model`.
 //! 3. Add the model and its quantization levels to the template in [`family`].
 
-pub mod feagi_advanced;
-pub mod feagi_simple;
-pub mod foundation_death;
-pub mod foundation_power;
-pub mod memory_fire_hashing;
+use models::feagi_advanced::quantizations::NMFeagiAdvancedQuantDefaultQuant;
 
 #[macro_use]
 pub mod family;
 pub mod neurogenesis_dispatch;
+pub mod models;
 // Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
 //pub mod initializers;
 
@@ -117,18 +114,18 @@ pub mod neurogenesis_dispatch;
 //
 
 fn example() {
-    use crate::connectome_basis::neuron_model::feagi_advanced::{
-        NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
-        NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedQuantDefaultQuant, Period,
-    };
     use crate::connectome_basis::neuron_model::{
-        NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisGeneratorUniformDefault, NeurogenesisFromStorageOrByGeneratorEnum,
-        NeurogenesisFromStorageOrByGeneratorOf,
+        NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisFromStorageOrByGeneratorEnum,
+        NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisGeneratorUniformDefault,
         NeurogenesisMethod, NeuronLayoutData, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties,
     };
     use crate::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
     use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
     use feagi_basis::prelude::*;
+    use models::feagi_advanced::{
+        NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
+        NMFeagiAdvancedDataNeuronInternal, Period,
+    };
 
     // 1. The generator of a new area, holding every per model data struct of FeagiAdvanced
     let layout =

@@ -1,9 +1,9 @@
 use feagi_basis::collections::spatial_context::integer_signed::SignedIntegerSpatial;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{self, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedQuantDefaultQuant};
-use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{self, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleQuantDefaultQuant};
-use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::{self, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingQuantDefaultQuant};
+use feagi_connectome::neuron_models::models::::{self, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedQuantDefaultQuant};
+use feagi_connectome::neuron_models::models::::{self, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleQuantDefaultQuant};
+use feagi_connectome::neuron_models::models::::{self, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingQuantDefaultQuant};
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::connectome_basis::neuron_model::{NMFeagiAdvancedQuantEnum, NMFeagiSimpleQuantEnum, NMMemoryFireHashingQuantEnum};
@@ -22,6 +22,7 @@ use feagi_genome::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPosi
 use feagi_genome::genome::genomes::designer::container_cortical_area::{CorticalAreaContainerDesigner, CorticalAreaContainersDesigner, NeuronModelDataDesigner};
 use feagi_genome::genome::genomes::designer::DesignerGenome;
 use std::collections::HashSet;
+use feagi_connectome::neuron_models::models::;
 
 type Fiq = FeagiIndexQuantizationStandard;
 
@@ -136,7 +137,7 @@ fn container<CT: CorticalAreaTypeMember>(
 fn simple_data() -> NeuronModelDataDesigner<Fiq, NMFeagiSimpleQuantDefaultQuant> {
     NeuronModelDataDesigner {
         cortical_universal: universal(),
-        cortical_properties: NMFeagiSimpleDataCorticalProperties::new(feagi_simple::Period::QUANT_ONE, 7.0, 1.0, 1.0),
+        cortical_properties: NMFeagiSimpleDataCorticalProperties::new(::Period::QUANT_ONE, 7.0, 1.0, 1.0),
         cortical_data_variance: NMFeagiSimpleDataCorticalVariance::new(),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
@@ -147,7 +148,7 @@ fn simple_data() -> NeuronModelDataDesigner<Fiq, NMFeagiSimpleQuantDefaultQuant>
 fn advanced_data() -> NeuronModelDataDesigner<Fiq, NMFeagiAdvancedQuantDefaultQuant> {
     NeuronModelDataDesigner {
         cortical_universal: universal(),
-        cortical_properties: NMFeagiAdvancedDataCorticalProperties::new(feagi_advanced::Period::QUANT_ONE, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+        cortical_properties: NMFeagiAdvancedDataCorticalProperties::new(::Period::QUANT_ONE, 9.0, 1.0, 1.0, 1.0, 1.0, 1.0),
         cortical_data_variance: NMFeagiAdvancedDataCorticalVariance::new(0.0, 0.0, 0.0),
         cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
         burst_engine_index: BurstEngineIndex(0),
@@ -171,7 +172,7 @@ fn designer_containers_hold_only_what_their_cortical_type_allows() {
             CorticalAreaNeuronCount::QUANT_ZERO,
             ProcessingMemoryModelEnum::MemoryFireHashing(NMMemoryFireHashingQuantEnum::DefaultQuant(NeuronModelDataDesigner::<Fiq, NMMemoryFireHashingQuantDefaultQuant> {
                 cortical_universal: universal(),
-                cortical_properties: NMMemoryFireHashingDataCorticalProperties::new(memory_fire_hashing::Period::QUANT_ONE, 3.0, 1.0, 1.0),
+                cortical_properties: NMMemoryFireHashingDataCorticalProperties::new(::Period::QUANT_ONE, 3.0, 1.0, 1.0),
                 cortical_data_variance: NMMemoryFireHashingDataCorticalVariance::new(),
                 cortical_npu_index: CorticalAreaEngineIndex::QUANT_ZERO,
                 burst_engine_index: BurstEngineIndex(0),

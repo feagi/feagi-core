@@ -1,17 +1,17 @@
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome::connectome_basis::neuron_model::{
-    NeurogenesisByGenerator, NeurogenesisGeneratorUniformDefault, NeurogenesisFromStorage, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
+    NeurogenesisByGenerator, NeurogenesisFromStorage, NeurogenesisGeneratorUniformDefault, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
     NeurogenesisStorageError,
 };
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
+use feagi_connectome::neuron_models::models::::{
     NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
     NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedQuantDefaultQuant,
     Period,
 };
-use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
+use feagi_connectome::neuron_models::models::::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
     NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronVariance, NMFoundationPowerQuantFloat32,
 };
@@ -402,8 +402,8 @@ fn wrapped_defaults_generator_becomes_the_model_generator() {
 mod dispatch {
     use super::*;
     use feagi_basis::BurstIndex;
-    use feagi_connectome_neural::burst_engine_cpu::{NeuronCPUParallelDynamics, CpuCorticalAreaNeurogenesisDispatch, CpuCorticalAreaNeurogenesisVisitor};
-    use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{BurstEngineDynamics, NMFeagiAdvancedDataCorticalScratch};
+    use feagi_connectome_neural::burst_engine_cpu::{CpuCorticalAreaNeurogenesisDispatch, CpuCorticalAreaNeurogenesisVisitor, NeuronCPUParallelDynamics};
+    use feagi_connectome::neuron_models::models::::{BurstEngineDynamics, NMFeagiAdvancedDataCorticalScratch};
     use feagi_connectome::connectome_basis::neuron_model::NMEnum;
     use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisFromStorageOrByGeneratorContainer, NeurogenesisFromStorageOrByGeneratorEnum, NeurogenesisFromStorageOrByGeneratorOf};
 

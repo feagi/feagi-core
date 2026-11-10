@@ -2,14 +2,14 @@
 
 use super::{CorticalAreaType, UsesFoundationDeath, UsesFoundationPower};
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::quantization::quantizable::DataValueQuantizationError;
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
-use feagi_connectome::connectome_basis::neuron_model::foundation_death::{
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::neuron_models::models::::{
     NMFoundationDeathDataCorticalInternal, NMFoundationDeathDataCorticalProperties, NMFoundationDeathDataCorticalVariance,
     NMFoundationDeathDataNeuronInternal, NMFoundationDeathTrait,
 };
-use feagi_connectome::connectome_basis::neuron_model::foundation_power::{
+use feagi_connectome::neuron_models::models::::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
     NMFoundationPowerDataNeuronInternal, NMFoundationPowerTrait,
 };

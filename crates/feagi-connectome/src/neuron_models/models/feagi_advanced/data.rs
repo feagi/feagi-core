@@ -1,63 +1,11 @@
+use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use crate::neuron_models::family::NeuronModel;
 
 create_wrapped_quantized_decimal!(
     /// For handling timing
     pub Period
 );
-
-/// The main neuron model used by FEAGI, effectively an extended LIF model
-pub trait NMFeagiAdvancedTrait: NeuronModel<
-    NeuronLayoutTag=NeuronLayoutTagVoxel,
-    CorticalDataProperties=NMFeagiAdvancedDataCorticalProperties<Self>,
-    CorticalDataInternal=NMFeagiAdvancedDataCorticalInternal<Self>,
-    CorticalDataScratch=NMFeagiAdvancedDataCorticalScratch<Self>,
-    CorticalDataVariance=NMFeagiAdvancedDataCorticalVariance<Self>,
-    NeuronDataInternal=NMFeagiAdvancedDataNeuronInternal<Self>,
-    NeuronDataScratch=NMFeagiAdvancedDataNeuronScratch<Self>,
-    NeuronDataVariance=NMFeagiAdvancedDataNeuronVariance<Self>
->
-{
-    #[doc = " For handling timing"]
-    type Period: ::feagi_basis::quantization::quantizable::QuantizedDecimalUnwrappedTrait;
-}
-
-//region Quant levels
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFeagiAdvancedQuantDefaultQuant;
-
-impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantDefaultQuant {
-    type Period = f32;
-}
-
-impl NeuronModel for NMFeagiAdvancedQuantDefaultQuant {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
-        super::neurogenesis::FeagiAdvancedNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
-        NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMFeagiAdvancedDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMFeagiAdvancedDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMFeagiAdvancedDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMFeagiAdvancedDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMFeagiAdvancedDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMFeagiAdvancedDataNeuronVariance<Self>;
-}
-
-impl MembranePotentialQuantization for NMFeagiAdvancedQuantDefaultQuant
-{
-    type MembranePotentialQuant = f32;
-}
-
-//endregion
 
 //region Cortical Properties
 

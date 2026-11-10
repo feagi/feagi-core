@@ -1,10 +1,13 @@
-use feagi_connectome::connectome_basis::neuron_model;
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::NMFeagiAdvancedQuantDefaultQuant;
-use feagi_connectome::connectome_basis::neuron_model::feagi_simple::NMFeagiSimpleQuantDefaultQuant;
-use feagi_connectome::connectome_basis::neuron_model::foundation_death::NMFoundationDeathQuantFloat64;
-use feagi_connectome::connectome_basis::neuron_model::foundation_power::{NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
-use feagi_connectome::connectome_basis::neuron_model::memory_fire_hashing::NMMemoryFireHashingQuantDefaultQuant;
-use feagi_connectome::connectome_basis::neuron_model::{NMFoundationPowerQuantKind, NMContainer, NMKind, NMMember, NMAccessError};
+use feagi_connectome::neuron_models::models::::NMFeagiAdvancedQuantDefaultQuant;
+use feagi_connectome::neuron_models::models::::NMFeagiSimpleQuantDefaultQuant;
+use feagi_connectome::neuron_models::models::::NMFoundationDeathQuantFloat64;
+use feagi_connectome::neuron_models::models::::{NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
+use feagi_connectome::neuron_models::models::::NMMemoryFireHashingQuantDefaultQuant;
+use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
+use feagi_connectome::connectome_basis::neuron_model::{NMAccessError, NMContainer, NMFoundationPowerQuantKind, NMKind, NMMember};
+use feagi_connectome::connectome_basis::neuron_model::{
+    NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisGeneratorUniformDefault, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
+};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::{
     with_nm_feagi_advanced, with_nm_feagi_simple, with_nm_foundation_death, with_nm_foundation_power,
@@ -21,13 +24,9 @@ use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};
 use feagi_genome::basis::cortical_area::sensor::Camera;
 use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::basis::cortical_area::NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum;
-use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
-use feagi_connectome::connectome_basis::neuron_model::{
-    NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisGeneratorUniformDefault, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
-};
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{NMFeagiAdvancedDataNeuronInternal, Period};
-use feagi_genome::basis::cortical_area::processing::{InterconnectFeagiAdvancedGenerator, InterconnectFeagiSimpleGenerator};
+use feagi_connectome::neuron_models::models::::{NMFeagiAdvancedDataNeuronInternal, Period};
 use feagi_basis::neurons::{CorticalAreaNeuronCount, DimensionalCorticalAreaDimensions};
+use feagi_genome::basis::cortical_area::processing::{InterconnectFeagiAdvancedGenerator, InterconnectFeagiSimpleGenerator};
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Advanced = NMFeagiAdvancedQuantDefaultQuant;

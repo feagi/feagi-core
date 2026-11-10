@@ -5,14 +5,15 @@
 use super::{CorticalAreaType, UsesFeagiAdvanced, UsesFeagiSimple};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::neuron_models::models::;
+use feagi_connectome::neuron_models::models::::{
     self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
     NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
 };
-use feagi_connectome::connectome_basis::neuron_model::feagi_simple::{
+use feagi_connectome::neuron_models::models::::{
     self, NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance,
     NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait,
 };
@@ -44,7 +45,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> BrightnessAdjustFeag
                 is_psp_using_neuron_potential: false,
             },
             NMFeagiAdvancedDataCorticalProperties {
-                refractory_period: feagi_advanced::Period::QUANT_ONE,
+                refractory_period: ::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 leak_coefficient: 1.0f32.try_to_quantization()?,
                 leak_variability: 1.0f32.try_to_quantization()?,
@@ -61,7 +62,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> BrightnessAdjustFeag
                 _p: PhantomData,
             },
             NMFeagiAdvancedDataNeuronInternal {
-                refractory_countdown: feagi_advanced::Period::QUANT_ZERO,
+                refractory_countdown: ::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
         )))
@@ -85,7 +86,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> BrightnessAdjustFeagiS
                 is_psp_using_neuron_potential: false,
             },
             NMFeagiSimpleDataCorticalProperties {
-                refractory_period: feagi_simple::Period::QUANT_ONE,
+                refractory_period: ::Period::QUANT_ONE,
                 firing_threshold: 1.0f32.try_to_quantization()?,
                 postsynaptic_current: 1.0f32.try_to_quantization()?,
                 postsynaptic_current_max: 1.0f32.try_to_quantization()?,
@@ -94,7 +95,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> BrightnessAdjustFeagiS
             NMFeagiSimpleDataCorticalInternal::new(),
             NMFeagiSimpleDataCorticalVariance::new(),
             NMFeagiSimpleDataNeuronInternal {
-                refractory_countdown: feagi_simple::Period::QUANT_ZERO,
+                refractory_countdown: ::Period::QUANT_ZERO,
                 _p: PhantomData,
             },
         )))

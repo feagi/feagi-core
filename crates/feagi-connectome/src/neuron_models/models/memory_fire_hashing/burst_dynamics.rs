@@ -1,49 +1,49 @@
-use crate::neuron_models::feagi_simple::data::{NMFeagiSimpleTrait, Period};
+use crate::neuron_models::models::memory_fire_hashing::data::{NMMemoryFireHashingTrait, Period};
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
 use feagi_basis::BurstIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::{NeuralBurstEngineDynamics};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-pub struct FeagiSimpleBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait>(core::marker::PhantomData<(FIQ, NM)>);
+pub struct MemoryFireHashingBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
 //region Common
 
-impl<FIQ, NM> FeagiSimpleBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFeagiSimpleTrait,
+    NM: NMMemoryFireHashingTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
 }
 
-impl<FIQ, NM> Default for FeagiSimpleBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> Default for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFeagiSimpleTrait,
+    NM: NMMemoryFireHashingTrait,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FeagiSimpleBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFeagiSimpleTrait,
+    NM: NMMemoryFireHashingTrait,
 {
 }
 
 //endregion
 
 #[cfg(feature = "burst-engine-cpu")]
-impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for FeagiSimpleBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFeagiSimpleTrait,
+    NM: NMMemoryFireHashingTrait,
 {
     fn process_model_cortical_area_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
@@ -63,7 +63,7 @@ where
         neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),
     ) -> bool {
 
-        // TODO extremely simple port, redo later
+        // TODO extremely memory port, redo later
 
         let cortical_properties = cortical_data.0;
         let _cortical_internal = cortical_data.1;

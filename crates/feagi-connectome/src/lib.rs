@@ -37,7 +37,7 @@ pub mod connectome_basis {
         /// and the dispatch macros `with_nm!` as `$crate::connectome_basis::neuron_model`
         pub use crate::neuron_models::family::*;
         /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
-        pub use crate::neuron_models::{feagi_advanced, feagi_simple, foundation_death, foundation_power, memory_fire_hashing};
+        pub use crate::neuron_models::{};
         pub use crate::neuron_models::neurogenesis_dispatch::{NeurogenesisFromStorageOrByGeneratorContainer, NeurogenesisFromStorageOrByGeneratorEnum, NeurogenesisFromStorageOrByGeneratorOf};
         pub use feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing;
         pub use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
@@ -57,6 +57,16 @@ pub mod connectome_basis {
             define_cortical_type_family_template, define_model_family_template, expand_cortical_area_map, expand_cortical_identifier, expand_cortical_type_family,
             expand_model_family,
         };
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::models::feagi_advanced;
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::models::feagi_simple;
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::models::foundation_death;
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::models::foundation_power;
+        /// A module per neuron model, with its quantization items and `BurstEngineDynamics`
+        pub use crate::neuron_models::models::memory_fire_hashing;
     }
 
     pub mod synapse_model {

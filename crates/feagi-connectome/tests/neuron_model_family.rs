@@ -1,8 +1,9 @@
-use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::NMFeagiAdvancedQuantDefaultQuant;
-use feagi_connectome::connectome_basis::neuron_model::foundation_power::{NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
+use feagi_connectome::neuron_models::models::::NMFeagiAdvancedQuantDefaultQuant;
+use feagi_connectome::neuron_models::models::::{NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
 use feagi_connectome::connectome_basis::neuron_model::{
-    NMFoundationPowerQuantEnum, NMFoundationPowerQuantKind, NMContainer, NMEnum, NMKind,
-    NMMember, NMAccessError,
+    NMAccessError, NMContainer, NMEnum,
+    NMFoundationPowerQuantEnum, NMFoundationPowerQuantKind, NMKind,
+    NMMember,
 };
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
