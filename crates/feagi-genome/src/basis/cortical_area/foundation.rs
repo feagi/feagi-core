@@ -86,14 +86,14 @@ pub struct CorticalTypeFoundationPower;
 
 impl<NM> CorticalTypeFoundation<NM> for CorticalTypeFoundationPower
 where
-    NM: NeuronModel + CorticalTypeFoundationPowerSupportedNeuronModels
+    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeFoundationPowerSupportedNeuronModels
 {
 
 }
 
 impl<NM> CorticalType<NM> for CorticalTypeFoundationPower
 where
-    NM: NeuronModel + CorticalTypeFoundationPowerSupportedNeuronModels,
+    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeFoundationPowerSupportedNeuronModels,
 {
     type NeuronLayout = NeuronLayoutTagVoxel;
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,

@@ -82,12 +82,12 @@ pub struct CorticalTypeProcessingInterconnect;
 
 impl<NM> CorticalTypeProcessing<NM> for CorticalTypeProcessingInterconnect
 where
-    NM: NeuronModel + CorticalTypeProcessingInterconnectSupportedNeuronModels
+    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeProcessingInterconnectSupportedNeuronModels
 {}
 
 impl<NM> CorticalType<NM> for CorticalTypeProcessingInterconnect
 where
-    NM: NeuronModel + CorticalTypeProcessingInterconnectSupportedNeuronModels
+    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeProcessingInterconnectSupportedNeuronModels
 {
     type NeuronLayout = NeuronLayoutTagVoxel;
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
