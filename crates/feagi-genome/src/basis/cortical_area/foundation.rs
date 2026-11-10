@@ -30,18 +30,21 @@ pub enum CorticalTypeFoundationSubtypeKind {
 //region Cortical Subtype Enums
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTGeneratorFoundationPowerModeled<FIQ>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTStorageFoundationPowerModeled<FIQ>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 {
     Power(CTStorageOrGeneratorFoundationPowerModeled<FIQ>)
@@ -123,16 +126,19 @@ impl CorticalTypeFoundationPowerSupportedNeuronModels for NMFoundationPowerQuant
 // NOTE: these only have 1 neuron model
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisStorageQuanted<FIQ>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageOrGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
     FoundationPower(NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>)
 }

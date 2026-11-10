@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub(crate) struct CorticalAreaGenomeCorticalTypedMap<FIQ: FeagiIndexQuantization>
 {
     pub foundation: CorticalAreaGenomeCorticalFoundationSubtypedMap<FIQ>,
@@ -16,15 +17,40 @@ pub(crate) struct CorticalAreaGenomeCorticalTypedMap<FIQ: FeagiIndexQuantization
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub(crate) struct CorticalAreaGenomeCorticalFoundationSubtypedMap<FIQ: FeagiIndexQuantization>
 {
     pub power: HashMap<[u8; 6], CorticalAreaContainerCommon<CTGeneratorFoundationPowerModeled<FIQ>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub(crate) struct CorticalAreaGenomeCorticalProcessingSubtypedMap<FIQ: FeagiIndexQuantization>
 {
     pub interconnect: HashMap<[u8; 6], CorticalAreaContainerCommon<CTGeneratorProcessingInterconnectModeled<FIQ>>>,
+}
+
+// Default is written out, as deriving it would require `FIQ: Default`
+
+impl<FIQ: FeagiIndexQuantization> Default for CorticalAreaGenomeCorticalTypedMap<FIQ> {
+    fn default() -> Self {
+        Self {
+            foundation: Default::default(),
+            processing: Default::default(),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> Default for CorticalAreaGenomeCorticalFoundationSubtypedMap<FIQ> {
+    fn default() -> Self {
+        Self { power: HashMap::new() }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> Default for CorticalAreaGenomeCorticalProcessingSubtypedMap<FIQ> {
+    fn default() -> Self {
+        Self { interconnect: HashMap::new() }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

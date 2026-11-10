@@ -108,18 +108,21 @@ impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiSimpleQu
 //endregion
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
