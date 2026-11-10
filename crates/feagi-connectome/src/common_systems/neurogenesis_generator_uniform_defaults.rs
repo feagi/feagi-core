@@ -72,7 +72,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
 
     fn spawn_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
         let internal = self.neuron_internal.clone();
-        let scratch = NM::NeurogenesisScratchVarianceGeneratorType::<FIQ>::static_get_neuron_scratch(index, &self.layout, &internal);
+        let scratch = NM::generate_neuron_scratch(index, &self.layout, &internal);
         (internal, scratch)
     }
 }

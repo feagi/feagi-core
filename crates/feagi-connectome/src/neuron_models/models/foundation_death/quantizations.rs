@@ -4,6 +4,20 @@ use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
 use crate::connectome_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use half::{bf16, f16};
 
+//region enums
+
+#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+/// Describes the quantization of the Foundation Death Neuron Model
+pub enum NMFoundationDeathQuantKind {
+    Float16,
+    BFloat16,
+    Float32,
+    Float64,
+}
+
+
+//endregion
+
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFoundationDeathQuantFloat16;
 
@@ -26,6 +40,9 @@ impl NeuronModel for NMFoundationDeathQuantFloat16 {
     type NeuronDataInternal = NMFoundationDeathDataNeuronInternal<Self>;
     type NeuronDataScratch = NMFoundationDeathDataNeuronScratch<Self>;
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
+
+    type QuantKind = NMFoundationDeathQuantKind;
+    const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float16;
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat16
@@ -55,6 +72,9 @@ impl NeuronModel for NMFoundationDeathQuantBFloat16 {
     type NeuronDataInternal = NMFoundationDeathDataNeuronInternal<Self>;
     type NeuronDataScratch = NMFoundationDeathDataNeuronScratch<Self>;
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
+
+    type QuantKind = NMFoundationDeathQuantKind;
+    const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::BFloat16;
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantBFloat16
@@ -84,6 +104,9 @@ impl NeuronModel for NMFoundationDeathQuantFloat32 {
     type NeuronDataInternal = NMFoundationDeathDataNeuronInternal<Self>;
     type NeuronDataScratch = NMFoundationDeathDataNeuronScratch<Self>;
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
+
+    type QuantKind = NMFoundationDeathQuantKind;
+    const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float32;
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat32
@@ -113,6 +136,9 @@ impl NeuronModel for NMFoundationDeathQuantFloat64 {
     type NeuronDataInternal = NMFoundationDeathDataNeuronInternal<Self>;
     type NeuronDataScratch = NMFoundationDeathDataNeuronScratch<Self>;
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
+
+    type QuantKind = NMFoundationDeathQuantKind;
+    const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float64;
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat64

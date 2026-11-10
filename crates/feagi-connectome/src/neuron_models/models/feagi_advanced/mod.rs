@@ -24,6 +24,6 @@ pub trait NMFeagiAdvancedTrait: NeuronModel<
     NeuronDataVariance=NMFeagiAdvancedDataNeuronVariance<Self>
 >
 {
-    #[doc = " For handling timing"]
+    #[doc = "For handling timing"]
     type Period: ::feagi_basis::quantization::quantizable::QuantizedDecimalUnwrappedTrait;
 }

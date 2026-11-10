@@ -1,5 +1,6 @@
+use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use crate::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
-use crate::neuron_model::neuron_layout::NeuronLayoutTag;
+use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutTag};
 use crate::quantization_levels::MembranePotentialQuantization;
 use crate::quantization_levels::FeagiIndexQuantization;
 use model_data::{
@@ -7,6 +8,7 @@ use model_data::{
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification,
 };
 use neurogenesis::by_generator::NeurogenesisByGenerator;
+use crate::neuron_model::neurogenesis::from_storage::NeurogenesisFromStorage;
 
 //pub mod interfacing;
 pub mod model_data;
@@ -23,7 +25,7 @@ pub trait NeuronModel: MembranePotentialQuantization {
     
     /// What neuron layout this neuron model expects
     type NeuronLayoutTag: NeuronLayoutTag;
-    
+
     /// Generator trait for producing default variance and scratch values during NeuroGenesis
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
 
@@ -59,7 +61,75 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// The per neuron level data derived from [`Self::CorticalDataVariance`]. Read only to neuron
     /// dynamics and never saved, as it can be generated again
     type NeuronDataVariance: NeuronDataVarianceSpecification<Self>;
+
+    /// The Quant Kind enum for this neuron model
+    type QuantKind;
     
+    /// The Quant of this model represented as the Quant Kind Enum wrapper
+    const QUANT_KIND: Self::QuantKind;
+    
+    //region Default Impls
+    
+    //region Generate Data
+    
+    /// Statically generate the cortical scratch data during NeuroGenesis. Proxies through
+    /// Self::NeurogenesisScratchVarianceGeneratorType
+    fn generate_cortical_scratch<FIQ: FeagiIndexQuantization>(
+        layout: &<Self::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
+        cortical_properties: &Self::CorticalDataProperties,
+        cortical_internal: &Self::CorticalDataInternal,
+    ) -> Self::CorticalDataScratch {
+        Self::NeurogenesisScratchVarianceGeneratorType::static_get_cortical_scratch(
+            layout,
+            cortical_properties,
+            cortical_internal
+        )
+    }
+
+    /// Statically generate the neuron scratch data during NeuroGenesis. Proxies through
+    /// Self::NeurogenesisScratchVarianceGeneratorType
+    fn generate_neuron_scratch<FIQ: FeagiIndexQuantization>(
+        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+        layout: &<Self::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
+        internal_neuron_data: &Self::NeuronDataInternal
+    ) -> Self::NeuronDataScratch {
+        Self::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_scratch(
+            index,
+            layout,
+            internal_neuron_data
+        )
+    }
+
+    /// Statically generate the neuron variance data during NeuroGenesis. Proxies through
+    /// Self::NeurogenesisScratchVarianceGeneratorType
+    fn generate_neuron_variance<FIQ: FeagiIndexQuantization>(
+        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+        layout: &<Self::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
+        variance: &Self::CorticalDataVariance
+    ) -> Self::NeuronDataVariance {
+        Self::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_variance(
+            index,
+            layout,
+            variance
+        )
+    }
+    
+    //endregion
+    
+    /// Given a NeurogenesisFromStorage of this neuron model, turns it into a generator that
+    /// this model uses that can be stored in the genome to recreate this cortical area
+    /// (sans trained data). Proxies though Self::NeurogenesisByGeneratorType
+    fn create_generator_from_storage<FIQ: FeagiIndexQuantization>(
+        storage: &NeurogenesisFromStorage<FIQ, Self>,
+        other_data: <Self::NeurogenesisByGeneratorType<FIQ> as NeurogenesisByGenerator<FIQ, Self>>::OtherDataNeededForFromStorage
+    ) -> Self::NeurogenesisByGeneratorType<FIQ> {
+        Self::NeurogenesisByGeneratorType::new_generator_from_storage(
+            storage,
+            other_data
+        )
+    }
+    
+    //endregion
 }
 
 

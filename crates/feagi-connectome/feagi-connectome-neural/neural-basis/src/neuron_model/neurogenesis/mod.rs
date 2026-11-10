@@ -75,10 +75,10 @@ where
             let index = &CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(i);
             let (internal, scratch)
                 = self.spawn_neuron_data_at(index);
-            let variance = NM::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_variance(
+            let variance = NM::generate_neuron_variance(
                 index,
-                &self.get_layout(),
-                &self.get_model_cortical_variance()
+                self.get_layout(),
+                self.get_model_cortical_variance()
             );
             (internal, scratch, variance)
         })
@@ -103,10 +103,10 @@ where
             let index = CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(i);
             let (internal, scratch)
                 = self.spawn_neuron_data_at(&index);
-            let variance = NM::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_variance(
+            let variance = NM::generate_neuron_variance(
                 &index,
-                &self.get_layout(),
-                &self.get_model_cortical_variance()
+                self.get_layout(),
+                self.get_model_cortical_variance()
             );
             (*internal_out, *scratch_out, *variance_out) = (internal, scratch, variance);
         }

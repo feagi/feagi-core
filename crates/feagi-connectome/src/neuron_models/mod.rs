@@ -97,7 +97,7 @@
 //! 2. Declare the folder below, and re-export it in `connectome_basis::neuron_model`.
 //! 3. Add the model and its quantization levels to the template in [`family`].
 
-use models::feagi_advanced::quantizations::NMFeagiAdvancedQuantDefaultQuant;
+use models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
 
 #[macro_use]
 pub mod family;
@@ -130,7 +130,7 @@ fn example() {
     // 1. The generator of a new area, holding every per model data struct of FeagiAdvanced
     let layout =
         NeuronLayoutVoxel::<FeagiIndexQuantizationStandard>::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([2, 2, 1, 1]).unwrap());
-    let generator = NeurogenesisGeneratorUniformDefault::<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant>::new(
+    let generator = NeurogenesisGeneratorUniformDefault::<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantStandard32Bit>::new(
         layout,
         NeuronModelUniversalCorticalProperties {
             cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -149,14 +149,14 @@ fn example() {
 
     // 2. Nest it, innermost first. The container here is NeurogenesisFromStorageOrByGeneratorContainer, so
     //    the data held for a member is a NeurogenesisFromStorageOrByGeneratorOf: from storage, or by generator
-    let neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant> =
+    let neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantStandard32Bit> =
         NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator);
     let per_level = NMFeagiAdvancedQuantEnum::DefaultQuant(neurogenesis); // which quantization level
     let per_model: NeurogenesisFromStorageOrByGeneratorEnum<FeagiIndexQuantizationStandard> = NMEnum::FeagiAdvanced(per_level); // which model
 
     // The same three steps in one, by the member's marker struct
     let same: NeurogenesisFromStorageOrByGeneratorEnum<FeagiIndexQuantizationStandard> =
-        NMEnum::from_data::<NMFeagiAdvancedQuantDefaultQuant>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(NeurogenesisGeneratorUniformDefault::new(
+        NMEnum::from_data::<NMFeagiAdvancedQuantStandard32Bit>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -169,7 +169,7 @@ fn example() {
             NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO),
         )));
     assert_eq!(per_model.kind(), same.kind());
-    assert_eq!(per_model.kind(), <NMFeagiAdvancedQuantDefaultQuant as NMMember>::KIND);
+    assert_eq!(per_model.kind(), <NMFeagiAdvancedQuantStandard32Bit as NMMember>::KIND);
 
     // 3. Back down to the per model data fields, by matching every layer
     match &per_model {
@@ -181,8 +181,8 @@ fn example() {
     }
 
     //    or by the member, when it is known, which errors if another member is held
-    let neurogenesis: &NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant> =
-        per_model.try_as::<NMFeagiAdvancedQuantDefaultQuant>().unwrap();
+    let neurogenesis: &NeurogenesisFromStorageOrByGeneratorOf<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantStandard32Bit> =
+        per_model.try_as::<NMFeagiAdvancedQuantStandard32Bit>().unwrap();
     if let NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(generator) = neurogenesis {
         let _leak = generator.cortical_properties.leak_coefficient;
     }
