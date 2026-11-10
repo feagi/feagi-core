@@ -1,5 +1,5 @@
 use crate::connectome_basis::connectome_editing::ConnectomeDispatch;
-use crate::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::neural_processors::singular::commands::NeuronProcessorSingleEngineCommandHandler;
 use crate::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;

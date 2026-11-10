@@ -1,6 +1,6 @@
 use crate::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use crate::connectome_basis::engine::EngineChangeCommandOtherError;
-use crate::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome_neural::neural_basis::engine::BurstEngine;

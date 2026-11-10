@@ -9,7 +9,8 @@ pub(crate) mod burst_dynamics;
 
 pub use data::*;
 pub use burst_dynamics::FeagiSimpleBurstEngineDynamics as BurstEngineDynamics;
-use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 
 /// Quantization For the Feagi Simple type

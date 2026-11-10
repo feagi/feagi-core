@@ -8,9 +8,8 @@ pub(crate) mod burst_dynamics;
 
 
 pub use data::*;
-pub use burst_dynamics::FeagiAdvancedBurstEngineDynamics as BurstEngineDynamics;
-use crate::connectome_basis::neuron_model::{NeuronLayoutTagVoxel, NeuronModel};
-
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 /// The main neuron model used by FEAGI, effectively an extended LIF model
 pub trait NMFeagiAdvancedTrait: NeuronModel<

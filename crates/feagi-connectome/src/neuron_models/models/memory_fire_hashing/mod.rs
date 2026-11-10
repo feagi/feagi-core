@@ -9,7 +9,8 @@ pub(crate) mod burst_dynamics;
 
 pub use data::*;
 pub use burst_dynamics::MemoryFireHashingBurstEngineDynamics as BurstEngineDynamics;
-use crate::connectome_basis::neuron_model::{NeuronLayoutTagSingleSteppedDynamic, NeuronModel};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 
 /// Quantization For the Memory type
