@@ -1,5 +1,5 @@
 use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
@@ -96,7 +96,9 @@ where
     NM: NeuronModel + CorticalTypeFoundationPowerSupportedNeuronModels,
 {
     type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = ();
+    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
+        0, 0, 0, 0, 1, 1, 1, 1 // XYZD min XYZD max
+    >;
     type IdentifierInner = [u8; 6];
     type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;

@@ -1,5 +1,5 @@
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::brain_region_identifiers::{BrainRegionAncestryID, BrainRegionID};
+use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID};
 use crate::genome::genome_editing::genome_edit_sequence::{
     GenomeEditSequence, GenomeEditSequenceIntensity, GenomeEditSequenceStep, GenomeEditSequenceStepEnum,
 };

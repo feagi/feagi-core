@@ -135,10 +135,6 @@ NeuronLayoutRestrictorVoxelBound<FIQ, X_MIN, Y_MIN, Z_MIN, D_MIN, X_MAX, Y_MAX, 
     }
 }
 
-//endregion
-
-
-
 fn validate_quant_limits<FIQ: FeagiIndexQuantization>(
     context: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>
 ) -> Result<(), NeuronLayoutRestrictionError> {
@@ -154,6 +150,12 @@ fn validate_quant_limits<FIQ: FeagiIndexQuantization>(
     )?;
     Ok(())
 }
+
+
+//endregion
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::{CTStorageOrGeneratorTyped, FauxCorticalIdentifier};
 use crate::genome::genome_editing::genome_edit_sequence::{GenomeEditSequence, GenomeEditSequenceIntensity, GenomeEditSequenceStep, GenomeEditSequenceStepEnum};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};

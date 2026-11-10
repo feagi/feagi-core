@@ -1,5 +1,5 @@
 use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantStandard32Bit};
@@ -90,7 +90,7 @@ where
     NM: NeuronModel + CorticalTypeProcessingInterconnectSupportedNeuronModels
 {
     type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = ();
+    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
     type IdentifierInner = [u8; 6];
     type CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind;
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Processing;

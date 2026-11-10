@@ -9,7 +9,7 @@ use feagi_connectome::connectome_basis::neuron_model::NeuronModelUniversalCortic
 use feagi_connectome::connectome_basis::neuron_model::{NMFeagiAdvancedQuantEnum, NMFeagiSimpleQuantEnum, NMMemoryFireHashingQuantEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
-use feagi_genome::basis::brain_region_identifiers::BrainRegionID;
+use feagi_genome::basis::brain_region::BrainRegionID;
 use feagi_genome::basis::cortical_area::foundation::Power;
 use feagi_genome::basis::cortical_area::motor::Led;
 use feagi_genome::basis::cortical_area::processing::{Interconnect, Memory};

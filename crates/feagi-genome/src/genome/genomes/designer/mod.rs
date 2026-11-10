@@ -3,7 +3,7 @@ pub mod container_cortical_area;
 
 use container_brain_region::{BrainRegionContainerRuntimeEnumMut, BrainRegionContainerRuntimeEnumRef};
 use std::collections::HashMap;
-use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::brain_region::BrainRegionID;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
 use crate::genome::genomes::GenomeError;

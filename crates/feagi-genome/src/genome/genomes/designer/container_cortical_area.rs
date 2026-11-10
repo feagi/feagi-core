@@ -1,4 +1,4 @@
-use crate::basis::brain_region_identifiers::BrainRegionID;
+use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::foundation::CTGeneratorFoundationPowerModeled;
 use crate::basis::cortical_area::processing::CTGeneratorProcessingInterconnectModeled;
 use crate::basis::cortical_area::CorticalIdentifier;
