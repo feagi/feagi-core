@@ -23,7 +23,7 @@ use feagi_genome::basis::cortical_area::tunable::BrightnessAdjust;
 use feagi_genome::basis::cortical_area::NeurogenesisFromStorageOrByGeneratorCorticalTypeEnum;
 use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
 use feagi_connectome::connectome_basis::neuron_model::{
-    NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisDefaultsGenerator, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
+    NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisGeneratorUniformDefault, NeurogenesisMethod, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutSingleSteppedDynamic, NeuronLayoutVoxel,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{NMFeagiAdvancedDataNeuronInternal, Period};
 use feagi_genome::basis::cortical_area::processing::{InterconnectFeagiAdvancedGenerator, InterconnectFeagiSimpleGenerator};
@@ -186,7 +186,7 @@ fn serde_round_trip() {
 }
 
 /// A new area of this type and member, from the defaults of the cortical type
-fn generator_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NMMember>(layout: NeuronLayoutOf<M, Fiq>) -> NeurogenesisDefaultsGenerator<Fiq, M> {
+fn generator_from_defaults<T: CorticalAreaTypeMemberAt<M>, M: NMMember>(layout: NeuronLayoutOf<M, Fiq>) -> NeurogenesisGeneratorUniformDefault<Fiq, M> {
     <T as CorticalAreaTypeMemberAt<M>>::new_defaults_generator::<Fiq>(layout).unwrap()
 }
 

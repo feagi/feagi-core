@@ -11,11 +11,13 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLa
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
+/// Probably the most common shared cortical area generator. 
 /// Generates a cortical area from fixed starting values: every neuron starts with the same
 /// internal data. Its scratch and variance data come from the model's
-/// `NeuronModel::NeurogenesisDefaults`
+/// `NeuronModel::NeurogenesisDefaults`. This allows different cortical models to specify their own
+/// default cortical 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NeurogenesisDefaultsGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
+pub struct NeurogenesisGeneratorUniformDefault<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     /// How the neurons of the area are laid out
     pub layout: NeuronLayoutOf<NM, FIQ>,
     /// Cortical level data used by all models
@@ -27,7 +29,7 @@ pub struct NeurogenesisDefaultsGenerator<FIQ: FeagiIndexQuantization, NM: Neuron
     pub neuron_internal: NM::NeuronDataInternal,
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisDefaultsGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisGeneratorUniformDefault<FIQ, NM> {
     pub fn new(
         layout: NeuronLayoutOf<NM, FIQ>,
         universal_properties: NeuronModelUniversalCorticalProperties<NM>,
@@ -47,7 +49,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisDefaultsGenerator
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> for NeurogenesisDefaultsGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
     fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
         &self.layout
     }
@@ -70,12 +72,12 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
 
     fn spawn_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
         let internal = self.neuron_internal.clone();
-        let scratch = NM::NeurogenesisDefaults::<FIQ>::static_get_neuron_scratch(index, &self.layout, &internal);
+        let scratch = NM::NeurogenesisScratchVarianceGeneratorType::<FIQ>::static_get_neuron_scratch(index, &self.layout, &internal);
         (internal, scratch)
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisDefaultsGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
     /// The internal data every neuron starts with, which storage does not hold as a single value
     type OtherDataNeededForFromStorage = NM::NeuronDataInternal;
 

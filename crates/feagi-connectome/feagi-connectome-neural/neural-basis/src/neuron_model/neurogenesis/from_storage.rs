@@ -78,7 +78,7 @@ where
     fn spawn_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
         let index_u = index.quant_to_usize();
         let internal = self.neuron_internal[index_u].clone();
-        let scratch = NM::NeurogenesisDefaults::static_get_neuron_scratch(index, &self.layout, &internal);
+        let scratch = NM::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_scratch(index, &self.layout, &internal);
         (internal, scratch)
     }
 }

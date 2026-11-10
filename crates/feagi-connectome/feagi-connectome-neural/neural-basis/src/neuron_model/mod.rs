@@ -24,9 +24,12 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// What neuron layout this neuron model expects
     type NeuronLayoutTag: NeuronLayoutTag;
     
-    type NeurogenesisDefaults<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
+    /// Generator trait for producing default variance and scratch values during NeuroGenesis
+    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
 
-    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisByGenerator<FIQ, Self>;
+    /// When not loading from storage, what method should be used to create the cortical area's
+    /// initial data state?
+    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization>: NeurogenesisByGenerator<FIQ, Self>;
 
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during

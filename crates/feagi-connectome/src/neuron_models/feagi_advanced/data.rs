@@ -1,6 +1,11 @@
 use feagi_basis::create_wrapped_quantized_decimal;
+use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
+use feagi_basis::prelude::QuantizedDecimalTrait;
+use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
-use feagi_connectome_neural::neural_basis::quantization_levels::MembranePotentialQuantization;
+use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use crate::neuron_models::family::NeuronModel;
 
 create_wrapped_quantized_decimal!(
@@ -26,19 +31,41 @@ pub trait NMFeagiAdvancedTrait: NeuronModel<
 
 //region Quant levels
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedQuantDefaultQuant;
 
-impl MembranePotentialQuantization for NMFeagiAdvancedQuantDefaultQuant 
+impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantDefaultQuant {
+    type Period = f32;
+}
+
+impl NeuronModel for NMFeagiAdvancedQuantDefaultQuant {
+    type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> = 
+        super::neurogenesis::FeagiAdvancedNeurogenesisDefaults<FIQ, Self>;
+
+    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> = 
+        NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+    type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
+    type CorticalDataInternal = NMFeagiAdvancedDataCorticalInternal<Self>;
+    type CorticalDataScratch = NMFeagiAdvancedDataCorticalScratch<Self>;
+    type CorticalDataVariance = NMFeagiAdvancedDataCorticalVariance<Self>;
+    type NeuronDataInternal = NMFeagiAdvancedDataNeuronInternal<Self>;
+    type NeuronDataScratch = NMFeagiAdvancedDataNeuronScratch<Self>;
+    type NeuronDataVariance = NMFeagiAdvancedDataNeuronVariance<Self>;
+}
+
+impl MembranePotentialQuantization for NMFeagiAdvancedQuantDefaultQuant
 {
-    type MembranePotentialQuant = f32; 
+    type MembranePotentialQuant = f32;
 }
 
 //endregion
 
 //region Cortical Properties
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataCorticalProperties<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How long till a neuron of the cortical area can fire again"]
@@ -92,7 +119,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalProperties<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataCorticalProperties<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -117,10 +144,9 @@ for NMFeagiAdvancedDataCorticalProperties<NM> {}
 
 //endregion
 
-
 //region Cortical internal
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataCorticalInternal<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
@@ -138,7 +164,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalInternal<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataCorticalInternal<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -156,7 +182,7 @@ for NMFeagiAdvancedDataCorticalInternal<NM> {}
 
 //region Cortical Scratch
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataCorticalScratch<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
@@ -174,7 +200,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalScratch<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataCorticalScratch<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -192,7 +218,7 @@ for NMFeagiAdvancedDataCorticalScratch<NM> {}
 
 //region Cortical Variance
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataCorticalVariance<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How much fire threshold increases in a cortical area on the X direction"]
@@ -226,7 +252,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataCorticalVariance<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -246,7 +272,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
 
 //region Neuron Internal
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataNeuronInternal<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How many more bursts the neuron is refractory for"]
@@ -270,7 +296,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronInternal<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataNeuronInternal<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -291,7 +317,7 @@ for NMFeagiAdvancedDataNeuronInternal<NM> {}
 
 //region Neuron Scratch
 
-#[derive(Clone, Copy, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiAdvancedDataNeuronScratch<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
@@ -309,7 +335,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronScratch<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataNeuronScratch<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -327,7 +353,7 @@ for NMFeagiAdvancedDataNeuronScratch<NM> {}
 
 //region Neuron Variance
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct NMFeagiAdvancedDataNeuronVariance<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " Added to the firing threshold of the cortical area, for this neuron"]
@@ -350,7 +376,7 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronVariance<NM> {
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
-        -> Result<
+        -> ::core::result::Result<
             NMFeagiAdvancedDataNeuronVariance<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
@@ -368,6 +394,27 @@ impl<NM: NMFeagiAdvancedTrait> feagi_connectome_neural::neural_basis::neuron_mod
 for NMFeagiAdvancedDataNeuronVariance<NM> {}
 
 //endregion
+
+
+
+
+
+impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagiAdvancedDataCorticalVariance<NM> {
+    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
+        &self,
+        layout: &NeuronLayoutOf<NM, FIQ>,
+        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
+        let coordinates = layout.get_neuron_layout_context(index);
+        let [x, y, z, _d] = coordinates.as_slice();
+        NMFeagiAdvancedDataNeuronVariance::new(
+            self.firing_threshold_increment_x * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*x)
+                + self.firing_threshold_increment_y * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*y)
+                + self.firing_threshold_increment_z * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*z),
+        )
+    }
+}
+
 
 /*
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
@@ -450,21 +497,7 @@ define_cortical_dynamics_quantization_template! {
 
 cortical_dynamics_quantization_feagi_advanced_template!(expand_cortical_dynamics_quantization);
 
-impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagiAdvancedDataCorticalVariance<NM> {
-    fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
-        &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
-        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
-        let coordinates = layout.get_neuron_layout_context(index);
-        let [x, y, z, _d] = coordinates.as_slice();
-        NMFeagiAdvancedDataNeuronVariance::new(
-            self.firing_threshold_increment_x * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*x)
-                + self.firing_threshold_increment_y * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*y)
-                + self.firing_threshold_increment_z * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*z),
-        )
-    }
-}
+
 
 
 

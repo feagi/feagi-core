@@ -112,7 +112,7 @@ mod custom_inner {
     use feagi_basis::quantization::quantizable::DataValueQuantizationError;
     use feagi_connectome::connectome_basis::neuron_model::NeuronLayoutTagVoxel;
     use feagi_connectome::connectome_basis::neuron_model::{
-        NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTag,
+        NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTag,
     };
     use feagi_connectome::connectome_basis::neuron_model::{define_cortical_type_family_template, expand_cortical_identifier, expand_cortical_type_family};
     use feagi_connectome::connectome_basis::neuron_model;
@@ -166,7 +166,7 @@ mod custom_inner {
         impl UsesFeagiSimple for Thing {
             fn new_defaults_generator<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait>(
                 _layout: NeuronLayoutOf<NM, FIQ>,
-            ) -> Result<NeurogenesisDefaultsGenerator<FIQ, NM>, DataValueQuantizationError> {
+            ) -> Result<NeurogenesisGeneratorUniformDefault<FIQ, NM>, DataValueQuantizationError> {
                 unimplemented!()
             }
         }

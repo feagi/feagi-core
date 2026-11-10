@@ -3,7 +3,7 @@ use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPoten
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel, NeuronLayoutVoxel};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
 use feagi_connectome::connectome_basis::neuron_model::{
-    NeurogenesisByGenerator, NeurogenesisDefaultsGenerator, NeurogenesisFromStorage, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
+    NeurogenesisByGenerator, NeurogenesisGeneratorUniformDefault, NeurogenesisFromStorage, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
     NeurogenesisStorageError,
 };
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
@@ -314,8 +314,8 @@ impl<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait> NeurogenesisScratchVar
 
 type Uniform = NMTestUniformQuantFloat32;
 
-fn uniform_generator(dimensions: [usize; 4], value: f32) -> NeurogenesisDefaultsGenerator<Fiq, Uniform> {
-    NeurogenesisDefaultsGenerator::new(
+fn uniform_generator(dimensions: [usize; 4], value: f32) -> NeurogenesisGeneratorUniformDefault<Fiq, Uniform> {
+    NeurogenesisGeneratorUniformDefault::new(
         voxel_layout(dimensions),
         universal(),
         NMTestUniformDataCorticalProperties::new(),
@@ -351,7 +351,7 @@ fn defaults_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
         [1.0, 2.0, 3.0].map(NMTestUniformDataNeuronInternal::new).to_vec(),
     )
     .unwrap();
-    let generator = NeurogenesisDefaultsGenerator::new_generator_from_storage(&storage, NMTestUniformDataNeuronInternal::new(9.0));
+    let generator = NeurogenesisGeneratorUniformDefault::new_generator_from_storage(&storage, NMTestUniformDataNeuronInternal::new(9.0));
     assert_eq!(generator, uniform_generator([3, 1, 1, 1], 9.0));
     let values: Vec<f32> = generator.iter().map(|(internal, _, _)| internal.value).collect();
     assert_eq!(values, [9.0; 3]);
@@ -359,13 +359,13 @@ fn defaults_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
 
 /// What a cortical type does: wraps the defaults generator to fill in its own defaults, which a
 /// client may edit, then hands it out as the generator of the model
-struct ExampleCorticalTypeGenerator<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait>(pub NeurogenesisDefaultsGenerator<FIQ, NM>);
+struct ExampleCorticalTypeGenerator<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait>(pub NeurogenesisGeneratorUniformDefault<FIQ, NM>);
 
 impl<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait> ExampleCorticalTypeGenerator<FIQ, NM> {
     /// Every neuron of this cortical type starts at 2
     fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Self {
         use feagi_basis::prelude::QuantizedDecimalTrait;
-        Self(NeurogenesisDefaultsGenerator::new(
+        Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             universal(),
             NMTestUniformDataCorticalProperties::new(),
@@ -377,7 +377,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMTestUniformTrait> ExampleCorticalTypeGen
 
     fn into_model_generator(self) -> NM::NeurogenesisGenerator<FIQ>
     where
-        NM::NeurogenesisGenerator<FIQ>: From<NeurogenesisDefaultsGenerator<FIQ, NM>>,
+        NM::NeurogenesisGenerator<FIQ>: From<NeurogenesisGeneratorUniformDefault<FIQ, NM>>,
     {
         self.0.into()
     }

@@ -7,7 +7,7 @@ use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
-use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutOf, NeuronLayoutTagSingleSteppedDynamic, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTagSingleSteppedDynamic, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::feagi_advanced::{
     self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
     NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
@@ -40,7 +40,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> InterconnectFeagiAdv
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
-        Ok(Self(NeurogenesisDefaultsGenerator::new(
+        Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -81,7 +81,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> InterconnectFeagiSimpl
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
-        Ok(Self(NeurogenesisDefaultsGenerator::new(
+        Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -126,7 +126,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait> MemoryMemoryFire
     /// A new `Memory` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
     pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
-        Ok(Self(NeurogenesisDefaultsGenerator::new(
+        Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,

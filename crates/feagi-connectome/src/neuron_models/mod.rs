@@ -105,7 +105,6 @@ pub mod memory_fire_hashing;
 
 #[macro_use]
 pub mod family;
-pub mod defaults_generator;
 pub mod neurogenesis_dispatch;
 // Replaced by neurogenesis, as the `NeuronInitializer` trait they implement no longer exists
 //pub mod initializers;
@@ -123,7 +122,8 @@ fn example() {
         NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedQuantDefaultQuant, Period,
     };
     use crate::connectome_basis::neuron_model::{
-        NeurogenesisFromStorageOrByGeneratorOf, NeurogenesisFromStorageOrByGeneratorEnum, NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisDefaultsGenerator,
+        NMEnum, NMFeagiAdvancedQuantEnum, NMMember, NeurogenesisGeneratorUniformDefault, NeurogenesisFromStorageOrByGeneratorEnum,
+        NeurogenesisFromStorageOrByGeneratorOf,
         NeurogenesisMethod, NeuronLayoutData, NeuronLayoutVoxel, NeuronModelUniversalCorticalProperties,
     };
     use crate::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
@@ -133,7 +133,7 @@ fn example() {
     // 1. The generator of a new area, holding every per model data struct of FeagiAdvanced
     let layout =
         NeuronLayoutVoxel::<FeagiIndexQuantizationStandard>::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize([2, 2, 1, 1]).unwrap());
-    let generator = NeurogenesisDefaultsGenerator::<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant>::new(
+    let generator = NeurogenesisGeneratorUniformDefault::<FeagiIndexQuantizationStandard, NMFeagiAdvancedQuantDefaultQuant>::new(
         layout,
         NeuronModelUniversalCorticalProperties {
             cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -159,7 +159,7 @@ fn example() {
 
     // The same three steps in one, by the member's marker struct
     let same: NeurogenesisFromStorageOrByGeneratorEnum<FeagiIndexQuantizationStandard> =
-        NMEnum::from_data::<NMFeagiAdvancedQuantDefaultQuant>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(NeurogenesisDefaultsGenerator::new(
+        NMEnum::from_data::<NMFeagiAdvancedQuantDefaultQuant>(NeurogenesisFromStorageOrByGeneratorOf::ByGenerator(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,

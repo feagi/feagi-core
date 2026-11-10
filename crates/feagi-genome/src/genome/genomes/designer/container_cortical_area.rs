@@ -4,7 +4,7 @@ use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genome_object::GenomeObjectPositioning;
 use std::collections::HashSet;
 use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisDefaultsGenerator, NeuronLayoutData, NeuronLayoutTag, NeuronModel, NMContainer, NeuronModelUniversalCorticalProperties};
+use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutData, NeuronLayoutTag, NeuronModel, NMContainer, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_basis::visualization::NeuronVisualizationWordIndex;
@@ -56,14 +56,14 @@ pub struct NeuronModelDataDesigner<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 
 
 
-/// Holds what a new cortical area is generated from: a [`NeurogenesisDefaultsGenerator`] with the
+/// Holds what a new cortical area is generated from: a [`NeurogenesisGeneratorUniformDefault`] with the
 /// defaults of its cortical type, which a client may edit before the area is created. Get one from
 /// the generator wrapper of the cortical type, or generically through
 /// `CorticalAreaTypeMemberAt::new_defaults_generator`
 pub struct NeurogenesisDefaultsGeneratorContainer<FIQ>(core::marker::PhantomData<fn() -> FIQ>);
 
 impl<FIQ: FeagiIndexQuantization> NMContainer for NeurogenesisDefaultsGeneratorContainer<FIQ> {
-    type Of<M: NeuronModel> = NeurogenesisDefaultsGenerator<FIQ, M>;
+    type Of<M: NeuronModel> = NeurogenesisGeneratorUniformDefault<FIQ, M>;
 }
 
 /// The generator of a new cortical area, at whichever cortical type and model member it is

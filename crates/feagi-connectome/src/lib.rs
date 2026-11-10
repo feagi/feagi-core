@@ -2,6 +2,7 @@
 
 mod neuron_models;
 pub mod neural_processors;
+pub mod common_systems;
 
 /// Core data structures and traits needed for interfacing with the connectome
 pub mod connectome_basis {
@@ -51,7 +52,7 @@ pub mod connectome_basis {
             from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator, NeurogenesisMethod, NeurogenesisScratchVarianceGenerator,
         };
         /// The generator starting every neuron of an area from the same values, for cortical types to wrap
-        pub use crate::neuron_models::defaults_generator::NeurogenesisDefaultsGenerator;
+        pub use crate::common_systems::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
         pub use feagi_connectome_proc::{
             define_cortical_type_family_template, define_model_family_template, expand_cortical_area_map, expand_cortical_identifier, expand_cortical_type_family,
             expand_model_family,
