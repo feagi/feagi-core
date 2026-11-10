@@ -3,7 +3,7 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::Neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::NMFoundationPowerTrait;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
-use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalType, CorticalTypeKind};
+use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
 
 
 /// These are the core cortical areas of FEAGI, that typically have some unique functionality
@@ -24,6 +24,35 @@ where
 pub enum CorticalTypeFoundationSubtypeKind {
     Power = 0,
 }
+
+#[repr(C, u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum CorticalIdentifierFoundation {
+    Power([u8; 6]) = 0
+}
+
+impl CorticalIdentifierFoundation {
+
+    /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
+    /// correct inner!
+    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
+    {
+        debug_assert_eq!(bytes[0], 0);
+        Ok(CorticalIdentifier::Foundation(
+            match bytes[1] {
+                0 => {
+                    let [_, _, last_six @ ..] = bytes;
+                    CorticalIdentifierFoundation::Power(last_six)
+                },
+                _ => {
+                    return Err(())
+                }
+            }
+        ))
+    }
+
+}
+
 
 
 //region Power
@@ -77,3 +106,5 @@ pub enum CTStorageOrGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization>
 
 
 //endregion
+
+

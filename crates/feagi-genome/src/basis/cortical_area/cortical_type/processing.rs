@@ -2,8 +2,8 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantStandard32Bit};
-use feagi_connectome::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantStandard32Bit;
-use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalType, CorticalTypeKind};
+use feagi_connectome::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantStandard32Bit};
+use crate::basis::cortical_area::cortical_type::{CorticalAllowedRegions, CorticalIdentifier, CorticalType, CorticalTypeKind};
 
 pub trait CorticalTypeProcessing<NM>: CorticalType<
     NM,
@@ -19,6 +19,32 @@ where
 pub enum CorticalTypeProcessingSubtypeKind {
     Interconnect = 0,
 }
+#[repr(C, u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum CorticalIdentifierProcessing {
+    Interconnect([u8; 6])
+}
+
+impl CorticalIdentifierProcessing {
+    /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
+    /// correct inner!
+    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, ()>
+    {
+        debug_assert_eq!(bytes[0], 1);
+        Ok(CorticalIdentifier::Processing(
+            match bytes[1] {
+                0 => {
+                    let [_, _, last_six @ ..] = bytes;
+                    CorticalIdentifierProcessing::Interconnect(last_six)
+                },
+                _ => {
+                    return Err(())
+                }
+            }
+        ))
+    }
+}
+
 
 //region Interconnect
 
@@ -52,21 +78,21 @@ impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiSimpleQu
 //endregion
 
 pub enum CTGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
-    FeagiSimple(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
+    FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
 }
 
 pub enum CTStorageProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
-    FeagiSimple(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
+    FeagiSimple(NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
 }
 
 pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
-    FeagiSimple(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
+    FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
 }
 
-
-
-
 //endregion
+
+
+

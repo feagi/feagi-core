@@ -4,6 +4,8 @@ pub mod processing;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::basis::cortical_area::cortical_type::foundation::CorticalIdentifierFoundation;
+use crate::basis::cortical_area::cortical_type::processing::CorticalIdentifierProcessing;
 use crate::basis::cortical_area::identifier::CorticalAreaInnerID;
 
 /// A cortical type is a higher level description of a cortical area. It has a set layout, but
@@ -67,6 +69,51 @@ impl From<CorticalTypeAndSubtype> for CorticalTypeKind {
     }
 }
 
+pub(crate) trait CorticalIdentifierInner {
+    /// The repr(u8) enum that represents the subtype under a given type
+    type CorticalSubTypeKindEnum;
+
+    /// Each cortical subtype has a unique byte identifier (amongst that type). This is used for
+    /// cortical Identification
+    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum;
+
+    /// Each cortical type has a unique byte identifier. This is used for cortical Identification
+    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind;
+}
+
+#[repr(C, u8)]
+#[derive(Copy, Clone, Debug)]
+pub enum CorticalIdentifier {
+    Foundation(CorticalIdentifierFoundation) = 0,
+    Processing(CorticalIdentifierProcessing) = 1,
+}
+
+impl CorticalIdentifier {
+
+    fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, ()> {
+        match bytes[0] {
+            0 => CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes),
+            1 => CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes),
+            _ => Err(())
+        }
+
+    }
+
+    /// Directly cast from bytes to this. Does NOT check validity!
+    unsafe fn from_bytes_unsafe(bytes: [u8; 8]) -> Self {
+        core::mem::transmute(bytes)
+    }
+
+    fn into_bytes(self) -> CorticalIdentifierBytes {
+        const _: () = assert!(core::mem::size_of::<CorticalIdentifier>() == 8); // compile time check
+        let arr: [u8; 8] = unsafe {core::mem::transmute(self)};
+        CorticalIdentifierBytes(arr)
+    }
+}
+
+pub struct CorticalIdentifierBytes(pub(crate) [u8; 8]);
+
+
 
 
 /// Allows specifying where a cortical area of the given type can reside in the genome
@@ -75,5 +122,5 @@ impl From<CorticalTypeAndSubtype> for CorticalTypeKind {
 pub enum CorticalAllowedRegions {
     RootOnly,
     InnerOnly,
-    RootOrInner, // look, its a bitmask!
+    RootOrInner, // look, its a bitset!
 }
