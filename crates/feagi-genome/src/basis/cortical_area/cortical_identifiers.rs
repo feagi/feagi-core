@@ -8,6 +8,8 @@ use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePath
 use crate::basis::cortical_area::foundation::CorticalIdentifierFoundation;
 use crate::basis::cortical_area::processing::CorticalIdentifierProcessing;
 
+// TODO manual byte serialization / deserialization to enforce 8 byte limits, note that serde
+// ignores #[repr(C, u8)] overrides! So when bringing this down to 8 bytes we must do so manually
 
 //region (Genuine) Cortical Identifier
 
@@ -23,31 +25,14 @@ pub enum CorticalIdentifier { // Due Faux, the max is 127
     Processing(CorticalIdentifierProcessing) = 1,
 }
 
-impl CorticalIdentifier {
-
-    fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError> {
-        match bytes[0] {
-            0 => Ok(Self::Foundation(CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes)?)),
-            1 => Ok(Self::Processing(CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes)?)),
-            err => Err(CorticalIdentifierParseError::InvalidCorticalType(err))
-        }
-    }
-
-    fn into_bytes(self) -> CorticalIdentifierBytes {
-        const _: () = assert!(core::mem::size_of::<CorticalIdentifier>() == 8); // compile time check
-        let arr: [u8; 8] = unsafe {core::mem::transmute(self)};
-        CorticalIdentifierBytes(arr)
-    }
-}
-
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CorticalIdentifierBytes(pub(crate) [u8; 8]);
 
 impl CorticalIdentifierBytes {
     pub fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
     {
-        let decoded = CorticalIdentifier::try_from_bytes(bytes)?;
-        Ok(decoded.into_bytes()) // 0 cost return
+        let decoded = Self::try_deserialize_from_bytes(bytes)?;
+        Ok(Self::serialize_into_bytes(decoded)) // 0 cost return
     }
 
     pub fn to_bytes(self) -> [u8; 8]
@@ -55,95 +40,22 @@ impl CorticalIdentifierBytes {
         self.0
     }
 
-
-}
-
-//endregion
-
-//region Faux Cortical Identifier
-
-/// Used in place of the `CorticalIdentifier` in transformation / addition functions to eliminate
-/// odds of collision while still having something mappings can match against
-#[repr(C, u8)]
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FauxCorticalIdentifier { // Note: Offset of 128 to maintain difference with Genuine
-    Foundation(CorticalIdentifierFoundation) = 128 + 0,
-    Processing(CorticalIdentifierProcessing) = 128 + 1,
-}
-
-impl FauxCorticalIdentifier {
-    fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError> {
+    fn try_deserialize_from_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, CorticalIdentifierParseError> {
         match bytes[0] {
-            128 => Ok(Self::Foundation(CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes)?)),
-            129 => Ok(Self::Processing(CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes)?)),
+            0 => Ok(CorticalIdentifier::Foundation(CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes)?)),
+            1 => Ok(CorticalIdentifier::Processing(CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes)?)),
             err => Err(CorticalIdentifierParseError::InvalidCorticalType(err))
         }
     }
 
-    fn into_bytes(self) -> FauxCorticalIdentifierBytes {
+    fn serialize_into_bytes(identifier: CorticalIdentifier) -> CorticalIdentifierBytes {
         const _: () = assert!(core::mem::size_of::<CorticalIdentifier>() == 8); // compile time check
-        let arr: [u8; 8] = unsafe {core::mem::transmute(self)};
-        FauxCorticalIdentifierBytes(arr)
+        let arr: [u8; 8] = unsafe {core::mem::transmute(identifier)};
+        CorticalIdentifierBytes(arr)
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct FauxCorticalIdentifierBytes(pub(crate) [u8; 8]);
-
-impl FauxCorticalIdentifierBytes {
-    pub fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
-    {
-        let decoded = FauxCorticalIdentifier::try_from_bytes(bytes)?;
-        Ok(decoded.into_bytes()) // 0 cost return
-    }
-
-    pub fn to_bytes(self) -> [u8; 8]
-    {
-        self.0
-    }
-}
-
-//endregion
-
-//region Maybe Cortical Identifier
-
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)] // No serde explicitly, due be being 9 bytes
-pub enum MaybeCorticalIdentifier {
-    Genuine(CorticalIdentifier),
-    Faux(FauxCorticalIdentifier)
-}
-
-trait IdentifierByteParser<const OFFSET: u8> {
-
-    type Identifier;
-    type IdentifierBytes;
-
-    fn try_parse_from_bytes(bytes: [u8; 8])
-        -> Result<Self::Identifier, CorticalIdentifierParseError> {
-
-    }
-
-}
-
-//endregion
-
-#[derive(Debug, thiserror::Error)]
-pub enum CorticalIdentifierParseError {
-    #[error("Decoded byte {0} corresponds to no known cortical type!")]
-    InvalidCorticalType(u8),
-    #[error("Decoded byte {0} corresponds to no known cortical subtype!")]
-    InvalidCorticalSubtype(u8),
-}
-
-/// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
-/// bytes and back must return the exact same bytes, or two different byte patterns could mean the
-/// same cortical area
-pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + Into<[u8; 6]> + TryFrom<[u8; 6]> {}
-
-/// just 6 bytes counts as well
-impl CorticalAreaInnerID for [u8; 6] {}
-
-
+//region Base 64
 
 /// How many bytes a [`CorticalIdentifier`] takes as padded base64 text
 const TEXT_BYTE_COUNT: usize = 12;
@@ -272,3 +184,49 @@ impl<'de> serde::Deserialize<'de> for CorticalIdentifierBase64 {
         deserializer.deserialize_str(TextVisitor)
     }
 }
+
+//endregion
+
+//endregion
+
+//region Faux Cortical Identifier
+
+/// Used in place of the `CorticalIdentifier` in transformation / addition functions to eliminate
+/// odds of collision while still having something mappings can match against
+#[repr(C, u8)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FauxCorticalIdentifier { // Note: Offset of 128 to maintain difference with Genuine
+    Foundation(CorticalIdentifierFoundation) = 128 + 0,
+    Processing(CorticalIdentifierProcessing) = 128 + 1,
+}
+
+//endregion
+
+//region Maybe Cortical Identifier
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)] // No serde explicitly, due be being 9 bytes
+pub enum MaybeCorticalIdentifier {
+    Genuine(CorticalIdentifier),
+    Faux(FauxCorticalIdentifier)
+}
+
+//endregion
+
+#[derive(Debug, thiserror::Error)]
+pub enum CorticalIdentifierParseError {
+    #[error("Decoded byte {0} corresponds to no known cortical type!")]
+    InvalidCorticalType(u8),
+    #[error("Decoded byte {0} corresponds to no known cortical subtype!")]
+    InvalidCorticalSubtype(u8),
+}
+
+/// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
+/// bytes and back must return the exact same bytes, or two different byte patterns could mean the
+/// same cortical area
+pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + Into<[u8; 6]> + TryFrom<[u8; 6]> {}
+
+/// just 6 bytes counts as well
+impl CorticalAreaInnerID for [u8; 6] {}
+
+
+
