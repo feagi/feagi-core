@@ -27,16 +27,22 @@ pub enum CorticalTypeProcessingSubtypeKind {
 
 //region Cortical Subtype Enums
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
 {
     Interconnect(CTGeneratorProcessingInterconnectModeled<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageProcessingSubTyped<FIQ: FeagiIndexQuantization>
 {
     Interconnect(CTStorageProcessingInterconnectModeled<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageOrGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
 {
     Interconnect(CTStorageOrGeneratorProcessingInterconnectModeled<FIQ>)
@@ -107,21 +113,21 @@ impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiSimpleQu
 
 //endregion
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum CTGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum CTStorageProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>),
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),

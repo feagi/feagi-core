@@ -17,7 +17,9 @@ pub trait CorticalTypeFoundation<NM>: CorticalType<
 >
 where
     NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel>
-{}
+{
+
+}
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Hash)]
@@ -56,7 +58,7 @@ pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
 
 #[repr(C, u8)]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub(in crate::basis) enum CorticalIdentifierFoundation {
+pub(crate) enum CorticalIdentifierFoundation {
     Power([u8; 6]) = 0
 }
 
@@ -64,7 +66,7 @@ impl CorticalIdentifierFoundation {
 
     /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
     /// correct inner!
-    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
+    pub(crate) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
     {
         debug_assert_eq!(bytes[0] % 128, 0);
         Ok(
@@ -108,9 +110,16 @@ where
     >;
     type IdentifierInner = [u8; 6];
     type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
+    type CorticalGeneratorEnum<FIQ: FeagiIndexQuantization> = CTGeneratorFoundationPowerModeled<FIQ>;
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
     const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
     const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
+
+    fn get_initial_cortical_generator<FIQ: FeagiIndexQuantization>() -> NM::NeurogenesisByGeneratorType<FIQ> {
+        CTGeneratorFoundationPowerModeled::FoundationPower(
+            NMFoundationPowerNeurogenesisGeneratorQuanted::
+        )
+    }
 }
 
 //region lock neuron model support

@@ -5,7 +5,7 @@ use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::FauxCorticalIdentifier;
 
-pub struct GenomeEditStepCorticalAreaBuilder<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
+pub struct GenomeEditStepCorticalAreaBuilder<'a, FIQ: FeagiIndexQuantization>(pub(super) &'a mut GenomeEditSequence<FIQ>);
 
 impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepCorticalAreaBuilder<'a, FIQ> {
 

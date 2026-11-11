@@ -8,7 +8,12 @@ use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
 use crate::genome::genomes::GenomeError;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::genome::genomes::designer::container_cortical_area::CorticalAreaGenomeCorticalTypedMap;
+use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat32};
+use feagi_connectome::neuron_models::models::ProxyNMNeuroGenesisFromGenerator;
+use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
+use crate::basis::cortical_area::CTGeneratorTyped;
+use crate::basis::cortical_area::foundation::{CTGeneratorFoundationPowerModeled, CTGeneratorFoundationSubTyped, CorticalTypeFoundationPower};
+use crate::genome::genomes::designer::container_cortical_area::{CorticalAreaContainer};
 
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
 /// as the interface and translator for modifications to that brain directly on the genome and
@@ -17,27 +22,39 @@ use crate::genome::genomes::designer::container_cortical_area::CorticalAreaGenom
 pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     root_brain_region: BrainRegionContainerRootRuntime,
     inner_brain_regions: HashMap<BrainRegionID, BrainRegionContainerInnerRuntime>,
-    cortical_areas: CorticalAreaGenomeCorticalTypedMap<FIQ>,
+    cortical_areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ>>,
 
     // TODO NPU
 
     // TODO
     // connectivity rules cache (id -> rule)
     // cortical mappings cache  (id -> cortical mapping set (mapping id -> mapping) )
-    _p: core::marker::PhantomData<FIQ>,
 }
 
 impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
 
-    pub fn new_genome_now(root_metadata: GenomeObjectMetadata) -> Self {
+    /// Creates a new barebones genome (root brain region dated to now, and a single
+    /// foundation power cortical area)
+    pub fn new_barebones_genome_now(root_metadata: GenomeObjectMetadata) -> Self {
 
-        let (root, _root_id)
-            = BrainRegionContainerRootRuntime::new_now(root_metadata);
+        let region_root= BrainRegionContainerRootRuntime::new(
+            root_metadata, BrainRegionID::new_now()
+        );
+
+        let area_power_generator = CTGeneratorTyped::Foundation(
+            CTGeneratorFoundationSubTyped::Power(
+                CTGeneratorFoundationPowerModeled::FoundationPower(
+                    NMFoundationPowerNeurogenesisGeneratorQuanted::Float32(
+                        NMFoundationPowerQuantFloat32::
+                    )
+                )
+            )
+        )
+
         Self {
-            root_brain_region: root,
+            root_brain_region: region_root,
             inner_brain_regions: Default::default(),
             cortical_areas: Default::default(),
-            _p: Default::default(),
         }
     }
 

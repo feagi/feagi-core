@@ -132,16 +132,16 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageOrGeneratorModeled<FIQ> {
 
 /// A struct of stored data for a neuron models data that can be used to generate that cortical area
 /// as it was saved.
-type ProxyNMNeuroGenesisFromStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+pub type ProxyNMNeuroGenesisFromStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     = NeurogenesisFromStorage<FIQ, NM>;
 /// A struct for a given neuron model that allows creating it from minimal cortical level data.
 /// This can be saved in the genome. Note implementation differs by Neuron Model
-type ProxyNMNeuroGenesisFromGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+pub type ProxyNMNeuroGenesisFromGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     = NM::NeurogenesisByGeneratorType<FIQ>;
 /// An enum that that acts as a generator for a neuron model, that underneath can be of a storage
 /// type or of the neuron models specific generator. Useful for exports where we may want
 /// to optionally allow the use of storage, or not, to control export sizes
-type ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
+pub type ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     = NeurogenesisFromStorageOrByGenerator<FIQ, NM, NM::NeurogenesisByGeneratorType<FIQ>>;
 
 //endregion

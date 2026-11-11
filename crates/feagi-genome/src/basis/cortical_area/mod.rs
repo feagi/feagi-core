@@ -2,12 +2,14 @@ pub mod foundation;
 pub mod processing;
 pub mod cortical_identifiers;
 
+use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::foundation::{CTGeneratorFoundationSubTyped, CTStorageFoundationSubTyped, CTStorageOrGeneratorFoundationSubTyped, CorticalTypeFoundationSubtypeKind};
 use crate::basis::cortical_area::processing::{CTGeneratorProcessingSubTyped, CTStorageOrGeneratorProcessingSubTyped, CTStorageProcessingSubTyped, CorticalTypeProcessingSubtypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::CorticalAreaInnerID;
+
 //region Cortical Type
 
 /// A cortical type is a higher level description of a cortical area. It has a set layout, but
@@ -30,6 +32,10 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     /// The repr(u8) enum that represents the subtype under a given type
     type CorticalSubTypeKindEnum;
 
+    /// The Enum covering all cortical generators for this cortical type, across supported
+    /// neuron models and quantizations
+    type CorticalGeneratorEnum<FIQ: FeagiIndexQuantization>;
+    
     /// Each cortical type has a unique byte identifier. This is used for cortical Identification
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind;
 
@@ -39,6 +45,8 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 
     /// What regions is this cortical type allowed within the genome?
     const ALLOWED_REGIONS: CorticalAllowedRegions;
+    
+    fn get_initial_cortical_generator<FIQ: FeagiIndexQuantization>() -> NM::NeurogenesisByGeneratorType<FIQ>;
 
     //region Default impls
 
@@ -66,18 +74,24 @@ pub enum CorticalTypeAndSubtype{
     Processing(CorticalTypeProcessingSubtypeKind),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTGeneratorTyped<FIQ: FeagiIndexQuantization>
 {
     Foundation(CTGeneratorFoundationSubTyped<FIQ>),
     Processing(CTGeneratorProcessingSubTyped<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageTyped<FIQ: FeagiIndexQuantization>
 {
     Foundation(CTStorageFoundationSubTyped<FIQ>),
     Processing(CTStorageProcessingSubTyped<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTStorageOrGeneratorTyped<FIQ: FeagiIndexQuantization>
 {
     Foundation(CTStorageOrGeneratorFoundationSubTyped<FIQ>),

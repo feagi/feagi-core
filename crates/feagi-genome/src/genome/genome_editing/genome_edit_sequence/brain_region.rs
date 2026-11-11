@@ -5,7 +5,7 @@ use crate::genome::genome_editing::genome_edit_sequence::{
 };
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
-pub struct GenomeEditStepBrainRegionBuilder<'a, FIQ: FeagiIndexQuantization>(&'a mut GenomeEditSequence<FIQ>);
+pub struct GenomeEditStepBrainRegionBuilder<'a, FIQ: FeagiIndexQuantization>(pub(super) &'a mut GenomeEditSequence<FIQ>);
 
 impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepBrainRegionBuilder<'a, FIQ> {
     /// Add a new brain region with the current timestamp for the ID and the Ancestry ID

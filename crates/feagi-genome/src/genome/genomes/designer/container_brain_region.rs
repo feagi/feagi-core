@@ -170,17 +170,14 @@ pub(crate) struct BrainRegionContainerRootRuntime {
 }
 
 impl BrainRegionContainerRootRuntime {
-    pub(crate) fn new_now(metadata: GenomeObjectMetadata) -> (Self, BrainRegionID) {
-        let this_id = BrainRegionID::new_now();
-        (Self {
-            root_id: this_id.clone(),
+    pub(crate) fn new(metadata: GenomeObjectMetadata, root_id: BrainRegionID) -> Self {
+        Self {
+            root_id,
             metadata,
-            ancestor_id: this_id.into(),
+            ancestor_id: root_id.into(),
             contained_areas: Default::default(),
             contained_regions: Default::default(),
-        },
-            this_id
-        )
+        }
     }
 }
 

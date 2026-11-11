@@ -1,9 +1,8 @@
-use crate::basis::cortical_area::cortical_identifiers::FauxCorticalIdentifier;
-use crate::genome::genome_editing::genome_edit_sequence::brain_region::GenomeEditStepBrainRegionEnum;
-use crate::genome::genome_editing::genome_edit_sequence::cortical_area::GenomeEditStepCorticalAreaEnum;
+use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, FauxCorticalIdentifier};
+use crate::genome::genome_editing::genome_edit_sequence::brain_region::{GenomeEditStepBrainRegionBuilder, GenomeEditStepBrainRegionEnum};
+use crate::genome::genome_editing::genome_edit_sequence::cortical_area::{GenomeEditStepCorticalAreaBuilder, GenomeEditStepCorticalAreaEnum};
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use std::collections::HashSet;
-
 
 pub mod brain_region;
 pub mod cortical_area;
@@ -14,18 +13,34 @@ pub mod cortical_area;
 pub struct GenomeEditSequence<FIQ: FeagiIndexQuantization> {
     pub(crate) intensity: GenomeEditSequenceIntensity,
     pub(crate) steps: Vec<GenomeEditSequenceStepEnum<FIQ>>,
-    pub(crate) contained_faux_cortical_ids: HashSet<FauxCorticalIdentifier>
+    // To ensure no duplicates
+    pub(crate) contained_faux_cortical_ids: HashSet<FauxCorticalIdentifier>,
+    // To ensure we dont map to deletions, or delete multiple times
+    pub(crate) deleting_cortical_ids: HashSet<CorticalIdentifier>,
+
 }
 
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditSequence<FIQ>
 {
-    pub fn new() -> Self {
+    /// Creates a new empty (invalid) Sequence, add steps to make it valid
+    pub fn new_empty() -> Self {
         Self {
             intensity: GenomeEditSequenceIntensity::Empty,
             steps: vec![],
             contained_faux_cortical_ids: Default::default(),
+            deleting_cortical_ids: Default::default(),
         }
+    }
+
+    /// Define a step related to Brain Regions
+    fn brain_region(&mut self) -> GenomeEditStepBrainRegionBuilder<'_, FIQ> {
+        GenomeEditStepBrainRegionBuilder(self)
+    }
+
+    /// Define a step related to Cortical Areas
+    fn cortical_area(&mut self) -> GenomeEditStepCorticalAreaBuilder<'_, FIQ> {
+        GenomeEditStepCorticalAreaBuilder(self)
     }
 
     fn inject_step(&mut self, step: GenomeEditSequenceStepEnum<FIQ>) {
@@ -37,7 +52,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditSequence<FIQ>
 impl<FIQ: FeagiIndexQuantization> Default for GenomeEditSequence<FIQ>
 {
     fn default() -> Self {
-        Self::new()
+        Self::new_empty()
     }
 }
 
