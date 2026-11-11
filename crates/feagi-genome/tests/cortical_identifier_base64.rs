@@ -3,8 +3,8 @@ use feagi_basis::feagi_id::base_64::FeagiIDBase64Error;
 use feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind;
 use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathStaticElement;
 use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
-use feagi_genome::basis::cortical_area::{CorticalIdentifierBase64, CorticalIdentifierBytes, CorticalIdentifierParseError};
 use std::collections::HashMap;
+use feagi_genome::basis::cortical_area::cortical_identifiers::{CorticalIdentifierBase64, CorticalIdentifierBytes, CorticalIdentifierParseError};
 
 /// Processing Interconnect, with the inner ID "abcdef"
 fn interconnect() -> CorticalIdentifierBytes {

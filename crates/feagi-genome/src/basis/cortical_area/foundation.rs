@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalIdentifier, CorticalIdentifierParseError, CorticalType, CorticalTypeKind};
+use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
-
+use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
 //region Cortical Subtype
 
 /// These are the core cortical areas of FEAGI, that typically have some unique functionality
@@ -64,10 +64,10 @@ impl CorticalIdentifierFoundation {
 
     /// Must be called from `CorticalIdentifier::try_from_bytes` as it assumes it called the
     /// correct inner!
-    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
+    pub(in crate::basis) fn try_from_cortical_identifier_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
     {
-        debug_assert_eq!(bytes[0], 0);
-        Ok(CorticalIdentifier::Foundation(
+        debug_assert_eq!(bytes[0] % 128, 0);
+        Ok(
             match bytes[1] {
                 0 => {
                     let [_, _, last_six @ ..] = bytes;
@@ -77,7 +77,7 @@ impl CorticalIdentifierFoundation {
                     return Err(CorticalIdentifierParseError::InvalidCorticalSubtype(err))
                 }
             }
-        ))
+        )
     }
 
 }

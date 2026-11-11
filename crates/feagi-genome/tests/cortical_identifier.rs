@@ -1,6 +1,6 @@
 use feagi_genome::basis::cortical_area::processing::CorticalIdentifierProcessing;
-use feagi_genome::basis::cortical_area::{CorticalIdentifier, CorticalIdentifierBytes, CorticalIdentifierParseError};
 use std::collections::HashSet;
+use feagi_genome::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierBytes, CorticalIdentifierParseError};
 
 const INNER: [u8; 6] = *b"abcdef";
 
