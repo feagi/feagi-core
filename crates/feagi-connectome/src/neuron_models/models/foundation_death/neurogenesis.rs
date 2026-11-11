@@ -6,7 +6,7 @@
 use crate::neuron_models::models::foundation_death::quantizations::{NMFoundationDeathNeurogenesisGeneratorQuanted, NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted, NMFoundationDeathNeurogenesisStorageQuanted, NMFoundationDeathQuantBFloat16, NMFoundationDeathQuantFloat16, NMFoundationDeathQuantFloat32, NMFoundationDeathQuantFloat64, NMFoundationDeathQuantKind};
 use crate::neuron_models::models::foundation_death::NMFoundationDeathTrait;
 use crate::neuron_models::models::foundation_death::{NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronVariance};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
@@ -20,16 +20,16 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 //region Impls
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
         NMFoundationDeathNeurogenesisGeneratorQuanted::Float16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -51,16 +51,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
         NMFoundationDeathNeurogenesisGeneratorQuanted::BFloat16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantBFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -82,16 +82,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
         NMFoundationDeathNeurogenesisGeneratorQuanted::Float32(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat32>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat32>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -113,16 +113,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
         NMFoundationDeathNeurogenesisGeneratorQuanted::Float64(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat64>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat64>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -201,16 +201,16 @@ impl<NM: NMFoundationDeathTrait> CorticalDataVarianceSpecification<NM> for NMFou
 
 //region Storage
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
         NMFoundationDeathNeurogenesisStorageQuanted::Float16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -232,16 +232,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
         NMFoundationDeathNeurogenesisStorageQuanted::BFloat16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantBFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -263,16 +263,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
         NMFoundationDeathNeurogenesisStorageQuanted::Float32(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat32>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat32>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -294,16 +294,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
         NMFoundationDeathNeurogenesisStorageQuanted::Float64(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat64>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat64>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -329,16 +329,16 @@ where
 
 //region Storage Or Generator
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat16>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat16>) -> Self {
         NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::Float16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -360,16 +360,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantBFloat16>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantBFloat16>) -> Self {
         NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::BFloat16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantBFloat16>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -391,16 +391,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat32>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat32>) -> Self {
         NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::Float32(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat32>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat32>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -422,16 +422,16 @@ where
     }
 }
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat64>> for NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat64>) -> Self {
         NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::Float64(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat64>
+impl<FIQ> TryFrom<NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat64>
 where
     FIQ: FeagiIndexQuantization,
 {

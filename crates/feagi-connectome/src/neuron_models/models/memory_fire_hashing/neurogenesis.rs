@@ -6,7 +6,7 @@
 use crate::neuron_models::models::memory_fire_hashing::quantizations::{NMMemoryFireHashingNeurogenesisGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageQuanted, NMMemoryFireHashingQuantKind, NMMemoryFireHashingQuantStandard32Bit};
 use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronVariance};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
@@ -20,16 +20,16 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 //region Impls
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
         NMMemoryFireHashingNeurogenesisGeneratorQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -101,16 +101,16 @@ impl<NM: NMMemoryFireHashingTrait> CorticalDataVarianceSpecification<NM> for NMM
 
 //region Storage
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
         NMMemoryFireHashingNeurogenesisStorageQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -136,16 +136,16 @@ where
 
 //region Storage Or Generator
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>> for NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>) -> Self {
         NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>
+impl<FIQ> TryFrom<NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {

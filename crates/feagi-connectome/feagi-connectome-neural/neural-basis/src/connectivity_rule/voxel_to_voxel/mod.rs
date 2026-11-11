@@ -4,6 +4,7 @@ use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
+use crate::neuron_model::neuron_layout::NeuronLayoutRestrictor;
 
 //pub mod vector;
 pub mod all_to_voxel;
@@ -25,7 +26,8 @@ ConnectivityRule<
     // NOTE: Take ownership (copy) of the dims since it would otherwise have a separate lifetime
     // which would be annoying to deal with
 
-    fn spawn_generator(
+    fn spawn_generator
+    (
         &self,
         source_dims: DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
         destination_dims: DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,

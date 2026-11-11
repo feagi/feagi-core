@@ -1,4 +1,4 @@
-use crate::neuron_models::models::feagi_simple::data::Period;
+use crate::neuron_models::models::feagi_simple::data::wrapped::Period;
 use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
@@ -9,25 +9,13 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 pub struct FeagiSimpleBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
-//region Common
-
-impl<FIQ, NM> FeagiSimpleBurstEngineDynamics<FIQ, NM>
-where
-    FIQ: FeagiIndexQuantization,
-    NM: NMFeagiSimpleTrait,
-{
-    pub fn new() -> Self {
-        Self(core::marker::PhantomData)
-    }
-}
-
 impl<FIQ, NM> Default for FeagiSimpleBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiSimpleTrait,
 {
     fn default() -> Self {
-        Self::new()
+        Self(core::marker::PhantomData)
     }
 }
 
@@ -35,8 +23,7 @@ impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FeagiSimpleBurstEngineDynam
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiSimpleTrait,
-{
-}
+{}
 
 //endregion
 

@@ -1,15 +1,17 @@
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neurogenesis::{NeurogenesisScratchVarianceGenerator, NeurogenesisMethod};
-use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutError, NeuronLayoutTag};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 
+/// TODO deserialization needs to verify if layout is sensible!
+
 #[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
 // Every field is serializable through the traits of FIQ and NM, not the bounds serde infers
 #[serde(bound = "")]
-pub struct NeurogenesisFromStorage<FIQ, NM>
+pub struct NeurogenesisStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
@@ -22,12 +24,12 @@ where
     neuron_internal: Vec<NM::NeuronDataInternal>, // TODO dont use vec!
 }
 
-impl<FIQ, NM> NeurogenesisFromStorage<FIQ, NM>
+impl<FIQ, NM> NeurogenesisStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    pub fn new(
+    pub(crate) fn try_new(
         layout: <NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
         cortical_universal_properties: NeuronModelUniversalCorticalProperties<NM>,
         cortical_properties: NM::CorticalDataProperties,
@@ -52,7 +54,7 @@ where
     }
 }
 
-impl<FIQ, NM> NeurogenesisMethod<FIQ, NM> for NeurogenesisFromStorage<FIQ, NM>
+impl<FIQ, NM> NeurogenesisMethod<FIQ, NM> for NeurogenesisStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
@@ -88,5 +90,7 @@ where
 #[derive(Clone, Copy, Hash, Debug, thiserror::Error)]
 pub enum NeurogenesisStorageError {
     #[error("Given collection size of NeurogenesisFromStorage does not meet size defined by layout!")]
-    InvalidSize
+    InvalidSize,
+    #[error("Given Layout it invalid given restriction!")]
+    LayoutRestrictorError(#[from] NeuronLayoutError)
 }

@@ -5,7 +5,7 @@ pub mod cortical_identifiers;
 use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::foundation::{CTGeneratorFoundationSubTyped, CTStorageFoundationSubTyped, CTStorageOrGeneratorFoundationSubTyped, CorticalTypeFoundationSubtypeKind};
 use crate::basis::cortical_area::processing::{CTGeneratorProcessingSubTyped, CTStorageOrGeneratorProcessingSubTyped, CTStorageProcessingSubTyped, CorticalTypeProcessingSubtypeKind};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutTag};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
@@ -24,7 +24,7 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     /// What restrictions, if any, should be on the neuron layout?
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>:
         NeuronLayoutRestrictor< // layouts must match
-            FIQ, CorticalLevelContext=<<Self::NeuronLayout as NeuronLayoutTag>::Layout<FIQ> as NeuronLayoutData<FIQ>>::CorticalLevelContext
+            FIQ, CorticalLevelContext=<<Self::NeuronLayout as NeuronLayoutTag>::Layout<FIQ> as NeuronLayout<FIQ>>::CorticalLevelContext
     >;
 
     /// What method of inner ID is used for this cortical type
@@ -51,7 +51,7 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NM, FIQ>
-    ) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError>;
+    ) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError>;
 
     //region Default impls
 
@@ -137,7 +137,7 @@ where
     >
     () -> NeurogenesisGeneratorUniformDefaultInitParameters<NM>
     where
-        NM: NeuronModel<NeurogenesisByGeneratorType<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>>
+        NM: NeuronModel<NeurogenesisGenerator<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>>
     ;
 }
 

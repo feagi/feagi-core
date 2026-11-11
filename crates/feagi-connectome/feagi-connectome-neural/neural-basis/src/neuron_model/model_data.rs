@@ -1,4 +1,4 @@
-use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use crate::neuron_model::{NeuronModel};
 use crate::quantization_levels::FeagiIndexQuantization;
 use core::fmt::Debug;

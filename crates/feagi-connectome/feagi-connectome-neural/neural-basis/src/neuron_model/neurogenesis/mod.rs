@@ -3,7 +3,7 @@ pub mod from_storage_or_by_generator;
 pub mod by_generator;
 
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf, NeuronLayoutTag};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
@@ -43,7 +43,7 @@ where
     NM: NeuronModel
 {
     
-    fn get_layout(&self) -> &<NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>;
+    fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ>;
 
     /// Cortical level data used by all models
     fn get_universal_cortical_properties(&self) -> NeuronModelUniversalCorticalProperties<NM>;

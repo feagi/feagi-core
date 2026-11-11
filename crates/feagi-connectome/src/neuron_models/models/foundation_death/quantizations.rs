@@ -1,6 +1,6 @@
 use crate::neuron_models::models::foundation_death::{NMFoundationDeathDataCorticalInternal, NMFoundationDeathDataCorticalProperties, NMFoundationDeathDataCorticalScratch, NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronInternal, NMFoundationDeathDataNeuronScratch, NMFoundationDeathDataNeuronVariance, NMFoundationDeathTrait};
 use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -22,10 +22,10 @@ pub enum NMFoundationDeathQuantKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat16>),
-    BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
-    Float32(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat32>),
-    Float64(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationDeathQuantFloat64>)
+    Float16(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationDeathQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ> {
@@ -44,10 +44,10 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisGeneratorQuanted<
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat16>),
-    BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantBFloat16>),
-    Float32(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat32>),
-    Float64(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationDeathQuantFloat64>)
+    Float16(NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(NeurogenesisFromStorageOf<FIQ, NMFoundationDeathQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageQuanted<FIQ> {
@@ -67,10 +67,10 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageQuanted<FI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat16>),
-    BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantBFloat16>),
-    Float32(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat32>),
-    Float64(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationDeathQuantFloat64>)
+    Float16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat16>),
+    BFloat16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantBFloat16>),
+    Float32(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat32>),
+    Float64(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationDeathQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ> {
@@ -100,7 +100,7 @@ impl NeuronModel for NMFoundationDeathQuantFloat16 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationDeathNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationDeathDataCorticalProperties<Self>;
@@ -132,7 +132,7 @@ impl NeuronModel for NMFoundationDeathQuantBFloat16 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationDeathNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationDeathDataCorticalProperties<Self>;
@@ -164,7 +164,7 @@ impl NeuronModel for NMFoundationDeathQuantFloat32 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationDeathNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationDeathDataCorticalProperties<Self>;
@@ -196,7 +196,7 @@ impl NeuronModel for NMFoundationDeathQuantFloat64 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationDeathNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationDeathDataCorticalProperties<Self>;

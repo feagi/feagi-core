@@ -3,7 +3,7 @@ use feagi_basis::collections::spatial_helpers::axis_order::AxisOrderDecrementing
 use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHelper;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
-use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutChangePolicy, NeuronLayoutRestrictionError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::NeuronVisualizationVoxelIndex;
 
@@ -23,20 +23,16 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayoutVoxel<FIQ> {
     }
 }
 
-impl<
-    FIQ: FeagiIndexQuantization,
-> NeuronLayoutData<FIQ>
-for NeuronLayoutVoxel<FIQ> {
+impl<FIQ: FeagiIndexQuantization, > NeuronLayout<FIQ> for NeuronLayoutVoxel<FIQ> {
 
     const CHANGE_POLICY: NeuronLayoutChangePolicy = NeuronLayoutChangePolicy::Fixed;
     const SPARSITY: NeuronLayoutSparsity = NeuronLayoutSparsity::Dense;
 
     type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
     type NeuronLevelContext = DimensionalCorticalAreaNeuronCoordinates<FIQ::NeuronIndexQuant>;
-    type VisualizerContext = NeuronVisualizationVoxelIndex<FIQ::NeuronBitBatchIndexQuant>;
 
-    fn new(init_data: Self::CorticalLevelContext) -> Self {
-        Self{helper: SpatialHelper::new(init_data) }
+    fn get_cortical_layout_context(&self) -> &Self::CorticalLevelContext {
+        &self.helper.get_dimensions()
     }
 
     fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
@@ -45,27 +41,12 @@ for NeuronLayoutVoxel<FIQ> {
         )
     }
 
-    fn get_neuron_layout_context(&self, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::NeuronLevelContext {
-        self.helper.linear_to_coordinate(neuron_index.deref())
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Result<Self::NeuronLevelContext, NeuronLayoutError> {
+        Ok(self.helper.linear_to_coordinate(neuron_index.deref()))
     }
 }
 
 
-/// Neuron Layout Type of Voxel
-#[derive(Copy, Clone, Debug)]
-pub struct NeuronLayoutTagVoxel;
-
-impl NeuronLayoutTag for NeuronLayoutTagVoxel {
-    type Layout<FIQ: FeagiIndexQuantization> = NeuronLayoutVoxel<FIQ>;
-}
-
-//region Restrictions
-
-#[derive(Debug, thiserror::Error)]
-pub enum NeuronLayoutRestrictionVoxelError {
-    #[error("Given Voxel Dimensions exceed stated XYZ Bounds!")]
-    ExceedsXYZBounds
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NeuronLayoutRestrictorVoxelUnbound<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
@@ -74,13 +55,17 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayoutRestrictorVoxelUnbound<FIQ> {
     pub fn new() -> Self { Self(core::marker::PhantomData) }
 }
 
-impl<FIQ: FeagiIndexQuantization> NeuronLayoutRestrictor<FIQ>
-for NeuronLayoutRestrictorVoxelUnbound<FIQ>
+impl<FIQ: FeagiIndexQuantization> NeuronLayoutRestrictor<FIQ> for NeuronLayoutRestrictorVoxelUnbound<FIQ>
 {
-    type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
+    type NeuronLayout = NeuronLayoutVoxel<FIQ>;
 
-    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
+    fn validate_cortical_context(context: &<Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext) -> Result<(), NeuronLayoutError> {
         validate_quant_limits::<FIQ>(context)
+    }
+
+    fn validate_and_create_neuron_layout(context: <Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext) -> Result<Self::NeuronLayout, NeuronLayoutError> {
+        Self::validate_cortical_context(&context)?;
+        Ok( NeuronLayoutVoxel{ helper: SpatialHelper::new(context) } )
     }
 }
 
@@ -114,9 +99,9 @@ impl<FIQ: FeagiIndexQuantization,
     const Z_MAX: usize,
     const D_MAX: usize,> NeuronLayoutRestrictor<FIQ> for
 NeuronLayoutRestrictorVoxelBound<FIQ, X_MIN, Y_MIN, Z_MIN, D_MIN, X_MAX, Y_MAX, Z_MAX, D_MAX> {
-    type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
+    type NeuronLayout = NeuronLayoutVoxel<FIQ>;
 
-    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
+    fn validate_cortical_context(context: &<Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext) -> Result<(), NeuronLayoutError> {
         validate_quant_limits::<FIQ>(context)?;
         let [x, y, z, d] = context.as_slice();
         if  x.quant_to_usize() < X_MIN || x.quant_to_usize() >= X_MAX {
@@ -133,26 +118,45 @@ NeuronLayoutRestrictorVoxelBound<FIQ, X_MIN, Y_MIN, Z_MIN, D_MIN, X_MAX, Y_MAX, 
         };
         Ok(())
     }
+
+    fn validate_and_create_neuron_layout(context: <Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext) -> Result<Self::NeuronLayout, NeuronLayoutError> {
+        Self::validate_cortical_context(&context)?;
+        Ok( NeuronLayoutVoxel{ helper: SpatialHelper::new(context) } )
+    }
 }
 
 fn validate_quant_limits<FIQ: FeagiIndexQuantization>(
     context: &DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>
-) -> Result<(), NeuronLayoutRestrictionError> {
+) -> Result<(), NeuronLayoutError> {
     let [x, y, z, d ] = context.as_slice();
     let mut r = x.quant_to_usize().checked_mul(y.quant_to_usize()).ok_or_else(
-        || NeuronLayoutRestrictionError::ViolatesQuantizationMax
+        || NeuronLayoutError::ViolatesQuantizationMax
     )?;
     r = r.checked_mul(z.quant_to_usize()).ok_or_else(
-        || NeuronLayoutRestrictionError::ViolatesQuantizationMax
+        || NeuronLayoutError::ViolatesQuantizationMax
     )?;
     r.checked_mul(d.quant_to_usize()).ok_or_else(
-        || NeuronLayoutRestrictionError::ViolatesQuantizationMax
+        || NeuronLayoutError::ViolatesQuantizationMax
     )?;
     Ok(())
 }
 
 
-//endregion
+#[derive(Debug, thiserror::Error, Clone, Hash, Copy)]
+pub enum NeuronLayoutRestrictionVoxelError {
+    #[error("Given Voxel Dimensions exceed stated XYZ Bounds!")]
+    ExceedsXYZBounds
+}
+
+
+
+/// Neuron Layout Type of Voxel
+#[derive(Copy, Clone, Debug)]
+pub struct NeuronLayoutTagVoxel;
+
+impl NeuronLayoutTag for NeuronLayoutTagVoxel {
+    type Layout<FIQ: FeagiIndexQuantization> = NeuronLayoutVoxel<FIQ>;
+}
 
 
 

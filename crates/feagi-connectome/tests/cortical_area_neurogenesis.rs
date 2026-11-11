@@ -12,11 +12,11 @@ use feagi_connectome::neuron_models::models::foundation_power::{
 };
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::{NeurogenesisFromStorage, NeurogenesisStorageError};
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::{NeurogenesisStorage, NeurogenesisStorageError};
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisMethod;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 
@@ -92,7 +92,7 @@ fn advanced_properties() -> NMFeagiAdvancedDataCorticalProperties<Advanced> {
 
 #[test]
 fn storage_writes_variance_alongside_neuron_data() {
-    let storage = NeurogenesisFromStorage::<Fiq, Advanced>::new(
+    let storage = NeurogenesisStorage::<Fiq, Advanced>::new(
         voxel_layout([2, 1, 1, 1]),
         universal(),
         advanced_properties(),
@@ -113,8 +113,8 @@ fn storage_writes_variance_alongside_neuron_data() {
     assert_eq!(storage.iter().map(|(_, _, neuron)| neuron).collect::<Vec<_>>(), variance);
 }
 
-fn power_storage(neuron_count: usize) -> Result<NeurogenesisFromStorage<Fiq, Power>, NeurogenesisStorageError> {
-    NeurogenesisFromStorage::new(
+fn power_storage(neuron_count: usize) -> Result<NeurogenesisStorage<Fiq, Power>, NeurogenesisStorageError> {
+    NeurogenesisStorage::new(
         voxel_layout([2, 2, 1, 1]),
         universal(),
         NMFoundationPowerDataCorticalProperties::new(),
@@ -186,7 +186,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisMethod<F
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisByGenerator<FIQ, NM> for IndexAsRefractoryGenerator<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisGenerator<FIQ, NM> for IndexAsRefractoryGenerator<FIQ, NM> {
     /// Everything but the neurons, which this generator makes from their index
     type GeneratorInitParameters = (
         NeuronModelUniversalCorticalProperties<NM>,
@@ -202,7 +202,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisByGenera
     }
 
     /// Regenerates from the stored cortical data, every neuron starting at its index again
-    fn new_generator_from_storage(storage: &NeurogenesisFromStorage<FIQ, NM>, _other_data: ()) -> Self {
+    fn new_generator_from_storage(storage: &NeurogenesisStorage<FIQ, NM>, _other_data: ()) -> Self {
         let (cortical_properties, cortical_internal) = storage.clone_model_cortical_data();
         Self {
             layout: *storage.get_layout(),
@@ -230,7 +230,7 @@ fn custom_generator_runs_through_the_neurogenesis_method() {
 /// Stored neuron data is used as is, while the generator made from that storage generates its own
 #[test]
 fn custom_generator_from_storage_regenerates_neurons() {
-    let storage = NeurogenesisFromStorage::<Fiq, Advanced>::new(
+    let storage = NeurogenesisStorage::<Fiq, Advanced>::new(
         voxel_layout([3, 1, 1, 1]),
         universal(),
         advanced_properties(),
@@ -278,7 +278,7 @@ fn uniform_generator_starts_every_neuron_the_same() {
 /// Made from storage, the cortical data is kept while every neuron starts from the given value
 #[test]
 fn uniform_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
-    let storage = NeurogenesisFromStorage::<Fiq, Advanced>::new(
+    let storage = NeurogenesisStorage::<Fiq, Advanced>::new(
         voxel_layout([3, 1, 1, 1]),
         universal(),
         advanced_properties(),
@@ -296,7 +296,7 @@ fn uniform_generator_from_storage_keeps_cortical_data_and_resets_neurons() {
 /// generator type without wrapping
 #[test]
 fn uniform_generator_is_the_model_generator() {
-    let generator: <Advanced as NeuronModel>::NeurogenesisByGeneratorType<Fiq> = uniform_generator([3, 1, 1, 1], 4.0);
+    let generator: <Advanced as NeuronModel>::NeurogenesisGenerator<Fiq> = uniform_generator([3, 1, 1, 1], 4.0);
     assert_eq!(refractory_countdowns(&generator), [4.0; 3]);
 }
 

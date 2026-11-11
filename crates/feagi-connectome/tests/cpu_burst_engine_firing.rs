@@ -29,10 +29,10 @@ use feagi_connectome_neural::neural_basis::connectome_editing::{
 };
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutData;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome_neural::neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelIndex};
@@ -70,7 +70,7 @@ fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
 /// The generator of an area whose neurons always fire
 fn power_generator<NM>(dimensions: [usize; 4]) -> NeurogenesisFromStorageOrByGenerator<Fiq, NM, NeurogenesisGeneratorUniformDefault<Fiq, NM>>
 where
-    NM: NMFoundationPowerTrait + NeuronModel<NeurogenesisByGeneratorType<Fiq> = NeurogenesisGeneratorUniformDefault<Fiq, NM>>,
+    NM: NMFoundationPowerTrait + NeuronModel<NeurogenesisGenerator<Fiq> = NeurogenesisGeneratorUniformDefault<Fiq, NM>>,
 {
     NeurogenesisFromStorageOrByGenerator::ByGenerator(NeurogenesisGeneratorUniformDefault::new(
         NeurogenesisGeneratorUniformDefaultInitParameters {

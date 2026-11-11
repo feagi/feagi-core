@@ -6,13 +6,13 @@
 use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit};
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronVariance};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedDecimalTrait;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutOf};
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 //region Generator
@@ -21,16 +21,16 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 //region Impls
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
         NMFeagiAdvancedNeurogenesisGeneratorQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>> for ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>
+impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -111,16 +111,16 @@ impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagi
 
 //region Storage
 
-impl<FIQ> From<ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
         NMFeagiAdvancedNeurogenesisStorageQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>> for ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>
+impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -146,16 +146,16 @@ where
 
 //region Storage Or Generator
 
-impl<FIQ> From<ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
+    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
         NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>> for ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>
+impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {

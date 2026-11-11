@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutRestrictionError, NeuronLayoutRestrictor};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor};
 use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -120,7 +120,7 @@ impl CorticalType<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPower
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat16,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         // Power has nothing to configure, so the generator is entirely its defaults
@@ -187,7 +187,7 @@ impl CorticalType<NMFoundationPowerQuantBFloat16> for CorticalTypeFoundationPowe
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantBFloat16,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         // Power has nothing to configure, so the generator is entirely its defaults
@@ -254,7 +254,7 @@ impl CorticalType<NMFoundationPowerQuantFloat32> for CorticalTypeFoundationPower
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat32,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         // Power has nothing to configure, so the generator is entirely its defaults
@@ -321,7 +321,7 @@ impl CorticalType<NMFoundationPowerQuantFloat64> for CorticalTypeFoundationPower
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat64,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         // Power has nothing to configure, so the generator is entirely its defaults

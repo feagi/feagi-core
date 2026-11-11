@@ -5,8 +5,8 @@ use container_brain_region::{BrainRegionContainerRuntimeEnumMut, BrainRegionCont
 use std::collections::HashMap;
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
 use feagi_basis::voxels::CorticalAreaVoxelDimensions;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutData;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::basis::brain_region::BrainRegionID;
 use crate::genome::genome_object::{GenomeObjectCoordinate2D, GenomeObjectCoordinate3D, GenomeObjectMetadata, GenomeObjectPositioning};
@@ -14,7 +14,7 @@ use crate::genome::genomes::designer::container_brain_region::{BrainRegionContai
 use crate::genome::genomes::GenomeError;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat32};
-use feagi_connectome::neuron_models::models::ProxyNMNeuroGenesisFromGenerator;
+use feagi_connectome::neuron_models::models::NeurogenesisByGeneratorTypeOf;
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::{CTGeneratorTyped, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType};

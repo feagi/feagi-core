@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalScratch, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleDataNeuronScratch, NMFeagiSimpleDataNeuronVariance, NMFeagiSimpleTrait};
-use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -14,11 +16,16 @@ pub enum NMFeagiSimpleQuantKind {
     Standard32Bit,
 }
 
+impl NMFeagiSimpleQuantKind {
+    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
+}
+
+
 /// Allows Neurogenesis of the Feagi Simple Neuron Model by its generator for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ> {
@@ -28,13 +35,15 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>
             Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
         }
     }
+    
+    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> 
 }
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model from its stored data for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiSimpleQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageQuanted<FIQ> {
@@ -51,7 +60,7 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageQuanted<FIQ> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ> {
@@ -66,6 +75,10 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageOrGeneratorQua
 
 //endregion
 
+//region Quant Levels
+
+//region Standard32Bit
+
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFeagiSimpleQuantStandard32Bit;
 
@@ -77,9 +90,9 @@ impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
-        super::neurogenesis::FeagiSimpleNeurogenesisDefaults<FIQ, Self>;
+        super::neurogenesis::NMFeagiSimpleScratchVarianceGenerator<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFeagiSimpleDataCorticalProperties<Self>;
@@ -91,13 +104,17 @@ impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
     type NeuronDataVariance = NMFeagiSimpleDataNeuronVariance<Self>;
 
     type QuantKind = NMFeagiSimpleQuantKind;
+    
     const QUANT_KIND: Self::QuantKind = NMFeagiSimpleQuantKind::Standard32Bit;
 }
 
-impl MembranePotentialQuantization for NMFeagiSimpleQuantStandard32Bit
-{
+impl MembranePotentialQuantization for NMFeagiSimpleQuantStandard32Bit {
     type MembranePotentialQuant = f32;
 }
+
+//endregion
+
+//endregion
 
 //region Model Level Conversions
 

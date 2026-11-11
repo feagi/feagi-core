@@ -1,7 +1,7 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use crate::neuron_model::neurogenesis::from_storage::NeurogenesisFromStorage;
+use crate::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use crate::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::neuron_model::NeuronModel;
@@ -14,9 +14,9 @@ pub enum NeurogenesisFromStorageOrByGenerator<FIQ, NM, NBG>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    NBG: NeurogenesisByGenerator<FIQ, NM>
+    NBG: NeurogenesisGenerator<FIQ, NM>
 {
-    FromStorage(NeurogenesisFromStorage<FIQ, NM>),
+    FromStorage(NeurogenesisStorage<FIQ, NM>),
     ByGenerator(NBG)
 }
 
@@ -24,13 +24,13 @@ where
 /// model's own generator. The [`NeurogenesisFromStorageOrByGenerator`] of `NM`, its generator fixed
 /// to `NM::NeurogenesisGenerator`, as `NeuronLayoutOf` is the layout of a model
 pub type NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM> =
-    NeurogenesisFromStorageOrByGenerator<FIQ, NM, <NM as NeuronModel>::NeurogenesisByGeneratorType<FIQ>>;
+    NeurogenesisFromStorageOrByGenerator<FIQ, NM, <NM as NeuronModel>::NeurogenesisGenerator<FIQ>>;
 
 impl<FIQ, NM, NBG> NeurogenesisMethod<FIQ, NM> for NeurogenesisFromStorageOrByGenerator<FIQ, NM, NBG>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-    NBG: NeurogenesisByGenerator<FIQ, NM>
+    NBG: NeurogenesisGenerator<FIQ, NM>
 {
     fn get_layout(&self) -> &<NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> {
         match &self {

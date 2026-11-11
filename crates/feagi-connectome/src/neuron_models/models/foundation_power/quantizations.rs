@@ -1,6 +1,6 @@
 use crate::neuron_models::models::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalScratch, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronScratch, NMFoundationPowerDataNeuronVariance, NMFoundationPowerTrait};
 use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -23,10 +23,10 @@ pub enum NMFoundationPowerQuantKind {
 
 #[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat16>),
-    BFloat16(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantBFloat16>),
-    Float32(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat32>),
-    Float64(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFoundationPowerQuantFloat64>)
+    Float16(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(NeurogenesisByGeneratorTypeOf<FIQ, NMFoundationPowerQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ> {
@@ -45,10 +45,10 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorQuanted<
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat16>),
-    BFloat16(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantBFloat16>),
-    Float32(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat32>),
-    Float64(ProxyNMNeuroGenesisFromStorage<FIQ, NMFoundationPowerQuantFloat64>)
+    Float16(NeurogenesisFromStorageOf<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(NeurogenesisFromStorageOf<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(NeurogenesisFromStorageOf<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(NeurogenesisFromStorageOf<FIQ, NMFoundationPowerQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageQuanted<FIQ> {
@@ -68,10 +68,10 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageQuanted<FI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat16>),
-    BFloat16(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantBFloat16>),
-    Float32(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat32>),
-    Float64(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFoundationPowerQuantFloat64>)
+    Float16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFoundationPowerQuantFloat64>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
@@ -101,7 +101,7 @@ impl NeuronModel for NMFoundationPowerQuantFloat16 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationPowerNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
@@ -133,7 +133,7 @@ impl NeuronModel for NMFoundationPowerQuantBFloat16 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationPowerNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
@@ -165,7 +165,7 @@ impl NeuronModel for NMFoundationPowerQuantFloat32 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationPowerNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
@@ -197,7 +197,7 @@ impl NeuronModel for NMFoundationPowerQuantFloat64 {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FoundationPowerNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;

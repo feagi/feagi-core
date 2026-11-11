@@ -4,8 +4,8 @@
 
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisFromStorage;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{NeurogenesisMethod, NeurogenesisScratchVarianceGenerator};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -62,7 +62,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
+impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
 
     type GeneratorInitParameters = NeurogenesisGeneratorUniformDefaultInitParameters<NM>;
 
@@ -83,7 +83,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, 
 
     /// Keeps the cortical data of the stored area, with every neuron starting from `neuron_internal`
     /// rather than its stored data
-    fn new_generator_from_storage(storage: &NeurogenesisFromStorage<FIQ, NM>, default_uniform_neuron_internal_data: NM::NeuronDataInternal) -> Self {
+    fn new_generator_from_storage(storage: &NeurogenesisStorage<FIQ, NM>, default_uniform_neuron_internal_data: NM::NeuronDataInternal) -> Self {
         let (cortical_properties, cortical_internal) = storage.clone_model_cortical_data();
         Self {
             layout: *storage.get_layout(),

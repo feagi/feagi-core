@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
 use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -18,7 +18,7 @@ pub enum NMMemoryFireHashingQuantKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ> {
@@ -34,7 +34,7 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuante
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ> {
@@ -51,7 +51,7 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ> {
@@ -79,7 +79,7 @@ impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::MemoryFireHashingNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMMemoryFireHashingDataCorticalProperties<Self>;

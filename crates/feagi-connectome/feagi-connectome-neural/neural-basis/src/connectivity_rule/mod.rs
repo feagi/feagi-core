@@ -1,13 +1,13 @@
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
-use crate::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutTag};
 use crate::quantization_levels::FeagiIndexQuantization;
 
 pub mod voxel_to_voxel;
 
 /// A genome storable rule for how a source area connects its neurons to a destination area.
 pub trait ConnectivityRule<FIQ: FeagiIndexQuantization> {
-    type MappingInputLayout: NeuronLayoutData<FIQ>;
-    type MappingOutputLayout: NeuronLayoutData<FIQ>;
+    type MappingInputLayout: NeuronLayout<FIQ>;
+    type MappingOutputLayout: NeuronLayout<FIQ>;
 }
 
 

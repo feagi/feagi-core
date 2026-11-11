@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait};
 use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -20,7 +20,7 @@ pub enum NMFeagiAdvancedQuantKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ> {
@@ -36,7 +36,7 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorQuanted<FI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeuroGenesisFromStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ> {
@@ -53,7 +53,7 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(ProxyNMNeurogenesisFromStorageOrByGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
 
 impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ> {
@@ -81,7 +81,7 @@ impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FeagiAdvancedScratchVarianceGenerator<FIQ, Self>;
 
-    type NeurogenesisByGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;

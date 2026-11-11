@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutRestrictionError, NeuronLayoutRestrictor};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor};
 use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -11,7 +11,7 @@ use feagi_connectome::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDat
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantStandard32Bit};
 use feagi_connectome::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait};
 use feagi_connectome::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantStandard32Bit};
-use feagi_connectome::neuron_models::models::{feagi_advanced, feagi_simple, ProxyNMNeuroGenesisFromGenerator};
+use feagi_connectome::neuron_models::models::{feagi_advanced, feagi_simple, NeurogenesisByGeneratorTypeOf};
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
 //region Cortical Subtype
@@ -118,7 +118,7 @@ impl CorticalType<NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingI
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFeagiAdvancedQuantStandard32Bit,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         let mut generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
@@ -203,7 +203,7 @@ impl CorticalType<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInt
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFeagiSimpleQuantStandard32Bit,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
 
         Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
         let mut generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();

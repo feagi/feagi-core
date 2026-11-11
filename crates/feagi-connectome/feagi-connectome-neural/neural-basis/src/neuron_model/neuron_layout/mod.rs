@@ -2,6 +2,7 @@
 
 use core::fmt::Debug;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use crate::neuron_model::neuron_layout::voxel::NeuronLayoutRestrictionVoxelError;
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 
@@ -10,12 +11,12 @@ pub mod single_stepped_dynamic;
 
 
 /// Root trait for defining Neuron Layout, the struct that defines how the neurons are laid out
-/// in a cortical area
-pub trait NeuronLayoutData<
-    FIQ: FeagiIndexQuantization,
->: Clone + Copy + Debug + PartialEq + Sync + Send
+/// in a cortical area. Can Only be constructed through a `NeuronLayoutRestrictor`
+pub trait NeuronLayout<FIQ: FeagiIndexQuantization, >: Clone + Copy + Debug + PartialEq + Sync + Send
 + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
 {
+    // Can only be constructed by `NeuronLayoutRestrictor`
+    
     /// How and if the neuron layout can change on its own (cortical area grows)
     const CHANGE_POLICY: NeuronLayoutChangePolicy;
 
@@ -29,39 +30,44 @@ pub trait NeuronLayoutData<
     /// cortical area
     type NeuronLevelContext;
     
-    /// Data used to maintain some sort of context needed for visualization of neuron activity
-    type VisualizerContext;
-
-
-    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext)
-        -> Result<Self, NeuronLayoutRestrictionError>
-    where
-        Res: NeuronLayoutRestrictor<FIQ, CorticalLevelContext=Self::CorticalLevelContext>
-    {
-        Res::validate_cortical_context(&init_data)?;
-        Ok(Self::new(init_data))
-    }
-
-    /// Do not call directly! Use `validate_and_new`!
-    /// Init the cortical context after validation
-    fn new(init_data: Self::CorticalLevelContext) -> Self;
-
+    /// Get the saved cortical area layout context (ex: dimensions, size, etc)
+    fn get_cortical_layout_context(&self) -> &Self::CorticalLevelContext;
+    
     /// Gets the (max) number of neurons that this layout encloses to have allocation for
     fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
-
+    
     /// Gets the struct denoting the "location" of a neuron in the context of the cortical area
     fn get_neuron_layout_context(
         &self,
         neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-    ) -> Self::NeuronLevelContext;
-
-    // NOTE: No Resizing directly. If we need to resize the cortical area, we init a new one and
-    // copy over what is needed
+    ) -> Result<Self::NeuronLevelContext, NeuronLayoutError>; // TODO unchecked version
 }
+
+
+/// May impose restrictions on the cortical level context. Also responsible for spawning NeuronLayouts
+pub trait NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>: Clone + Copy + Debug + PartialEq
++ Sync + Send + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
+{
+    /// The type of layout this supports
+    type NeuronLayout: NeuronLayout<FIQ>;
+
+    /// Simply validates the cortical level context if its valid
+    fn validate_cortical_context(
+        context: &<Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext
+    ) -> Result<(), NeuronLayoutError>;
+
+    /// Validates a cortical level context, then returns the Neuron Layout if its valid
+    fn validate_and_create_neuron_layout(
+        context: <Self::NeuronLayout as NeuronLayout<FIQ>>::CorticalLevelContext
+    ) -> Result<Self::NeuronLayout, NeuronLayoutError>;
+
+}
+
+
 
 /// Allows defining the Neuron Layout type without knowing the FIQ in the moment
 pub trait NeuronLayoutTag: Clone + Debug {
-    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayoutData<FIQ>;
+    type Layout<FIQ: FeagiIndexQuantization>: NeuronLayout<FIQ>;
 }
 
 /// Returns the Neuron Layout of the given Neuron Model at the given index quantization
@@ -69,18 +75,9 @@ pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::NeuronLayoutTag as Neur
 
 /// Returns the Cortical Context of the Neuron layout of the given Neuron model at the given index Quant
 pub type CorticalLayoutContextOf<NM, FIQ> 
-    = <<<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> as NeuronLayoutData<FIQ>>::CorticalLevelContext;
-
-/// May impose restrictions on the cortical level context
-pub trait NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>: Clone + Copy + Debug + PartialEq
-+ Sync + Send + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
-{
-    /// What data describes the cortical context that summerizes the state of the whole area
-    type CorticalLevelContext;
+    = <<<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> as NeuronLayout<FIQ>>::CorticalLevelContext;
 
 
-    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError>;
-}
 
 /// Defines how a cortical area of a Neuron Layout may change size on its own. Allows the burst
 /// engine to make various considerations
@@ -97,13 +94,15 @@ pub enum NeuronLayoutSparsity {
     Sparse,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum NeuronLayoutRestrictionError {
+#[derive(Debug, thiserror::Error, Clone, Hash, Copy)]
+pub enum NeuronLayoutError {
     #[error("Given Neuron layout would exceed current index quantization limits!")]
     ViolatesQuantizationMax,
-    #[error("Invalid Voxel Dimensions")]
-    Voxel(#[from] voxel::NeuronLayoutRestrictionVoxelError),
-
-    // nothing for SingleSteppedDynamicSparse
-
+    #[error("Neuron Index out of Bounds!")]
+    NeuronIndexOutOfBounds,
+    #[error("Cortical Layout must include at least one neuron!")]
+    EmptyNeuronLayout,
+    #[error("Given layout fails dimensional restriction!")]
+    VoxelRestriction(#[from] NeuronLayoutRestrictionVoxelError),
 }
+
