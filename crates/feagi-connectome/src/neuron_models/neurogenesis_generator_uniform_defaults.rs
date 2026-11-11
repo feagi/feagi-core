@@ -10,6 +10,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{Neurogen
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutTag;
 
 /// Probably the most common shared cortical area generator. 
 /// Generates a cortical area from fixed starting values: every neuron starts with the same
@@ -31,25 +32,7 @@ pub struct NeurogenesisGeneratorUniformDefault<FIQ: FeagiIndexQuantization, NM: 
     pub neuron_internal: NM::NeuronDataInternal,
 }
 
-impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisGeneratorUniformDefault<FIQ, NM> {
-    pub fn new(
-        layout: NeuronLayoutOf<NM, FIQ>,
-        universal_properties: NeuronModelUniversalCorticalProperties<NM>,
-        cortical_properties: NM::CorticalDataProperties,
-        cortical_internal: NM::CorticalDataInternal,
-        cortical_variance: NM::CorticalDataVariance,
-        neuron_internal: NM::NeuronDataInternal,
-    ) -> Self {
-        Self {
-            layout,
-            universal_properties,
-            cortical_properties,
-            cortical_internal,
-            cortical_variance,
-            neuron_internal,
-        }
-    }
-}
+
 
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
     fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
@@ -80,8 +63,23 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
 }
 
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
+    
+    type GeneratorInitParameters = NeurogenesisGeneratorUniformDefaultInitParameters<NM>;
+    
     /// The internal data every neuron starts with, which storage does not hold as a single value
     type OtherDataNeededForFromStorage = NM::NeuronDataInternal;
+
+    fn new(input: Self::GeneratorInitParameters, layout: NeuronLayoutOf<NM, FIQ>) -> Self {
+        // NOTE: Layout Restrictor checks should be left to the Cortical Type
+        Self {
+            layout,
+            universal_properties: input.universal_properties,
+            cortical_properties: input.cortical_properties,
+            cortical_internal: input.cortical_internal,
+            cortical_variance: input.cortical_variance,
+            neuron_internal: input.neuron_internal,
+        }
+    }
 
     /// Keeps the cortical data of the stored area, with every neuron starting from `neuron_internal`
     /// rather than its stored data
@@ -96,4 +94,15 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, 
             neuron_internal: default_uniform_neuron_internal_data,
         }
     }
+}
+
+/// The data of a `NeurogenesisGeneratorUniformDefault` generator
+pub struct NeurogenesisGeneratorUniformDefaultInitParameters<NM: NeuronModel> {
+    /// Cortical level data used by all models
+    pub universal_properties: NeuronModelUniversalCorticalProperties<NM>,
+    pub cortical_properties: NM::CorticalDataProperties,
+    pub cortical_internal: NM::CorticalDataInternal,
+    pub cortical_variance: NM::CorticalDataVariance,
+    /// The internal data every neuron of the area starts with
+    pub neuron_internal: NM::NeuronDataInternal,
 }

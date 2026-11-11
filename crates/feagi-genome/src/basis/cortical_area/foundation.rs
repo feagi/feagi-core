@@ -4,6 +4,7 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
+use feagi_connectome::neuron_models::models::ProxyNMNeuroGenesisFromGenerator;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
 //region Cortical Subtype
 
@@ -110,16 +111,10 @@ where
     >;
     type IdentifierInner = [u8; 6];
     type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
-    type CorticalGeneratorEnum<FIQ: FeagiIndexQuantization> = CTGeneratorFoundationPowerModeled<FIQ>;
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
     const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
     const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
 
-    fn get_initial_cortical_generator<FIQ: FeagiIndexQuantization>() -> NM::NeurogenesisByGeneratorType<FIQ> {
-        CTGeneratorFoundationPowerModeled::FoundationPower(
-            NMFoundationPowerNeurogenesisGeneratorQuanted::
-        )
-    }
 }
 
 //region lock neuron model support

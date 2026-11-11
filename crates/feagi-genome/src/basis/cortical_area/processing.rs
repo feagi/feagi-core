@@ -1,10 +1,18 @@
 use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType, CorticalTypeKind};
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutRestrictionError};
+use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait};
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantStandard32Bit};
+use feagi_connectome::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait};
 use feagi_connectome::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantStandard32Bit};
+use feagi_connectome::neuron_models::models::{feagi_advanced, feagi_simple, ProxyNMNeuroGenesisFromGenerator};
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
 //region Cortical Subtype
 
@@ -87,6 +95,124 @@ impl CorticalIdentifierProcessing {
 /// General Middle of the line processing neurons
 pub struct CorticalTypeProcessingInterconnect;
 
+//region Feagi Advanced
+
+impl CorticalTypeProcessing<NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+{}
+
+impl CorticalType<NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+{
+    type NeuronLayout = NeuronLayoutTagVoxel;
+    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
+    type IdentifierInner = [u8; 6];
+    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = (
+        NeuronModelUniversalCorticalProperties<NMFeagiAdvancedQuantStandard32Bit>,
+        <NMFeagiAdvancedQuantStandard32Bit as NeuronModel>::CorticalDataProperties
+    );
+    type CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind;
+    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Processing;
+    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind::Interconnect;
+
+    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
+
+    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
+        parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
+        cortical_layout: CorticalLayoutContextOf<NMFeagiAdvancedQuantStandard32Bit,
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+        todo!()
+    }
+}
+
+impl<FIQ> CorticalSubTypeUsesDefaultCorticalGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn generator_defaults() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiAdvancedQuantStandard32Bit> {
+        NeurogenesisGeneratorUniformDefaultInitParameters {
+            universal_properties: NeuronModelUniversalCorticalProperties {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            cortical_properties: NMFeagiAdvancedDataCorticalProperties{
+                refractory_period: feagi_advanced::Period::QUANT_ONE,
+                firing_threshold: CorticalAreaNeuronPotential::QUANT_ONE,
+                leak_coefficient: CorticalAreaNeuronPotential::QUANT_ZERO,
+                leak_variability: CorticalAreaNeuronPotential::QUANT_ZERO,
+                postsynaptic_current: CorticalAreaNeuronPotential::QUANT_ZERO,
+                postsynaptic_current_max: CorticalAreaNeuronPotential::QUANT_ONE,
+                degeneration: CorticalAreaNeuronPotential::QUANT_ZERO,
+            },
+            cortical_internal: NMFeagiAdvancedDataCorticalInternal::new(),
+            cortical_variance: NMFeagiAdvancedDataCorticalVariance::new(
+                CorticalAreaNeuronPotential::QUANT_ZERO,
+                CorticalAreaNeuronPotential::QUANT_ZERO,
+                CorticalAreaNeuronPotential::QUANT_ZERO
+            ),
+            neuron_internal: NMFeagiAdvancedDataNeuronInternal {
+                refractory_countdown: feagi_advanced::Period::QUANT_ONE,
+            },
+        }
+    }
+}
+
+
+//endregion
+
+
+//region FeagiSimple
+
+impl CorticalTypeProcessing<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+{}
+
+impl CorticalType<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+{
+    type NeuronLayout = NeuronLayoutTagVoxel;
+    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
+    type IdentifierInner = [u8; 6];
+    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = (
+        NeuronModelUniversalCorticalProperties<NMFeagiAdvancedQuantStandard32Bit>,
+        <NMFeagiSimpleQuantStandard32Bit as NeuronModel>::CorticalDataProperties
+    );
+    type CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind;
+    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Processing;
+    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind::Interconnect;
+    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
+
+    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(parameters: Self::CorticalAreaGeneratorParameters<FIQ>, cortical_layout: CorticalLayoutContextOf<NMFeagiSimpleQuantStandard32Bit, FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+        todo!()
+    }
+}
+
+impl<FIQ> CorticalSubTypeUsesDefaultCorticalGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn generator_defaults() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiSimpleQuantStandard32Bit> {
+        NeurogenesisGeneratorUniformDefaultInitParameters {
+            universal_properties: NeuronModelUniversalCorticalProperties {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            cortical_properties: NMFeagiSimpleDataCorticalProperties {
+                refractory_period: feagi_simple::Period::QUANT_ONE,
+                firing_threshold: CorticalAreaNeuronPotential::QUANT_ONE,
+                postsynaptic_current: CorticalAreaNeuronPotential::QUANT_ZERO,
+                postsynaptic_current_max: CorticalAreaNeuronPotential::QUANT_ZERO,
+            },
+            cortical_internal: NMFeagiSimpleDataCorticalInternal::new(),
+            cortical_variance: NMFeagiSimpleDataCorticalVariance::new(),
+            neuron_internal: NMFeagiSimpleDataNeuronInternal {
+                refractory_countdown: feagi_simple::Period::QUANT_ONE,
+            },
+        }
+    }
+}
+
+//endregion
+
+/*
 impl<NM> CorticalTypeProcessing<NM> for CorticalTypeProcessingInterconnect
 where
     NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeProcessingInterconnectSupportedNeuronModels
@@ -104,14 +230,7 @@ where
     const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind::Interconnect;
     const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
 }
-
-//region lock neuron model support
-/// Locks Cortical Type Processing Subtype Interconnect to the Neuron Models: FeagiAdvanced, FeagiSimple,
-trait CorticalTypeProcessingInterconnectSupportedNeuronModels {}
-impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiAdvancedQuantStandard32Bit {}
-impl CorticalTypeProcessingInterconnectSupportedNeuronModels for NMFeagiSimpleQuantStandard32Bit {}
-
-//endregion
+*/
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]

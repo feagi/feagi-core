@@ -79,7 +79,7 @@ for NeuronLayoutRestrictorVoxelUnbound<FIQ>
 {
     type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
 
-    fn validate_cortical_context(&self, context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
+    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
         validate_quant_limits::<FIQ>(context)
     }
 }
@@ -116,7 +116,7 @@ impl<FIQ: FeagiIndexQuantization,
 NeuronLayoutRestrictorVoxelBound<FIQ, X_MIN, Y_MIN, Z_MIN, D_MIN, X_MAX, Y_MAX, Z_MAX, D_MAX> {
     type CorticalLevelContext = DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>;
 
-    fn validate_cortical_context(&self, context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
+    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
         validate_quant_limits::<FIQ>(context)?;
         let [x, y, z, d] = context.as_slice();
         if  x.quant_to_usize() < X_MIN || x.quant_to_usize() >= X_MAX {

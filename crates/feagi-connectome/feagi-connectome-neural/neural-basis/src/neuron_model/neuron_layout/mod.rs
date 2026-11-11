@@ -33,12 +33,12 @@ pub trait NeuronLayoutData<
     type VisualizerContext;
 
 
-    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext, restrictor: &Res)
+    fn validate_with_restrictor_and_new<Res>(init_data: Self::CorticalLevelContext)
         -> Result<Self, NeuronLayoutRestrictionError>
     where
         Res: NeuronLayoutRestrictor<FIQ, CorticalLevelContext=Self::CorticalLevelContext>
     {
-        restrictor.validate_cortical_context(&init_data)?;
+        Res::validate_cortical_context(&init_data)?;
         Ok(Self::new(init_data))
     }
 
@@ -67,6 +67,9 @@ pub trait NeuronLayoutTag: Clone + Debug {
 /// Returns the Neuron Layout of the given Neuron Model at the given index quantization
 pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>;
 
+/// Returns the Cortical Context of the Neuron layout of the given Neuron model at the given index Quant
+pub type CorticalLayoutContextOf<NM, FIQ> 
+    = <<<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> as NeuronLayoutData<FIQ>>::CorticalLevelContext;
 
 /// May impose restrictions on the cortical level context
 pub trait NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>: Clone + Copy + Debug + PartialEq
@@ -76,7 +79,7 @@ pub trait NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>: Clone + Copy + De
     type CorticalLevelContext;
 
 
-    fn validate_cortical_context(&self, context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError>;
+    fn validate_cortical_context(context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError>;
 }
 
 /// Defines how a cortical area of a Neuron Layout may change size on its own. Allows the burst

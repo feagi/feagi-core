@@ -8,7 +8,7 @@ use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronVariance};
 use crate::neuron_models::models::{NeuronModelEnumConversionError, ProxyNMNeuroGenesisFromGenerator, ProxyNMNeuroGenesisFromStorage, ProxyNMNeurogenesisFromStorageOrByGenerator};
 use core::marker::PhantomData;
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedDecimalTrait;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
@@ -98,9 +98,9 @@ impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagi
         let coordinates = layout.get_neuron_layout_context(index);
         let [x, y, z, _d] = coordinates.as_slice();
         NMFeagiAdvancedDataNeuronVariance::new(
-            self.firing_threshold_increment_x * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*x)
-                + self.firing_threshold_increment_y * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*y)
-                + self.firing_threshold_increment_z * NM::MembranePotentialQuant::from_quantized_unsigned_integer(*z),
+            self.firing_threshold_increment_x * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*x)
+                + self.firing_threshold_increment_y * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*y)
+                + self.firing_threshold_increment_z * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*z),
         )
     }
 }

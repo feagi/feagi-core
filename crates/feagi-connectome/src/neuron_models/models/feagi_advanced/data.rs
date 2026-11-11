@@ -1,5 +1,6 @@
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 
 create_wrapped_quantized_decimal!(
@@ -16,37 +17,33 @@ pub struct NMFeagiAdvancedDataCorticalProperties<NM: NMFeagiAdvancedTrait> {
     pub refractory_period: Period<NM::Period>,
 
     #[doc = " At what threshold do we fire"]
-    pub firing_threshold: NM::MembranePotentialQuant,
+    pub firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " Amount of leak"]
-    pub leak_coefficient: NM::MembranePotentialQuant,
+    pub leak_coefficient: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " How variable a leak is"]
-    pub leak_variability: NM::MembranePotentialQuant,
+    pub leak_variability: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " Current post-synaptic"]
-    pub postsynaptic_current: NM::MembranePotentialQuant,
+    pub postsynaptic_current: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " max postsynaptic current"]
-    pub postsynaptic_current_max: NM::MembranePotentialQuant,
+    pub postsynaptic_current_max: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " neuron degeneration TODO shouldnt this be in memory?"]
-    pub degeneration: NM::MembranePotentialQuant,
-
-    #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    pub degeneration: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalProperties<NM> {
     pub const fn new(
         refractory_period: Period<NM::Period>,
-        firing_threshold: NM::MembranePotentialQuant,
-        leak_coefficient: NM::MembranePotentialQuant,
-        leak_variability: NM::MembranePotentialQuant,
-        postsynaptic_current: NM::MembranePotentialQuant,
-        postsynaptic_current_max: NM::MembranePotentialQuant,
-        degeneration: NM::MembranePotentialQuant
+        firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        leak_coefficient: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        leak_variability: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        postsynaptic_current: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        postsynaptic_current_max: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        degeneration: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>
     ) -> Self {
         Self {
             refractory_period,
@@ -56,7 +53,6 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalProperties<NM> {
             postsynaptic_current,
             postsynaptic_current_max,
             degeneration,
-            _p: ::core::marker::PhantomData
         }
     }
 
@@ -166,13 +162,13 @@ for NMFeagiAdvancedDataCorticalScratch<NM> {}
 pub struct NMFeagiAdvancedDataCorticalVariance<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How much fire threshold increases in a cortical area on the X direction"]
-    pub firing_threshold_increment_x: NM::MembranePotentialQuant,
+    pub firing_threshold_increment_x: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " How much fire threshold increases in a cortical area on the Y direction"]
-    pub firing_threshold_increment_y: NM::MembranePotentialQuant,
+    pub firing_threshold_increment_y: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " How much fire threshold increases in a cortical area on the Z direction"]
-    pub firing_threshold_increment_z: NM::MembranePotentialQuant,
+    pub firing_threshold_increment_z: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
@@ -181,9 +177,9 @@ pub struct NMFeagiAdvancedDataCorticalVariance<NM: NMFeagiAdvancedTrait> {
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
     pub const fn new(
-        firing_threshold_increment_x: NM::MembranePotentialQuant,
-        firing_threshold_increment_y: NM::MembranePotentialQuant,
-        firing_threshold_increment_z: NM::MembranePotentialQuant
+        firing_threshold_increment_x: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        firing_threshold_increment_y: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        firing_threshold_increment_z: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>
     ) -> Self {
         Self {
             firing_threshold_increment_x,
@@ -221,10 +217,6 @@ pub struct NMFeagiAdvancedDataNeuronInternal<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How many more bursts the neuron is refractory for"]
     pub refractory_countdown: Period<NM::Period>,
-
-    #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronInternal<NM> {
@@ -233,7 +225,6 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronInternal<NM> {
     ) -> Self {
         Self {
             refractory_countdown,
-            _p: ::core::marker::PhantomData
         }
     }
 
@@ -301,19 +292,16 @@ for NMFeagiAdvancedDataNeuronScratch<NM> {}
 pub struct NMFeagiAdvancedDataNeuronVariance<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " Added to the firing threshold of the cortical area, for this neuron"]
-    pub firing_threshold_offset: NM::MembranePotentialQuant,
-
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    pub firing_threshold_offset: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+    
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronVariance<NM> {
     pub const fn new(
-        firing_threshold_offset: NM::MembranePotentialQuant
+        firing_threshold_offset: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
     ) -> Self {
         Self {
             firing_threshold_offset,
-            _p: ::core::marker::PhantomData
         }
     }
 

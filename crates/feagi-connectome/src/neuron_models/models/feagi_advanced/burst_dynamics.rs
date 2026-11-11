@@ -80,19 +80,18 @@ where
             return false;
         }
 
-        // The buffer holds the carried potential with this burst's input already integrated
-        let potential = processing_buffer.deref();
+
         let firing_threshold =
             cortical_properties.firing_threshold + neuron_variance.firing_threshold_offset;
-        if potential >= firing_threshold {
+        if processing_buffer.deref() >= firing_threshold.deref() {
             neuron_internal.refractory_countdown = cortical_properties.refractory_period;
             return true;
         }
 
         // Only a neuron that did not fire keeps charge to leak
         let retained_fraction =
-            NM::MembranePotentialQuant::QUANT_ONE - cortical_properties.leak_coefficient;
-        *processing_buffer = CorticalAreaNeuronPotential::new(potential * retained_fraction);
+            CorticalAreaNeuronPotential::QUANT_ONE - cortical_properties.leak_coefficient;
+        *processing_buffer *= retained_fraction;
         false
     }
 }

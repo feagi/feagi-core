@@ -1,5 +1,6 @@
 use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 
 create_wrapped_quantized_decimal!(
@@ -16,32 +17,27 @@ pub struct NMFeagiSimpleDataCorticalProperties<NM: NMFeagiSimpleTrait> {
     pub refractory_period: Period<NM::Period>,
 
     #[doc = " At what threshold do we fire"]
-    pub firing_threshold: NM::MembranePotentialQuant,
+    pub firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " Current post-synaptic"]
-    pub postsynaptic_current: NM::MembranePotentialQuant,
+    pub postsynaptic_current: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 
     #[doc = " max postsynaptic current"]
-    pub postsynaptic_current_max: NM::MembranePotentialQuant,
-
-    #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    pub postsynaptic_current_max: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
 }
 
 impl<NM: NMFeagiSimpleTrait> NMFeagiSimpleDataCorticalProperties<NM> {
     pub const fn new(
         refractory_period: Period<NM::Period>,
-        firing_threshold: NM::MembranePotentialQuant,
-        postsynaptic_current: NM::MembranePotentialQuant,
-        postsynaptic_current_max: NM::MembranePotentialQuant
+        firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        postsynaptic_current: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
+        postsynaptic_current_max: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>
     ) -> Self {
         Self {
             refractory_period,
             firing_threshold,
             postsynaptic_current,
             postsynaptic_current_max,
-            _p: ::core::marker::PhantomData
         }
     }
 
@@ -183,10 +179,6 @@ pub struct NMFeagiSimpleDataNeuronInternal<NM: NMFeagiSimpleTrait> {
 
     #[doc = " How many more bursts the neuron is refractory for"]
     pub refractory_countdown: Period<NM::Period>,
-
-    #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiSimpleTrait> NMFeagiSimpleDataNeuronInternal<NM> {
@@ -195,7 +187,6 @@ impl<NM: NMFeagiSimpleTrait> NMFeagiSimpleDataNeuronInternal<NM> {
     ) -> Self {
         Self {
             refractory_countdown,
-            _p: ::core::marker::PhantomData
         }
     }
 

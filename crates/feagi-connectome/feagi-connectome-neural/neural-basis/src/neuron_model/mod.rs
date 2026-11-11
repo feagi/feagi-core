@@ -62,6 +62,7 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// dynamics and never saved, as it can be generated again
     type NeuronDataVariance: NeuronDataVarianceSpecification<Self>;
 
+    
     /// The Quant Kind enum for this neuron model
     type QuantKind;
     

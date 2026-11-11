@@ -81,12 +81,10 @@ where
             *processing_buffer = CorticalAreaNeuronPotential::QUANT_ZERO;
             return false;
         }
-
-        // The buffer holds the carried potential with this burst's input already integrated
-        let potential = processing_buffer.deref();
+        
         let firing_threshold =
             cortical_properties.firing_threshold;
-        if potential >= firing_threshold {
+        if *processing_buffer >= firing_threshold {
             neuron_internal.refractory_countdown = cortical_properties.refractory_period;
             return true;
         }

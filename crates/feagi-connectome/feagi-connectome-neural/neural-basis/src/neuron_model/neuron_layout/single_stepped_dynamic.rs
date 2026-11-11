@@ -61,7 +61,7 @@ for NeuronLayoutRestrictorSingleSteppedDynamicUnbound<FIQ>
 {
     type CorticalLevelContext = CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
 
-    fn validate_cortical_context(&self, _context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
+    fn validate_cortical_context(_context: &Self::CorticalLevelContext) -> Result<(), NeuronLayoutRestrictionError> {
         Ok(()) // nothing to check
     }
 }
