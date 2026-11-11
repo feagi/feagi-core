@@ -23,7 +23,7 @@ pub trait NeuronLayoutData<
     const SPARSITY: NeuronLayoutSparsity;
 
     /// What data describes the cortical context that summerizes the state of the whole area
-    type CorticalLevelContext: Clone;
+    type CorticalLevelContext: Clone + Debug + PartialEq + serde::Serialize + serde::de::DeserializeOwned;
 
     /// The per neuron context, helps identify a neurons "location" relative to others within a
     /// cortical area

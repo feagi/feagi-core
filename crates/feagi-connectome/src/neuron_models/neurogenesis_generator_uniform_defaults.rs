@@ -7,12 +7,12 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModel
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisFromStorage;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{NeurogenesisMethod, NeurogenesisScratchVarianceGenerator};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutTag;
 
-/// Probably the most common shared cortical area generator. 
+/// Probably the most common shared cortical area generator.
 /// Generates a cortical area from fixed starting values: every neuron starts with the same
 /// internal data. Its scratch and variance data come from the model's
 /// `NeuronModel::NeurogenesisDefaults`. This allows different cortical models to specify their own
@@ -63,9 +63,9 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
 }
 
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
-    
+
     type GeneratorInitParameters = NeurogenesisGeneratorUniformDefaultInitParameters<NM>;
-    
+
     /// The internal data every neuron starts with, which storage does not hold as a single value
     type OtherDataNeededForFromStorage = NM::NeuronDataInternal;
 

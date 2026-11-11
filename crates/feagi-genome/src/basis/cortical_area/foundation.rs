@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType, CorticalTypeKind};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutRestrictionError};
+use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -110,11 +111,15 @@ where
         1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
     >;
     type IdentifierInner = [u8; 6];
+    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = ();
     type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
     const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
     const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
 
+    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(parameters: Self::CorticalAreaGeneratorParameters<FIQ>, cortical_layout: CorticalLayoutContextOf<NM, FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+        todo!()
+    }
 }
 
 //region lock neuron model support

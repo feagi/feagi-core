@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutRestrictionError};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutData, NeuronLayoutOf, NeuronLayoutRestrictionError, NeuronLayoutRestrictor};
 use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeKind};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -119,15 +119,36 @@ impl CorticalType<NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingI
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NMFeagiAdvancedQuantStandard32Bit,
             FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
-        todo!()
+
+        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
+        let mut generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
+        generator_defaults.universal_properties = parameters.0;
+        generator_defaults.cortical_properties = parameters.1;
+
+        let layout = NeuronLayoutOf::<NMFeagiAdvancedQuantStandard32Bit, FIQ>::new(cortical_layout);
+
+        let generator = NeurogenesisGeneratorUniformDefault::new(
+            generator_defaults,
+            layout
+        );
+        Ok (
+            CTGeneratorTyped::Processing(
+                CTGeneratorProcessingSubTyped::Interconnect(
+                    CTGeneratorProcessingInterconnectModeled::FeagiAdvanced(
+                        NMFeagiAdvancedNeurogenesisGeneratorQuanted::Standard32Bit(
+                            generator
+                        )
+                    )
+                )
+            )
+        )
     }
 }
 
-impl<FIQ> CorticalSubTypeUsesDefaultCorticalGenerator<FIQ, NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingInterconnect
-where
-    FIQ: FeagiIndexQuantization,
+impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFeagiAdvancedQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+
 {
-    fn generator_defaults() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiAdvancedQuantStandard32Bit> {
+    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiAdvancedQuantStandard32Bit> {
         NeurogenesisGeneratorUniformDefaultInitParameters {
             universal_properties: NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -171,7 +192,7 @@ impl CorticalType<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInt
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
     type IdentifierInner = [u8; 6];
     type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = (
-        NeuronModelUniversalCorticalProperties<NMFeagiAdvancedQuantStandard32Bit>,
+        NeuronModelUniversalCorticalProperties<NMFeagiSimpleQuantStandard32Bit>,
         <NMFeagiSimpleQuantStandard32Bit as NeuronModel>::CorticalDataProperties
     );
     type CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind;
@@ -179,16 +200,40 @@ impl CorticalType<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInt
     const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind::Interconnect;
     const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
 
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(parameters: Self::CorticalAreaGeneratorParameters<FIQ>, cortical_layout: CorticalLayoutContextOf<NMFeagiSimpleQuantStandard32Bit, FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
-        todo!()
+    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
+        parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
+        cortical_layout: CorticalLayoutContextOf<NMFeagiSimpleQuantStandard32Bit,
+            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError> {
+
+        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
+        let mut generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
+        generator_defaults.universal_properties = parameters.0;
+        generator_defaults.cortical_properties = parameters.1;
+
+        let layout = NeuronLayoutOf::<NMFeagiAdvancedQuantStandard32Bit, FIQ>::new(cortical_layout);
+
+        let generator = NeurogenesisGeneratorUniformDefault::new(
+            generator_defaults,
+            layout
+        );
+        Ok (
+            CTGeneratorTyped::Processing(
+                CTGeneratorProcessingSubTyped::Interconnect(
+                    CTGeneratorProcessingInterconnectModeled::FeagiSimple(
+                        NMFeagiSimpleNeurogenesisGeneratorQuanted::Standard32Bit(
+                            generator
+                        )
+                    )
+                )
+            )
+        )
     }
 }
 
-impl<FIQ> CorticalSubTypeUsesDefaultCorticalGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInterconnect
-where
-    FIQ: FeagiIndexQuantization,
+impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFeagiSimpleQuantStandard32Bit> for CorticalTypeProcessingInterconnect
+
 {
-    fn generator_defaults() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiSimpleQuantStandard32Bit> {
+    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFeagiSimpleQuantStandard32Bit> {
         NeurogenesisGeneratorUniformDefaultInitParameters {
             universal_properties: NeuronModelUniversalCorticalProperties {
                 cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -211,26 +256,6 @@ where
 }
 
 //endregion
-
-/*
-impl<NM> CorticalTypeProcessing<NM> for CorticalTypeProcessingInterconnect
-where
-    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeProcessingInterconnectSupportedNeuronModels
-{}
-
-impl<NM> CorticalType<NM> for CorticalTypeProcessingInterconnect
-where
-    NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel> + CorticalTypeProcessingInterconnectSupportedNeuronModels
-{
-    type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
-    type IdentifierInner = [u8; 6];
-    type CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind;
-    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Processing;
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeProcessingSubtypeKind::Interconnect;
-    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
-}
-*/
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]

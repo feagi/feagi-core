@@ -32,10 +32,10 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 
     /// Any additional parameters the generator needs to do
     type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization>;
-    
+
     /// The repr(u8) enum that represents the subtype under a given type
     type CorticalSubTypeKindEnum;
-    
+
     /// Each cortical type has a unique byte identifier. This is used for cortical Identification
     const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind;
 
@@ -45,16 +45,16 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 
     /// What regions is this cortical type allowed within the genome?
     const ALLOWED_REGIONS: CorticalAllowedRegions;
-    
+
     /// Creates a generator enum given the parameters and layout. Be sure the implementation
     /// verifys the cortical layout!
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
         cortical_layout: CorticalLayoutContextOf<NM, FIQ>
     ) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutRestrictionError>;
-    
+
     //region Default impls
-    
+
     // TODO Cortical Identifier Conversions
 
     //endregion
@@ -125,16 +125,20 @@ impl From<CorticalTypeAndSubtype> for CorticalTypeKind {
 /// Extend any subtype with this trait to automatically add functions for using the Uniform Default
 /// neuron generator with it for its neurogenesis. Only makes sense for implementations that
 /// use this generator
-pub trait CorticalSubTypeUsesDefaultCorticalGenerator<FIQ, NM>: CorticalType<NM>
+pub trait CorticalSubTypeUsesDefaultCorticalGenerator<NM>: CorticalType<NM>
 where
-    FIQ: FeagiIndexQuantization,
     NM: NeuronModel<
         NeuronLayoutTag=Self::NeuronLayout,
-        NeurogenesisByGeneratorType<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>
     >
 {
     /// Gets the default values to be used in the generator. Fields can be overridden. TODO Requantization?
-    fn generator_defaults() -> NeurogenesisGeneratorUniformDefaultInitParameters<NM>;
+    fn uniform_default_generator_defaults<
+        FIQ: FeagiIndexQuantization,
+    >
+    () -> NeurogenesisGeneratorUniformDefaultInitParameters<NM>
+    where
+        NM: NeuronModel<NeurogenesisByGeneratorType<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>>
+    ;
 }
 
 
