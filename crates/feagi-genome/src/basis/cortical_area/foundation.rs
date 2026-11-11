@@ -104,7 +104,7 @@ where
 {
     type NeuronLayout = NeuronLayoutTagVoxel;
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
-        0, 0, 0, 0, 1, 1, 1, 1 // XYZD min XYZD max
+        1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
     >;
     type IdentifierInner = [u8; 6];
     type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;

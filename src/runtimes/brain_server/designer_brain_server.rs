@@ -13,13 +13,8 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_comma
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::FeagiWorkerSpawnError;
 use feagi_basis::target_frequency::{TargetFrequency, TargetFrequencyError};
-use feagi_connectome::connectome_basis::engine::{BurstEngineCPURayon, BurstEngineCPURayonInitError};
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
-use feagi_connectome::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
-use feagi_connectome::neural_processors::singular::{
-    NeuronProcessorSingleEngineVisualizationReceiver,
-    NeuronProcessorSingleEngineVisualizationTransmitter, NeuronProcessorSingleEngineWorkerBuilder, NeuronProcessorSingleEngineWorkerBuilderError,
-};
+use feagi_connectome::feagi_connectome_neural::burst_engine_cpu::BurstEngineCPURayon;
+use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_genome::workers::genome_manager::requests::category_structs::{GenomeManagerConfigurables, GenomeManagerRequesters};
 use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::node::feagi_node_flags::FeagiNodeFlags;
