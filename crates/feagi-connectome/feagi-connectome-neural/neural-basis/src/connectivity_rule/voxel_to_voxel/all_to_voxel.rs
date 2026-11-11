@@ -1,12 +1,9 @@
-use std::ops::Deref;
-use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHelper;
-use crate::connectivity_rule::voxel_to_voxel::{neuron_coordinates, voxel_fits_within, ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
+use crate::connectivity_rule::voxel_to_voxel::{neuron_index, voxel_fits_within, voxel_index_helper, ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
 use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutRestrictor};
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions};
-use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
 //region Rule
@@ -101,16 +98,14 @@ impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorVoxelToVoxel<FIQ> for
     }
 
     fn iter(&self) -> impl ExactSizeIterator<Item=LocalNeuronIndexPair<FIQ>> {
-        let destination_layout = SpatialHelper::new(self.destination_dims);
+        let destination_layout = voxel_index_helper::<FIQ>(self.destination_dims);
         let destination_density = self.destination_dims.as_slice()[3].quant_to_usize();
         let destination = self.destination;
 
         let pairs = (0..self.source_neurons_count).flat_map(move |source_index| {
             let source = CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(source_index);
             (0..destination_density).map(move |destination_d| {
-                let coord = &neuron_coordinates::<FIQ>(destination, destination_d);
-                let destination = destination_layout.coordinate_to_linear(coord);
-                (source, destination)
+                (source, neuron_index::<FIQ>(&destination_layout, destination, destination_d))
             })
         });
 

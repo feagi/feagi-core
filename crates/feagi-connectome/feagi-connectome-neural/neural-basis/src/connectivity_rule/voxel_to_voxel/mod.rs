@@ -4,7 +4,8 @@ use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, SpatialCoordinate};
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
-use crate::neuron_model::neuron_layout::NeuronLayoutRestrictor;
+use feagi_basis::collections::spatial_helpers::axis_order::AxisOrderDecrementing;
+use feagi_basis::collections::spatial_helpers::spatial_index_context::SpatialHelper;
 
 //pub mod vector;
 pub mod all_to_voxel;
@@ -77,4 +78,28 @@ fn neuron_coordinates<FIQ: FeagiIndexQuantization>(
         z.deref(),
         FIQ::NeuronIndexQuant::quant_from_usize_unchecked(density_position),
     ])
+}
+
+/// Spatial helper matching the index ordering of [`NeuronLayoutVoxel`]
+type VoxelIndexHelper<FIQ> = SpatialHelper<
+    <FIQ as FeagiIndexQuantization>::NeuronIndexQuant,
+    AxisOrderDecrementing<4>,
+    4,
+>;
+
+fn voxel_index_helper<FIQ: FeagiIndexQuantization>(
+    dims: DimensionalCorticalAreaDimensions<FIQ::NeuronIndexQuant>,
+) -> VoxelIndexHelper<FIQ> {
+    SpatialHelper::new(dims)
+}
+
+/// Local index of the neuron at the given density position within a voxel.
+/// Does NOT check that the voxel fits the helper's dimensions!
+fn neuron_index<FIQ: FeagiIndexQuantization>(
+    helper: &VoxelIndexHelper<FIQ>,
+    voxel: &CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>,
+    density_position: usize,
+) -> CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant> {
+    let coordinates = neuron_coordinates::<FIQ>(voxel, density_position);
+    CorticalAreaNeuronLocalIndex::new(helper.coordinate_to_linear(&coordinates))
 }

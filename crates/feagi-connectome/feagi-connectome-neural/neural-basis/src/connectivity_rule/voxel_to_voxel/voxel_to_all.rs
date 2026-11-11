@@ -1,7 +1,6 @@
-use crate::connectivity_rule::voxel_to_voxel::{neuron_coordinates, voxel_fits_within, ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
+use crate::connectivity_rule::voxel_to_voxel::{neuron_index, voxel_fits_within, voxel_index_helper, ConnectivityGeneratorVoxelToVoxel, ConnectivityRuleVoxelToVoxel, LocalNeuronIndexPair};
 use crate::connectivity_rule::{AxonBundleSynapseLocalCount, ConnectivityRule, ExactCountIterator};
 use crate::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use crate::neuron_model::neuron_layout::NeuronLayout;
 use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions};
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
@@ -46,9 +45,7 @@ impl<FIQ: FeagiIndexQuantization> ConnectivityRuleVoxelToVoxel<FIQ> for Connecti
         }
 
         let source_density = source_dims.as_slice()[3].quant_to_usize();
-        let destination_neurons = NeuronLayoutVoxel::<FIQ>::new(destination_dims)
-            .get_number_neurons_to_allocate_for()
-            .quant_to_usize();
+        let destination_neurons = destination_dims.spatial_element_count();
         let total_pairs = source_density.checked_mul(destination_neurons)
             .ok_or(ConnectivityGeneratorVoxelToAllError::TooManySynapses)?;
         let number_pairs = AxonBundleSynapseLocalCount::quant_try_from_usize(total_pairs)
@@ -98,15 +95,13 @@ impl<'a, FIQ: FeagiIndexQuantization> ConnectivityGeneratorVoxelToVoxel<FIQ> for
     }
 
     fn iter(&self) -> impl ExactSizeIterator<Item=LocalNeuronIndexPair<FIQ>> {
-        let source_layout = NeuronLayoutVoxel::<FIQ>::new(self.source_dims);
+        let source_layout = voxel_index_helper::<FIQ>(self.source_dims);
         let source_density = self.source_dims.as_slice()[3].quant_to_usize();
         let destination_neurons = self.destination_neurons;
         let source_voxel = self.source;
 
         let pairs = (0..source_density).flat_map(move |source_d| {
-            let source = source_layout.neuron_coordinates_to_index(
-                &neuron_coordinates::<FIQ>(source_voxel, source_d),
-            );
+            let source = neuron_index::<FIQ>(&source_layout, source_voxel, source_d);
             (0..destination_neurons).map(move |destination_index| {
                 (source, CorticalAreaNeuronLocalIndex::quant_from_usize_unchecked(destination_index))
             })
