@@ -6,8 +6,8 @@ use feagi_genome::genome::genome_object::GenomeObjectMetadata;
 use feagi_genome::genome::genomes::designer::DesignerGenome;
 
 #[test]
-fn designer_genome_builds_with_an_empty_cortical_map() {
-    let genome = DesignerGenome::<FeagiIndexQuantizationStandard>::new_genome_now(GenomeObjectMetadata {
+fn barebones_designer_genome_builds() {
+    let genome = DesignerGenome::<FeagiIndexQuantizationStandard>::new_barebones_genome_now(GenomeObjectMetadata {
         name: "test".to_string(),
         description: String::new(),
     });

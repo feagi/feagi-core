@@ -10,7 +10,7 @@ use feagi_connectome::neuron_models::models::foundation_power::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
     NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronVariance,
 };
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::{NeurogenesisFromStorage, NeurogenesisStorageError};
@@ -28,6 +28,11 @@ fn voxel_layout(dimensions: [usize; 4]) -> NeuronLayoutVoxel<Fiq> {
     NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize(dimensions).unwrap())
 }
 
+/// A membrane potential of the 32 bit models
+fn p(value: f32) -> CorticalAreaNeuronPotential<f32> {
+    CorticalAreaNeuronPotential::new(value)
+}
+
 fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
     NeuronModelUniversalCorticalProperties {
         cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
@@ -39,12 +44,12 @@ fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
 //region Variance
 
 fn advanced_variance(x: f32, y: f32, z: f32) -> NMFeagiAdvancedDataCorticalVariance<Advanced> {
-    NMFeagiAdvancedDataCorticalVariance::new(x, y, z)
+    NMFeagiAdvancedDataCorticalVariance::new(p(x), p(y), p(z))
 }
 
 fn written_offsets(variance: &NMFeagiAdvancedDataCorticalVariance<Advanced>, layout: &NeuronLayoutVoxel<Fiq>, into: &mut [NMFeagiAdvancedDataNeuronVariance<Advanced>]) -> Vec<f32> {
     variance.write_neuron_variance_into_slice::<Fiq>(layout, into);
-    into.iter().map(|neuron| neuron.firing_threshold_offset).collect()
+    into.iter().map(|neuron| neuron.firing_threshold_offset.deref()).collect()
 }
 
 /// With these increments each digit of the offset is one axis of the coordinate, so every coordinate
@@ -52,7 +57,7 @@ fn written_offsets(variance: &NMFeagiAdvancedDataCorticalVariance<Advanced>, lay
 #[test]
 fn variance_offset_comes_from_the_neuron_coordinates() {
     let layout = voxel_layout([2, 3, 1, 1]);
-    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
+    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(p(0.0)); 6];
     let mut offsets = written_offsets(&advanced_variance(1.0, 10.0, 100.0), &layout, &mut neurons);
     offsets.sort_by(f32::total_cmp);
     assert_eq!(offsets, [0.0, 1.0, 10.0, 11.0, 20.0, 21.0]);
@@ -64,11 +69,11 @@ fn runtime_variance_edits_do_not_compound() {
     let first = advanced_variance(1.0, 10.0, 0.0);
     let second = advanced_variance(5.0, 0.0, 0.0);
 
-    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
+    let mut neurons = vec![NMFeagiAdvancedDataNeuronVariance::new(p(0.0)); 6];
     let original = written_offsets(&first, &layout, &mut neurons);
 
     let edited = written_offsets(&second, &layout, &mut neurons);
-    let mut fresh = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 6];
+    let mut fresh = vec![NMFeagiAdvancedDataNeuronVariance::new(p(0.0)); 6];
     assert_eq!(edited, written_offsets(&second, &layout, &mut fresh));
 
     // Editing back lands exactly on where it started
@@ -82,7 +87,7 @@ fn runtime_variance_edits_do_not_compound() {
 fn advanced_properties() -> NMFeagiAdvancedDataCorticalProperties<Advanced> {
     // refractory_period, firing_threshold, leak_coefficient, leak_variability,
     // postsynaptic_current, postsynaptic_current_max, degeneration
-    NMFeagiAdvancedDataCorticalProperties::new(Period::QUANT_ONE, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    NMFeagiAdvancedDataCorticalProperties::new(Period::QUANT_ONE, p(1.0), p(1.0), p(1.0), p(1.0), p(1.0), p(1.0))
 }
 
 #[test]
@@ -98,10 +103,10 @@ fn storage_writes_variance_alongside_neuron_data() {
     .unwrap();
     let mut internal = vec![NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO); 2];
     let mut scratch = vec![NMFeagiAdvancedDataNeuronScratch::new(); 2];
-    let mut variance = vec![NMFeagiAdvancedDataNeuronVariance::new(-1.0); 2];
+    let mut variance = vec![NMFeagiAdvancedDataNeuronVariance::new(p(-1.0)); 2];
     storage.write_into_slices(&mut internal, &mut scratch, &mut variance);
 
-    let mut offsets: Vec<f32> = variance.iter().map(|neuron| neuron.firing_threshold_offset).collect();
+    let mut offsets: Vec<f32> = variance.iter().map(|neuron| neuron.firing_threshold_offset.deref()).collect();
     offsets.sort_by(f32::total_cmp);
     assert_eq!(offsets, [0.0, 3.0]);
     assert_eq!(storage.iter().len(), 2);
@@ -182,7 +187,19 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisMethod<F
 }
 
 impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisByGenerator<FIQ, NM> for IndexAsRefractoryGenerator<FIQ, NM> {
+    /// Everything but the neurons, which this generator makes from their index
+    type GeneratorInitParameters = (
+        NeuronModelUniversalCorticalProperties<NM>,
+        NM::CorticalDataProperties,
+        NM::CorticalDataInternal,
+        NM::CorticalDataVariance,
+    );
     type OtherDataNeededForFromStorage = ();
+
+    fn new(input: Self::GeneratorInitParameters, layout: NeuronLayoutOf<NM, FIQ>) -> Self {
+        let (universal_properties, cortical_properties, cortical_internal, cortical_variance) = input;
+        Self { layout, universal_properties, cortical_properties, cortical_internal, cortical_variance }
+    }
 
     /// Regenerates from the stored cortical data, every neuron starting at its index again
     fn new_generator_from_storage(storage: &NeurogenesisFromStorage<FIQ, NM>, _other_data: ()) -> Self {
@@ -203,13 +220,10 @@ fn refractory_countdowns<G: NeurogenesisMethod<Fiq, Advanced>>(neurogenesis: &G)
 
 #[test]
 fn custom_generator_runs_through_the_neurogenesis_method() {
-    let generator = IndexAsRefractoryGenerator::<Fiq, Advanced> {
-        layout: voxel_layout([3, 1, 1, 1]),
-        universal_properties: universal(),
-        cortical_properties: advanced_properties(),
-        cortical_internal: NMFeagiAdvancedDataCorticalInternal::new(),
-        cortical_variance: advanced_variance(0.0, 0.0, 0.0),
-    };
+    let generator = IndexAsRefractoryGenerator::<Fiq, Advanced>::new(
+        (universal(), advanced_properties(), NMFeagiAdvancedDataCorticalInternal::new(), advanced_variance(0.0, 0.0, 0.0)),
+        voxel_layout([3, 1, 1, 1]),
+    );
     assert_eq!(refractory_countdowns(&generator), [0.0, 1.0, 2.0]);
 }
 
@@ -237,12 +251,14 @@ fn custom_generator_from_storage_regenerates_neurons() {
 
 fn uniform_generator(dimensions: [usize; 4], countdown: f32) -> NeurogenesisGeneratorUniformDefault<Fiq, Advanced> {
     NeurogenesisGeneratorUniformDefault::new(
+        NeurogenesisGeneratorUniformDefaultInitParameters {
+            universal_properties: universal(),
+            cortical_properties: advanced_properties(),
+            cortical_internal: NMFeagiAdvancedDataCorticalInternal::new(),
+            cortical_variance: advanced_variance(0.0, 0.0, 0.0),
+            neuron_internal: NMFeagiAdvancedDataNeuronInternal::new(Period::new(countdown)),
+        },
         voxel_layout(dimensions),
-        universal(),
-        advanced_properties(),
-        NMFeagiAdvancedDataCorticalInternal::new(),
-        advanced_variance(0.0, 0.0, 0.0),
-        NMFeagiAdvancedDataNeuronInternal::new(Period::new(countdown)),
     )
 }
 
@@ -254,7 +270,7 @@ fn uniform_generator_starts_every_neuron_the_same() {
 
     let mut internal = vec![NMFeagiAdvancedDataNeuronInternal::new(Period::new(-1.0)); 4];
     let mut scratch = vec![NMFeagiAdvancedDataNeuronScratch::new(); 4];
-    let mut variance = vec![NMFeagiAdvancedDataNeuronVariance::new(0.0); 4];
+    let mut variance = vec![NMFeagiAdvancedDataNeuronVariance::new(p(0.0)); 4];
     generator.write_into_slices(&mut internal, &mut scratch, &mut variance);
     assert!(internal.iter().all(|neuron| neuron.refractory_countdown.deref() == 5.0));
 }
@@ -309,7 +325,7 @@ mod cpu_dynamics {
             Self {
                 processing_buffer: CorticalAreaNeuronPotential::QUANT_ZERO,
                 internal: NMFeagiAdvancedDataNeuronInternal::new(Period::QUANT_ZERO),
-                variance: NMFeagiAdvancedDataNeuronVariance::new(threshold_offset),
+                variance: NMFeagiAdvancedDataNeuronVariance::new(p(threshold_offset)),
             }
         }
 
@@ -322,7 +338,7 @@ mod cpu_dynamics {
                 &voxel_layout([1, 1, 1, 1]),
                 &CorticalAreaNeuronLocalIndex::QUANT_ZERO,
                 (
-                    &NMFeagiAdvancedDataCorticalProperties::new(Period::new(2.0), 10.0, 0.5, 0.0, 1.0, 1.0, 0.0),
+                    &NMFeagiAdvancedDataCorticalProperties::new(Period::new(2.0), p(10.0), p(0.5), p(0.0), p(1.0), p(1.0), p(0.0)),
                     &NMFeagiAdvancedDataCorticalInternal::new(),
                     &NMFeagiAdvancedDataCorticalScratch::new(),
                 ),

@@ -1,5 +1,4 @@
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-use feagi_basis::prelude::*;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutData, NeuronLayoutRestrictor};
@@ -11,10 +10,13 @@ use feagi_connectome::neuron_models::models::foundation_power::quantizations::{N
 use feagi_connectome::neuron_models::models::foundation_power::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal,
 };
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisMethod;
+use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedNeurogenesisGeneratorQuanted;
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use feagi_genome::basis::cortical_area::foundation::{CTGeneratorFoundationPowerModeled, CTGeneratorFoundationSubTyped, CorticalTypeFoundationPower, CorticalTypeFoundationSubtypeKind};
-use feagi_genome::basis::cortical_area::processing::{CorticalTypeProcessingInterconnect, CorticalTypeProcessingSubtypeKind};
-use feagi_genome::basis::cortical_area::{CorticalAllowedRegions, CorticalType, CorticalTypeAndSubtype, CorticalTypeKind};
+use feagi_genome::basis::cortical_area::processing::{CTGeneratorProcessingInterconnectModeled, CTGeneratorProcessingSubTyped, CorticalTypeProcessingInterconnect, CorticalTypeProcessingSubtypeKind};
+use feagi_genome::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeAndSubtype, CorticalTypeKind};
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Power32 = NMFoundationPowerQuantFloat32;
@@ -63,39 +65,96 @@ fn dimensions(xyzd: [usize; 4]) -> DimensionalCorticalAreaDimensions<<Fiq as Fea
     DimensionalCorticalAreaDimensions::new_dimensions_from_usize(xyzd).unwrap()
 }
 
+type PowerRestrictor = <CorticalTypeFoundationPower as CorticalType<Power32>>::NeuronLayoutRestrictor<Fiq>;
+type InterconnectRestrictor = <CorticalTypeProcessingInterconnect as CorticalType<Simple>>::NeuronLayoutRestrictor<Fiq>;
+
 /// Power is a single neuron, so its restrictor only allows dimensions of 1
 #[test]
 fn power_restricts_its_layout_to_one_neuron() {
-    let restrictor = <<CorticalTypeFoundationPower as CorticalType<Power32>>::NeuronLayoutRestrictor<Fiq>>::new();
-    assert!(restrictor.validate_cortical_context(&dimensions([1, 1, 1, 1])).is_ok());
-    assert!(restrictor.validate_cortical_context(&dimensions([2, 1, 1, 1])).is_err());
-    assert!(restrictor.validate_cortical_context(&dimensions([1, 1, 1, 3])).is_err());
+    assert!(PowerRestrictor::validate_cortical_context(&dimensions([1, 1, 1, 1])).is_ok());
+    assert!(PowerRestrictor::validate_cortical_context(&dimensions([2, 1, 1, 1])).is_err());
+    assert!(PowerRestrictor::validate_cortical_context(&dimensions([1, 1, 1, 3])).is_err());
 
-    assert!(NeuronLayoutVoxel::<Fiq>::validate_with_restrictor_and_new(dimensions([1, 1, 1, 1]), &restrictor).is_ok());
-    assert!(NeuronLayoutVoxel::<Fiq>::validate_with_restrictor_and_new(dimensions([4, 4, 1, 1]), &restrictor).is_err());
+    assert!(NeuronLayoutVoxel::<Fiq>::validate_with_restrictor_and_new::<PowerRestrictor>(dimensions([1, 1, 1, 1])).is_ok());
+    assert!(NeuronLayoutVoxel::<Fiq>::validate_with_restrictor_and_new::<PowerRestrictor>(dimensions([4, 4, 1, 1])).is_err());
 }
 
 #[test]
 fn interconnect_does_not_restrict_its_layout() {
-    let restrictor = <<CorticalTypeProcessingInterconnect as CorticalType<Simple>>::NeuronLayoutRestrictor<Fiq>>::new();
-    assert!(restrictor.validate_cortical_context(&dimensions([1, 1, 1, 1])).is_ok());
-    assert!(restrictor.validate_cortical_context(&dimensions([8, 4, 2, 3])).is_ok());
+    assert!(InterconnectRestrictor::validate_cortical_context(&dimensions([1, 1, 1, 1])).is_ok());
+    assert!(InterconnectRestrictor::validate_cortical_context(&dimensions([8, 4, 2, 3])).is_ok());
 }
 
 fn power_generator() -> NeurogenesisGeneratorUniformDefault<Fiq, Power32> {
     NeurogenesisGeneratorUniformDefault::new(
-        NeuronLayoutVoxel::new(dimensions([1, 1, 1, 1])),
-        NeuronModelUniversalCorticalProperties::<Power32> {
-            cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-            is_psp_uniform: false,
-            is_psp_using_neuron_potential: false,
+        NeurogenesisGeneratorUniformDefaultInitParameters {
+            universal_properties: NeuronModelUniversalCorticalProperties::<Power32> {
+                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                is_psp_uniform: false,
+                is_psp_using_neuron_potential: false,
+            },
+            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
+            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
+            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
+            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
         },
-        NMFoundationPowerDataCorticalProperties::new(),
-        NMFoundationPowerDataCorticalInternal::new(),
-        NMFoundationPowerDataCorticalVariance::new(),
-        NMFoundationPowerDataNeuronInternal::new(),
+        NeuronLayoutVoxel::new(dimensions([1, 1, 1, 1])),
     )
 }
+
+//region Generator creation
+
+/// Power has nothing to configure, so the generator of an area is the cortical type's defaults
+#[test]
+fn power_creates_its_generator_from_its_defaults() {
+    let generator = <CorticalTypeFoundationPower as CorticalType<Power32>>::create_cortical_area_generator::<Fiq>((), dimensions([1, 1, 1, 1])).unwrap();
+    let CTGeneratorTyped::Foundation(CTGeneratorFoundationSubTyped::Power(CTGeneratorFoundationPowerModeled::FoundationPower(
+        NMFoundationPowerNeurogenesisGeneratorQuanted::Float32(inner),
+    ))) = generator
+    else {
+        panic!("created as another cortical type or quantization: {generator:?}")
+    };
+    assert_eq!(inner, power_generator());
+    assert_eq!(inner.iter().len(), 1);
+}
+
+#[test]
+fn creating_a_generator_checks_the_layout() {
+    assert!(<CorticalTypeFoundationPower as CorticalType<Power32>>::create_cortical_area_generator::<Fiq>((), dimensions([2, 1, 1, 1])).is_err());
+}
+
+/// The parameters given replace the defaults of the cortical type, and the model chosen decides the
+/// variant of the generator
+#[test]
+fn interconnect_creates_its_generator_from_the_given_parameters() {
+    let defaults = <CorticalTypeProcessingInterconnect as CorticalSubTypeUsesDefaultCorticalGenerator<Advanced>>::uniform_default_generator_defaults::<Fiq>();
+    let mut properties = defaults.cortical_properties;
+    properties.firing_threshold = CorticalAreaNeuronPotential::new(7.0);
+
+    let generator =
+        <CorticalTypeProcessingInterconnect as CorticalType<Advanced>>::create_cortical_area_generator::<Fiq>((defaults.universal_properties, properties), dimensions([2, 3, 1, 1])).unwrap();
+    let CTGeneratorTyped::Processing(CTGeneratorProcessingSubTyped::Interconnect(CTGeneratorProcessingInterconnectModeled::FeagiAdvanced(
+        NMFeagiAdvancedNeurogenesisGeneratorQuanted::Standard32Bit(inner),
+    ))) = generator
+    else {
+        panic!("created as another cortical type or model: {generator:?}")
+    };
+    assert_eq!(inner.cortical_properties.firing_threshold.deref(), 7.0);
+    assert_eq!(inner.iter().len(), 6);
+}
+
+#[test]
+fn interconnect_creates_a_generator_of_each_model_it_allows() {
+    let defaults = <CorticalTypeProcessingInterconnect as CorticalSubTypeUsesDefaultCorticalGenerator<Simple>>::uniform_default_generator_defaults::<Fiq>();
+    let generator =
+        <CorticalTypeProcessingInterconnect as CorticalType<Simple>>::create_cortical_area_generator::<Fiq>((defaults.universal_properties, defaults.cortical_properties), dimensions([1, 1, 1, 1])).unwrap();
+    assert!(matches!(
+        generator,
+        CTGeneratorTyped::Processing(CTGeneratorProcessingSubTyped::Interconnect(CTGeneratorProcessingInterconnectModeled::FeagiSimple(_)))
+    ));
+}
+
+//endregion
 
 /// Every level is present even with a single model, so that allowing a second model later does not
 /// change how existing data is saved
