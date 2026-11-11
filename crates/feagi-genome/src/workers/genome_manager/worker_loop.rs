@@ -40,7 +40,7 @@ pub(crate) async fn run_genome_manager<FIQ: FeagiIndexQuantization>(
         name: "Genome Test Name".to_string(),
         description: "".to_string(),
     };
-    let mut graph = DesignerGenome::<FIQ>::new_genome_now(root_metadata);
+    let mut graph = DesignerGenome::<FIQ>::new_barebones_genome_now(root_metadata);
 
     let mut commands = FeagiWorkerCommandRouter::new(GenomeManagerCommandHandler, responder);
     let GenomeManagerResponders { burst_engine, connectome, cortical_area, cortical_mapping, genome, morphology, region } = genome_request_responders;
