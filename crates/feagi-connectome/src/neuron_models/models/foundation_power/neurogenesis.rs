@@ -164,7 +164,7 @@ where
         _cortical_properties: &NM::CorticalDataProperties,
         _cortical_internal: &NM::CorticalDataInternal,
     ) -> NM::CorticalDataScratch {
-        todo!("FoundationPower cortical scratch")
+        NM::CorticalDataScratch::new() // no fields
     }
 
     fn static_get_neuron_scratch(
@@ -172,7 +172,7 @@ where
         _layout: &NeuronLayoutOf<NM, FIQ>,
         _internal_neuron_data: &NM::NeuronDataInternal,
     ) -> NM::NeuronDataScratch {
-        todo!("FoundationPower neuron scratch")
+        NM::NeuronDataScratch::new() // no fields
     }
 
     /// The variance the model's cortical variance gives the neuron

@@ -11,6 +11,11 @@ pub mod burst_engine_cpu {
     };
     pub use neural_burst_cpu::parallel_burst_engines::rayon::burst_engine_cpu_rayon::BurstEngineCPURayon;
     pub use neural_burst_cpu::parallel_burst_engines::rayon::errors::BurstEngineCPURayonInitError;
+    pub use neural_burst_cpu::parallel_burst_engines::rayon::neuron_model_store::{CpuNeuronModelStore, CpuNeuronModelStores};
+    pub use neural_burst_cpu::shared_structs::{
+        CorticalAreaUbiquitousFlags, CpuAddCorticalAreaError, CpuAddedCorticalArea, CpuEngineNeuronData, CpuMembranePotentialQuant,
+        MembranePotentialData, MembranePotentialQuantData, PerNeuronUbiquitousFlags,
+    };
     // TODO engine
 }
 

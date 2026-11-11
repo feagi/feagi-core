@@ -41,8 +41,9 @@ where
     ) -> bool; // true if firing
 
 
-    /// called per neuron, calls `process_model_neuron_dynamics` and does the psp postprocessing
-    /// upon it. DO NOT override this implementation!
+    /// called per neuron, calls `process_model_neuron_dynamics`, stores if the neuron is firing in
+    /// its flags, and if it is, does the psp postprocessing upon it. The caller has already summed
+    /// the incoming potentials into `processing_buffer`. DO NOT override this implementation!
     fn process_neuron_dynamics_for_psp(
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
@@ -74,11 +75,18 @@ where
             neuron_data
         );
 
-        // At this point, the output neuron potential (regardless of firing state) was written
-        // to processing_buffer
+        // At this point processing_buffer holds the firing potential if the model fired, otherwise
+        // the charge the neuron retained
 
-        // We should apply any modifiers to the outgoing neuron potential,
-        // regardless of firing state
+        // This struct will apply any force fires / probe overrides and store firing state
+        let is_firing = neuron_flags.process_neuron_firing(model_is_firing);
+
+        // The modifiers of the outgoing potential only apply to a neuron that is firing. One that
+        // is not keeps what the model left it, as that is the charge it starts its next burst with
+        if !is_firing {
+            return;
+        }
+
         if !cortical_flags.is_psp_using_neuron_potential() {
             *processing_buffer = *cortical_level_psp;
         }
@@ -87,8 +95,5 @@ where
         if !cortical_flags.is_psp_uniform() {
             *processing_buffer *= CorticalAreaNeuronPotential::new(neuron_inversed_outgoing_connection_count.deref());
         }
-
-        // This struct will apply any force fires / probe overrides and store firing state
-        _ = neuron_flags.process_neuron_firing(model_is_firing);
     }
 }

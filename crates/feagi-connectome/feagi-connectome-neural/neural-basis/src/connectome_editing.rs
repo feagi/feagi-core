@@ -143,13 +143,16 @@ pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization>
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectomeEditErrorCorticalAreaAdd {
     #[error("Unknown Failure. Connectome Corruption assumed")]
-    UnknownFailure
+    UnknownFailure,
+    #[error("The burst engine can not index the cortical area at its index quantization. Nothing was changed")]
+    ExceedsIndexQuantization,
 }
 
 impl ConnectomeEditError for ConnectomeEditErrorCorticalAreaAdd {
     fn is_connectome_corrupted(&self) -> bool {
         match &self {
             ConnectomeEditErrorCorticalAreaAdd::UnknownFailure => true,
+            ConnectomeEditErrorCorticalAreaAdd::ExceedsIndexQuantization => false,
         }
     }
 }

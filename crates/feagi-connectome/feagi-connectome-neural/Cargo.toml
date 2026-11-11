@@ -24,7 +24,7 @@ alloc = [
 
 burst-engine-cpu = [
     "std",
-    "dep:neural-burst-cpu"
+    "dep:neural-burst-cpu", "neural-burst-cpu/rayon" # The CPU engine is the rayon one
 ]
 
 burst-engine-esp32 = [
