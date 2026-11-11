@@ -99,6 +99,7 @@ fn power_generator() -> NeurogenesisGeneratorUniformDefault<Fiq, Power32> {
 
 /// Every level is present even with a single model, so that allowing a second model later does not
 /// change how existing data is saved
+#[cfg(feature = "alloc")]
 #[test]
 fn generator_serializes_by_subtype_then_model_then_quantization() {
     let generator = CTGeneratorFoundationSubTyped::Power(CTGeneratorFoundationPowerModeled::FoundationPower(

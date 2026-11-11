@@ -24,6 +24,7 @@ std = [
 ]
 
 alloc = [
+    "serde_json",
     "serde/alloc", "serde_json?/alloc", "serde_arrays/alloc", "thingbuf/alloc", "half/alloc", "heapless/alloc"
 ]
 

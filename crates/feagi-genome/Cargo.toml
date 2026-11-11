@@ -19,6 +19,7 @@ std = [
 ]
 
 alloc = [
+    "serde_json",
     "serde/alloc", "serde_json/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
     "feagi-basis/alloc", "feagi-connectome/alloc"
 ]
@@ -35,11 +36,11 @@ paste = { workspace = true }
 thiserror = { workspace = true, default-features = false }
 half = { workspace = true, features = ["serde"] }
 serde = { workspace = true, default-features = false, features = ["derive"] }
-serde_json = {workspace = true} # TODO this may nto be optional?
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true }
 rand = {workspace = true}
+serde_json = { workspace = true, optional = true}
 
 [dev-dependencies]
 postcard = { workspace = true, features = ["alloc"] }

@@ -51,6 +51,7 @@ fn every_possible_header_is_valid_only_if_a_cortical_type_and_is_canonical() {
     assert_eq!(valid.len(), ALL_VALID.len());
 }
 
+#[cfg(feature = "alloc")]
 #[test]
 fn bytes_serialize_as_the_8_bytes() {
     let id = CorticalIdentifierBytes::try_from_bytes(ALL_VALID[1]).unwrap();
@@ -64,7 +65,9 @@ fn bytes_serialize_as_the_8_bytes() {
     assert_eq!(serde_json::from_str::<CorticalIdentifierBytes>(&json).unwrap(), id);
 }
 
+
 /// The identifier itself serializes as its nested enum, by cortical type then subtype
+#[cfg(feature = "alloc")]
 #[test]
 fn identifier_serializes_by_type_then_subtype() {
     let id = CorticalIdentifier::Processing(CorticalIdentifierProcessing::Interconnect(INNER));

@@ -106,6 +106,7 @@ fn is_a_static_path_element() {
     assert_eq!(CorticalIdentifierBase64::try_from("AQBhYmNkZWY=").unwrap(), base64);
 }
 
+#[cfg(feature = "alloc")]
 #[test]
 fn serializes_as_its_text() {
     let base64 = CorticalIdentifierBase64::from(interconnect());
@@ -120,7 +121,9 @@ fn serializes_as_its_text() {
     assert_eq!(postcard::from_bytes::<CorticalIdentifierBase64>(&bytes).unwrap(), base64);
 }
 
+
 /// Requests hold these as the keys of JSON objects
+#[cfg(feature = "alloc")]
 #[test]
 fn may_be_a_json_object_key() {
     let base64 = CorticalIdentifierBase64::from(interconnect());

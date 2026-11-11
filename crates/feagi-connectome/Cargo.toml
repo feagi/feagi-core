@@ -19,6 +19,7 @@ std = [
 ]
 
 alloc = [
+    "serde_json",
     "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
     "feagi-basis/alloc", "feagi-connectome-neural/alloc"
 ]
@@ -45,6 +46,7 @@ serde = { workspace = true, default-features = false, features = ["derive"] }
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
+serde_json = { workspace = true, optional = true}
 rand = {workspace = true}
 rayon = {workspace = true, optional = true}
 
