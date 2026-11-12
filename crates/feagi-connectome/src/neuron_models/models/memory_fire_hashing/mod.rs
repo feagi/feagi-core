@@ -1,5 +1,6 @@
 //! The `MemoryFireHashing` neuron model: its generated quantization items, reached through
 //! `connectome_basis::neuron_model::memory_fire_hashing`, and its burst engine dynamics
+use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantKind;
 
 pub mod quantizations;
 pub mod data;
@@ -22,7 +23,8 @@ pub trait NMMemoryFireHashingTrait: NeuronModel<
     CorticalDataVariance=NMMemoryFireHashingDataCorticalVariance<Self>,
     NeuronDataInternal=NMMemoryFireHashingDataNeuronInternal<Self>,
     NeuronDataScratch=NMMemoryFireHashingDataNeuronScratch<Self>,
-    NeuronDataVariance=NMMemoryFireHashingDataNeuronVariance<Self>
+    NeuronDataVariance=NMMemoryFireHashingDataNeuronVariance<Self>,
+    QuantKind=NMMemoryFireHashingQuantKind,
 >
 {
     #[doc = " For handling timing"]

@@ -7,7 +7,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::N
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
-use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
 
 //region enums
 
@@ -21,6 +21,7 @@ impl NMFeagiSimpleQuantKind {
     pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum NMFeagiSimpleQuantedKind {
     Standard32Bit(NMFeagiSimpleQuantStandard32Bit)
 }
@@ -198,6 +199,31 @@ impl TryFrom<NMKind> for NMFeagiSimpleQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FeagiSimple(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FeagiSimple,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl From<NMFeagiSimpleQuantedKind> for NMQuantedKind {
+    fn from(value: NMFeagiSimpleQuantedKind) -> Self {
+        NMQuantedKind::FeagiSimple(value)
+    }
+}
+
+impl TryFrom<NMQuantedKind> for NMFeagiSimpleQuantedKind {
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMQuantedKind::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {

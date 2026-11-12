@@ -1,5 +1,6 @@
 //! The `FeagiAdvanced` neuron model: its generated quantization items, reached through
 //! `connectome_basis::neuron_model::feagi_advanced`, and its burst engine dynamics
+use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantKind;
 
 pub mod quantizations;
 pub mod data;
@@ -21,7 +22,8 @@ pub trait NMFeagiAdvancedTrait: NeuronModel<
     CorticalDataVariance=NMFeagiAdvancedDataCorticalVariance<Self>,
     NeuronDataInternal=NMFeagiAdvancedDataNeuronInternal<Self>,
     NeuronDataScratch=NMFeagiAdvancedDataNeuronScratch<Self>,
-    NeuronDataVariance=NMFeagiAdvancedDataNeuronVariance<Self>
+    NeuronDataVariance=NMFeagiAdvancedDataNeuronVariance<Self>,
+    QuantKind=NMFeagiAdvancedQuantKind,
 >
 {
     #[doc = "For handling timing"]

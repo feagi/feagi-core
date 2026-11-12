@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
-use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
@@ -14,6 +14,28 @@ use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuant
 pub enum NMMemoryFireHashingQuantKind {
     Standard32Bit,
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum NMMemoryFireHashingQuantedKind {
+    Standard32Bit(NMMemoryFireHashingQuantStandard32Bit)
+}
+
+impl NMMemoryFireHashingQuantedKind {
+    pub fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match &self {
+            NMMemoryFireHashingQuantedKind::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+
+    pub fn from_nm_quant<NM: NMMemoryFireHashingTrait>() -> NMMemoryFireHashingQuantedKind {
+        match NM::QUANT_KIND {
+            NMMemoryFireHashingQuantKind::Standard32Bit => NMMemoryFireHashingQuantedKind::Standard32Bit(NMMemoryFireHashingQuantStandard32Bit),
+        }
+    }
+}
+
+
+//region Generators
 
 /// The data needed to create the generator of the Memory Fire Hashing Neuron Model, for a given quantization
 #[derive(Debug, Clone)]
@@ -82,6 +104,8 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageOrGenera
 
 //endregion
 
+//endregion
+
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMMemoryFireHashingQuantStandard32Bit;
 
@@ -109,12 +133,37 @@ impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
     type NeuronDataVariance = NMMemoryFireHashingDataNeuronVariance<Self>;
 
     type QuantKind = NMMemoryFireHashingQuantKind;
+    type QuantedKind = NMMemoryFireHashingQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMMemoryFireHashingQuantKind::Standard32Bit;
+    const QUANTED_KIND: Self::QuantedKind = NMMemoryFireHashingQuantedKind::Standard32Bit(Self);
 }
 
 impl MembranePotentialQuantization for NMMemoryFireHashingQuantStandard32Bit
 {
     type MembranePotentialQuant = f32;
+}
+
+impl From<NMMemoryFireHashingQuantStandard32Bit> for NMMemoryFireHashingQuantedKind {
+    fn from(value: NMMemoryFireHashingQuantStandard32Bit) -> Self {
+        NMMemoryFireHashingQuantedKind::Standard32Bit(value)
+    }
+}
+
+impl TryFrom<NMMemoryFireHashingQuantedKind> for NMMemoryFireHashingQuantStandard32Bit {
+    type Error = NeuronModelEnumConversionError<NMMemoryFireHashingQuantKind>;
+
+    fn try_from(value: NMMemoryFireHashingQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMMemoryFireHashingQuantedKind::Standard32Bit(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMMemoryFireHashingQuantKind::Standard32Bit,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 //region Model Level Conversions
@@ -132,6 +181,31 @@ impl TryFrom<NMKind> for NMMemoryFireHashingQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::MemoryFireHashing(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::MemoryFireHashing,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl From<NMMemoryFireHashingQuantedKind> for NMQuantedKind {
+    fn from(value: NMMemoryFireHashingQuantedKind) -> Self {
+        NMQuantedKind::MemoryFireHashing(value)
+    }
+}
+
+impl TryFrom<NMQuantedKind> for NMMemoryFireHashingQuantedKind {
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMQuantedKind::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {

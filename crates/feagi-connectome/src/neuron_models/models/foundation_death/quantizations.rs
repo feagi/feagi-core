@@ -1,5 +1,5 @@
 use crate::neuron_models::models::foundation_death::{NMFoundationDeathDataCorticalInternal, NMFoundationDeathDataCorticalProperties, NMFoundationDeathDataCorticalScratch, NMFoundationDeathDataCorticalVariance, NMFoundationDeathDataNeuronInternal, NMFoundationDeathDataNeuronScratch, NMFoundationDeathDataNeuronVariance, NMFoundationDeathTrait};
-use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
@@ -18,6 +18,37 @@ pub enum NMFoundationDeathQuantKind {
     Float32,
     Float64,
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum NMFoundationDeathQuantedKind {
+    Float16(NMFoundationDeathQuantFloat16),
+    BFloat16(NMFoundationDeathQuantBFloat16),
+    Float32(NMFoundationDeathQuantFloat32),
+    Float64(NMFoundationDeathQuantFloat64)
+}
+
+impl NMFoundationDeathQuantedKind {
+    pub fn quant_kind(&self) -> NMFoundationDeathQuantKind {
+        match &self {
+            NMFoundationDeathQuantedKind::Float16(_) => NMFoundationDeathQuantKind::Float16,
+            NMFoundationDeathQuantedKind::BFloat16(_) => NMFoundationDeathQuantKind::BFloat16,
+            NMFoundationDeathQuantedKind::Float32(_) => NMFoundationDeathQuantKind::Float32,
+            NMFoundationDeathQuantedKind::Float64(_) => NMFoundationDeathQuantKind::Float64,
+        }
+    }
+
+    pub fn from_nm_quant<NM: NMFoundationDeathTrait>() -> NMFoundationDeathQuantedKind {
+        match NM::QUANT_KIND {
+            NMFoundationDeathQuantKind::Float16 => NMFoundationDeathQuantedKind::Float16(NMFoundationDeathQuantFloat16),
+            NMFoundationDeathQuantKind::BFloat16 => NMFoundationDeathQuantedKind::BFloat16(NMFoundationDeathQuantBFloat16),
+            NMFoundationDeathQuantKind::Float32 => NMFoundationDeathQuantedKind::Float32(NMFoundationDeathQuantFloat32),
+            NMFoundationDeathQuantKind::Float64 => NMFoundationDeathQuantedKind::Float64(NMFoundationDeathQuantFloat64),
+        }
+    }
+}
+
+
+//region Generators
 
 /// The data needed to create the generator of the Foundation Death Neuron Model, for a given quantization
 #[derive(Debug, Clone)]
@@ -110,6 +141,8 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationDeathNeurogenesisStorageOrGenerato
 
 //endregion
 
+//endregion
+
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFoundationDeathQuantFloat16;
 
@@ -136,12 +169,37 @@ impl NeuronModel for NMFoundationDeathQuantFloat16 {
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationDeathQuantKind;
+    type QuantedKind = NMFoundationDeathQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float16;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationDeathQuantedKind::Float16(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat16
 {
     type MembranePotentialQuant = f16;
+}
+
+impl From<NMFoundationDeathQuantFloat16> for NMFoundationDeathQuantedKind {
+    fn from(value: NMFoundationDeathQuantFloat16) -> Self {
+        NMFoundationDeathQuantedKind::Float16(value)
+    }
+}
+
+impl TryFrom<NMFoundationDeathQuantedKind> for NMFoundationDeathQuantFloat16 {
+    type Error = NeuronModelEnumConversionError<NMFoundationDeathQuantKind>;
+
+    fn try_from(value: NMFoundationDeathQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationDeathQuantedKind::Float16(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationDeathQuantKind::Float16,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -170,12 +228,37 @@ impl NeuronModel for NMFoundationDeathQuantBFloat16 {
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationDeathQuantKind;
+    type QuantedKind = NMFoundationDeathQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::BFloat16;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationDeathQuantedKind::BFloat16(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantBFloat16
 {
     type MembranePotentialQuant = bf16;
+}
+
+impl From<NMFoundationDeathQuantBFloat16> for NMFoundationDeathQuantedKind {
+    fn from(value: NMFoundationDeathQuantBFloat16) -> Self {
+        NMFoundationDeathQuantedKind::BFloat16(value)
+    }
+}
+
+impl TryFrom<NMFoundationDeathQuantedKind> for NMFoundationDeathQuantBFloat16 {
+    type Error = NeuronModelEnumConversionError<NMFoundationDeathQuantKind>;
+
+    fn try_from(value: NMFoundationDeathQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationDeathQuantedKind::BFloat16(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationDeathQuantKind::BFloat16,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -204,12 +287,37 @@ impl NeuronModel for NMFoundationDeathQuantFloat32 {
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationDeathQuantKind;
+    type QuantedKind = NMFoundationDeathQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float32;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationDeathQuantedKind::Float32(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat32
 {
     type MembranePotentialQuant = f32;
+}
+
+impl From<NMFoundationDeathQuantFloat32> for NMFoundationDeathQuantedKind {
+    fn from(value: NMFoundationDeathQuantFloat32) -> Self {
+        NMFoundationDeathQuantedKind::Float32(value)
+    }
+}
+
+impl TryFrom<NMFoundationDeathQuantedKind> for NMFoundationDeathQuantFloat32 {
+    type Error = NeuronModelEnumConversionError<NMFoundationDeathQuantKind>;
+
+    fn try_from(value: NMFoundationDeathQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationDeathQuantedKind::Float32(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationDeathQuantKind::Float32,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -238,12 +346,37 @@ impl NeuronModel for NMFoundationDeathQuantFloat64 {
     type NeuronDataVariance = NMFoundationDeathDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationDeathQuantKind;
+    type QuantedKind = NMFoundationDeathQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationDeathQuantKind::Float64;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationDeathQuantedKind::Float64(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationDeathQuantFloat64
 {
     type MembranePotentialQuant = f64;
+}
+
+impl From<NMFoundationDeathQuantFloat64> for NMFoundationDeathQuantedKind {
+    fn from(value: NMFoundationDeathQuantFloat64) -> Self {
+        NMFoundationDeathQuantedKind::Float64(value)
+    }
+}
+
+impl TryFrom<NMFoundationDeathQuantedKind> for NMFoundationDeathQuantFloat64 {
+    type Error = NeuronModelEnumConversionError<NMFoundationDeathQuantKind>;
+
+    fn try_from(value: NMFoundationDeathQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationDeathQuantedKind::Float64(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationDeathQuantKind::Float64,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 //region Model Level Conversions
@@ -261,6 +394,31 @@ impl TryFrom<NMKind> for NMFoundationDeathQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FoundationDeath(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationDeath,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl From<NMFoundationDeathQuantedKind> for NMQuantedKind {
+    fn from(value: NMFoundationDeathQuantedKind) -> Self {
+        NMQuantedKind::FoundationDeath(value)
+    }
+}
+
+impl TryFrom<NMQuantedKind> for NMFoundationDeathQuantedKind {
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMQuantedKind::FoundationDeath(v) => {
                 Ok(v)
             },
             _ => {

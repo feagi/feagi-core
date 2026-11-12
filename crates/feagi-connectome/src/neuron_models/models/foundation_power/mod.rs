@@ -1,5 +1,6 @@
 //! The `FoundationPower` neuron model: its generated quantization items, reached through
 //! `connectome_basis::neuron_model::foundation_power`, and its burst engine dynamics
+use crate::neuron_models::models::foundation_power::quantizations::NMFoundationPowerQuantKind;
 
 pub mod quantizations;
 pub mod data;
@@ -22,7 +23,8 @@ pub trait NMFoundationPowerTrait: NeuronModel<
     CorticalDataVariance=NMFoundationPowerDataCorticalVariance<Self>,
     NeuronDataInternal=NMFoundationPowerDataNeuronInternal<Self>,
     NeuronDataScratch=NMFoundationPowerDataNeuronScratch<Self>,
-    NeuronDataVariance=NMFoundationPowerDataNeuronVariance<Self>
+    NeuronDataVariance=NMFoundationPowerDataNeuronVariance<Self>,
+    QuantKind=NMFoundationPowerQuantKind,
 >
 {
 }

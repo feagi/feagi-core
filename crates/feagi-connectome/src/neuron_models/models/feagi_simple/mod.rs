@@ -12,7 +12,7 @@ pub use burst_dynamics::FeagiSimpleBurstEngineDynamics as BurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use crate::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleQuantKind};
+use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuantKind};
 
 /// Quantization For the Feagi Simple type
 pub trait NMFeagiSimpleTrait: NeuronModel<

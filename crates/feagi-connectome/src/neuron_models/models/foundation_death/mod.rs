@@ -1,5 +1,6 @@
 //! The `FoundationDeath` neuron model: its generated quantization items, reached through
 //! `connectome_basis::neuron_model::foundation_death`, and its burst engine dynamics
+use crate::neuron_models::models::foundation_death::quantizations::NMFoundationDeathQuantKind;
 
 pub mod quantizations;
 pub mod data;
@@ -22,7 +23,8 @@ pub trait NMFoundationDeathTrait: NeuronModel<
     CorticalDataVariance=NMFoundationDeathDataCorticalVariance<Self>,
     NeuronDataInternal=NMFoundationDeathDataNeuronInternal<Self>,
     NeuronDataScratch=NMFoundationDeathDataNeuronScratch<Self>,
-    NeuronDataVariance=NMFoundationDeathDataNeuronVariance<Self>
+    NeuronDataVariance=NMFoundationDeathDataNeuronVariance<Self>,
+    QuantKind=NMFoundationDeathQuantKind,
 >
 {
 }

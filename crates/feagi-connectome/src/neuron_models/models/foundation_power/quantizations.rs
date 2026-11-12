@@ -1,5 +1,5 @@
 use crate::neuron_models::models::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalScratch, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronScratch, NMFoundationPowerDataNeuronVariance, NMFoundationPowerTrait};
-use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
@@ -18,6 +18,37 @@ pub enum NMFoundationPowerQuantKind {
     Float32,
     Float64,
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum NMFoundationPowerQuantedKind {
+    Float16(NMFoundationPowerQuantFloat16),
+    BFloat16(NMFoundationPowerQuantBFloat16),
+    Float32(NMFoundationPowerQuantFloat32),
+    Float64(NMFoundationPowerQuantFloat64)
+}
+
+impl NMFoundationPowerQuantedKind {
+    pub fn quant_kind(&self) -> NMFoundationPowerQuantKind {
+        match &self {
+            NMFoundationPowerQuantedKind::Float16(_) => NMFoundationPowerQuantKind::Float16,
+            NMFoundationPowerQuantedKind::BFloat16(_) => NMFoundationPowerQuantKind::BFloat16,
+            NMFoundationPowerQuantedKind::Float32(_) => NMFoundationPowerQuantKind::Float32,
+            NMFoundationPowerQuantedKind::Float64(_) => NMFoundationPowerQuantKind::Float64,
+        }
+    }
+
+    pub fn from_nm_quant<NM: NMFoundationPowerTrait>() -> NMFoundationPowerQuantedKind {
+        match NM::QUANT_KIND {
+            NMFoundationPowerQuantKind::Float16 => NMFoundationPowerQuantedKind::Float16(NMFoundationPowerQuantFloat16),
+            NMFoundationPowerQuantKind::BFloat16 => NMFoundationPowerQuantedKind::BFloat16(NMFoundationPowerQuantBFloat16),
+            NMFoundationPowerQuantKind::Float32 => NMFoundationPowerQuantedKind::Float32(NMFoundationPowerQuantFloat32),
+            NMFoundationPowerQuantKind::Float64 => NMFoundationPowerQuantedKind::Float64(NMFoundationPowerQuantFloat64),
+        }
+    }
+}
+
+
+//region Generators
 
 /// The data needed to create the generator of the Foundation Power Neuron Model, for a given quantization
 #[derive(Debug, Clone)]
@@ -111,6 +142,8 @@ impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisStorageOrGenerato
 
 //endregion
 
+//endregion
+
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMFoundationPowerQuantFloat16;
 
@@ -137,12 +170,37 @@ impl NeuronModel for NMFoundationPowerQuantFloat16 {
     type NeuronDataVariance = NMFoundationPowerDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationPowerQuantKind;
+    type QuantedKind = NMFoundationPowerQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationPowerQuantKind::Float16;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationPowerQuantedKind::Float16(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationPowerQuantFloat16
 {
     type MembranePotentialQuant = f16;
+}
+
+impl From<NMFoundationPowerQuantFloat16> for NMFoundationPowerQuantedKind {
+    fn from(value: NMFoundationPowerQuantFloat16) -> Self {
+        NMFoundationPowerQuantedKind::Float16(value)
+    }
+}
+
+impl TryFrom<NMFoundationPowerQuantedKind> for NMFoundationPowerQuantFloat16 {
+    type Error = NeuronModelEnumConversionError<NMFoundationPowerQuantKind>;
+
+    fn try_from(value: NMFoundationPowerQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationPowerQuantedKind::Float16(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationPowerQuantKind::Float16,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -171,12 +229,37 @@ impl NeuronModel for NMFoundationPowerQuantBFloat16 {
     type NeuronDataVariance = NMFoundationPowerDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationPowerQuantKind;
+    type QuantedKind = NMFoundationPowerQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationPowerQuantKind::BFloat16;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationPowerQuantedKind::BFloat16(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationPowerQuantBFloat16
 {
     type MembranePotentialQuant = bf16;
+}
+
+impl From<NMFoundationPowerQuantBFloat16> for NMFoundationPowerQuantedKind {
+    fn from(value: NMFoundationPowerQuantBFloat16) -> Self {
+        NMFoundationPowerQuantedKind::BFloat16(value)
+    }
+}
+
+impl TryFrom<NMFoundationPowerQuantedKind> for NMFoundationPowerQuantBFloat16 {
+    type Error = NeuronModelEnumConversionError<NMFoundationPowerQuantKind>;
+
+    fn try_from(value: NMFoundationPowerQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationPowerQuantedKind::BFloat16(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationPowerQuantKind::BFloat16,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -205,12 +288,37 @@ impl NeuronModel for NMFoundationPowerQuantFloat32 {
     type NeuronDataVariance = NMFoundationPowerDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationPowerQuantKind;
+    type QuantedKind = NMFoundationPowerQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationPowerQuantKind::Float32;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationPowerQuantedKind::Float32(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationPowerQuantFloat32
 {
     type MembranePotentialQuant = f32;
+}
+
+impl From<NMFoundationPowerQuantFloat32> for NMFoundationPowerQuantedKind {
+    fn from(value: NMFoundationPowerQuantFloat32) -> Self {
+        NMFoundationPowerQuantedKind::Float32(value)
+    }
+}
+
+impl TryFrom<NMFoundationPowerQuantedKind> for NMFoundationPowerQuantFloat32 {
+    type Error = NeuronModelEnumConversionError<NMFoundationPowerQuantKind>;
+
+    fn try_from(value: NMFoundationPowerQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationPowerQuantedKind::Float32(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationPowerQuantKind::Float32,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -239,12 +347,37 @@ impl NeuronModel for NMFoundationPowerQuantFloat64 {
     type NeuronDataVariance = NMFoundationPowerDataNeuronVariance<Self>;
 
     type QuantKind = NMFoundationPowerQuantKind;
+    type QuantedKind = NMFoundationPowerQuantedKind;
     const QUANT_KIND: Self::QuantKind = NMFoundationPowerQuantKind::Float64;
+    const QUANTED_KIND: Self::QuantedKind = NMFoundationPowerQuantedKind::Float64(Self);
 }
 
 impl MembranePotentialQuantization for NMFoundationPowerQuantFloat64
 {
     type MembranePotentialQuant = f64;
+}
+
+impl From<NMFoundationPowerQuantFloat64> for NMFoundationPowerQuantedKind {
+    fn from(value: NMFoundationPowerQuantFloat64) -> Self {
+        NMFoundationPowerQuantedKind::Float64(value)
+    }
+}
+
+impl TryFrom<NMFoundationPowerQuantedKind> for NMFoundationPowerQuantFloat64 {
+    type Error = NeuronModelEnumConversionError<NMFoundationPowerQuantKind>;
+
+    fn try_from(value: NMFoundationPowerQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFoundationPowerQuantedKind::Float64(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFoundationPowerQuantKind::Float64,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 //region Model Level Conversions
@@ -262,6 +395,31 @@ impl TryFrom<NMKind> for NMFoundationPowerQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl From<NMFoundationPowerQuantedKind> for NMQuantedKind {
+    fn from(value: NMFoundationPowerQuantedKind) -> Self {
+        NMQuantedKind::FoundationPower(value)
+    }
+}
+
+impl TryFrom<NMQuantedKind> for NMFoundationPowerQuantedKind {
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMQuantedKind::FoundationPower(v) => {
                 Ok(v)
             },
             _ => {
