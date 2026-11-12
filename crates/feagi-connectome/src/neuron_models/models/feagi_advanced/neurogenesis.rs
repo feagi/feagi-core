@@ -68,7 +68,7 @@ where
         _cortical_properties: &NM::CorticalDataProperties,
         _cortical_internal: &NM::CorticalDataInternal,
     ) -> NM::CorticalDataScratch {
-        NM::CorticalDataScratch::new() // no fields
+        NM::CorticalDataScratch::default() // no fields
     }
 
     fn static_get_neuron_scratch(
@@ -76,7 +76,7 @@ where
         _layout: &NeuronLayoutOf<FIQ, NM>,
         _internal_neuron_data: &NM::NeuronDataInternal,
     ) -> NM::NeuronDataScratch {
-        NM::NeuronDataScratch::new() // no fields
+        NM::NeuronDataScratch::default() // no fields
     }
 
     /// The variance the model's cortical variance gives the neuron
@@ -98,11 +98,14 @@ impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagi
         let coordinates = layout.get_neuron_layout_context(index)
             .expect("Neuron index during neurogenesis must come from this layout"); // TODO Address This Properly
         let [x, y, z, _d] = coordinates.as_slice();
-        NMFeagiAdvancedDataNeuronVariance::new(
-            self.firing_threshold_increment_x * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*x)
-                + self.firing_threshold_increment_y * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*y)
-                + self.firing_threshold_increment_z * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*z),
-        )
+
+        let firing_threshold_offset = self.firing_threshold_increment_x * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*x)
+            + self.firing_threshold_increment_y * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*y)
+            + self.firing_threshold_increment_z * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*z);
+        
+        NMFeagiAdvancedDataNeuronVariance {
+            firing_threshold_offset,
+        }
     }
 }
 

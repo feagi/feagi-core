@@ -46,7 +46,7 @@ pub mod interconnect {
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
         use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
         use feagi_connectome::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal};
-        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
+        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind};
         use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiAdvancedQuantStandard32Bit {
@@ -85,9 +85,17 @@ pub mod interconnect {
             }
         }
 
-        pub enum CTProcessingInterconnectGeneratorPrecursorModeled {
-            Standard32Bit(NMFeagiAdvancedQuantStandard32Bit::)
+        pub enum CTProcessingInterconnectKindModeled<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NMFeagiAdvancedQuantedKind)
         }
+        
+        pub enum CTProcessingInterconnectGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NMFeagiAdvancedQuantStandard32Bit::NeurogenesisGeneratorPrecursor<FIQ>),
+        }
+        
+
+        
+        
 
 
     }
@@ -130,12 +138,12 @@ pub mod interconnect {
             }
         }
 
-
-        pub enum CTGeneratorProcessingInterconnectModeled
-
-
+        
     }
 
+    
+    
+    
     pub enum CTProcessingInterconnectNMModeledKind {
         FeagiAdvanced(NMFeagiAdvancedQuantedKind),
         FeagiSimple(NMFeagiSimpleQuantedKind),

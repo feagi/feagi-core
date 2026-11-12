@@ -1,4 +1,4 @@
-use crate::neuron_models::models::feagi_advanced::data::Period;
+use crate::neuron_models::models::feagi_advanced::data::wrapped::Period;
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::QuantizedElementBase;
