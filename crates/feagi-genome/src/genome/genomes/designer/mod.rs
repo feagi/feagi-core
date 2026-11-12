@@ -13,7 +13,7 @@ use crate::genome::genome_object::{GenomeObjectCoordinate2D, GenomeObjectCoordin
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
 use crate::genome::genomes::GenomeError;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat32};
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat32};
 use feagi_connectome::neuron_models::models::NeurogenesisByGeneratorTypeOf;
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;

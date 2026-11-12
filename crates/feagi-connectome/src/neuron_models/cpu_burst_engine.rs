@@ -7,18 +7,18 @@
 
 use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedQuantStandard32Bit};
 use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleQuantStandard32Bit};
-use crate::neuron_models::models::foundation_death::quantizations::{
-    NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted, NMFoundationDeathQuantBFloat16, NMFoundationDeathQuantFloat16, NMFoundationDeathQuantFloat32,
-    NMFoundationDeathQuantFloat64,
+use crate::neuron_models::models::exclusive_death::quantizations::{
+    NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathQuantBFloat16, NMExclusiveDeathQuantFloat16, NMExclusiveDeathQuantFloat32,
+    NMExclusiveDeathQuantFloat64,
 };
-use crate::neuron_models::models::foundation_power::quantizations::{
-    NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32,
-    NMFoundationPowerQuantFloat64,
+use crate::neuron_models::models::exclusive_power::quantizations::{
+    NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32,
+    NMExclusivePowerQuantFloat64,
 };
 use crate::neuron_models::models::memory_fire_hashing::quantizations::{
     NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingQuantStandard32Bit,
 };
-use crate::neuron_models::models::{feagi_advanced, feagi_simple, foundation_death, foundation_power, memory_fire_hashing, NMNeurogenesisStorageOrGeneratorModeled};
+use crate::neuron_models::models::{feagi_advanced, feagi_simple, exclusive_death, exclusive_power, memory_fire_hashing, NMNeurogenesisStorageOrGeneratorModeled};
 use feagi_basis::BurstIndex;
 use feagi_connectome_neural::burst_engine_cpu::{
     BurstEngineCPURayon, CpuAddCorticalAreaError, CpuAddedCorticalArea, CpuEngineNeuronData, CpuNeuronModelStore, CpuNeuronModelStores,
@@ -37,23 +37,23 @@ pub struct CpuNeuronModelStoreList<FIQ: FeagiIndexQuantization> {
     pub feagi_simple_standard_32_bit:
         CpuNeuronModelStore<FIQ, NMFeagiSimpleQuantStandard32Bit, feagi_simple::BurstEngineDynamics<FIQ, NMFeagiSimpleQuantStandard32Bit>>,
 
-    pub foundation_death_float_16:
-        CpuNeuronModelStore<FIQ, NMFoundationDeathQuantFloat16, foundation_death::BurstEngineDynamics<FIQ, NMFoundationDeathQuantFloat16>>,
-    pub foundation_death_b_float_16:
-        CpuNeuronModelStore<FIQ, NMFoundationDeathQuantBFloat16, foundation_death::BurstEngineDynamics<FIQ, NMFoundationDeathQuantBFloat16>>,
-    pub foundation_death_float_32:
-        CpuNeuronModelStore<FIQ, NMFoundationDeathQuantFloat32, foundation_death::BurstEngineDynamics<FIQ, NMFoundationDeathQuantFloat32>>,
-    pub foundation_death_float_64:
-        CpuNeuronModelStore<FIQ, NMFoundationDeathQuantFloat64, foundation_death::BurstEngineDynamics<FIQ, NMFoundationDeathQuantFloat64>>,
+    pub exclusive_death_float_16:
+        CpuNeuronModelStore<FIQ, NMExclusiveDeathQuantFloat16, exclusive_death::BurstEngineDynamics<FIQ, NMExclusiveDeathQuantFloat16>>,
+    pub exclusive_death_b_float_16:
+        CpuNeuronModelStore<FIQ, NMExclusiveDeathQuantBFloat16, exclusive_death::BurstEngineDynamics<FIQ, NMExclusiveDeathQuantBFloat16>>,
+    pub exclusive_death_float_32:
+        CpuNeuronModelStore<FIQ, NMExclusiveDeathQuantFloat32, exclusive_death::BurstEngineDynamics<FIQ, NMExclusiveDeathQuantFloat32>>,
+    pub exclusive_death_float_64:
+        CpuNeuronModelStore<FIQ, NMExclusiveDeathQuantFloat64, exclusive_death::BurstEngineDynamics<FIQ, NMExclusiveDeathQuantFloat64>>,
 
-    pub foundation_power_float_16:
-        CpuNeuronModelStore<FIQ, NMFoundationPowerQuantFloat16, foundation_power::BurstEngineDynamics<FIQ, NMFoundationPowerQuantFloat16>>,
-    pub foundation_power_b_float_16:
-        CpuNeuronModelStore<FIQ, NMFoundationPowerQuantBFloat16, foundation_power::BurstEngineDynamics<FIQ, NMFoundationPowerQuantBFloat16>>,
-    pub foundation_power_float_32:
-        CpuNeuronModelStore<FIQ, NMFoundationPowerQuantFloat32, foundation_power::BurstEngineDynamics<FIQ, NMFoundationPowerQuantFloat32>>,
-    pub foundation_power_float_64:
-        CpuNeuronModelStore<FIQ, NMFoundationPowerQuantFloat64, foundation_power::BurstEngineDynamics<FIQ, NMFoundationPowerQuantFloat64>>,
+    pub exclusive_power_float_16:
+        CpuNeuronModelStore<FIQ, NMExclusivePowerQuantFloat16, exclusive_power::BurstEngineDynamics<FIQ, NMExclusivePowerQuantFloat16>>,
+    pub exclusive_power_b_float_16:
+        CpuNeuronModelStore<FIQ, NMExclusivePowerQuantBFloat16, exclusive_power::BurstEngineDynamics<FIQ, NMExclusivePowerQuantBFloat16>>,
+    pub exclusive_power_float_32:
+        CpuNeuronModelStore<FIQ, NMExclusivePowerQuantFloat32, exclusive_power::BurstEngineDynamics<FIQ, NMExclusivePowerQuantFloat32>>,
+    pub exclusive_power_float_64:
+        CpuNeuronModelStore<FIQ, NMExclusivePowerQuantFloat64, exclusive_power::BurstEngineDynamics<FIQ, NMExclusivePowerQuantFloat64>>,
 
     pub memory_fire_hashing_standard_32_bit: CpuNeuronModelStore<
         FIQ,
@@ -69,14 +69,14 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
         Self {
             feagi_advanced_standard_32_bit: CpuNeuronModelStore::new(),
             feagi_simple_standard_32_bit: CpuNeuronModelStore::new(),
-            foundation_death_float_16: CpuNeuronModelStore::new(),
-            foundation_death_b_float_16: CpuNeuronModelStore::new(),
-            foundation_death_float_32: CpuNeuronModelStore::new(),
-            foundation_death_float_64: CpuNeuronModelStore::new(),
-            foundation_power_float_16: CpuNeuronModelStore::new(),
-            foundation_power_b_float_16: CpuNeuronModelStore::new(),
-            foundation_power_float_32: CpuNeuronModelStore::new(),
-            foundation_power_float_64: CpuNeuronModelStore::new(),
+            exclusive_death_float_16: CpuNeuronModelStore::new(),
+            exclusive_death_b_float_16: CpuNeuronModelStore::new(),
+            exclusive_death_float_32: CpuNeuronModelStore::new(),
+            exclusive_death_float_64: CpuNeuronModelStore::new(),
+            exclusive_power_float_16: CpuNeuronModelStore::new(),
+            exclusive_power_b_float_16: CpuNeuronModelStore::new(),
+            exclusive_power_float_32: CpuNeuronModelStore::new(),
+            exclusive_power_float_64: CpuNeuronModelStore::new(),
             memory_fire_hashing_standard_32_bit: CpuNeuronModelStore::new(),
         }
     }
@@ -88,8 +88,8 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
     ) -> Result<CpuAddedCorticalArea<FIQ>, CpuAddCorticalAreaError> {
         use NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted as FeagiAdvanced;
         use NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted as FeagiSimple;
-        use NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted as FoundationDeath;
-        use NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted as FoundationPower;
+        use NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted as ExclusiveDeath;
+        use NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted as ExclusivePower;
         use NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted as MemoryFireHashing;
         use NMNeurogenesisStorageOrGeneratorModeled as Model;
 
@@ -98,15 +98,15 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
 
             Model::FeagiSimple(FeagiSimple::Standard32Bit(area)) => self.feagi_simple_standard_32_bit.add_cortical_area(area, engine),
 
-            Model::FoundationDeath(FoundationDeath::Float16(area)) => self.foundation_death_float_16.add_cortical_area(area, engine),
-            Model::FoundationDeath(FoundationDeath::BFloat16(area)) => self.foundation_death_b_float_16.add_cortical_area(area, engine),
-            Model::FoundationDeath(FoundationDeath::Float32(area)) => self.foundation_death_float_32.add_cortical_area(area, engine),
-            Model::FoundationDeath(FoundationDeath::Float64(area)) => self.foundation_death_float_64.add_cortical_area(area, engine),
+            Model::ExclusiveDeath(ExclusiveDeath::Float16(area)) => self.exclusive_death_float_16.add_cortical_area(area, engine),
+            Model::ExclusiveDeath(ExclusiveDeath::BFloat16(area)) => self.exclusive_death_b_float_16.add_cortical_area(area, engine),
+            Model::ExclusiveDeath(ExclusiveDeath::Float32(area)) => self.exclusive_death_float_32.add_cortical_area(area, engine),
+            Model::ExclusiveDeath(ExclusiveDeath::Float64(area)) => self.exclusive_death_float_64.add_cortical_area(area, engine),
 
-            Model::FoundationPower(FoundationPower::Float16(area)) => self.foundation_power_float_16.add_cortical_area(area, engine),
-            Model::FoundationPower(FoundationPower::BFloat16(area)) => self.foundation_power_b_float_16.add_cortical_area(area, engine),
-            Model::FoundationPower(FoundationPower::Float32(area)) => self.foundation_power_float_32.add_cortical_area(area, engine),
-            Model::FoundationPower(FoundationPower::Float64(area)) => self.foundation_power_float_64.add_cortical_area(area, engine),
+            Model::ExclusivePower(ExclusivePower::Float16(area)) => self.exclusive_power_float_16.add_cortical_area(area, engine),
+            Model::ExclusivePower(ExclusivePower::BFloat16(area)) => self.exclusive_power_b_float_16.add_cortical_area(area, engine),
+            Model::ExclusivePower(ExclusivePower::Float32(area)) => self.exclusive_power_float_32.add_cortical_area(area, engine),
+            Model::ExclusivePower(ExclusivePower::Float64(area)) => self.exclusive_power_float_64.add_cortical_area(area, engine),
 
             Model::MemoryFireHashing(MemoryFireHashing::Standard32Bit(area)) => self.memory_fire_hashing_standard_32_bit.add_cortical_area(area, engine),
         }
@@ -115,14 +115,14 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
     fn run_neuron_phase(&mut self, burst_index: &BurstIndex<FIQ::BurstIndexQuant>, engine: &mut CpuEngineNeuronData<FIQ>) {
         self.feagi_advanced_standard_32_bit.run_neuron_phase(burst_index, engine);
         self.feagi_simple_standard_32_bit.run_neuron_phase(burst_index, engine);
-        self.foundation_death_float_16.run_neuron_phase(burst_index, engine);
-        self.foundation_death_b_float_16.run_neuron_phase(burst_index, engine);
-        self.foundation_death_float_32.run_neuron_phase(burst_index, engine);
-        self.foundation_death_float_64.run_neuron_phase(burst_index, engine);
-        self.foundation_power_float_16.run_neuron_phase(burst_index, engine);
-        self.foundation_power_b_float_16.run_neuron_phase(burst_index, engine);
-        self.foundation_power_float_32.run_neuron_phase(burst_index, engine);
-        self.foundation_power_float_64.run_neuron_phase(burst_index, engine);
+        self.exclusive_death_float_16.run_neuron_phase(burst_index, engine);
+        self.exclusive_death_b_float_16.run_neuron_phase(burst_index, engine);
+        self.exclusive_death_float_32.run_neuron_phase(burst_index, engine);
+        self.exclusive_death_float_64.run_neuron_phase(burst_index, engine);
+        self.exclusive_power_float_16.run_neuron_phase(burst_index, engine);
+        self.exclusive_power_b_float_16.run_neuron_phase(burst_index, engine);
+        self.exclusive_power_float_32.run_neuron_phase(burst_index, engine);
+        self.exclusive_power_float_64.run_neuron_phase(burst_index, engine);
         self.memory_fire_hashing_standard_32_bit.run_neuron_phase(burst_index, engine);
     }
 }

@@ -1,13 +1,13 @@
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantKind;
 use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantKind;
-use crate::neuron_models::models::foundation_death::quantizations::NMFoundationDeathQuantKind;
-use crate::neuron_models::models::foundation_power::quantizations::NMFoundationPowerQuantKind;
+use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
+use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
 use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantKind;
 use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantedKind;
 use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantedKind;
-use crate::neuron_models::models::foundation_death::quantizations::NMFoundationDeathQuantedKind;
-use crate::neuron_models::models::foundation_power::quantizations::NMFoundationPowerQuantedKind;
+use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantedKind;
+use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantedKind;
 use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantedKind;
 
 
@@ -17,8 +17,8 @@ use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFi
 pub enum NMModelKind {
     FeagiAdvanced,
     FeagiSimple,
-    FoundationDeath,
-    FoundationPower,
+    ExclusiveDeath,
+    ExclusivePower,
     MemoryFireHashing,
 }
 
@@ -32,8 +32,8 @@ pub enum NMModelKind {
 pub enum NMKind {
     FeagiAdvanced(NMFeagiAdvancedQuantKind),
     FeagiSimple(NMFeagiSimpleQuantKind),
-    FoundationDeath(NMFoundationDeathQuantKind),
-    FoundationPower(NMFoundationPowerQuantKind),
+    ExclusiveDeath(NMExclusiveDeathQuantKind),
+    ExclusivePower(NMExclusivePowerQuantKind),
     MemoryFireHashing(NMMemoryFireHashingQuantKind),
 }
 
@@ -43,8 +43,8 @@ impl NMKind {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }
@@ -55,8 +55,8 @@ impl NMKind {
 pub enum NMQuantedKind {
     FeagiAdvanced(NMFeagiAdvancedQuantedKind),
     FeagiSimple(NMFeagiSimpleQuantedKind),
-    FoundationDeath(NMFoundationDeathQuantedKind),
-    FoundationPower(NMFoundationPowerQuantedKind),
+    ExclusiveDeath(NMExclusiveDeathQuantedKind),
+    ExclusivePower(NMExclusivePowerQuantedKind),
     MemoryFireHashing(NMMemoryFireHashingQuantedKind),
 }
 
@@ -66,8 +66,8 @@ impl NMQuantedKind {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }

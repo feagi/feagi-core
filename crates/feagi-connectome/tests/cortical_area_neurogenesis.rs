@@ -5,10 +5,10 @@ use feagi_connectome::neuron_models::models::feagi_advanced::{
     NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
     NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait, Period,
 };
-use feagi_connectome::neuron_models::models::foundation_power::quantizations::NMFoundationPowerQuantFloat32;
-use feagi_connectome::neuron_models::models::foundation_power::{
-    NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance,
-    NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronVariance,
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantFloat32;
+use feagi_connectome::neuron_models::models::exclusive_power::{
+    NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalVariance,
+    NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronVariance,
 };
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataVarianceSpecification, NeuronModelUniversalCorticalProperties};
@@ -22,7 +22,7 @@ use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuant
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Advanced = NMFeagiAdvancedQuantStandard32Bit;
-type Power = NMFoundationPowerQuantFloat32;
+type Power = NMExclusivePowerQuantFloat32;
 type Unbound = NeuronLayoutRestrictorVoxelUnbound<Fiq>;
 
 fn dimensions(dimensions: [usize; 4]) -> DimensionalCorticalAreaDimensions<<Fiq as FeagiIndexQuantization>::NeuronIndexQuant> {
@@ -122,10 +122,10 @@ fn power_storage(neuron_count: usize) -> Result<NeurogenesisStorage<Fiq, Power>,
     Power::spawn_neurogenesis_storage::<Fiq, Unbound>(
         dimensions([2, 2, 1, 1]),
         universal(),
-        NMFoundationPowerDataCorticalProperties::new(),
-        NMFoundationPowerDataCorticalInternal::new(),
-        NMFoundationPowerDataCorticalVariance::new(),
-        vec![NMFoundationPowerDataNeuronInternal::new(); neuron_count],
+        NMExclusivePowerDataCorticalProperties::new(),
+        NMExclusivePowerDataCorticalInternal::new(),
+        NMExclusivePowerDataCorticalVariance::new(),
+        vec![NMExclusivePowerDataNeuronInternal::new(); neuron_count],
     )
 }
 
@@ -140,7 +140,7 @@ fn stored_neuron_data_must_match_the_layout() {
 /// A model without variance fields holds no per neuron variance memory
 #[test]
 fn model_without_variance_generates_nothing() {
-    assert_eq!(size_of::<NMFoundationPowerDataNeuronVariance<Power>>(), 0);
+    assert_eq!(size_of::<NMExclusivePowerDataNeuronVariance<Power>>(), 0);
     let storage = power_storage(4).unwrap();
     assert_eq!(storage.iter().len(), 4);
 }

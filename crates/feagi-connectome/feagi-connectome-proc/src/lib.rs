@@ -122,7 +122,7 @@ use feagi_macro_components::model_family::model_family_template::ModelFamilyTemp
 ///
 ///     Models: {
 ///         /// Always fires
-///         FoundationPower: {
+///         ExclusivePower: {
 ///             Float16,
 ///             Float32,
 ///         }
@@ -159,7 +159,7 @@ pub fn define_model_family_template(input: proc_macro::TokenStream) -> proc_macr
 /// Expanded in the module of the hand written items of the family, which has the base trait
 /// `{Family}` in scope and defines `NMContainer` (`type Of<M: {Family}>`), `NMMember`, and
 /// `NMAccessError`. That module must be re-exported as `crate::connectome_basis::neuron_model`,
-/// next to a module per model named its snake case, such as `foundation_power`, holding the model
+/// next to a module per model named its snake case, such as `exclusive_power`, holding the model
 /// trait `NM{Model}Trait`, the tag `NM{Model}Tag` (a type distinct per model implementing
 /// `{Family}`), every marker struct `NM{Model}Quant{Level}` of it, as
 /// `expand_cortical_dynamics_quantization` generates them, and `BurstEngineDynamics`. Marker
@@ -198,8 +198,8 @@ use feagi_macro_components::model_family::cortical_type_family_template::Cortica
 ///
 ///     Types: {
 ///         /// Cortical types that keep the brain running
-///         Foundation = 1: {
-///             Power = 1: [FoundationPower],
+///         Exclusive = 1: {
+///             Power = 1: [ExclusivePower],
 ///         }
 ///         Processing = 2: {
 ///             Interconnect = 1: [FeagiAdvanced, FeagiSimple],
@@ -246,7 +246,7 @@ pub fn define_cortical_type_family_template(input: proc_macro::TokenStream) -> p
 ///
 /// Must be public where this is expanded: the base trait `{Family}`, with associated type
 /// `NeuronLayout`, and a module per super type named its snake case, holding a unit struct per
-/// cortical type named as in the template, such as `foundation::Power`. Must be in scope where this
+/// cortical type named as in the template, such as `exclusive::Power`. Must be in scope where this
 /// is expanded: the module of the model family, `NeurogenesisDefaultsGenerator`,
 /// `FeagiIndexQuantization`, and `NeuronLayoutOf`. The
 /// crate must depend on `serde`

@@ -1,37 +1,37 @@
-use crate::neuron_models::models::foundation_death::NMFoundationDeathTrait;
+use crate::neuron_models::models::exclusive_death::NMExclusiveDeathTrait;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-pub struct FoundationDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFoundationDeathTrait>(
+pub struct ExclusiveDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusiveDeathTrait>(
     core::marker::PhantomData<(FIQ, NM)>,
 );
 
 //region Common
-impl<FIQ, NM> FoundationDeathBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> ExclusiveDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationDeathTrait,
+    NM: NMExclusiveDeathTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
 }
 
-impl<FIQ, NM> Default for FoundationDeathBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> Default for ExclusiveDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationDeathTrait,
+    NM: NMExclusiveDeathTrait,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FoundationDeathBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for ExclusiveDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationDeathTrait,
+    NM: NMExclusiveDeathTrait,
 {
 }
 //endregion
@@ -40,10 +40,10 @@ where
 
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM>
-for FoundationDeathBurstEngineDynamics<FIQ, NM>
+for ExclusiveDeathBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationDeathTrait,
+    NM: NMExclusiveDeathTrait,
 {
     fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,

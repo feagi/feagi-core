@@ -1,17 +1,17 @@
-use crate::neuron_models::models::foundation_death::NMFoundationDeathTrait;
+use crate::neuron_models::models::exclusive_power::NMExclusivePowerTrait;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 
 //region Cortical Properties
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataCorticalProperties<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataCorticalProperties<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalProperties<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataCorticalProperties<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -20,20 +20,20 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalProperties<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataCorticalProperties<To>,
+            NMExclusivePowerDataCorticalProperties<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataCorticalProperties::new()
+            NMExclusivePowerDataCorticalProperties::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataPropertiesSpecification<NM>
-for NMFoundationDeathDataCorticalProperties<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataPropertiesSpecification<NM>
+for NMExclusivePowerDataCorticalProperties<NM> {}
 
 //endregion
 
@@ -41,14 +41,14 @@ for NMFoundationDeathDataCorticalProperties<NM> {}
 //region Cortical internal
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataCorticalInternal<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataCorticalInternal<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalInternal<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataCorticalInternal<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -57,34 +57,34 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalInternal<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataCorticalInternal<To>,
+            NMExclusivePowerDataCorticalInternal<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataCorticalInternal::new()
+            NMExclusivePowerDataCorticalInternal::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataInternalSpecification<NM>
-for NMFoundationDeathDataCorticalInternal<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataInternalSpecification<NM>
+for NMExclusivePowerDataCorticalInternal<NM> {}
 
 //endregion
 
 //region Cortical Scratch
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataCorticalScratch<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataCorticalScratch<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalScratch<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataCorticalScratch<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -93,34 +93,34 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalScratch<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataCorticalScratch<To>,
+            NMExclusivePowerDataCorticalScratch<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataCorticalScratch::new()
+            NMExclusivePowerDataCorticalScratch::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataScratchSpecification<NM>
-for NMFoundationDeathDataCorticalScratch<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataScratchSpecification<NM>
+for NMExclusivePowerDataCorticalScratch<NM> {}
 
 //endregion
 
 //region Cortical Variance
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataCorticalVariance<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataCorticalVariance<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalVariance<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataCorticalVariance<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -129,14 +129,14 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalVariance<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataCorticalVariance<To>,
+            NMExclusivePowerDataCorticalVariance<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataCorticalVariance::new()
+            NMExclusivePowerDataCorticalVariance::new()
         )
     }
 }
@@ -146,14 +146,14 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataCorticalVariance<NM> {
 //region Neuron Internal
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataNeuronInternal<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataNeuronInternal<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronInternal<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataNeuronInternal<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -162,34 +162,34 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronInternal<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataNeuronInternal<To>,
+            NMExclusivePowerDataNeuronInternal<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataNeuronInternal::new()
+            NMExclusivePowerDataNeuronInternal::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataInternalSpecification<NM>
-for NMFoundationDeathDataNeuronInternal<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataInternalSpecification<NM>
+for NMExclusivePowerDataNeuronInternal<NM> {}
 
 //endregion
 
 //region Neuron Scratch
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFoundationDeathDataNeuronScratch<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataNeuronScratch<NM: NMExclusivePowerTrait> {
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronScratch<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataNeuronScratch<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -198,33 +198,33 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronScratch<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataNeuronScratch<To>,
+            NMExclusivePowerDataNeuronScratch<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataNeuronScratch::new()
+            NMExclusivePowerDataNeuronScratch::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataScratchSpecification<NM>
-for NMFoundationDeathDataNeuronScratch<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataScratchSpecification<NM>
+for NMExclusivePowerDataNeuronScratch<NM> {}
 
 //endregion
 
 //region Neuron Variance
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct NMFoundationDeathDataNeuronVariance<NM: NMFoundationDeathTrait> {
+pub struct NMExclusivePowerDataNeuronVariance<NM: NMExclusivePowerTrait> {
 
     #[doc = r" Public so that this struct may be written out with its fields named"]
     pub _p: ::core::marker::PhantomData<NM>,
 }
 
-impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronVariance<NM> {
+impl<NM: NMExclusivePowerTrait> NMExclusivePowerDataNeuronVariance<NM> {
     pub const fn new() -> Self {
         Self {
             _p: ::core::marker::PhantomData
@@ -233,43 +233,43 @@ impl<NM: NMFoundationDeathTrait> NMFoundationDeathDataNeuronVariance<NM> {
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
-    pub fn requantize<To: NMFoundationDeathTrait>(&self)
+    pub fn requantize<To: NMExclusivePowerTrait>(&self)
         -> ::core::result::Result<
-            NMFoundationDeathDataNeuronVariance<To>,
+            NMExclusivePowerDataNeuronVariance<To>,
             ::feagi_basis::quantization::quantizable::DataValueQuantizationError
         >
     {
         Ok(
-            NMFoundationDeathDataNeuronVariance::new()
+            NMExclusivePowerDataNeuronVariance::new()
         )
     }
 }
 
-impl<NM: NMFoundationDeathTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataVarianceSpecification<NM>
-for NMFoundationDeathDataNeuronVariance<NM> {}
+impl<NM: NMExclusivePowerTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataVarianceSpecification<NM>
+for NMExclusivePowerDataNeuronVariance<NM> {}
 
 //endregion
 
 
 /*
-use super::neurogenesis::FoundationDeathNeurogenesisDefaults;
+use super::neurogenesis::ExclusivePowerNeurogenesisDefaults;
 use crate::neuron_models::defaults_generator::NeurogenesisDefaultsGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::{CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification, NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::quantization_levels::{MembranePotentialQuantization, FeagiIndexQuantization};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_proc::{define_cortical_dynamics_quantization_template, expand_cortical_dynamics_quantization};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf};
 use half::{bf16, f16};
 
 define_cortical_dynamics_quantization_template! {
-    /// Quantization For the Foundation Death type
-    FoundationDeath
+    /// Quantization For the Exclusive Power type
+    ExclusivePower
 
     NeuronLayout: NeuronLayoutTagVoxel
 
     // How the scratch and variance data of a neuron is generated
-    NeurogenesisDefaults: FoundationDeathNeurogenesisDefaults<FIQ, Self>
+    NeurogenesisDefaults: ExclusivePowerNeurogenesisDefaults<FIQ, Self>
 
     // How the neurons of a new cortical area are generated, every neuron starting from the same values
     NeurogenesisGenerator: NeurogenesisDefaultsGenerator<FIQ, Self>
@@ -293,6 +293,6 @@ define_cortical_dynamics_quantization_template! {
     }
 }
 
-cortical_dynamics_quantization_foundation_death_template!(expand_cortical_dynamics_quantization);
+cortical_dynamics_quantization_exclusive_power_template!(expand_cortical_dynamics_quantization);
 
  */

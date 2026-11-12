@@ -63,7 +63,7 @@ define_model_family_template! {
 
     Models: {
         /// Always fires
-        FoundationPower: {
+        ExclusivePower: {
             Float16,
             BFloat16,
             Float32,
@@ -71,7 +71,7 @@ define_model_family_template! {
         }
 
         /// Kills the brain
-        FoundationDeath: {
+        ExclusiveDeath: {
             Float16,
             BFloat16,
             Float32,

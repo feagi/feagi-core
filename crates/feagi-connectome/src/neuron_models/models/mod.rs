@@ -4,15 +4,15 @@ use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted, NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind};
 use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted, NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantKind};
-use crate::neuron_models::models::foundation_death::quantizations::{NMFoundationDeathNeurogenesisGeneratorPrecursorQuanted, NMFoundationDeathNeurogenesisGeneratorQuanted, NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted, NMFoundationDeathNeurogenesisStorageQuanted, NMFoundationDeathQuantKind};
-use crate::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted, NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantKind};
+use crate::neuron_models::models::exclusive_death::quantizations::{NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted, NMExclusiveDeathNeurogenesisGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageQuanted, NMExclusiveDeathQuantKind};
+use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisGeneratorPrecursorQuanted, NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantKind};
 use crate::neuron_models::models::kind::NMModelKind;
 use crate::neuron_models::models::memory_fire_hashing::quantizations::{NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted, NMMemoryFireHashingNeurogenesisGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageQuanted, NMMemoryFireHashingQuantKind};
 
 pub mod feagi_advanced;
 pub mod feagi_simple;
-pub mod foundation_death;
-pub mod foundation_power;
+pub mod exclusive_death;
+pub mod exclusive_power;
 pub mod memory_fire_hashing;
 pub mod kind;
 pub mod neurogenesis;
@@ -24,8 +24,8 @@ pub mod neurogenesis;
 pub enum NMNeurogenesisGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>),
-    FoundationDeath(NMFoundationDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>),
-    FoundationPower(NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ>),
+    ExclusiveDeath(NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>),
+    ExclusivePower(NMExclusivePowerNeurogenesisGeneratorPrecursorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ>)
 }
 
@@ -35,8 +35,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisGeneratorPrecursorModeled<FIQ> {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }
@@ -48,8 +48,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisGeneratorPrecursorModeled<FIQ> {
 pub enum NMNeurogenesisGeneratorModeled<FIQ: FeagiIndexQuantization> {
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>),
-    FoundationDeath(NMFoundationDeathNeurogenesisGeneratorQuanted<FIQ>),
-    FoundationPower(NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>),
+    ExclusiveDeath(NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ>),
+    ExclusivePower(NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>)
 }
 
@@ -59,8 +59,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisGeneratorModeled<FIQ> {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }
@@ -72,8 +72,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisGeneratorModeled<FIQ> {
 pub enum NMNeurogenesisStorageModeled<FIQ: FeagiIndexQuantization> {
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>),
-    FoundationDeath(NMFoundationDeathNeurogenesisStorageQuanted<FIQ>),
-    FoundationPower(NMFoundationPowerNeurogenesisStorageQuanted<FIQ>),
+    ExclusiveDeath(NMExclusiveDeathNeurogenesisStorageQuanted<FIQ>),
+    ExclusivePower(NMExclusivePowerNeurogenesisStorageQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>)
 }
 
@@ -83,8 +83,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageModeled<FIQ> {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }
@@ -96,8 +96,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageModeled<FIQ> {
 pub enum NMNeurogenesisStorageOrGeneratorModeled<FIQ: FeagiIndexQuantization> {
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),
-    FoundationDeath(NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>),
-    FoundationPower(NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>),
+    ExclusiveDeath(NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>),
+    ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>)
 }
 
@@ -107,8 +107,8 @@ impl<FIQ: FeagiIndexQuantization> NMNeurogenesisStorageOrGeneratorModeled<FIQ> {
         match self {
             Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
             Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::FoundationDeath(_) => NMModelKind::FoundationDeath,
-            Self::FoundationPower(_) => NMModelKind::FoundationPower,
+            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
+            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
             Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
         }
     }

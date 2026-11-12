@@ -6,8 +6,8 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::Neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
 use feagi_connectome::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantStandard32Bit;
-use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32};
-use feagi_connectome::neuron_models::models::foundation_power::{
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32};
+use feagi_connectome::neuron_models::models::exclusive_power::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal,
 };
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;

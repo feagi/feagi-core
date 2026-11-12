@@ -1,38 +1,38 @@
-use crate::neuron_models::models::foundation_power::NMFoundationPowerTrait;
+use crate::neuron_models::models::exclusive_power::NMExclusivePowerTrait;
 use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-pub struct FoundationPowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFoundationPowerTrait>(
+pub struct ExclusivePowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusivePowerTrait>(
     core::marker::PhantomData<(FIQ, NM)>,
 );
 
 //region Common
-impl<FIQ, NM> FoundationPowerBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> ExclusivePowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationPowerTrait,
+    NM: NMExclusivePowerTrait,
 {
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
 }
 
-impl<FIQ, NM> Default for FoundationPowerBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> Default for ExclusivePowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationPowerTrait,
+    NM: NMExclusivePowerTrait,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FoundationPowerBurstEngineDynamics<FIQ, NM>
+impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for ExclusivePowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationPowerTrait,
+    NM: NMExclusivePowerTrait,
 {
 }
 //endregion
@@ -41,10 +41,10 @@ where
 
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM>
-for FoundationPowerBurstEngineDynamics<FIQ, NM>
+for ExclusivePowerBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
-    NM: NMFoundationPowerTrait,
+    NM: NMExclusivePowerTrait,
 {
     fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
