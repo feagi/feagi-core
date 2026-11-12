@@ -16,6 +16,8 @@ pub mod foundation_power;
 pub mod memory_fire_hashing;
 pub mod kind;
 pub mod neurogenesis;
+
+
 //region Enums
 
 #[derive(Clone, Debug)]
@@ -153,5 +155,5 @@ pub enum NeuronModelEnumConversionError<K: core::fmt::Debug> {
         expected: K,
         /// The kind the enum actually holds
         actual: K,
-    }
+    },
 }

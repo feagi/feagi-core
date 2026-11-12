@@ -96,6 +96,11 @@ impl CorticalIdentifierFoundation {
 
 //region Power
 
+pub enum
+
+pub struct CorticalTypeFoundationPower
+
+/*
 /// Fires every burst
 pub struct CorticalTypeFoundationPower;
 
@@ -367,6 +372,9 @@ impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFoundationPowerQuantFloat64> 
 //endregion
 
 
+
+
+ */
 // NOTE: these only have 1 neuron model
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

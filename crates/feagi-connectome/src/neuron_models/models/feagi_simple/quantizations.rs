@@ -21,6 +21,28 @@ impl NMFeagiSimpleQuantKind {
     pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
 }
 
+pub enum NMFeagiSimpleQuantedKind {
+    Standard32Bit(NMFeagiSimpleQuantStandard32Bit)
+}
+
+impl NMFeagiSimpleQuantedKind {
+    pub fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
+        match &self { 
+            NMFeagiSimpleQuantedKind::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
+        }
+        
+    }
+    
+    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantedKind {
+        match NM::QUANT_KIND {
+            NMFeagiSimpleQuantKind::Standard32Bit => NMFeagiSimpleQuantedKind::Standard32Bit(NMFeagiSimpleQuantStandard32Bit)
+        }
+    }
+} 
+
+
+//region Generators
+
 /// The data needed to create the generator of the Feagi Simple Neuron Model, for a given quantization
 #[derive(Debug, Clone)]
 pub enum NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
@@ -88,6 +110,8 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageOrGeneratorQua
     }
 }
 
+//endregion
+
 
 //endregion
 
@@ -122,12 +146,37 @@ impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
     type NeuronDataVariance = NMFeagiSimpleDataNeuronVariance<Self>;
 
     type QuantKind = NMFeagiSimpleQuantKind;
+    type QuantedKind = NMFeagiSimpleQuantedKind;
 
     const QUANT_KIND: Self::QuantKind = NMFeagiSimpleQuantKind::Standard32Bit;
+    const QUANTED_KIND: Self::QuantedKind = NMFeagiSimpleQuantedKind::Standard32Bit(Self);
 }
 
 impl MembranePotentialQuantization for NMFeagiSimpleQuantStandard32Bit {
     type MembranePotentialQuant = f32;
+}
+
+impl From<NMFeagiSimpleQuantStandard32Bit> for NMFeagiSimpleQuantedKind {
+    fn from(value: NMFeagiSimpleQuantStandard32Bit) -> Self {
+        NMFeagiSimpleQuantedKind::Standard32Bit(value)
+    }
+}
+
+impl TryFrom<NMFeagiSimpleQuantedKind> for NMFeagiSimpleQuantStandard32Bit {
+    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
+
+    fn try_from(value: NMFeagiSimpleQuantedKind) -> Result<Self, Self::Error> {
+        let actual = value.quant_kind();
+        match value {
+            NMFeagiSimpleQuantedKind::Standard32Bit(s) => {Ok(s)},
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMFeagiSimpleQuantKind::Standard32Bit,
+                    actual,
+                })
+            }
+        }
+    }
 }
 
 //endregion
