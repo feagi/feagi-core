@@ -46,7 +46,7 @@ pub trait CorticalDataVarianceSpecification<NM: NeuronModel>: Clone + Debug + Pa
     /// What the variance data of a neuron should be at the given index
     fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
         &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
+        layout: &NeuronLayoutOf<FIQ, NM>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> NM::NeuronDataVariance;
 
@@ -54,7 +54,7 @@ pub trait CorticalDataVarianceSpecification<NM: NeuronModel>: Clone + Debug + Pa
     /// Overwrites what was there, so no previous variance needs to be undone
     fn write_neuron_variance_into_slice<FIQ: FeagiIndexQuantization>(
         &self,
-        layout: &NeuronLayoutOf<NM, FIQ>,
+        layout: &NeuronLayoutOf<FIQ, NM>,
         variance: &mut [NM::NeuronDataVariance],
     ) {
         assert_eq!(variance.len(), layout.get_number_neurons_to_allocate_for().quant_to_usize());

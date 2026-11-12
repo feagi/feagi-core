@@ -792,7 +792,7 @@ impl CorticalTypeFamilyTemplate {
                     /// defaults of this type, every neuron starting from the same values. Errors if a
                     /// default decimal becomes infinite or NaN at quantization `NM`
                     fn new_defaults_generator<FIQ: FeagiIndexQuantization, NM: #model_trait>(
-                        layout: NeuronLayoutOf<NM, FIQ>,
+                        layout: NeuronLayoutOf<FIQ, NM>,
                     ) -> ::core::result::Result<NeurogenesisDefaultsGenerator<FIQ, NM>, #quantization_error>;
                 }
             }

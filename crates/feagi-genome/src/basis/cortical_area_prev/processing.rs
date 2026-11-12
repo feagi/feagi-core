@@ -40,7 +40,7 @@ cortical_type_generator! {
 impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> InterconnectFeagiAdvancedGenerator<FIQ, NM> {
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
-    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+    pub fn new(layout: NeuronLayoutOf<FIQ, NM>) -> Result<Self, DataValueQuantizationError> {
         Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
@@ -81,7 +81,7 @@ cortical_type_generator! {
 impl<FIQ: FeagiIndexQuantization, NM: NMFeagiSimpleTrait> InterconnectFeagiSimpleGenerator<FIQ, NM> {
     /// A new `Interconnect` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
-    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+    pub fn new(layout: NeuronLayoutOf<FIQ, NM>) -> Result<Self, DataValueQuantizationError> {
         Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
@@ -126,7 +126,7 @@ cortical_type_generator! {
 impl<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait> MemoryMemoryFireHashingGenerator<FIQ, NM> {
     /// A new `Memory` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
-    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+    pub fn new(layout: NeuronLayoutOf<FIQ, NM>) -> Result<Self, DataValueQuantizationError> {
         Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {

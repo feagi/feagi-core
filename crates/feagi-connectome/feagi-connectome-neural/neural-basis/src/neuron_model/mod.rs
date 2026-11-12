@@ -1,6 +1,6 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use crate::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
-use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutError, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
 use crate::quantization_levels::MembranePotentialQuantization;
 use crate::quantization_levels::FeagiIndexQuantization;
 use model_data::{
@@ -28,17 +28,17 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// What neuron layout this neuron model expects
     type NeuronLayoutTag: NeuronLayoutTag;
 
-    
+
     /// Generator trait for producing default variance and scratch values during NeuroGenesis
     type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
 
     /// The cortical area builder that does not load from storage for this neuron model
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisGenerator<FIQ, Self>;
-    
+
     /// The precursor to the NeuroGenesisGenerator, effectively the data needed to make it
     type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization>: NeurogenesisGeneratorPrecursor<FIQ, Self>;
-    
-    
+
+
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
     type CorticalDataProperties: CorticalDataPropertiesSpecification<Self>;
@@ -66,25 +66,25 @@ pub trait NeuronModel: MembranePotentialQuantization {
     /// The per neuron level data derived from [`Self::CorticalDataVariance`]. Read only to neuron
     /// dynamics and never saved, as it can be generated again
     type NeuronDataVariance: NeuronDataVarianceSpecification<Self>;
-    
-    
+
+
     /// The Quant Kind enum for this neuron model
     type QuantKind;
-    
+
     
     /// The Quant of this model represented as the Quant Kind Enum wrapper
     const QUANT_KIND: Self::QuantKind;
     
     //region Default Impls
-    
+
     // NOTE: Many of these are defined here due to uses in the enums
-    
+
     fn spawn_neurogenesis_storage<
         FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<Self, FIQ>>
+        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
     >
     (
-        cortical_layout_context: CorticalLayoutContextOf<Self, FIQ>,
+        cortical_layout_context: CorticalLayoutContextOf<FIQ, Self>,
         cortical_universal_properties: NeuronModelUniversalCorticalProperties<Self>,
         cortical_properties: Self::CorticalDataProperties,
         cortical_internal: Self::CorticalDataInternal,
@@ -96,17 +96,20 @@ pub trait NeuronModel: MembranePotentialQuantization {
             layout, cortical_universal_properties, cortical_properties, cortical_internal, cortical_variance, neuron_internal
         )
     }
-    
-    fn spawn_neurogenesis_generator_from_precursor<FIQ: FeagiIndexQuantization> (
+
+    fn spawn_neurogenesis_generator_from_precursor<
+        FIQ: FeagiIndexQuantization,
+        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
+    > (
         precursor: Self::NeurogenesisGeneratorPrecursor<FIQ>
-    ) -> Self::NeurogenesisGenerator<FIQ> {
-        precursor.into_generator()
+    ) -> Result<Self::NeurogenesisGenerator<FIQ>, NeuronLayoutError> {
+        precursor.into_generator::<Res>()
     }
 
-    // NOTE: Explicitly No spawning function for `NeurogenesisGeneratorPrecursor` as 
+    // NOTE: Explicitly No spawning function for `NeurogenesisGeneratorPrecursor` as
     // different cortical types may wish to have some differing implementations (though the
     // NM does specify the generator and precursor type) IE different defaults
-    
+
     
     /// Statically generate the cortical scratch data during NeuroGenesis. Proxies through
     /// Self::NeurogenesisScratchVarianceGeneratorType
@@ -149,7 +152,7 @@ pub trait NeuronModel: MembranePotentialQuantization {
             variance
         )
     }
-    
+
     
 
     

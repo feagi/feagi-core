@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalScratch, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleDataNeuronScratch, NMFeagiSimpleDataNeuronVariance, NMFeagiSimpleTrait};
-use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
 use crate::neuron_models::models::kind::{NMKind, NMModelKind};
 
 //region enums
@@ -20,6 +21,10 @@ impl NMFeagiSimpleQuantKind {
     pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
 }
 
+#[derive(Debug, Clone)]
+pub enum NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit()
+}
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model by its generator for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,7 +41,8 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>
         }
     }
     
-    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> 
+    // NOTE: do not offer `from_nm_quant` since the NM will not have it, thats up to the CT
+    // to provide an implementation
 }
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model from its stored data for a given quantization
@@ -94,6 +100,8 @@ impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> = 
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFeagiSimpleDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFeagiSimpleDataCorticalInternal<Self>;
@@ -104,7 +112,7 @@ impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
     type NeuronDataVariance = NMFeagiSimpleDataNeuronVariance<Self>;
 
     type QuantKind = NMFeagiSimpleQuantKind;
-    
+
     const QUANT_KIND: Self::QuantKind = NMFeagiSimpleQuantKind::Standard32Bit;
 }
 
@@ -131,6 +139,37 @@ impl TryFrom<NMKind> for NMFeagiSimpleQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FeagiSimple(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FeagiSimple,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+        NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {

@@ -32,7 +32,7 @@ cortical_type_generator! {
 impl<FIQ: FeagiIndexQuantization, NM: NMFoundationPowerTrait> PowerFoundationPowerGenerator<FIQ, NM> {
     /// A new `Power` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
-    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+    pub fn new(layout: NeuronLayoutOf<FIQ, NM>) -> Result<Self, DataValueQuantizationError> {
         Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {
@@ -68,7 +68,7 @@ cortical_type_generator! {
 impl<FIQ: FeagiIndexQuantization, NM: NMFoundationDeathTrait> DeathFoundationDeathGenerator<FIQ, NM> {
     /// A new `Death` area laid out as `layout`, starting from the defaults of this type. Errors if
     /// a default decimal becomes infinite or NaN at quantization `NM`
-    pub fn new(layout: NeuronLayoutOf<NM, FIQ>) -> Result<Self, DataValueQuantizationError> {
+    pub fn new(layout: NeuronLayoutOf<FIQ, NM>) -> Result<Self, DataValueQuantizationError> {
         Ok(Self(NeurogenesisGeneratorUniformDefault::new(
             layout,
             NeuronModelUniversalCorticalProperties {

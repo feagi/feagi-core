@@ -43,7 +43,7 @@ macro_rules! cortical_type_generator {
                 FIQ: ::feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization,
                 NM: $model_trait,
             >(
-                layout: ::feagi_connectome::connectome_basis::neuron_model::NeuronLayoutOf<NM, FIQ>,
+                layout: ::feagi_connectome::connectome_basis::neuron_model::NeuronLayoutOf<FIQ, NM>,
             ) -> ::core::result::Result<
                 ::feagi_connectome::connectome_basis::neuron_model::NeurogenesisGeneratorUniformDefault<FIQ, NM>,
                 ::feagi_basis::quantization::quantizable::DataValueQuantizationError,

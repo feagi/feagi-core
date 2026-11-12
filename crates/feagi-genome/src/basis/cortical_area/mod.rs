@@ -50,7 +50,7 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     /// verifys the cortical layout!
     fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
         parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<NM, FIQ>
+        cortical_layout: CorticalLayoutContextOf<FIQ, NM>
     ) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError>;
 
     //region Default impls

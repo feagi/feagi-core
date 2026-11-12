@@ -13,7 +13,7 @@ where
     /// called per area. Called before neuron call
     fn process_model_cortical_area_dynamics(
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NeuronLayoutOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<FIQ, NM>,
         cortical_data: (
             &NM::CorticalDataProperties,
             &mut NM::CorticalDataInternal,
@@ -26,7 +26,7 @@ where
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NeuronLayoutOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<FIQ, NM>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
             &NM::CorticalDataProperties,
@@ -48,7 +48,7 @@ where
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NeuronLayoutOf<NM, FIQ>,
+        layout_context: &NeuronLayoutOf<FIQ, NM>,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         cortical_data: (
             &NM::CorticalDataProperties,

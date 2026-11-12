@@ -1,7 +1,8 @@
 //! A neurogenesis generator starting every neuron of a cortical area from the same values. Any
 //! neuron model may use it as its `NeuronModel::NeurogenesisGenerator`. Users of a model, such as
-//! cortical types, wrap it to fill in their own defaults
+//! cortical types, wrap it to fill in their own defaults. This is a very common generator
 
+use serde::{Deserialize, Serialize};
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
@@ -10,7 +11,8 @@ use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{Neurogen
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutTag;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGeneratorPrecursor;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 
 /// Probably the most common shared cortical area generator.
 /// Generates a cortical area from fixed starting values: every neuron starts with the same
@@ -22,20 +24,20 @@ use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::N
 #[serde(bound = "")]
 pub struct NeurogenesisGeneratorUniformDefault<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     /// How the neurons of the area are laid out
-    pub layout: NeuronLayoutOf<NM, FIQ>,
+    layout: NeuronLayoutOf<FIQ, NM>,
     /// Cortical level data used by all models
-    pub universal_properties: NeuronModelUniversalCorticalProperties<NM>,
-    pub cortical_properties: NM::CorticalDataProperties,
-    pub cortical_internal: NM::CorticalDataInternal,
-    pub cortical_variance: NM::CorticalDataVariance,
+    universal_properties: NeuronModelUniversalCorticalProperties<NM>,
+    cortical_properties: NM::CorticalDataProperties,
+    cortical_internal: NM::CorticalDataInternal,
+    cortical_variance: NM::CorticalDataVariance,
     /// The internal data every neuron of the area starts with
-    pub neuron_internal: NM::NeuronDataInternal,
+    neuron_internal: NM::NeuronDataInternal,
 }
 
 
 
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
-    fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
+    fn get_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
         &self.layout
     }
 
@@ -63,46 +65,56 @@ impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisMethod<FIQ, NM> f
 }
 
 impl<FIQ: FeagiIndexQuantization, NM: NeuronModel> NeurogenesisGenerator<FIQ, NM> for NeurogenesisGeneratorUniformDefault<FIQ, NM> {
-
-    type GeneratorInitParameters = NeurogenesisGeneratorUniformDefaultInitParameters<NM>;
-
-    /// The internal data every neuron starts with, which storage does not hold as a single value
-    type OtherDataNeededForFromStorage = NM::NeuronDataInternal;
-
-    fn new(input: Self::GeneratorInitParameters, layout: NeuronLayoutOf<NM, FIQ>) -> Self {
-        // NOTE: Layout Restrictor checks should be left to the Cortical Type
-        Self {
-            layout,
-            universal_properties: input.universal_properties,
-            cortical_properties: input.cortical_properties,
-            cortical_internal: input.cortical_internal,
-            cortical_variance: input.cortical_variance,
-            neuron_internal: input.neuron_internal,
-        }
-    }
-
-    /// Keeps the cortical data of the stored area, with every neuron starting from `neuron_internal`
-    /// rather than its stored data
-    fn new_generator_from_storage(storage: &NeurogenesisStorage<FIQ, NM>, default_uniform_neuron_internal_data: NM::NeuronDataInternal) -> Self {
-        let (cortical_properties, cortical_internal) = storage.clone_model_cortical_data();
-        Self {
-            layout: *storage.get_layout(),
-            universal_properties: storage.get_universal_cortical_properties(),
-            cortical_properties,
-            cortical_internal,
-            cortical_variance: storage.get_model_cortical_variance().clone(),
-            neuron_internal: default_uniform_neuron_internal_data,
-        }
-    }
+    
 }
 
-/// The data of a `NeurogenesisGeneratorUniformDefault` generator
-pub struct NeurogenesisGeneratorUniformDefaultInitParameters<NM: NeuronModel> {
+/// Default Data for a neuron model's init
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct NeurogenesisGeneratorPrecursorUniformDefault<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     /// Cortical level data used by all models
     pub universal_properties: NeuronModelUniversalCorticalProperties<NM>,
+    pub cortical_context: CorticalLayoutContextOf<FIQ, NM>,
     pub cortical_properties: NM::CorticalDataProperties,
     pub cortical_internal: NM::CorticalDataInternal,
     pub cortical_variance: NM::CorticalDataVariance,
     /// The internal data every neuron of the area starts with
     pub neuron_internal: NM::NeuronDataInternal,
+}
+
+impl<FIQ, NM> NeurogenesisGeneratorPrecursor<FIQ, NM> for NeurogenesisGeneratorPrecursorUniformDefault<FIQ, NM>
+where 
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel<NeurogenesisGenerator<FIQ> = NeurogenesisGeneratorUniformDefault<FIQ, NM>>
+{
+    type OtherDataNeededForFromStorage = NM::NeuronDataInternal;
+
+    fn new_from_storage(storage: &NeurogenesisStorage<FIQ, NM>, default_neuron_internal: Self::OtherDataNeededForFromStorage) -> Self {
+        
+        let (cortical_properties, cortical_internal) = storage.clone_model_cortical_data();
+        
+        Self {
+            universal_properties: storage.get_universal_cortical_properties(),
+            cortical_context: storage.get_layout().get_cortical_layout_context().clone(),
+            cortical_properties,
+            cortical_internal,
+            cortical_variance: storage.get_model_cortical_variance().clone(),
+            neuron_internal: default_neuron_internal,
+        }
+    }
+
+    fn into_generator<Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, NM>>>(self)
+        -> Result<NM::NeurogenesisGenerator<FIQ>, NeuronLayoutError> {
+        
+        let layout = Res::validate_and_create_neuron_layout(self.cortical_context)?;
+        
+        Ok(NeurogenesisGeneratorUniformDefault {
+            layout,
+            universal_properties: self.universal_properties,
+            cortical_properties: self.cortical_properties,
+            cortical_internal: self.cortical_internal,
+            cortical_variance: self.cortical_variance,
+            neuron_internal: self.neuron_internal,
+        })
+    }
 }

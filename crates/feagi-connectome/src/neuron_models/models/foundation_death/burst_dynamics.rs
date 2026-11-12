@@ -47,7 +47,7 @@ where
 {
     fn process_model_cortical_area_dynamics(
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        _layout_context: &NeuronLayoutOf<NM, FIQ>,
+        _layout_context: &NeuronLayoutOf<FIQ, NM>,
         _cortical_data: (
             &NM::CorticalDataProperties,
             &mut NM::CorticalDataInternal,
@@ -60,7 +60,7 @@ where
     fn process_model_neuron_dynamics(
         _processing_buffer: &mut CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
         _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        _layout_context: &NeuronLayoutOf<NM, FIQ>,
+        _layout_context: &NeuronLayoutOf<FIQ, NM>,
         _neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         _cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
         _neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),

@@ -43,7 +43,7 @@ where
     NM: NeuronModel
 {
     
-    fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ>;
+    fn get_layout(&self) -> &NeuronLayoutOf<FIQ, NM>;
 
     /// Cortical level data used by all models
     fn get_universal_cortical_properties(&self) -> NeuronModelUniversalCorticalProperties<NM>;

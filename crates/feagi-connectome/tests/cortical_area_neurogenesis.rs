@@ -148,7 +148,7 @@ fn model_without_variance_generates_nothing() {
 /// index
 #[derive(Clone, Debug)]
 pub struct IndexAsRefractoryGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
-    layout: NeuronLayoutOf<NM, FIQ>,
+    layout: NeuronLayoutOf<FIQ, NM>,
     universal_properties: NeuronModelUniversalCorticalProperties<NM>,
     cortical_properties: NM::CorticalDataProperties,
     cortical_internal: NM::CorticalDataInternal,
@@ -158,7 +158,7 @@ pub struct IndexAsRefractoryGenerator<FIQ: FeagiIndexQuantization, NM: NeuronMod
 /// Generic over every quantization level of the model, converting the index to the level's
 /// period type
 impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisMethod<FIQ, NM> for IndexAsRefractoryGenerator<FIQ, NM> {
-    fn get_layout(&self) -> &NeuronLayoutOf<NM, FIQ> {
+    fn get_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
         &self.layout
     }
 
@@ -196,7 +196,7 @@ impl<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait> NeurogenesisGenerato
     );
     type OtherDataNeededForFromStorage = ();
 
-    fn new(input: Self::GeneratorInitParameters, layout: NeuronLayoutOf<NM, FIQ>) -> Self {
+    fn new(input: Self::GeneratorInitParameters, layout: NeuronLayoutOf<FIQ, NM>) -> Self {
         let (universal_properties, cortical_properties, cortical_internal, cortical_variance) = input;
         Self { layout, universal_properties, cortical_properties, cortical_internal, cortical_variance }
     }

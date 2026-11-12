@@ -16,7 +16,7 @@ pub trait NeuronLayout<FIQ: FeagiIndexQuantization, >: Clone + Copy + Debug + Pa
 + serde::Serialize + serde::de::DeserializeOwned + Sized + 'static
 {
     // Can only be constructed by `NeuronLayoutRestrictor`
-    
+
     /// How and if the neuron layout can change on its own (cortical area grows)
     const CHANGE_POLICY: NeuronLayoutChangePolicy;
 
@@ -29,13 +29,13 @@ pub trait NeuronLayout<FIQ: FeagiIndexQuantization, >: Clone + Copy + Debug + Pa
     /// The per neuron context, helps identify a neurons "location" relative to others within a
     /// cortical area
     type NeuronLevelContext;
-    
+
     /// Get the saved cortical area layout context (ex: dimensions, size, etc)
     fn get_cortical_layout_context(&self) -> &Self::CorticalLevelContext;
-    
+
     /// Gets the (max) number of neurons that this layout encloses to have allocation for
     fn get_number_neurons_to_allocate_for(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
-    
+
     /// Gets the struct denoting the "location" of a neuron in the context of the cortical area
     fn get_neuron_layout_context(
         &self,
@@ -71,10 +71,10 @@ pub trait NeuronLayoutTag: Clone + Debug {
 }
 
 /// Returns the Neuron Layout of the given Neuron Model at the given index quantization
-pub type NeuronLayoutOf<NM, FIQ> = <<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>;
+pub type NeuronLayoutOf<FIQ, NM> = <<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>;
 
 /// Returns the Cortical Context of the Neuron layout of the given Neuron model at the given index Quant
-pub type CorticalLayoutContextOf<NM, FIQ> 
+pub type CorticalLayoutContextOf<FIQ, NM>
     = <<<NM as NeuronModel>::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> as NeuronLayout<FIQ>>::CorticalLevelContext;
 
 

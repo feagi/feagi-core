@@ -183,7 +183,7 @@ pub struct ModelQuantPerCorticalDataType<FIQ: FeagiIndexQuantization, NM: Neuron
     pub model_properties: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataProperties>,
     pub model_internal: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataInternal>,
     pub model_scratch: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NM::CorticalDataScratch>,
-    pub layouts: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronLayoutOf<NM, FIQ>>,
+    pub layouts: QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronLayoutOf<FIQ, NM>>,
     /// Which cortical area of the engine this is
     pub cortical_engine_index:
         QuantIndexedVector<CorticalAreaQuantIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,

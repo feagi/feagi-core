@@ -60,7 +60,7 @@ where
     NM: NMMemoryFireHashingTrait,
 {
     fn static_get_cortical_scratch(
-        _layout: &NeuronLayoutOf<NM, FIQ>,
+        _layout: &NeuronLayoutOf<FIQ, NM>,
         _cortical_properties: &NM::CorticalDataProperties,
         _cortical_internal: &NM::CorticalDataInternal,
     ) -> NM::CorticalDataScratch {
@@ -69,7 +69,7 @@ where
 
     fn static_get_neuron_scratch(
         _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-        _layout: &NeuronLayoutOf<NM, FIQ>,
+        _layout: &NeuronLayoutOf<FIQ, NM>,
         _internal_neuron_data: &NM::NeuronDataInternal,
     ) -> NM::NeuronDataScratch {
         NM::NeuronDataScratch::new() // no fields
@@ -78,7 +78,7 @@ where
     /// The variance the model's cortical variance gives the neuron
     fn static_get_neuron_variance(
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
-        layout: &NeuronLayoutOf<NM, FIQ>,
+        layout: &NeuronLayoutOf<FIQ, NM>,
         variance: &NM::CorticalDataVariance,
     ) -> NM::NeuronDataVariance {
         variance.neuron_variance_at::<FIQ>(layout, index)
@@ -88,7 +88,7 @@ where
 impl<NM: NMMemoryFireHashingTrait> CorticalDataVarianceSpecification<NM> for NMMemoryFireHashingDataCorticalVariance<NM> {
     fn neuron_variance_at<FIQ: FeagiIndexQuantization>(
         &self,
-        _layout: &NeuronLayoutOf<NM, FIQ>,
+        _layout: &NeuronLayoutOf<FIQ, NM>,
         _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> NMMemoryFireHashingDataNeuronVariance<NM> {
         NMMemoryFireHashingDataNeuronVariance::new()
