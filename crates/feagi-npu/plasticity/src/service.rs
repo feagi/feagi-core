@@ -5974,7 +5974,9 @@ mod tests {
     #[test]
     fn change_record_creation_path_takes_no_npu_and_no_area_wide_call() {
         let source = include_str!("service.rs");
-        let tests_start = source.find("#[cfg(test)]\nmod tests").expect("tests module");
+        let tests_start = source
+            .find("#[cfg(test)]\nmod tests")
+            .expect("tests module");
         let production = &source[..tests_start];
         let start = production
             .find("fn change_record_from_steps(")
@@ -5983,9 +5985,17 @@ mod tests {
         let builder = &production[start..end];
         let signature = &builder[..builder.find('{').expect("body")];
         for forbidden in ["npu", "Npu", "NPU", "Arc<"] {
-            assert!(!signature.contains(forbidden), "signature mentions {forbidden}");
+            assert!(
+                !signature.contains(forbidden),
+                "signature mentions {forbidden}"
+            );
         }
-        for forbidden in ["npu", "get_neurons_in_cortical_area", "get_neuron_coordinates", "lock("] {
+        for forbidden in [
+            "npu",
+            "get_neurons_in_cortical_area",
+            "get_neuron_coordinates",
+            "lock(",
+        ] {
             assert!(!builder.contains(forbidden), "builder uses {forbidden}");
         }
         let call_site = production

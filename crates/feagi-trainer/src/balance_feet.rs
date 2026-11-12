@@ -15636,11 +15636,7 @@ mod live_reading_tests {
     /// midpoint, read with the torso heading `yaw`.
     fn reply(lean_deg: f64, heading: f64, yaw: f64, steps: u64) -> Measurement {
         let t = lean_deg.to_radians();
-        let top = [
-            t.sin() * heading.cos(),
-            t.sin() * heading.sin(),
-            t.cos(),
-        ];
+        let top = [t.sin() * heading.cos(), t.sin() * heading.sin(), t.cos()];
         serde_json::from_value(serde_json::json!({
             "sim_time_s": 0.0,
             "physics_steps": steps,
@@ -15661,7 +15657,10 @@ mod live_reading_tests {
     fn runner_scored(reply: &Measurement, reset: Option<&LeanReference>) -> f64 {
         let c = setup();
         let posture = measure_posture(reply, &c).expect("posture");
-        let yaw = reply.bodies["torso"].heading.as_ref().and_then(|h| h.yaw_rad);
+        let yaw = reply.bodies["torso"]
+            .heading
+            .as_ref()
+            .and_then(|h| h.yaw_rad);
         let mut s = BalanceSample {
             seq: 1,
             seed: 1,

@@ -4178,8 +4178,7 @@ impl ConnectomeServiceImpl {
         // whose record no longer resolves load without one and join the legacy count.
         #[cfg(feature = "plasticity")]
         {
-            let unresolved =
-                restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
+            let unresolved = restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
             merge_rows_without_change_record(
                 &mut outcome.memory_neurons_without_change_record,
                 unresolved,
@@ -4485,7 +4484,10 @@ fn change_record_to_ids(
                     let mut pairs = entries
                         .iter()
                         .map(|&(x, y, z, ordinal, bucket)| {
-                            Some((neuron_at_voxel_ordinal(by_voxel, (x, y, z), ordinal)?, bucket))
+                            Some((
+                                neuron_at_voxel_ordinal(by_voxel, (x, y, z), ordinal)?,
+                                bucket,
+                            ))
                         })
                         .collect::<Option<Vec<_>>>()?;
                     pairs.sort_unstable_by_key(|(id, _)| *id);
@@ -13806,9 +13808,11 @@ mod change_encoded_lite_tests {
         mode: &str,
         with_record: bool,
     ) -> ServiceResult<(ConnectomeSnapshot, u64)> {
-        Ok(export_source(mode, with_record, ConnectomePersistMode::Lite, |_| {})
-            .await?
-            .0)
+        Ok(
+            export_source(mode, with_record, ConnectomePersistMode::Lite, |_| {})
+                .await?
+                .0,
+        )
     }
 
     /// Same source brain as [`lite_export`], exported in `persist` mode. `tamper` edits the
@@ -14156,13 +14160,8 @@ mod change_encoded_lite_tests {
     /// A full load restores the record in id form, so the next full save carries it again.
     #[tokio::test]
     async fn full_save_load_save_keeps_the_record() -> ServiceResult<()> {
-        let ((first, _), _source) = export_source(
-            "mp_differential",
-            true,
-            ConnectomePersistMode::Full,
-            |_| {},
-        )
-        .await?;
+        let ((first, _), _source) =
+            export_source("mp_differential", true, ConnectomePersistMode::Full, |_| {}).await?;
         let first_record = first.long_term_memory_neurons[0]
             .change_record
             .clone()
