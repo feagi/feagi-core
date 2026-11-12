@@ -9,7 +9,13 @@
 mod cifar;
 mod ilsvrc2012;
 mod imagenet;
+mod preview;
 mod svhn_mat;
+
+pub use preview::{
+    preview_image_classification, ImageClassificationPreviewFrame, ImageClassificationPreviewPage,
+    ImageClassificationPreviewRequest,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -453,6 +459,8 @@ impl AdapterPlugin for ImageFolderClassificationAdapter {
 pub fn scan_image_classification_root(
     root: &Path,
 ) -> Result<ImageClassificationScan, TrainerError> {
+    // A rescan means the dataset may have changed: drop the preview index.
+    preview::drop_cache();
     if !root.is_dir() {
         return Err(TrainerError::Parse(format!(
             "image classification root '{}' is not a directory",

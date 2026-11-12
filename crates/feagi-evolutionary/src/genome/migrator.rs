@@ -385,7 +385,13 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     }
 
     if !legacy_io_shorthands.is_empty() {
-        apply_legacy_io_shorthand_migration(&legacy_io_shorthands, &mut used_base64, result)?;
+        apply_legacy_io_shorthand_migration(
+            &legacy_io_shorthands,
+            blueprint,
+            is_flat,
+            &mut used_base64,
+            result,
+        )?;
     }
 
     Ok(())
@@ -422,8 +428,225 @@ fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     Ok(cid.as_base_64())
 }
 
+/// Legacy 6-char IDs with an explicit target unit, matched on the full ID before the generic
+/// 3-char subtype fallback (which mis-reads some of them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LegacyIoTarget {
+    /// Servo position OPU -> PositionalServo sub-area 0 (absolute).
+    ServoAbsolute,
+    /// Servo increment OPU -> PositionalServo sub-area 1 (incremental, 2 voxels per channel).
+    ServoIncremental,
+    /// Miscellaneous OPU -> MiscData OPU.
+    MiscData,
+}
+
+/// Explicit legacy table keyed on the full 6-char ID.
+fn legacy_io_table(id: &str) -> Option<LegacyIoTarget> {
+    match id {
+        "o_spos" => Some(LegacyIoTarget::ServoAbsolute),
+        "o__ser" => Some(LegacyIoTarget::ServoIncremental),
+        "o_misc" => Some(LegacyIoTarget::MiscData),
+        _ => None,
+    }
+}
+
+/// Read an area's block dimensions from a flat (`_____10c-<id>-cx-___bbx-i`) or hierarchical
+/// (`block_boundaries`) blueprint entry.
+fn legacy_area_dims(
+    blueprint: &serde_json::Map<String, Value>,
+    is_flat: bool,
+    id: &str,
+) -> Option<[u64; 3]> {
+    if is_flat {
+        let get = |axis: &str| {
+            blueprint
+                .get(&format!("_____10c-{}-cx-___bb{}-i", id, axis))
+                .and_then(|v| v.as_u64())
+        };
+        Some([get("x")?, get("y")?, get("z")?])
+    } else {
+        let arr = blueprint.get(id)?.get("block_boundaries")?.as_array()?;
+        if arr.len() != 3 {
+            return None;
+        }
+        Some([arr[0].as_u64()?, arr[1].as_u64()?, arr[2].as_u64()?])
+    }
+}
+
+/// Smallest group index whose IDs (all returned by `ids_for_group`) are free and not excluded.
+fn first_free_group<F>(
+    used_base64: &std::collections::HashSet<String>,
+    excluded_group: Option<u16>,
+    ids_for_group: F,
+) -> Option<u16>
+where
+    F: Fn(u16) -> Vec<String>,
+{
+    (0u16..=u16::MAX).find(|g| {
+        Some(*g) != excluded_group && ids_for_group(*g).iter().all(|id| !used_base64.contains(id))
+    })
+}
+
+fn positional_servo_ids(group: u16) -> [String; 3] {
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, PercentageNeuronPositioning,
+    };
+    use feagi_structures::genomic::MotorCorticalUnit;
+    let ids = MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+        FrameChangeHandling::Absolute,
+        PercentageNeuronPositioning::Linear,
+        CorticalUnitIndex::from(group),
+    );
+    [
+        ids[0].as_base_64(),
+        ids[1].as_base_64(),
+        ids[2].as_base_64(),
+    ]
+}
+
+fn misc_data_opu_id(group: u16) -> String {
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+    use feagi_structures::genomic::MotorCorticalUnit;
+    MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+        FrameChangeHandling::Absolute,
+        CorticalUnitIndex::from(group),
+    )[0]
+    .as_base_64()
+}
+
+/// Apply the explicit legacy table (servo and misc OPUs). Returns the IDs it handled.
+/// Group allocation is a free-group loop, never a silent demotion to custom.
+fn apply_explicit_legacy_table(
+    legacy_ids: &[String],
+    blueprint: &serde_json::Map<String, Value>,
+    is_flat: bool,
+    used_base64: &mut std::collections::HashSet<String>,
+    result: &mut MigrationResult,
+    notes: &mut Vec<String>,
+) -> EvoResult<std::collections::HashSet<String>> {
+    let mut handled: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let no_group = || {
+        EvoError::InvalidGenome("Unable to allocate a free group ID for a legacy OPU".to_string())
+    };
+    let record = |result: &mut MigrationResult,
+                  used: &mut std::collections::HashSet<String>,
+                  old: &str,
+                  new_id: String| {
+        used.insert(new_id.clone());
+        result.id_mapping.insert(old.to_string(), new_id);
+        result.cortical_ids_migrated += 1;
+    };
+
+    let has = |id: &str| {
+        legacy_ids.iter().any(|x| x == id)
+            && legacy_io_table(id).is_some()
+            && !result.id_mapping.contains_key(id)
+    };
+    let has_pos = has("o_spos");
+    let has_ser = has("o__ser");
+
+    // Servo position + servo increment: one group when the shapes agree, else separate groups.
+    let mut pos_group: Option<u16> = None;
+    if has_pos && has_ser {
+        let dp = legacy_area_dims(blueprint, is_flat, "o_spos");
+        let ds = legacy_area_dims(blueprint, is_flat, "o__ser");
+        let agree = match (dp, ds) {
+            (Some(p), Some(s)) => s[0] == p[0] * 2 && s[2] == p[2],
+            _ => false,
+        };
+        if agree {
+            if let Some(g) = first_free_group(used_base64, None, |g| {
+                let ids = positional_servo_ids(g);
+                vec![ids[0].clone(), ids[1].clone()]
+            }) {
+                let ids = positional_servo_ids(g);
+                record(result, used_base64, "o_spos", ids[0].clone());
+                record(result, used_base64, "o__ser", ids[1].clone());
+                handled.insert("o_spos".to_string());
+                handled.insert("o__ser".to_string());
+                notes.push(format!(
+                    "Legacy 'o_spos' + 'o__ser' (channels {} / {}, z {}) merged into one PositionalServo group {}: absolute → '{}', incremental → '{}'",
+                    dp.map(|d| d[0]).unwrap_or(0),
+                    ds.map(|d| d[0]).unwrap_or(0),
+                    dp.map(|d| d[2]).unwrap_or(0),
+                    g,
+                    ids[0],
+                    ids[1]
+                ));
+            } else {
+                return Err(no_group());
+            }
+        } else {
+            notes.push(format!(
+                "Legacy 'o_spos' (dims {:?}) and 'o__ser' (dims {:?}) do not agree (need x_ser = 2 * x_pos and equal z); kept in separate PositionalServo groups",
+                dp, ds
+            ));
+        }
+    }
+
+    for old_id in ["o_spos", "o__ser", "o_misc"] {
+        if handled.contains(old_id) || !legacy_ids.iter().any(|x| x == old_id) {
+            continue;
+        }
+        let Some(target) = legacy_io_table(old_id) else {
+            continue;
+        };
+        match target {
+            LegacyIoTarget::ServoAbsolute => {
+                let g = first_free_group(used_base64, None, |g| {
+                    vec![positional_servo_ids(g)[0].clone()]
+                })
+                .ok_or_else(no_group)?;
+                let new_id = positional_servo_ids(g)[0].clone();
+                record(result, used_base64, old_id, new_id.clone());
+                pos_group = Some(g);
+                notes.push(format!(
+                    "Legacy '{}' → PositionalServo sub-area 0 (absolute), group {} → '{}'",
+                    old_id, g, new_id
+                ));
+            }
+            LegacyIoTarget::ServoIncremental => {
+                let g = first_free_group(used_base64, pos_group, |g| {
+                    vec![positional_servo_ids(g)[1].clone()]
+                })
+                .ok_or_else(no_group)?;
+                let new_id = positional_servo_ids(g)[1].clone();
+                record(result, used_base64, old_id, new_id.clone());
+                notes.push(format!(
+                    "Legacy '{}' → PositionalServo sub-area 1 (incremental), group {} → '{}'",
+                    old_id, g, new_id
+                ));
+            }
+            LegacyIoTarget::MiscData => {
+                let g = first_free_group(used_base64, None, |g| vec![misc_data_opu_id(g)])
+                    .ok_or_else(no_group)?;
+                let new_id = misc_data_opu_id(g);
+                record(result, used_base64, old_id, new_id.clone());
+                notes.push(format!(
+                    "Legacy '{}' → MiscData OPU, group {} → '{}'",
+                    old_id, g, new_id
+                ));
+            }
+        }
+        handled.insert(old_id.to_string());
+    }
+
+    if handled.contains("o__ser") {
+        notes.push(
+            "Legacy 'o__ser' direction order unverified: assumed even x = forward, odd x = backward (PositionalServo decoder); no legacy evidence found"
+                .to_string(),
+        );
+    }
+
+    Ok(handled)
+}
+
 fn apply_legacy_io_shorthand_migration(
     legacy_ids: &[String],
+    blueprint: &serde_json::Map<String, Value>,
+    is_flat: bool,
     used_base64: &mut std::collections::HashSet<String>,
     result: &mut MigrationResult,
 ) -> EvoResult<()> {
@@ -440,7 +663,19 @@ fn apply_legacy_io_shorthand_migration(
 
     let mut exceptions: Vec<String> = Vec::new();
 
+    let table_handled = apply_explicit_legacy_table(
+        legacy_ids,
+        blueprint,
+        is_flat,
+        used_base64,
+        result,
+        &mut exceptions,
+    )?;
+
     for old_id in legacy_ids.iter() {
+        if table_handled.contains(old_id) {
+            continue;
+        }
         if old_id.starts_with("iv00") && old_id.len() == 6 {
             // Legacy segmented vision shorthands use suffixes like:
             // - TL/TM/TR/ML/MR/BL/BM/BR and _C for center.
@@ -1297,5 +1532,122 @@ mod tests {
             .as_base_64();
 
         assert_eq!(result.id_mapping.get("iv00TL").unwrap(), &expected);
+    }
+
+    fn servo_ids(group: u16) -> [String; 3] {
+        positional_servo_ids(group)
+    }
+
+    fn flat_dims(id: &str, x: u64, z: u64) -> Vec<(String, Value)> {
+        vec![
+            (format!("_____10c-{}-cx-___bbx-i", id), json!(x)),
+            (format!("_____10c-{}-cx-___bby-i", id), json!(1)),
+            (format!("_____10c-{}-cx-___bbz-i", id), json!(z)),
+        ]
+    }
+
+    fn legacy_genome(areas: &[(&str, u64, u64)]) -> Value {
+        let mut bp = serde_json::Map::new();
+        for (id, x, z) in areas {
+            bp.insert(format!("_____10c-{}-cx-__name-t", id), json!("legacy"));
+            for (k, v) in flat_dims(id, *x, *z) {
+                bp.insert(k, v);
+            }
+        }
+        json!({
+            "version": "2.0",
+            "blueprint": Value::Object(bp),
+            "brain_regions": null,
+            "neuron_morphologies": {},
+            "physiology": {}
+        })
+    }
+
+    #[test]
+    fn test_legacy_servo_position_alone_is_absolute_sub_area() {
+        let r = migrate_genome(&legacy_genome(&[("o_spos", 9, 10)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_spos").unwrap(), &servo_ids(0)[0]);
+    }
+
+    #[test]
+    fn test_legacy_servo_increment_alone_is_incremental_sub_area() {
+        let r = migrate_genome(&legacy_genome(&[("o__ser", 18, 10)])).unwrap();
+        assert_eq!(r.id_mapping.get("o__ser").unwrap(), &servo_ids(0)[1]);
+        assert!(r
+            .warnings
+            .iter()
+            .any(|w| w.contains("direction order unverified")));
+    }
+
+    #[test]
+    fn test_legacy_servo_pair_merges_into_one_group() {
+        let r = migrate_genome(&legacy_genome(&[("o_spos", 9, 10), ("o__ser", 18, 10)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_spos").unwrap(), &servo_ids(0)[0]);
+        assert_eq!(r.id_mapping.get("o__ser").unwrap(), &servo_ids(0)[1]);
+        assert!(r.warnings.iter().any(|w| w.contains("merged into one")));
+    }
+
+    #[test]
+    fn test_legacy_servo_pair_with_mismatched_z_stays_separate() {
+        let r = migrate_genome(&legacy_genome(&[("o_spos", 9, 10), ("o__ser", 18, 8)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_spos").unwrap(), &servo_ids(0)[0]);
+        assert_eq!(r.id_mapping.get("o__ser").unwrap(), &servo_ids(1)[1]);
+        assert!(r
+            .warnings
+            .iter()
+            .any(|w| w.contains("separate PositionalServo groups")));
+    }
+
+    #[test]
+    fn test_legacy_servo_pair_reads_hierarchical_dims() {
+        let genome = json!({
+            "version": "2.0",
+            "blueprint": {
+                "o_spos": {"block_boundaries": [9, 1, 10]},
+                "o__ser": {"block_boundaries": [18, 1, 10]}
+            },
+            "brain_regions": null,
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+        let r = migrate_genome(&genome).unwrap();
+        assert_eq!(r.id_mapping.get("o_spos").unwrap(), &servo_ids(0)[0]);
+        assert_eq!(r.id_mapping.get("o__ser").unwrap(), &servo_ids(0)[1]);
+    }
+
+    #[test]
+    fn test_legacy_misc_opu_maps_to_misc_data() {
+        let r = migrate_genome(&legacy_genome(&[("o_misc", 43, 1)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_misc").unwrap(), &misc_data_opu_id(0));
+    }
+
+    #[test]
+    fn test_legacy_servo_group_collision_allocates_next_free_group() {
+        // Group 0 sub-area 0 is already taken by an existing typed area in the genome.
+        let taken = servo_ids(0)[0].clone();
+        let mut genome = legacy_genome(&[("o_spos", 9, 10), ("o__ser", 18, 10)]);
+        genome["blueprint"]
+            .as_object_mut()
+            .unwrap()
+            .insert(format!("_____10c-{}-cx-__name-t", taken), json!("existing"));
+        let r = migrate_genome(&genome).unwrap();
+        assert_eq!(r.id_mapping.get("o_spos").unwrap(), &servo_ids(1)[0]);
+        assert_eq!(r.id_mapping.get("o__ser").unwrap(), &servo_ids(1)[1]);
+    }
+
+    #[test]
+    fn test_legacy_imu_inputs_unchanged_policy() {
+        let genome = legacy_genome(&[("i__acc", 1, 1), ("i__gyr", 3, 1)]);
+        let r = migrate_genome(&genome).unwrap();
+        // Deprecated accelerometer is still dropped (no area, no custom fallback).
+        assert!(!r.id_mapping.contains_key("i__acc"));
+        assert!(r
+            .warnings
+            .iter()
+            .any(|w| w.contains("Dropping deprecated IPU 'i__acc'")));
+        // Gyroscope keeps going through the generic subtype fallback, not the servo table.
+        if let Some(m) = r.id_mapping.get("i__gyr") {
+            assert!(!servo_ids(0).contains(m));
+        }
     }
 }

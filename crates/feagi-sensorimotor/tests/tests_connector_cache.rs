@@ -441,3 +441,49 @@ mod test_imu_register_write_contract {
         );
     }
 }
+
+#[cfg(test)]
+mod test_decoded_motor_snapshot_unit {
+    use super::*;
+    use feagi_structures::genomic::cortical_area::descriptors::NeuronDepth;
+    use feagi_structures::genomic::MotorCorticalUnit;
+
+    /// Two unit types sharing group index 0 must both appear in the snapshot,
+    /// distinguished by `unit`.
+    #[test]
+    fn snapshot_entries_carry_their_unit_type() {
+        let cache = ConnectorCache::new();
+        let mut motor_cache = cache.get_motor_cache();
+        let group = CorticalUnitIndex::from(0u16);
+        motor_cache
+            .positional_servo_register(
+                group,
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .expect("positional servo register");
+        motor_cache
+            .rotary_motor_register(
+                group,
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .expect("rotary motor register");
+
+        let snapshot = motor_cache.read_decoded_motor_snapshot();
+        let servo = snapshot
+            .iter()
+            .filter(|e| e.unit == MotorCorticalUnit::PositionalServo && e.group == 0)
+            .count();
+        let rotary = snapshot
+            .iter()
+            .filter(|e| e.unit == MotorCorticalUnit::RotaryMotor && e.group == 0)
+            .count();
+        assert_eq!(servo, 1, "servo entry missing: {snapshot:?}");
+        assert_eq!(rotary, 1, "rotary entry missing: {snapshot:?}");
+    }
+}

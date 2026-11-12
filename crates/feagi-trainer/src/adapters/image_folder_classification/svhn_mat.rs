@@ -510,7 +510,7 @@ fn read_i32(bytes: &[u8], little: bool) -> i32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
 
     fn push_u32(out: &mut Vec<u8>, value: u32) {
@@ -529,7 +529,10 @@ mod tests {
     }
 
     /// One 32×32×3×1 uint8 frame and a double label of 10.
-    fn write_one_frame(path: &Path, label: f64) {
+    pub(in crate::adapters::image_folder_classification) fn write_one_frame(
+        path: &Path,
+        label: f64,
+    ) {
         let mut header = vec![b' '; 116];
         header.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]);
         header.extend_from_slice(&0x0100_u16.to_le_bytes());

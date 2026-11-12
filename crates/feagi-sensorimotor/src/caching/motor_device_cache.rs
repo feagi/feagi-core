@@ -681,10 +681,13 @@ macro_rules! motor_unit_functions {
 ///
 /// Multi-dimensional decode outputs (e.g. `SpatialPointer` 3D) are flattened into
 /// one entry per axis so downstream consumers can address every value with a
-/// `(group, channel)` pair regardless of dimensionality.
+/// `(unit, group, channel)` triple regardless of dimensionality.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecodedMotorValue {
-    /// Cortical unit index (a.k.a. device group).
+    /// Motor unit type that produced this value. A group index is only unique
+    /// within one unit type, so `(unit, group, channel)` identifies the value.
+    pub unit: MotorCorticalUnit,
+    /// Cortical unit index (a.k.a. device group), unique per `unit` type.
     pub group: u32,
     /// Flattened channel index. For scalar units this is the source channel; for
     /// N-dimensional units it is `source_channel * N + axis`.
@@ -958,7 +961,7 @@ impl MotorDeviceCache {
     }
 
     /// Reads every registered motor unit's latest post-processed decode output as a
-    /// flat snapshot of scalar `(group, channel, mode, value)` tuples.
+    /// flat snapshot of scalar `(unit, group, channel, mode, value)` entries.
     ///
     /// This is the generic, type-erased accessor used to build motor command maps for
     /// downstream clients without needing per-unit typed reads. Multi-axis units are
@@ -978,7 +981,7 @@ impl MotorDeviceCache {
 
     fn read_decoded_motor_snapshot_filtered(&self, updated_only: bool) -> Vec<DecodedMotorValue> {
         let mut snapshot: Vec<DecodedMotorValue> = Vec::new();
-        for ((_motor_unit, cortical_unit_index), unit_cache) in
+        for ((motor_unit, cortical_unit_index), unit_cache) in
             self.motor_cortical_unit_caches.iter()
         {
             let group = cortical_unit_index.get() as u32;
@@ -1004,6 +1007,7 @@ impl MotorDeviceCache {
                         channel as u32 * axis_count + axis as u32
                     };
                     snapshot.push(DecodedMotorValue {
+                        unit: *motor_unit,
                         group,
                         channel: flattened_channel,
                         mode,
