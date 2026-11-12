@@ -1,15 +1,17 @@
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::brain_region::BrainRegionID;
+use crate::basis::cortical_area::CorticalTypedGeneratorPrecursor;
 use crate::genome::genomes::brain_region::BrainRegionSet;
 use crate::genome::genomes::{CachingContext, CachingContextCaching, GenomeReadingInterface};
-
-pub mod container_cortical_area;
-
+use crate::genome::genomes::cortical_area::CorticalAreaSet;
 
 
 pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
     brain_regions: BrainRegionSet<<CachingContextCaching as CachingContext>::BrainRegion>,
-    cortical_areas: FIQ
+    cortical_areas: CorticalAreaSet<
+        FIQ,
+        <CachingContextCaching as CachingContext>::CorticalArea,
+        CorticalTypedGeneratorPrecursor<FIQ>
+    >
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
