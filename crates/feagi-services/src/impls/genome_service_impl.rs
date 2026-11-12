@@ -6884,6 +6884,7 @@ mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             };
             exec.restore_long_term_memory_neurons(&[detail(deep_id, 1), detail(shallow_id, 2)])
                 .unwrap();

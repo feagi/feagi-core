@@ -23,6 +23,7 @@ use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::reach_hold::trainer_package_version;
+use crate::resume::{ResumeExport, ResumeFrom};
 use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Operator criterion for one pole-balance session.
@@ -229,6 +230,10 @@ pub struct PolePhaseReport {
     pub median_balanced_bursts: f64,
     /// Mean terminal tilt across every attempt, degrees.
     pub mean_final_tilt_deg: f64,
+    /// The host skipped the phase: it ended after the attempt in progress, before every planned
+    /// attempt ran.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skipped: bool,
 }
 
 impl PolePhaseReport {
@@ -267,6 +272,7 @@ impl PolePhaseReport {
             success_rate,
             median_balanced_bursts: median_u32(&durations),
             mean_final_tilt_deg,
+            skipped: false,
         })
     }
 }
@@ -331,6 +337,7 @@ pub fn pole_phase_scorecard(
         },
         metrics: pole_phase_metrics(phase),
         class_breakdown: Vec::new(),
+        confusion: None,
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,
@@ -368,15 +375,43 @@ pub struct PolePhaseRun<'a> {
     pub run_id: &'a RunId,
 }
 
-/// Run one phase (`train` or `test`) and emit its progress.
+/// Run one phase (`train` or `test`) from its first seed and emit its progress.
 pub fn run_pole_phase(
     run: &PolePhaseRun<'_>,
     probe: &mut dyn PoleProbe,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
-    mut data: Option<&mut (dyn RunDataSink + '_)>,
+    data: Option<&mut (dyn RunDataSink + '_)>,
 ) -> Result<PolePhaseReport, TrainerError> {
+    run_pole_phase_from(
+        run,
+        &ResumeFrom::default(),
+        probe,
+        present_goal,
+        events,
+        cancel,
+        data,
+    )
+    .map(|(report, _)| report)
+}
+
+/// Run one phase from `resume.first_index` (the seeds before it ran in earlier segments).
+///
+/// Returns the report of the attempts run in this segment and the [`ResumeExport`] for the next
+/// one: `units_done` counts attempts across segments and `partial` is set when a skip ended the
+/// segment early. The engine is stateless per seed, so the export carries no engine state;
+/// attempt indices, progress counts and the data rows continue from `first_index`. Merge the
+/// segments' attempts with `from_attempts` for the whole-phase report.
+pub fn run_pole_phase_from(
+    run: &PolePhaseRun<'_>,
+    resume: &ResumeFrom,
+    probe: &mut dyn PoleProbe,
+    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    events: &mut dyn RunEventSink,
+    cancel: &CancelToken,
+    mut data: Option<&mut (dyn RunDataSink + '_)>,
+) -> Result<(PolePhaseReport, ResumeExport), TrainerError> {
     if run.phase != "train" && run.phase != "test" {
         return Err(TrainerError::Config(
             "pole phase must be train or test".to_string(),
@@ -393,19 +428,24 @@ pub fn run_pole_phase(
         return Err(TrainerError::Config("poll_timeout must be > 0".to_string()));
     }
     let samples_total = run.seeds.len() as u64;
+    resume.check_within(samples_total, "attempt")?;
+    let first = resume.first_index as usize;
     let mut attempts = Vec::with_capacity(run.seeds.len());
     if let Some(sink) = data.as_deref_mut() {
         sink.declare_table(&pole_steps_spec());
         sink.declare_table(&pole_attempts_spec());
         sink.event(EventTime::default(), "phase_start", run.phase);
     }
-    for seed in run.seeds {
-        if cancel.is_cancelled() {
-            return Err(TrainerError::Cancelled(
-                "pole-balance run cancelled".to_string(),
-            ));
+    let mut skipped = false;
+    for seed in &run.seeds[first..] {
+        // Park while paused at the attempt boundary (the attempt in progress is never cut;
+        // a skip wakes the park), then honor a cancel.
+        cancel.interrupt("pole-balance run cancelled".to_string())?;
+        if cancel.is_skipped() && !attempts.is_empty() {
+            skipped = true;
+            break;
         }
-        let attempt_index = attempts.len() as u64;
+        let attempt_index = resume.first_index + attempts.len() as u64;
         let record = run_pole_attempt(
             *seed,
             run.criterion,
@@ -437,7 +477,7 @@ pub fn run_pole_phase(
         events.emit(RunEvent::new(
             run.run_id.clone(),
             RunEventKind::Progress {
-                samples_done: attempts.len() as u64,
+                samples_done: resume.first_index + attempts.len() as u64,
                 samples_total,
                 repeat_index: 0,
                 repeat_total: 1,
@@ -447,7 +487,7 @@ pub fn run_pole_phase(
                 image_png_base64: None,
                 mask_png_base64: None,
                 preview_name: Some(format!("{} seed {seed}", run.phase)),
-                predicted_class: None,
+                readout: None,
                 class_scores: Vec::new(),
                 stand: None,
             },
@@ -456,23 +496,31 @@ pub fn run_pole_phase(
     if let Some(sink) = data {
         sink.event(
             EventTime {
-                episode: Some(attempts.len() as u64),
+                episode: Some(resume.first_index + attempts.len() as u64),
                 ..EventTime::default()
             },
             "phase_end",
             run.phase,
         );
     }
-    let report = PolePhaseReport::from_attempts(attempts, run.criterion.attempt_burst_cap)?;
+    let done = resume.first_index + attempts.len() as u64;
+    let mut report = PolePhaseReport::from_attempts(attempts, run.criterion.attempt_burst_cap)?;
+    report.skipped = skipped;
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
             scope: MetricScope::Aggregate,
             metrics: pole_phase_metrics(&report),
             class_breakdown: Vec::new(),
+            confusion: None,
         },
     ));
-    Ok(report)
+    let export = ResumeExport {
+        units_done: done,
+        engine_state: serde_json::Value::Null,
+        partial: done < samples_total,
+    };
+    Ok((report, export))
 }
 
 const POLE_STEPS_TABLE: &str = "steps";
@@ -734,11 +782,20 @@ fn parse_http_json(raw: &[u8]) -> Result<serde_json::Value, TrainerError> {
         .ok_or_else(|| TrainerError::Runtime("pole control response has no result".to_string()))
 }
 
+/// Run controls this engine's loop honours (pause, skip and cancel; at the attempt).
+pub const CONTROL: crate::control::EngineControl = crate::control::EngineControl {
+    pause: true,
+    skip: true,
+    cancel: true,
+    boundary: crate::control::ControlBoundary::Attempt,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::control::CollectingEventSink;
     use std::collections::VecDeque;
+    use std::sync::Arc;
 
     struct ScriptedProbe {
         begins: VecDeque<PoleBegin>,
@@ -908,5 +965,166 @@ mod tests {
             &report,
         );
         assert_eq!(card.metrics.get("success_rate"), Some(&1.0));
+    }
+
+    #[test]
+    fn a_pause_mid_attempt_finishes_it_then_parks_before_the_next_reset_and_resumes() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let begins_seen = Arc::new(AtomicU32::new(0));
+        struct CountingProbe {
+            inner: ScriptedProbe,
+            begins: Arc<AtomicU32>,
+        }
+        impl PoleProbe for CountingProbe {
+            fn begin_attempt(
+                &mut self,
+                seed: u64,
+                criterion: &PoleBalanceCriterion,
+            ) -> Result<PoleBegin, TrainerError> {
+                self.begins.fetch_add(1, Ordering::SeqCst);
+                self.inner.begin_attempt(seed, criterion)
+            }
+            fn poll(
+                &mut self,
+                after_seq: u64,
+                timeout: Duration,
+            ) -> Result<PoleSample, TrainerError> {
+                self.inner.poll(after_seq, timeout)
+            }
+        }
+        let mut probe = CountingProbe {
+            inner: ScriptedProbe {
+                begins: VecDeque::from([begin(), begin()]),
+                samples: VecDeque::from([
+                    upright(1, 1),
+                    upright(2, 1),
+                    upright(1, 2),
+                    upright(2, 2),
+                ]),
+            },
+            begins: begins_seen.clone(),
+        };
+        let cancel = CancelToken::new();
+        let resumer = cancel.clone();
+        let watcher_seen = begins_seen.clone();
+        let watcher = std::thread::spawn(move || {
+            // Wait until the pause is set, give the phase time to reach the boundary.
+            while !resumer.is_paused() {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            std::thread::sleep(Duration::from_millis(200));
+            let while_paused = watcher_seen.load(Ordering::SeqCst);
+            resumer.resume();
+            while_paused
+        });
+        let pauser = cancel.clone();
+        let mut first = true;
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("pole-pause".to_string());
+        let report = run_pole_phase(
+            &PolePhaseRun {
+                phase: "train",
+                seeds: &[1, 2],
+                criterion: &criterion_with_cap(2),
+                poll_timeout: Duration::from_millis(1),
+                run_id: &run_id,
+            },
+            &mut probe,
+            &mut |_| {
+                if first {
+                    first = false;
+                    pauser.pause();
+                }
+                Ok(())
+            },
+            &mut events,
+            &cancel,
+            None,
+        )
+        .expect("phase");
+        let while_paused = watcher.join().expect("watcher");
+        assert_eq!(while_paused, 1, "no second reset while paused");
+        assert_eq!(report.attempts.len(), 2, "resume finished the phase");
+        assert_eq!(
+            report.attempts[0].bursts, 2,
+            "the first attempt was not cut"
+        );
+        assert_eq!(begins_seen.load(Ordering::SeqCst), 2);
+        assert!(!cancel.is_paused());
+    }
+
+    #[test]
+    fn pole_split_phase_equals_unsplit_and_attempt_indices_continue() {
+        use crate::resume::ResumeFrom;
+        let seeds = [11u64, 12, 13];
+        let criterion = criterion_with_cap(2);
+        let run_id = RunId("pole-split".to_string());
+        let segment = |from: &ResumeFrom, pause_at_first: bool| {
+            let n = seeds.len() - from.first_index as usize;
+            let mut probe = ScriptedProbe {
+                begins: (0..n).map(|_| begin()).collect(),
+                samples: seeds[from.first_index as usize..]
+                    .iter()
+                    .flat_map(|seed| [upright(1, *seed), upright(2, *seed)])
+                    .collect(),
+            };
+            let cancel = CancelToken::new();
+            let pauser = cancel.clone();
+            let mut data = crate::run_data::RecordingRunDataSink::default();
+            let mut events = CollectingEventSink::default();
+            let (report, export) = run_pole_phase_from(
+                &PolePhaseRun {
+                    phase: "train",
+                    seeds: &seeds,
+                    criterion: &criterion,
+                    poll_timeout: Duration::from_millis(1),
+                    run_id: &run_id,
+                },
+                from,
+                &mut probe,
+                &mut |_| {
+                    if pause_at_first {
+                        pauser.skip();
+                    }
+                    Ok(())
+                },
+                &mut events,
+                &cancel,
+                Some(&mut data),
+            )
+            .expect("phase");
+            let indices: Vec<_> = data
+                .rows_of("attempts")
+                .iter()
+                .map(|row| format!("{:?}", row[1]))
+                .collect();
+            (report, export, indices)
+        };
+        let (unsplit, unsplit_export, unsplit_indices) = segment(&ResumeFrom::default(), false);
+        assert!(!unsplit_export.partial);
+        assert_eq!(unsplit_export.units_done, 3);
+
+        let (first, first_export, _) = segment(&ResumeFrom::default(), true);
+        assert!(first.skipped && first_export.partial);
+        assert_eq!(first_export.units_done, 1);
+        let (second, second_export, second_indices) =
+            segment(&ResumeFrom::from_export(&first_export), false);
+        assert!(!second_export.partial);
+        assert_eq!(second_export.units_done, 3);
+        assert_eq!(
+            second_indices,
+            unsplit_indices[1..],
+            "attempt indices continue"
+        );
+
+        let merged: Vec<_> = first
+            .attempts
+            .iter()
+            .chain(&second.attempts)
+            .cloned()
+            .collect();
+        assert_eq!(merged, unsplit.attempts, "same seeds, same attempts");
+        let whole = PolePhaseReport::from_attempts(merged, criterion.attempt_burst_cap).unwrap();
+        assert_eq!(whole, unsplit);
     }
 }

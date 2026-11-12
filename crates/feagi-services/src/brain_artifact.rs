@@ -567,6 +567,11 @@ fn apply_identifier_remaps(
         if let Some(cortical_id) = &mut neuron.cortical_id {
             remap(cortical_id);
         }
+        if let Some(record) = &mut neuron.change_record {
+            for cortical_id in &mut record.upstream_cortical_ids {
+                remap(cortical_id);
+            }
+        }
     }
     for (_, frames) in &mut snapshot.long_term_memory_replay_frames {
         for frame in frames {

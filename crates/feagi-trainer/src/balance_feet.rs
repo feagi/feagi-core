@@ -30,8 +30,10 @@ use crate::memory_counters::{MemoryAreasRecorder, MemoryCounterSource};
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::plasticity_freeze::PlasticityControl;
 use crate::reach_hold::trainer_package_version;
+use crate::resume::{ResumeExport, ResumeFrom};
 use crate::run_actions::{ApplyEvent, ScheduledEvent};
 use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
+use std::ops::Not;
 
 fn default_support_deadband_deg() -> f64 {
     0.0
@@ -358,15 +360,19 @@ pub struct BalanceFeetCriterion {
     pub contact_bodies: Vec<String>,
     /// The body that has to stay over the feet for the robot to count as upright (for example
     /// the head). Required, no default; distinct from every contact body. Upright is "head over
-    /// feet": the posture tilt is the angle from world vertical of the line from the support
-    /// centre (mean CoM position of the contact bodies touching now; all contact bodies when
-    /// none touch) to this body's CoM. The torso tilt stays reported as `tilt`.
+    /// feet": the posture line runs from the support centre (mean CoM position of the contact
+    /// bodies touching now; all contact bodies when none touch) to this body's CoM. The scored
+    /// posture tilt is the angle between that line and the same line on the attempt's first
+    /// sample (the reset pose), turned by the heading change, so a stand pose that does not stack
+    /// the top body over the feet is not counted as lean. The torso tilt stays reported as
+    /// `tilt`, the absolute posture tilt as `posture_tilt`.
     ///
-    /// The posture tilt drives the tolerance cone, the lean and success windows, the learned
+    /// The scored posture tilt drives the tolerance cone, the lean and success windows, the learned
     /// stance-loss tilt, and the fall and upright checks (`max_tilt_deg`, `fall_tilt_deg`). It is
     /// scored only: the support spring is never steered toward it, so the support resists
     /// falling past the cone and the brain must learn to bring the head over the feet.
-    /// Sizing (`h0`) and `support_need` stay on the torso's own tilt and CoM geometry. Absent in
+    /// Sizing (`h0`) stays on the torso's own geometry; `support_need` reads the torso's lean from
+    /// its own reset orientation. Absent in
     /// an old setup it is empty and `validate` rejects the criterion.
     #[serde(default)]
     pub posture_top_body: String,
@@ -633,7 +639,13 @@ impl BalanceFeetCriterion {
     pub fn posture_definition(&self) -> String {
         let mut contacts: Vec<&str> = self.contact_bodies.iter().map(|n| n.trim()).collect();
         contacts.sort_unstable();
-        format!("{}|{}", self.posture_top_body.trim(), contacts.join(","))
+        // `rel`: tilts are measured from the reset pose; saved loss tilts from the older
+        // from-vertical measure do not carry over.
+        format!(
+            "rel|{}|{}",
+            self.posture_top_body.trim(),
+            contacts.join(",")
+        )
     }
 
     /// The contact bodies satisfy the stance: every one touches the world, or at least one when a
@@ -994,6 +1006,21 @@ fn round_level(level: f64) -> f64 {
     (level * 1.0e6).round() / 1.0e6
 }
 
+/// What a [`SupportSchedule`] carries between attempts, saved at a pause.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct SupportScheduleState {
+    /// Level to send with the next attempt.
+    pub level: f64,
+    /// Attempts in the open block.
+    pub block_attempts: u32,
+    /// Successes in the open block.
+    pub block_successes: u32,
+    /// `balanced_s` of each attempt in the open block.
+    pub block_balanced_s: Vec<f64>,
+    /// Failed blocks in a row.
+    pub failed_blocks_in_a_row: u32,
+}
+
 /// Assist-as-needed support schedule: lowers support after a successful block, holds after a
 /// failed one, and raises one step only after two consecutive failed blocks.
 #[derive(Debug, Clone, PartialEq)]
@@ -1028,6 +1055,28 @@ impl SupportSchedule {
         if level.is_finite() {
             schedule.level = level.clamp(schedule.config.min, schedule.config.start);
         }
+        schedule
+    }
+
+    /// Counters and level to save for a later segment of the same run.
+    pub fn state(&self) -> SupportScheduleState {
+        SupportScheduleState {
+            level: self.level,
+            block_attempts: self.block_attempts,
+            block_successes: self.block_successes,
+            block_balanced_s: self.block_balanced_s.clone(),
+            failed_blocks_in_a_row: self.failed_blocks_in_a_row,
+        }
+    }
+
+    /// Continue from a saved state, block counters included. The configuration stays the
+    /// run's own; the level is clamped to `[config.min, config.start]`.
+    pub fn restore(config: SupportConfig, state: SupportScheduleState) -> Self {
+        let mut schedule = Self::resume(config, state.level);
+        schedule.block_attempts = state.block_attempts;
+        schedule.block_successes = state.block_successes;
+        schedule.block_balanced_s = state.block_balanced_s;
+        schedule.failed_blocks_in_a_row = state.failed_blocks_in_a_row;
         schedule
     }
 
@@ -1232,6 +1281,20 @@ impl AdaptiveAssist {
             .effective_max_raw(criterion)
             .is_some_and(|raw| raw < criterion.cone_min_deg);
         assist
+    }
+
+    /// The parts of the assist that [`AdaptiveAssistState`] does not hold, for a pause inside one
+    /// run: the hold timer and the cone clamp flag.
+    pub fn pause_extras(&self) -> (f64, bool) {
+        (self.hold_left_s, self.cone_min_clamped)
+    }
+
+    /// Put back what [`Self::pause_extras`] saved (non-finite or negative timers are ignored).
+    pub fn restore_pause_extras(&mut self, hold_left_s: f64, cone_min_clamped: bool) {
+        if hold_left_s.is_finite() && hold_left_s >= 0.0 {
+            self.hold_left_s = hold_left_s;
+        }
+        self.cone_min_clamped |= cone_min_clamped;
     }
 
     /// State to save for a later attempt or run.
@@ -1564,8 +1627,8 @@ impl DeviationAssist {
 
 /// Collects the 1 Hz deviation and assistance timeline of a train phase. Cloned before an
 /// attempt so a discarded attempt leaves no trace in it.
-#[derive(Debug, Default, Clone)]
-struct DeviationAssistRun {
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeviationAssistRun {
     timeline: Vec<DeviationAssistPoint>,
     phase_t_s: f64,
     bucket: u64,
@@ -1640,6 +1703,13 @@ pub struct AdaptiveAttemptStats {
     /// Success windows completed: `hold_s` seconds inside the cone with the support idle.
     #[serde(default)]
     pub success_windows: u32,
+    /// Share of the scored time the success windows cover: whole `hold_s` windows, plus the
+    /// trailing part of a window that continues unbroken from a completed one.
+    #[serde(default)]
+    pub window_cover_fraction: f64,
+    /// Why a capped standing attempt was not a success, when the cover rule demoted it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demotion_reason: Option<WindowDemotion>,
     /// Times a lean past the cone outlasted `lean_grace_s` and tightened the assist.
     #[serde(default)]
     pub lean_retightens: u32,
@@ -1797,6 +1867,11 @@ pub struct BalanceAttemptRecord {
     pub bursts: u32,
     /// Posture tilt at the terminal burst, in degrees (the tilt the upright and fall rules score).
     pub final_tilt_deg: f64,
+    /// Absolute posture lean on the attempt's first sample (the reset pose), degrees, from world
+    /// vertical. `final_tilt_deg` and every tilt rule are measured from this pose. Absent when no
+    /// posture line was read.
+    #[serde(default)]
+    pub reset_tilt_deg: Option<f64>,
     /// Scheduled support level of the attempt. The opening settle spring is not recorded here.
     #[serde(default)]
     pub support_level: f64,
@@ -2724,6 +2799,113 @@ fn tilt_components_of(vec: [f64; 2], yaw_rad: Option<f64>) -> TiltComponentsDeg 
     }
 }
 
+/// Reset pose the runner latched on an attempt's first sample, with where it was latched.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ResetLatch {
+    /// The posture line and heading at the reset pose.
+    pub reference: LeanReference,
+    /// Episode the reading belongs to.
+    pub episode_id: u64,
+    /// Physics steps of the reading; a later reading with fewer steps means a new model load.
+    pub physics_steps: u64,
+}
+
+/// Receives each attempt's reset pose the moment the runner latches it.
+pub type ResetLatchSink<'a> = &'a mut (dyn FnMut(&ResetLatch) + 'a);
+
+/// One contact body in a live reading.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LiveContact {
+    /// Contact body name, as in the setup.
+    pub body: String,
+    /// Touches the world now; `None` when the reply carried no row for it.
+    pub touching: Option<bool>,
+}
+
+/// What the setup panel shows for one `measure` reply, from the same posture code the runner
+/// scores with. Missing positions leave the tilt fields `None`; the rows that exist are still
+/// returned.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveBalanceReading {
+    /// The tilt scoring uses: from the latched reset pose, else the absolute posture tilt.
+    pub scored_tilt_deg: Option<f64>,
+    /// Posture tilt from world vertical, degrees.
+    pub absolute_tilt_deg: Option<f64>,
+    /// The torso's own tilt from world vertical, degrees.
+    pub torso_tilt_deg: Option<f64>,
+    /// One row per setup contact body, in setup order.
+    pub contacts: Vec<LiveContact>,
+    /// Every contact body touches (false with no contact bodies).
+    pub all_contacts_touch: bool,
+    /// The scored tilt is measured from a latched reset pose.
+    pub reference_latched: bool,
+    /// Episode of the reply.
+    pub episode_id: u64,
+    /// Physics steps of the reply.
+    pub physics_steps: u64,
+}
+
+fn posture_sample_of(
+    reply: &Measurement,
+    criterion: &BalanceFeetCriterion,
+) -> Option<PostureSample> {
+    let posture = measure_posture(reply, criterion).ok()?;
+    let yaw = reply
+        .bodies
+        .get(criterion.torso_body.trim())
+        .and_then(|body| body.heading.as_ref())
+        .and_then(|heading| heading.yaw_rad);
+    Some(posture.sample(yaw))
+}
+
+/// The reset pose of a `measure` reply taken in the same operation as a reset: the posture line
+/// and heading the runner latches on an attempt's first sample. `None` for a partial setup.
+pub fn latch_reference(
+    reply: &Measurement,
+    criterion: &BalanceFeetCriterion,
+) -> Option<LeanReference> {
+    posture_sample_of(reply, criterion)?.reference
+}
+
+/// The live readout of one `measure` reply against the current reset pose (`None`: not latched,
+/// so the scored tilt is the absolute one, as in the runner before a pose is latched).
+pub fn live_balance_reading(
+    reply: &Measurement,
+    criterion: &BalanceFeetCriterion,
+    reference: Option<&LeanReference>,
+) -> LiveBalanceReading {
+    let sample = posture_sample_of(reply, criterion).map(|mut sample| {
+        if reference.is_some() {
+            sample.score_from(reference);
+        }
+        sample
+    });
+    let contacts: Vec<LiveContact> = criterion
+        .contact_bodies
+        .iter()
+        .enumerate()
+        .map(|(i, name)| LiveContact {
+            body: name.trim().to_string(),
+            touching: reply.contacts.get(i).map(|set| set.touching),
+        })
+        .collect();
+    LiveBalanceReading {
+        scored_tilt_deg: sample.map(|s| s.relative_tilt_deg.unwrap_or(s.tilt_deg)),
+        absolute_tilt_deg: sample.map(|s| s.tilt_deg),
+        torso_tilt_deg: reply
+            .bodies
+            .get(criterion.torso_body.trim())
+            .map(|body| body.tilt_rad.to_degrees()),
+        all_contacts_touch: !contacts.is_empty()
+            && contacts.iter().all(|row| row.touching == Some(true)),
+        contacts,
+        reference_latched: reference.is_some() && sample.is_some(),
+        episode_id: reply.episode_id,
+        physics_steps: reply.physics_steps,
+    }
+}
+
 /// Head-over-feet reading of one burst, from world positions only the Trainer reads (never a
 /// brain input): the line from the support centre to the posture top body, against vertical.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2733,14 +2915,125 @@ pub struct PostureReading {
     /// The rotation that takes the line back onto world up, on the world X and Y axes: the same
     /// convention as the torso's tilt vector (leaning toward +X gives `(0, -theta)`).
     pub tilt_vec_rad: [f64; 2],
+    /// Unit vector from the support centre to the top body (world frame, z up).
+    pub unit: [f64; 3],
+}
+
+/// An upright axis (the posture line, or the torso's up axis) with the heading it was read at.
+/// Latched on an attempt's first sample as the reset pose: the tilt that is scored is measured
+/// from it, so a stand pose that is not vertical is not counted as lean.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct LeanReference {
+    /// Unit vector of the axis, world frame, z up.
+    pub unit: [f64; 3],
+    /// Torso heading about up when it was read, rad. Absent when the controller reports none.
+    pub yaw_rad: Option<f64>,
+    /// Angle of the axis from world vertical, degrees (the absolute lean).
+    pub tilt_deg: f64,
+}
+
+/// The lean of an axis away from the reset axis, turned with the heading.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RelativeLean {
+    /// Angle between the current axis and the reset axis rotated by the heading change, rad.
+    pub angle_rad: f64,
+    /// Rotation taking the current axis onto the turned reset axis (angle times unit axis), rad;
+    /// the same sign convention as the tilt vector.
+    pub rotation_rad: [f64; 3],
+}
+
+impl LeanReference {
+    /// An axis from its (not necessarily unit) world vector; `None` for a zero or non-finite one.
+    pub fn from_vector(v: [f64; 3], yaw_rad: Option<f64>) -> Option<Self> {
+        let norm = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        if !v.iter().all(|c| c.is_finite()) || norm < 1.0e-12 {
+            return None;
+        }
+        let unit = [v[0] / norm, v[1] / norm, v[2] / norm];
+        Some(Self {
+            unit,
+            yaw_rad: yaw_rad.filter(|y| y.is_finite()),
+            tilt_deg: unit[2].clamp(-1.0, 1.0).acos().to_degrees(),
+        })
+    }
+
+    /// The torso's up axis from its tilt vector `[rx, ry]` (rad), the rotation that takes the
+    /// axis back onto world up.
+    pub fn from_tilt_vec(tilt_vec: [f64; 2], yaw_rad: Option<f64>) -> Option<Self> {
+        let [rx, ry] = tilt_vec;
+        let theta = rx.hypot(ry);
+        if !theta.is_finite() {
+            return None;
+        }
+        let up = if theta < 1.0e-12 {
+            [0.0, 0.0, 1.0]
+        } else {
+            let scale = theta.sin() / theta;
+            [-ry * scale, rx * scale, theta.cos()]
+        };
+        Self::from_vector(up, yaw_rad)
+    }
+
+    /// The lean of `self` (now) away from `reset`, with the reset axis rotated about up by the
+    /// heading change. Without a heading at either end the reset axis is not rotated.
+    pub fn lean_from(&self, reset: &LeanReference) -> RelativeLean {
+        let turn = match (self.yaw_rad, reset.yaw_rad) {
+            (Some(now), Some(then)) => now - then,
+            _ => 0.0,
+        };
+        let (sin, cos) = turn.sin_cos();
+        let r = reset.unit;
+        let turned = [r[0] * cos - r[1] * sin, r[0] * sin + r[1] * cos, r[2]];
+        let c = self.unit;
+        let cross = [
+            c[1] * turned[2] - c[2] * turned[1],
+            c[2] * turned[0] - c[0] * turned[2],
+            c[0] * turned[1] - c[1] * turned[0],
+        ];
+        let sin_a = (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
+        let dot = c[0] * turned[0] + c[1] * turned[1] + c[2] * turned[2];
+        let angle_rad = sin_a.atan2(dot);
+        let rotation_rad = if sin_a < 1.0e-12 {
+            [0.0; 3]
+        } else {
+            let k = angle_rad / sin_a;
+            [cross[0] * k, cross[1] * k, cross[2] * k]
+        };
+        RelativeLean {
+            angle_rad,
+            rotation_rad,
+        }
+    }
+}
+
+/// Predicted tilt, degrees, of a relative lean carried forward by the torso's swing: the
+/// rotation vector moves by `-ang_vel` (horizontal) over `lookahead_s`.
+pub fn predicted_relative_tilt_deg(
+    lean: &RelativeLean,
+    ang_vel: [f64; 3],
+    lookahead_s: f64,
+) -> f64 {
+    let [rx, ry, rz] = lean.rotation_rad;
+    (rx - lookahead_s * ang_vel[0])
+        .hypot(ry - lookahead_s * ang_vel[1])
+        .hypot(rz)
+        .to_degrees()
 }
 
 /// Posture of the burst, as the Trainer scores it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PostureSample {
-    /// Posture tilt, degrees: the angle of the line from the support centre to the top body
-    /// against world vertical.
+    /// Absolute posture tilt, degrees: the angle of the line from the support centre to the top
+    /// body against world vertical. Reported; the scored tilt is `relative_tilt_deg`.
     pub tilt_deg: f64,
+    /// Posture tilt from the attempt's reset pose, degrees: the angle between the line now and
+    /// the reset line turned by the heading change. Absent until the Trainer has latched a reset
+    /// line (then the absolute `tilt_deg` is scored).
+    #[serde(default)]
+    pub relative_tilt_deg: Option<f64>,
+    /// This burst's own line and heading, which the attempt latches on its first sample.
+    #[serde(default)]
+    pub reference: Option<LeanReference>,
     /// Signed posture lean in the torso frame, degrees, positive toward the torso's forward.
     /// Absent without the torso heading.
     pub forward_deg: Option<f64>,
@@ -2795,10 +3088,23 @@ pub fn posture_reading(centre: [f64; 3], top: [f64; 3]) -> Option<PostureReading
         let scale = tilt_rad / horizontal;
         [d[1] * scale, -d[0] * scale]
     };
+    let norm = horizontal.hypot(d[2]);
     Some(PostureReading {
         tilt_rad,
         tilt_vec_rad,
+        unit: [d[0] / norm, d[1] / norm, d[2] / norm],
     })
+}
+
+impl PostureSample {
+    /// Set `relative_tilt_deg` from the latched reset line (the one scoring rule the runner and
+    /// the live readout share). With none latched this burst is the reset pose and reads 0.
+    pub fn score_from(&mut self, reset: Option<&LeanReference>) -> Option<RelativeLean> {
+        let now = self.reference?;
+        let lean = now.lean_from(reset.unwrap_or(&now));
+        self.relative_tilt_deg = Some(lean.angle_rad.to_degrees());
+        Some(lean)
+    }
 }
 
 impl PostureReading {
@@ -2807,6 +3113,8 @@ impl PostureReading {
         let lean = tilt_components_of(self.tilt_vec_rad, yaw_rad);
         PostureSample {
             tilt_deg: self.tilt_rad.to_degrees(),
+            relative_tilt_deg: None,
+            reference: LeanReference::from_vector(self.unit, yaw_rad),
             forward_deg: lean.forward,
             left_deg: lean.left,
         }
@@ -2909,9 +3217,28 @@ impl StabilityAccum {
 
 impl BalanceSample {
     /// The tilt every scoring rule uses (upright, lean and success windows, fall, stance loss):
-    /// the posture tilt, or the torso tilt for a sample that carries none.
+    /// the posture tilt from the reset pose, the absolute posture tilt before a reset line is
+    /// latched, or the torso tilt for a sample that carries no posture.
     pub fn scored_tilt_deg(&self) -> f64 {
+        self.posture
+            .map_or(self.tilt_deg, |p| p.relative_tilt_deg.unwrap_or(p.tilt_deg))
+    }
+
+    /// Posture tilt from world vertical (not from the reset pose), degrees.
+    pub fn absolute_tilt_deg(&self) -> f64 {
         self.posture.map_or(self.tilt_deg, |p| p.tilt_deg)
+    }
+
+    /// The torso's up axis and heading on this burst, when the tilt vector was reported.
+    pub fn torso_reference(&self) -> Option<LeanReference> {
+        let st = self.stability.as_ref()?;
+        LeanReference::from_tilt_vec(st.tilt_vec_rad?, st.yaw_rad)
+    }
+
+    /// Set the scored posture tilt from the attempt's latched reset line. With none latched yet
+    /// this burst is the reset pose and reads 0.
+    pub fn score_posture_from(&mut self, reset: Option<&LeanReference>) -> Option<RelativeLean> {
+        self.posture.as_mut()?.score_from(reset)
     }
 
     /// Every contact body touches the world.
@@ -2988,6 +3315,12 @@ pub struct OpenBalanceAttempt {
     pub fall_bursts: u32,
     /// Torso height on the first sample after the reset (world z), m.
     pub reset_height_m: Option<f64>,
+    /// Posture line and heading on the first sample after the reset; the scored tilt is
+    /// measured from it.
+    pub reset_posture: Option<LeanReference>,
+    /// Torso up axis and heading on the first sample after the reset; `support_need` is
+    /// measured from it.
+    pub reset_torso: Option<LeanReference>,
     /// Non-settling bursts per failed upright test so far.
     pub non_upright: NonUprightCounts,
     /// Support-use samples so far (support > 0, non-settling).
@@ -3038,6 +3371,8 @@ impl OpenBalanceAttempt {
             first_violation_burst: None,
             fall_bursts: 0,
             reset_height_m: None,
+            reset_posture: None,
+            reset_torso: None,
             non_upright: NonUprightCounts::default(),
             support_use: SupportUseCounts::default(),
             off_stance_bursts: 0,
@@ -3164,6 +3499,10 @@ pub fn observe_balance_sample(
         .reset_height_m
         .or(sample.reset_height_m)
         .or(sample.torso_height_m);
+    let reset_posture = open
+        .reset_posture
+        .or(sample.posture.and_then(|p| p.reference));
+    let reset_torso = open.reset_torso.or(sample.torso_reference());
     let reasons = non_upright_reasons(sample, criterion, reset_height_m);
     let upright = !reasons.any();
     let perturbations = open
@@ -3237,6 +3576,7 @@ pub fn observe_balance_sample(
             outcome,
             bursts,
             final_tilt_deg: sample.scored_tilt_deg(),
+            reset_tilt_deg: reset_posture.map(|r| r.tilt_deg),
             stance_lost_tilt_deg: if upright {
                 None
             } else {
@@ -3280,6 +3620,8 @@ pub fn observe_balance_sample(
         next.last_seq = sample.seq.max(open.last_seq);
         next.counted_burst = false;
         next.reset_height_m = reset_height_m;
+        next.reset_posture = reset_posture;
+        next.reset_torso = reset_torso;
         next.perturbations = perturbations;
         next.last_perturbing = last_perturbing;
         return Ok(BalanceAttemptStep::Continue(next));
@@ -3292,6 +3634,8 @@ pub fn observe_balance_sample(
         next.last_burst_seq = Some(anchor);
         next.counted_burst = true;
         next.reset_height_m = reset_height_m;
+        next.reset_posture = reset_posture;
+        next.reset_torso = reset_torso;
         next.perturbations = perturbations;
         next.last_perturbing = last_perturbing;
         return Ok(BalanceAttemptStep::Continue(next));
@@ -3375,6 +3719,7 @@ pub fn observe_balance_sample(
             outcome,
             bursts,
             final_tilt_deg: sample.scored_tilt_deg(),
+            reset_tilt_deg: reset_posture.map(|r| r.tilt_deg),
             stance_lost_tilt_deg,
             support_level: open.params_support_level,
             upright_fraction: upright_fraction(upright_bursts, bursts),
@@ -3462,6 +3807,8 @@ pub fn observe_balance_sample(
         first_violation_burst,
         fall_bursts,
         reset_height_m,
+        reset_posture,
+        reset_torso,
         non_upright,
         support_use,
         off_stance_bursts,
@@ -3496,6 +3843,7 @@ fn balance_time_fields(
         outcome: BalanceAttemptOutcome::Truncated,
         bursts: 0,
         final_tilt_deg: 0.0,
+        reset_tilt_deg: None,
         support_level: 0.0,
         upright_fraction: 0.0,
         perturbations: 0,
@@ -4013,6 +4361,10 @@ pub struct BalancePhaseReport {
     /// was re-run with the same seed; none counts in `attempts` or in any score above.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub discarded_attempts: Vec<DiscardedAttempt>,
+    /// The host skipped the phase: it ended after the attempt in progress, before every planned
+    /// attempt ran. The attempts that finished are kept and scored.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skipped: bool,
 }
 
 /// Result of one unassisted probe attempt.
@@ -4295,6 +4647,7 @@ impl BalancePhaseReport {
             adaptive_state_next: None,
             cone_min_above_loss_tilt: false,
             discarded_attempts: Vec::new(),
+            skipped: false,
         })
     }
 
@@ -4561,6 +4914,7 @@ pub fn balance_phase_scorecard(
         },
         metrics: balance_phase_metrics(phase),
         class_breakdown: Vec::new(),
+        confusion: None,
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,
@@ -4660,6 +5014,53 @@ pub trait BalanceController {
 /// Callback that delivers affect signals into the brain (e.g. `runtime.submit_reward`).
 pub type DeliverReward<'a> = &'a mut (dyn FnMut(&[RewardSignal]) -> Result<(), TrainerError> + 'a);
 
+/// Engine state a paused balance phase exports in [`ResumeExport::engine_state`].
+///
+/// Restored: the support schedule (level and block counters), the adaptive assist (level, slow
+/// average, loss history, hold timer, cone flag) and the clocks of its timelines, the attempt
+/// count including probes (attempt indices and progress continue), and the probe cadence (it
+/// follows `first_index`, the training attempts done), the timelines' points and the open
+/// second of the deviation timeline, and the discarded attempts (so the last segment's report
+/// holds every segment's, in order, like an unsplit run's). Reset: the spring gains (sized
+/// again from the first reset of the segment). The perturbation generator derives from each attempt's seed.
+/// Scheduled events are per attempt (they fire after settle, once per attempt, and a new
+/// attempt ends any stimulation hold the last one left), so no schedule cursor is carried.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct BalanceResumeState {
+    /// Attempts run so far, probes included.
+    pub attempts_done: u64,
+    /// Support schedule, when the phase follows the schedule.
+    #[serde(default)]
+    pub schedule: Option<SupportScheduleState>,
+    /// Adaptive assist, when the phase is adaptive.
+    #[serde(default)]
+    pub adaptive: Option<AdaptiveResume>,
+    /// Deviation/assist timeline so far, with its clock and open second.
+    #[serde(default)]
+    pub deviation: Option<DeviationAssistRun>,
+    /// Attempts discarded so far, earlier segments' included.
+    #[serde(default)]
+    pub discarded: Vec<crate::balance_recovery::DiscardedAttempt>,
+}
+
+/// Adaptive assist state saved at a pause.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdaptiveResume {
+    /// Level, slow average and loss history.
+    pub state: AdaptiveAssistState,
+    /// Seconds left of the hold timer.
+    pub hold_left_s: f64,
+    /// `cone_min_deg` was above the learned limit at some point.
+    pub cone_min_clamped: bool,
+    /// Phase clock of the assist timeline, seconds of scored time.
+    pub phase_t_s: f64,
+    /// Time of the next timeline point.
+    pub next_point_s: f64,
+    /// Assist timeline points so far.
+    #[serde(default)]
+    pub timeline: Vec<AssistPoint>,
+}
+
 /// One phase of a balance session, plus the run the progress events belong to.
 pub struct BalancePhaseRun<'a> {
     /// `train`, `test` or `observe`.
@@ -4695,6 +5096,9 @@ pub struct BalancePhaseRun<'a> {
     /// Memory-area counters, sampled before the first attempt and after each one into the
     /// `memory_areas` table. `None` writes no such table. Needs `data`.
     pub memory_counters: Option<&'a mut dyn MemoryCounterSource>,
+    /// Told each attempt's reset pose when it is latched (the setup panel reads it live).
+    /// `None` publishes nothing.
+    pub reset_latch: Option<ResetLatchSink<'a>>,
 }
 
 /// Per-phase state: model facts and the gains sized once from the first reset.
@@ -4723,6 +5127,33 @@ pub fn run_balance_phase(
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
 ) -> Result<BalancePhaseReport, TrainerError> {
+    run_balance_phase_from(
+        run,
+        &ResumeFrom::default(),
+        controller,
+        present_goal,
+        events,
+        cancel,
+    )
+    .map(|(report, _)| report)
+}
+
+/// [`run_balance_phase`] continuing from `resume` ("pause and save, resume later").
+///
+/// The unit is the training attempt (a seed, with the probe that follows it): the segment runs
+/// `run.seeds[first_index..]`. `resume.engine_state` holds a [`BalanceResumeState`] exported by
+/// the earlier segment. With `resume.boundary_stop` a skip waits for the probe due after the
+/// current attempt, so the probe cadence stays aligned. Returns this segment's report (its
+/// attempts only; merge the segments' attempts for the whole phase) and the export for the next
+/// segment, `partial` when a skip ended the segment early.
+pub fn run_balance_phase_from(
+    run: &mut BalancePhaseRun<'_>,
+    resume: &ResumeFrom,
+    controller: &mut dyn BalanceController,
+    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    events: &mut dyn RunEventSink,
+    cancel: &CancelToken,
+) -> Result<(BalancePhaseReport, ResumeExport), TrainerError> {
     if !BALANCE_PHASES.contains(&run.phase) {
         return Err(TrainerError::Config(
             "balance phase must be train, test or observe".to_string(),
@@ -4844,6 +5275,7 @@ pub fn run_balance_phase(
             )));
         }
     }
+    resume.check_within(run.seeds.len() as u64, "attempt")?;
     let result = run_phase_attempts(
         run,
         criterion,
@@ -4855,6 +5287,7 @@ pub fn run_balance_phase(
         present_goal,
         events,
         cancel,
+        resume,
     );
     let restored = if freeze_attempted {
         run.plasticity
@@ -4864,7 +5297,7 @@ pub fn run_balance_phase(
         None
     };
     match (result, restored) {
-        (Ok(report), None | Some(Ok(()))) => Ok(report),
+        (Ok(done), None | Some(Ok(()))) => Ok(done),
         (Ok(_), Some(Err(restore))) => Err(TrainerError::Runtime(format!(
             "test finished but learning stayed frozen: {restore}"
         ))),
@@ -4890,17 +5323,29 @@ fn run_phase_attempts(
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
-) -> Result<BalancePhaseReport, TrainerError> {
+    resume: &ResumeFrom,
+) -> Result<(BalancePhaseReport, ResumeExport), TrainerError> {
     let brain_only = conditions.is_some();
+    let saved: BalanceResumeState = resume.decode_state()?.unwrap_or_default();
     let info = controller.model_info()?;
     check_model(&info, criterion)?;
     let mut session = BalanceSession { info, sizing: None };
-    let mut schedule = match &mode {
-        SupportMode::Resume(level) => SupportSchedule::resume(*support, *level),
-        SupportMode::ResumeAdaptive(state) => SupportSchedule::resume(*support, state.a),
+    let mut schedule = match (&mode, saved.schedule.clone()) {
+        (_, Some(state)) => SupportSchedule::restore(*support, state),
+        (SupportMode::Resume(level), None) => SupportSchedule::resume(*support, *level),
+        (SupportMode::ResumeAdaptive(state), None) => SupportSchedule::resume(*support, state.a),
         _ => SupportSchedule::new(*support),
     };
     let mut adaptive_run = adaptive_on.then(|| {
+        if let Some(saved) = saved.adaptive.clone() {
+            let mut assist = AdaptiveAssist::resume(criterion, saved.state);
+            assist.restore_pause_extras(saved.hold_left_s, saved.cone_min_clamped);
+            let mut run = AdaptiveRun::new(assist);
+            run.phase_t_s = saved.phase_t_s;
+            run.next_point_s = saved.next_point_s;
+            run.timeline = saved.timeline;
+            return run;
+        }
         AdaptiveRun::new(match &mode {
             SupportMode::Resume(level) => {
                 AdaptiveAssist::resume(criterion, AdaptiveAssistState::new(*level, *level))
@@ -4909,7 +5354,8 @@ fn run_phase_attempts(
             _ => AdaptiveAssist::start(criterion),
         })
     });
-    let mut dev_assist = (!brain_only).then(DeviationAssistRun::default);
+    let mut dev_assist = (!brain_only).then(|| saved.deviation.clone().unwrap_or_default());
+    let offset = saved.attempts_done as usize;
     let probe_every = if brain_only { 0 } else { criterion.probe_every };
     let planned_probes = if probe_every == 0 {
         0
@@ -4924,7 +5370,8 @@ fn run_phase_attempts(
     probe_criterion.support_mode = AssistMode::Ladder;
     probe_criterion.scheduled_events.clear();
     let mut attempts = Vec::with_capacity(samples_total as usize);
-    let mut train_done: u32 = 0;
+    // Training attempts done, earlier segments included: the probe cadence follows it.
+    let mut train_done: u32 = resume.first_index as u32;
     let mut probes_run: u32 = 0;
     let mut probes_frozen = true;
     let mut steps_table = StepsTable {
@@ -4944,8 +5391,17 @@ fn run_phase_attempts(
         (Some(source), Some(sink)) => Some(MemoryAreasRecorder::start(source, sink)),
         _ => None,
     };
-    let mut recovery = RecoveryState::new(run.recovery)?;
-    for seed in run.seeds {
+    let mut recovery = RecoveryState::resume(run.recovery, saved.discarded.clone())?;
+    let mut skipped = false;
+    for seed in &run.seeds[resume.first_index as usize..] {
+        // Skip: park while paused (a skip wakes the park), honor a cancel, then end the phase
+        // cleanly once at least one attempt finished. The attempt in progress is never cut, and
+        // a phase with no finished attempt has nothing to report, so it runs one attempt first.
+        cancel.interrupt("balance-on-feet run cancelled".to_string())?;
+        if cancel.is_skipped() && !attempts.is_empty() {
+            skipped = true;
+            break;
+        }
         let level = match (&adaptive_run, &mode) {
             (Some(adaptive), _) => adaptive.assist.level(),
             (None, SupportMode::Fixed(level)) => *level,
@@ -4976,15 +5432,16 @@ fn run_phase_attempts(
                     data: &mut run.data,
                     steps: &mut steps_table,
                     apply_event: &mut run.apply_event,
+                    reset_latch: &mut run.reset_latch,
                     phase: run.phase,
-                    attempt_index: attempts.len(),
+                    attempt_index: offset + attempts.len(),
                     probe: false,
                 },
                 &mut watch,
                 cancel,
             );
             let slot = AttemptSlot {
-                attempt_index: attempts.len(),
+                attempt_index: offset + attempts.len(),
                 seed: *seed,
                 probe: false,
             };
@@ -5020,26 +5477,35 @@ fn run_phase_attempts(
         if let Some(sink) = run.data.as_deref_mut() {
             sink.row(
                 ATTEMPTS_TABLE,
-                &attempt_row(run.phase, attempts.len(), &record, criterion.walk.is_some()),
+                &attempt_row(
+                    run.phase,
+                    offset + attempts.len(),
+                    &record,
+                    criterion.walk.is_some(),
+                ),
             );
-            if let Some(row) = observe_row(run.phase, attempts.len(), &record) {
+            if let Some(row) = observe_row(run.phase, offset + attempts.len(), &record) {
                 sink.row(OBSERVE_TABLE, &row);
             }
             if let Some(memory) = memory.as_mut() {
-                memory.after_attempt(sink, run.phase, attempts.len());
+                memory.after_attempt(sink, run.phase, offset + attempts.len());
             }
         }
         attempts.push(record);
         train_done += 1;
         events.emit(progress_event(
             run,
-            attempts.len() as u64,
+            (offset + offset + attempts.len()) as u64,
             samples_total,
             format!("{} seed {seed} support {level:.2}", run.phase),
             stand,
         ));
         if probe_every == 0 || !train_done.is_multiple_of(probe_every) {
             continue;
+        }
+        if cancel.is_skipped() && !resume.boundary_stop {
+            skipped = true;
+            break;
         }
         // Freeze learning, run one unassisted attempt, restore on every exit path. A discarded
         // probe restores learning before the link wait, then freezes again for the re-run.
@@ -5072,8 +5538,9 @@ fn run_phase_attempts(
                     data: &mut run.data,
                     steps: &mut steps_table,
                     apply_event: &mut None,
+                    reset_latch: &mut None,
                     phase: run.phase,
-                    attempt_index: attempts.len(),
+                    attempt_index: offset + attempts.len(),
                     probe: true,
                 },
                 &mut watch,
@@ -5090,7 +5557,7 @@ fn run_phase_attempts(
                 }
             }
             let slot = AttemptSlot {
-                attempt_index: attempts.len(),
+                attempt_index: offset + attempts.len(),
                 seed: *seed,
                 probe: true,
             };
@@ -5116,14 +5583,19 @@ fn run_phase_attempts(
         if let Some(sink) = run.data.as_deref_mut() {
             sink.row(
                 ATTEMPTS_TABLE,
-                &attempt_row(run.phase, attempts.len(), &record, criterion.walk.is_some()),
+                &attempt_row(
+                    run.phase,
+                    offset + attempts.len(),
+                    &record,
+                    criterion.walk.is_some(),
+                ),
             );
         }
         attempts.push(record);
         probes_run += 1;
         events.emit(progress_event(
             run,
-            attempts.len() as u64,
+            (offset + offset + attempts.len()) as u64,
             samples_total,
             format!("probe after {train_done} training attempts"),
             stand,
@@ -5132,7 +5604,7 @@ fn run_phase_attempts(
     if let Some(sink) = run.data.as_deref_mut() {
         sink.event(
             EventTime {
-                episode: Some(attempts.len() as u64),
+                episode: Some((offset + offset + attempts.len()) as u64),
                 ..EventTime::default()
             },
             "phase_end",
@@ -5141,13 +5613,27 @@ fn run_phase_attempts(
     }
     let mut report = BalancePhaseReport::from_attempts_with(attempts, support)?;
     report.assess_over_support(criterion);
-    report.discarded_attempts = recovery.into_discarded();
+    let discarded = recovery.into_discarded();
+    report.discarded_attempts = discarded.clone();
+    report.skipped = skipped;
     report.probe_plasticity_frozen = (probes_run > 0).then_some(probes_frozen);
     // A brain-only test applies no spring (zero gains), so there are no sized gains to report.
     (report.spring_sizing, report.spring_gains) = match session.sizing {
         Some((inputs, gains)) if !brain_only => (Some(inputs), Some(gains)),
         _ => (None, None),
     };
+    let adaptive_export = adaptive_run.as_ref().map(|run| {
+        let (hold_left_s, cone_min_clamped) = run.assist.pause_extras();
+        AdaptiveResume {
+            state: run.assist.state(),
+            hold_left_s,
+            cone_min_clamped,
+            phase_t_s: run.phase_t_s,
+            next_point_s: run.next_point_s,
+            timeline: run.timeline.clone(),
+        }
+    });
+    let dev_export = dev_assist.clone();
     if let Some(adaptive) = adaptive_run {
         report.support_level_next = Some(adaptive.assist.level());
         report.adaptive_state_next = Some(adaptive.assist.state());
@@ -5164,9 +5650,26 @@ fn run_phase_attempts(
             scope: MetricScope::Aggregate,
             metrics: balance_phase_metrics(&report),
             class_breakdown: Vec::new(),
+            confusion: None,
         },
     ));
-    Ok(report)
+    let attempts_total = offset as u64 + report.attempts.len() as u64;
+    let seeds_done = train_done as u64;
+    let export = ResumeExport {
+        units_done: seeds_done,
+        engine_state: serde_json::to_value(BalanceResumeState {
+            attempts_done: attempts_total,
+            schedule: matches!(mode, SupportMode::Fixed(_))
+                .not()
+                .then(|| schedule.state()),
+            adaptive: adaptive_export,
+            deviation: dev_export,
+            discarded,
+        })
+        .unwrap_or(serde_json::Value::Null),
+        partial: seeds_done < run.seeds.len() as u64,
+    };
+    Ok((report, export))
 }
 
 fn progress_event(
@@ -5189,7 +5692,7 @@ fn progress_event(
             image_png_base64: None,
             mask_png_base64: None,
             preview_name: Some(preview_name),
-            predicted_class: None,
+            readout: None,
             class_scores: Vec::new(),
             stand: Some(stand),
         },
@@ -5244,14 +5747,16 @@ fn measured_bodies(criterion: &BalanceFeetCriterion) -> Vec<String> {
         .chain(std::iter::once(&criterion.posture_top_body))
     {
         let name = name.trim().to_string();
-        if !bodies.contains(&name) {
+        if !name.is_empty() && !bodies.contains(&name) {
             bodies.push(name);
         }
     }
     bodies
 }
 
-fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
+/// The one `measure` request for a setup: the runner, the live readout and the reset-pose latch
+/// all send it, so they read the same bodies and contact sets.
+pub fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
     MeasureRequest {
         bodies: measured_bodies(criterion),
         contacts: criterion
@@ -5431,6 +5936,24 @@ impl AdaptiveRun {
     }
 }
 
+/// Why the window-cover rule demoted a capped standing attempt from success to truncated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowDemotion {
+    /// No whole `hold_s` success window completed.
+    NoSuccessWindow,
+    /// The success windows cover less of the scored time than `standing_fraction_for_success`.
+    CoverBelowThreshold,
+}
+
+/// Snake-case name of a window demotion, as written to the run data and results.
+pub fn window_demotion_name(reason: WindowDemotion) -> &'static str {
+    match reason {
+        WindowDemotion::NoSuccessWindow => "no_success_window",
+        WindowDemotion::CoverBelowThreshold => "cover_below_threshold",
+    }
+}
+
 /// Running numbers of one adaptive attempt.
 #[derive(Default)]
 struct AdaptiveAttemptTally {
@@ -5445,6 +5968,11 @@ struct AdaptiveAttemptTally {
     window_s: f64,
     /// Scored seconds the completed success windows cover.
     window_covered_s: f64,
+    /// The current partial window continues unbroken from a completed one (set when a window
+    /// completes, cleared by any lean past the cone or non-idle burst).
+    partial_continues: bool,
+    /// Why a capped success was demoted to truncated.
+    demotion_reason: Option<WindowDemotion>,
 }
 
 impl AdaptiveAttemptTally {
@@ -5454,14 +5982,21 @@ impl AdaptiveAttemptTally {
         self.min_a = Some(self.min_a.map_or(level, |m| m.min(level)));
     }
 
-    /// Share of the scored time the completed success windows cover.
+    /// Share of the scored time the success windows cover: the completed `hold_s` windows, plus
+    /// the trailing partial window when it continues unbroken from a completed one (so a cap that
+    /// is not a whole number of windows is not penalised for its remainder). 0 without a
+    /// completed window.
     fn window_cover_fraction(&self, burst_period_s: f64) -> f64 {
         let seconds = self.bursts * burst_period_s;
-        if seconds > 0.0 {
-            self.window_covered_s / seconds
+        if seconds <= 0.0 || self.success_windows == 0 {
+            return 0.0;
+        }
+        let trailing = if self.partial_continues {
+            self.window_s
         } else {
             0.0
-        }
+        };
+        ((self.window_covered_s + trailing) / seconds).min(1.0)
     }
 
     fn stats(
@@ -5494,6 +6029,8 @@ impl AdaptiveAttemptTally {
                 0.0
             },
             success_windows: self.success_windows,
+            window_cover_fraction: self.window_cover_fraction(burst_period_s),
+            demotion_reason: self.demotion_reason,
             lean_retightens: self.lean_retightens,
             lost_stance,
             a_start: start.a,
@@ -5564,7 +6101,12 @@ fn steps_table_spec(
         ColumnSpec::with_unit(
             "posture_tilt",
             "deg",
-            "Posture tilt: the angle from world vertical of the line from the support centre (mean position of the contact bodies touching, all of them when none touch) to the posture top body. This is the tilt the upright, lean, fall and stance-loss rules score.",
+            "Posture tilt: the angle from world vertical of the line from the support centre (mean position of the contact bodies touching, all of them when none touch) to the posture top body. Absolute, from world vertical; see scored_tilt for the tilt the rules score.",
+        ),
+        ColumnSpec::with_unit(
+            "scored_tilt",
+            "deg",
+            "Posture tilt from the attempt's reset pose: the angle between the posture line now and the line on the attempt's first sample (turned by the heading change). This is the tilt the upright, lean, fall and stance-loss rules score; it reads 0 at the reset pose.",
         ),
         ColumnSpec::with_unit("height", "m", "Torso height above world z."),
         ColumnSpec::unitless(
@@ -5749,6 +6291,19 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
                 "lean_retightens",
                 "Adaptive: times a lean past the cone outlasted the lean grace and tightened the assist. Empty for a non-adaptive attempt.",
             ),
+            ColumnSpec::with_unit(
+                "reset_tilt",
+                "deg",
+                "Absolute torso lean on the attempt's first sample (the reset pose), from world vertical. Every tilt rule is measured from this pose. Empty when no posture line was read.",
+            ),
+            ColumnSpec::unitless(
+                "window_cover_fraction",
+                "Adaptive: share of the scored time the success windows cover (whole hold windows plus an unbroken trailing part). A capped standing attempt is a success only when this reaches the standing-fraction threshold. Empty for a non-adaptive attempt.",
+            ),
+            ColumnSpec::unitless(
+                "demotion_reason",
+                "Adaptive: why a capped standing attempt was scored truncated instead of success: no_success_window (no whole hold window completed) or cover_below_threshold (windows cover too little of the scored time). Empty when the attempt was not demoted.",
+            ),
     ];
     if walking {
         columns.extend([
@@ -5899,6 +6454,13 @@ fn attempt_row(
         adaptive.map_or(RunDataValue::Null, |a| {
             RunDataValue::count(u64::from(a.lean_retightens))
         }),
+        RunDataValue::opt_float(record.reset_tilt_deg),
+        RunDataValue::opt_float(adaptive.map(|a| a.window_cover_fraction)),
+        adaptive
+            .and_then(|a| a.demotion_reason)
+            .map_or(RunDataValue::Null, |reason| {
+                RunDataValue::text(window_demotion_name(reason))
+            }),
     ]);
     if walking {
         let walk = record.walk.as_ref();
@@ -5924,6 +6486,7 @@ struct AttemptHooks<'r, 'a> {
     data: &'r mut Option<&'a mut dyn RunDataSink>,
     steps: &'r mut StepsTable,
     apply_event: &'r mut Option<ApplyEvent<'a>>,
+    reset_latch: &'r mut Option<ResetLatchSink<'a>>,
     phase: &'r str,
     attempt_index: usize,
     probe: bool,
@@ -5970,6 +6533,7 @@ impl AttemptHooks<'_, '_> {
             RunDataValue::Float(sim_time_s),
             RunDataValue::Float(sample.tilt_deg),
             RunDataValue::opt_float(sample.posture.map(|p| p.tilt_deg)),
+            RunDataValue::Float(sample.scored_tilt_deg()),
             RunDataValue::opt_float(sample.torso_height_m),
             RunDataValue::opt_float(sample_height_fraction(sample)),
             RunDataValue::opt_float(
@@ -6375,6 +6939,12 @@ fn run_balance_attempt(
             }
             None => None,
         };
+        // Lean is measured from the attempt's reset pose; the first sample is that pose.
+        let torso_now = body.tilt_vec.and_then(|vec| {
+            LeanReference::from_tilt_vec(vec, body.heading.as_ref().and_then(|h| h.yaw_rad))
+        });
+        let torso_lean =
+            torso_now.map(|now| now.lean_from(open.reset_torso.as_ref().unwrap_or(&now)));
         let mut sample = BalanceSample {
             seq: reading.physics_steps,
             seed,
@@ -6392,14 +6962,23 @@ fn run_balance_attempt(
             support_level: Some(level_now),
             settling,
             perturbing,
-            support_need: Some(support_need(
-                body.tilt_rad,
-                body.tilt_vec,
-                // Absent ang_vel means no lookahead term, as when it defaulted to zeros.
-                body.ang_vel.unwrap_or([0.0; 3]),
-                criterion.max_tilt_deg,
-                criterion.need_lookahead_s,
-            )),
+            support_need: Some(match torso_lean {
+                // From the torso's reset orientation, like the scored posture tilt.
+                Some(lean) => (predicted_relative_tilt_deg(
+                    &lean,
+                    // Absent ang_vel means no lookahead term, as when it defaulted to zeros.
+                    body.ang_vel.unwrap_or([0.0; 3]),
+                    criterion.need_lookahead_s,
+                ) / criterion.max_tilt_deg)
+                    .clamp(0.0, 1.0),
+                None => support_need(
+                    body.tilt_rad,
+                    body.tilt_vec,
+                    body.ang_vel.unwrap_or([0.0; 3]),
+                    criterion.max_tilt_deg,
+                    criterion.need_lookahead_s,
+                ),
+            }),
             support_effort: wrench.map(|w| support_effort(w, &sizing)),
             support_torque_nm: wrench.map(|w| w.wrench_norm_torque),
             support_force_n: wrench.map(|w| w.wrench_norm_force),
@@ -6414,6 +6993,19 @@ fn run_balance_attempt(
             stability: Some(StabilitySample::from_body(body)),
             walk: walk_reading,
         };
+        if open.reset_posture.is_none() {
+            if let (Some(reference), Some(sink)) = (
+                sample.posture.and_then(|p| p.reference),
+                hooks.reset_latch.as_deref_mut(),
+            ) {
+                sink(&ResetLatch {
+                    reference,
+                    episode_id: reading.episode_id,
+                    physics_steps: reading.physics_steps,
+                });
+            }
+        }
+        let posture_lean = sample.score_posture_from(open.reset_posture.as_ref());
         if observing && !settling {
             observe_track.add(&sample, criterion.max_tilt_deg, elapsed_s - settle_s);
         }
@@ -6464,17 +7056,26 @@ fn run_balance_attempt(
                     // The posture line's lean, carried forward along the torso's swing (the
                     // torso's angular velocity, not a difference of successive centres, so a
                     // foot lifting does not read as a jump).
-                    let predicted = predicted_tilt_deg(
-                        posture.tilt_rad,
-                        Some(posture.tilt_vec_rad),
-                        // Absent ang_vel means no lookahead term, as before.
-                        body.ang_vel.unwrap_or([0.0; 3]),
-                        criterion.need_lookahead_s,
-                    );
+                    let predicted = match &posture_lean {
+                        // From the reset pose, like the scored tilt.
+                        Some(lean) => predicted_relative_tilt_deg(
+                            lean,
+                            body.ang_vel.unwrap_or([0.0; 3]),
+                            criterion.need_lookahead_s,
+                        ),
+                        None => predicted_tilt_deg(
+                            posture.tilt_rad,
+                            Some(posture.tilt_vec_rad),
+                            // Absent ang_vel means no lookahead term, as before.
+                            body.ang_vel.unwrap_or([0.0; 3]),
+                            criterion.need_lookahead_s,
+                        ),
+                    };
                     // One reference cone for the spring, the lean test and the success window.
                     let dt_s = f64::from(new_bursts) * criterion.burst_period_s;
                     if predicted > run.assist.cone_deg(criterion) {
                         tally.window_s = 0.0;
+                        tally.partial_continues = false;
                         lean_s += dt_s;
                         if lean_s > criterion.lean_grace_s + 1.0e-9 {
                             run.assist.lean_retighten(criterion);
@@ -6490,9 +7091,11 @@ fn run_balance_attempt(
                                 tally.success_windows += 1;
                                 tally.window_covered_s += tally.window_s;
                                 tally.window_s = 0.0;
+                                tally.partial_continues = true;
                             }
                         } else {
                             tally.window_s = 0.0;
+                            tally.partial_continues = false;
                         }
                     }
                     let moved = run.assist.step(criterion, predicted, new_bursts);
@@ -6511,12 +7114,20 @@ fn run_balance_attempt(
         }
         // A capped standing attempt is a success only when success windows cover its standing
         // share: a held passive lean (or a held support) is not success and pays no Pleasure.
+        // At least one whole window must have completed.
         if adaptive.is_some() && criterion.walk.is_none() {
             if let BalanceAttemptStep::Finished(record) = &mut step {
-                if record.outcome == BalanceAttemptOutcome::Success
-                    && tally.window_cover_fraction(criterion.burst_period_s)
-                        < criterion.standing_fraction_for_success - 1.0e-9
+                let reason = if tally.success_windows == 0 {
+                    Some(WindowDemotion::NoSuccessWindow)
+                } else if tally.window_cover_fraction(criterion.burst_period_s)
+                    < criterion.standing_fraction_for_success - 1.0e-9
                 {
+                    Some(WindowDemotion::CoverBelowThreshold)
+                } else {
+                    None
+                };
+                if record.outcome == BalanceAttemptOutcome::Success && reason.is_some() {
+                    tally.demotion_reason = reason;
                     record.outcome = BalanceAttemptOutcome::Truncated;
                     outcome = Some(BalanceAttemptOutcome::Truncated);
                 }
@@ -7053,6 +7664,14 @@ fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, Trainer
         .ok_or_else(|| TrainerError::Runtime("balance control response has no result".to_string()))
 }
 
+/// Run controls this engine's loop honours (pause, skip and cancel; at the attempt; walk runs this engine).
+pub const CONTROL: crate::control::EngineControl = crate::control::EngineControl {
+    pause: true,
+    skip: true,
+    cancel: true,
+    boundary: crate::control::ControlBoundary::Attempt,
+};
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -7302,6 +7921,7 @@ mod tests {
             outcome,
             bursts: 5,
             final_tilt_deg: 3.0,
+            reset_tilt_deg: None,
             stance_lost_tilt_deg: None,
             support_level: level,
             upright_fraction: upright,
@@ -8560,6 +9180,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(
             &mut run,
@@ -8929,6 +9550,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         let report = run_balance_phase(
             &mut run,
@@ -9052,12 +9674,13 @@ mod tests {
             report.attempts[0].outcome,
             BalanceAttemptOutcome::Interrupted
         );
-        // truncated: leaning past the limit for the whole cap (3.0 s = 60 bursts)
+        // truncated: leaning past the limit (from the reset pose) for the whole cap (3.0 s = 60
+        // bursts); the first sample is the reset pose
         let mut mock = MockController::new(
             0.05,
             2,
-            Box::new(|_, _| Scripted {
-                tilt_deg: 30.0,
+            Box::new(|k, _| Scripted {
+                tilt_deg: if k <= 1 { 0.0 } else { 30.0 },
                 ..upright_step()
             }),
         );
@@ -9332,6 +9955,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(
             &mut run,
@@ -9432,6 +10056,7 @@ mod tests {
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
                 memory_counters: None,
+                reset_latch: None,
             };
             run_balance_phase(
                 &mut run,
@@ -9505,6 +10130,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         let error = run_balance_phase(
             &mut run,
@@ -9556,6 +10182,7 @@ mod tests {
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
                 memory_counters: None,
+                reset_latch: None,
             };
             run_balance_phase(
                 &mut run,
@@ -9639,6 +10266,7 @@ mod tests {
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
                 memory_counters: None,
+                reset_latch: None,
             };
             run_balance_phase(
                 &mut run,
@@ -9711,6 +10339,7 @@ mod tests {
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
                 memory_counters: memory.map(|source| -> &mut dyn MemoryCounterSource { source }),
+                reset_latch: None,
             };
             run_balance_phase(
                 &mut run,
@@ -9770,10 +10399,10 @@ mod tests {
         let col = |name: &str| data.column_index(OBSERVE_TABLE, name).expect(name);
         assert_eq!(observe[col("phase")], RunDataValue::text("observe"));
         assert_eq!(observe[col("allowed_angle")], RunDataValue::Float(15.0));
-        // Tilt stays at 2 degrees of a 15 degree allowance: never reaches the limit.
+        // Tilt holds at its reset value (2 degrees from vertical): 0 of the 15 degree allowance.
         assert_eq!(observe[col("time_to_limit")], RunDataValue::Null);
         match observe[col("peak_tilt_fraction")] {
-            RunDataValue::Float(v) => assert!((v - 2.0 / 15.0).abs() < 1e-9, "{v}"),
+            RunDataValue::Float(v) => assert!(v.abs() < 1e-9, "{v}"),
             ref other => panic!("{other:?}"),
         }
         assert_eq!(observe[col("fall_direction")], RunDataValue::Null);
@@ -9828,7 +10457,8 @@ mod tests {
         let limit = body.time_to_limit_s.expect("passed the limit");
         assert!((0.1..=0.25).contains(&limit), "{limit}");
         assert!(
-            (body.peak_tilt_fraction - 2.0).abs() < 1e-9,
+            // 3 degrees at reset, 30 after: 27 degrees from the reset pose over the 15 allowed
+            (body.peak_tilt_fraction - 27.0 / 15.0).abs() < 1e-9,
             "{}",
             body.peak_tilt_fraction
         );
@@ -9930,6 +10560,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         let error = run_balance_phase(
             &mut run,
@@ -10493,6 +11124,7 @@ mod tests {
             recovery: config,
             burst: clock,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(&mut run, mock, present, events, cancel)
     }
@@ -10908,6 +11540,85 @@ mod tests {
     }
 
     #[test]
+    fn a_skip_mid_attempt_finishes_that_attempt_and_ends_the_phase_skipped() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let cancel = CancelToken::new();
+        let skipper = cancel.clone();
+        let mut first_burst = true;
+        let config = recovery(5.0, 3);
+        let report = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2, 3],
+            &config,
+            &RUNNING_CLOCK,
+            &cancel,
+            &mut CollectingEventSink::default(),
+            None,
+            None,
+            // The skip arrives in the middle of the first attempt.
+            &mut |_| {
+                if first_burst {
+                    first_burst = false;
+                    skipper.skip();
+                }
+                Ok(())
+            },
+        )
+        .expect("phase");
+        assert_eq!(report.attempts.len(), 1, "no attempt starts after the skip");
+        assert_eq!(
+            report.attempts[0].bursts, 10,
+            "the attempt in progress ran to its end"
+        );
+        assert!(report.skipped);
+        assert!(!cancel.is_cancelled());
+    }
+
+    #[test]
+    fn a_phase_with_a_fresh_token_after_a_skipped_one_runs_every_attempt() {
+        let c = recovery_criterion();
+        let config = recovery(5.0, 3);
+        let skipped_token = CancelToken::new();
+        skipped_token.skip();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let first = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2, 3],
+            &config,
+            &RUNNING_CLOCK,
+            &skipped_token,
+            &mut CollectingEventSink::default(),
+            None,
+            None,
+            &mut |_| Ok(()),
+        )
+        .expect("skipped phase");
+        // A skip asked before any attempt finished still lets one attempt run and be reported.
+        assert_eq!(first.attempts.len(), 1);
+        assert!(first.skipped);
+        let fresh = CancelToken::new();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let next = run_recoverable(
+            &c,
+            &mut mock,
+            &[1, 2, 3],
+            &config,
+            &RUNNING_CLOCK,
+            &fresh,
+            &mut CollectingEventSink::default(),
+            None,
+            None,
+            &mut |_| Ok(()),
+        )
+        .expect("next phase");
+        assert_eq!(next.attempts.len(), 3);
+        assert!(!next.skipped);
+    }
+
+    #[test]
     fn a_burst_stall_mid_attempt_discards_it_and_reruns_the_same_seed() {
         // A 5 ms burst: the burst presenter below takes one burst period per burst, as a live
         // run's wall-clock step does.
@@ -11088,6 +11799,7 @@ mod tests {
                 recovery: &TEST_RECOVERY,
                 burst: &RUNNING_CLOCK,
                 memory_counters: None,
+                reset_latch: None,
             };
             run_balance_phase(
                 &mut run,
@@ -11262,6 +11974,8 @@ mod tests {
         let mut leaning = standing_sample(1, 0.30, None);
         leaning.posture = Some(PostureSample {
             tilt_deg: 40.0,
+            relative_tilt_deg: None,
+            reference: None,
             forward_deg: None,
             left_deg: None,
         });
@@ -11277,6 +11991,8 @@ mod tests {
         let mut first = standing_sample(1, 0.10, None);
         first.posture = Some(PostureSample {
             tilt_deg: 40.0,
+            relative_tilt_deg: None,
+            reference: None,
             forward_deg: None,
             left_deg: None,
         });
@@ -11417,8 +12133,16 @@ mod tests {
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
         let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
         assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
-        // Posture 10x the torso (20 deg > 15): never upright, though the torso reads 2 deg.
-        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        // Posture 10x the torso: the torso goes from 2 to 4 deg after the reset sample, the
+        // posture line from 20 to 40 deg, so it is 20 deg from its reset pose (> 15): never
+        // upright, though the torso is only 2 deg from its own.
+        let lean_after_reset = || {
+            Box::new(|k, _| Scripted {
+                tilt_deg: if k <= 1 { 2.0 } else { 4.0 },
+                ..upright_step()
+            })
+        };
+        let mut mock = MockController::new(0.05, 2, lean_after_reset());
         mock.posture_tilt_factor = 10.0;
         let mut tape = RecordingRunDataSink::default();
         let report = run_with_hooks(&c, &mut mock, "train", &[1], &rid(), Some(&mut tape), None)
@@ -11431,13 +12155,18 @@ mod tests {
             ref other => panic!("{other:?}"),
         };
         let (tilt, posture, need) = (col("tilt"), col("posture_tilt"), col("support_need"));
+        let scored = col("scored_tilt");
         assert!(col("posture_forward") > posture && col("posture_left") > posture);
         let rows = tape.rows_of("steps");
-        assert!(!rows.is_empty());
-        for row in rows {
-            assert!((float(row, tilt) - 2.0).abs() < 1e-6);
-            assert!((float(row, posture) - 20.0).abs() < 1e-6);
-            // support_need stays on the trunk: 2 deg over the 15 deg limit.
+        assert!(rows.len() > 1);
+        // The reset sample reads 0 on both the scored tilt and the need.
+        assert!(float(&rows[0], scored).abs() < 1e-6 && float(&rows[0], need).abs() < 1e-6);
+        for row in &rows[1..] {
+            // The report stays absolute.
+            assert!((float(row, tilt) - 4.0).abs() < 1e-6);
+            assert!((float(row, posture) - 40.0).abs() < 1e-6);
+            assert!((float(row, scored) - 20.0).abs() < 1e-6);
+            // support_need follows the trunk from its reset orientation: 2 deg over 15.
             assert!(
                 (float(row, need) - 2.0 / 15.0).abs() < 1e-6,
                 "{}",
@@ -11446,10 +12175,268 @@ mod tests {
         }
         // The posture is scored only: the Trainer never re-targets the spring, in train or test.
         assert!(mock.ref_up_updates.is_empty());
-        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut mock = MockController::new(0.05, 2, lean_after_reset());
         mock.posture_tilt_factor = 10.0;
         run_phase(&c, &mut mock, "train", &[1]).expect("train phase");
         assert!(mock.ref_up_updates.is_empty());
+    }
+
+    /// A sample whose posture line stands `lean_deg` off vertical toward `heading` (rad, in the
+    /// world XY plane), read with the torso heading `yaw`.
+    fn leaning_sample(seq: u64, lean_deg: f64, heading: f64, yaw: f64) -> BalanceSample {
+        let t = lean_deg.to_radians();
+        let top = [t.sin() * heading.cos(), t.sin() * heading.sin(), t.cos()];
+        let reading = posture_reading([0.0; 3], top).expect("line");
+        let mut s = sample(seq, 1, 2.0);
+        s.posture = Some(reading.sample(Some(yaw)));
+        s
+    }
+
+    /// Fold a sample the way the phase runner does: the scored tilt is set from the attempt's
+    /// latched reset line before the attempt sees it.
+    fn fed_from_reset(
+        open: &OpenBalanceAttempt,
+        s: &BalanceSample,
+        c: &BalanceFeetCriterion,
+    ) -> BalanceAttemptStep {
+        let mut s = s.clone();
+        s.score_posture_from(open.reset_posture.as_ref());
+        observe_balance_sample(open, &s, c, s.seed).expect("observe")
+    }
+
+    #[test]
+    fn a_held_reset_lean_is_zero_tilt_and_a_success() {
+        let mut c = criterion();
+        c.hold_s = 0.1;
+        c.attempt_cap_s = 1.0;
+        // The stand pose leans 18 deg (max 15): held still, it is the reset pose.
+        let mut open = OpenBalanceAttempt::fresh();
+        let mut finished = None;
+        for seq in 1..=6 {
+            let s = leaning_sample(seq, 18.0, 0.4, 0.0);
+            match fed_from_reset(&open, &s, &c) {
+                BalanceAttemptStep::Continue(next) => open = next,
+                BalanceAttemptStep::Finished(record) => {
+                    finished = Some(record);
+                    break;
+                }
+            }
+        }
+        let record = finished.expect("a held pose reaches the hold");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Success);
+        assert!(record.final_tilt_deg < 0.01, "{}", record.final_tilt_deg);
+        assert!((record.reset_tilt_deg.expect("reset") - 18.0).abs() < 1e-9);
+        // Absolute lean is kept apart from the scored one.
+        let s = leaning_sample(9, 18.0, 0.4, 0.0);
+        let mut scored = s.clone();
+        scored.score_posture_from(open.reset_posture.as_ref());
+        assert!((scored.absolute_tilt_deg() - 18.0).abs() < 1e-9);
+        assert!(scored.scored_tilt_deg() < 0.01);
+    }
+
+    #[test]
+    fn the_reset_lean_turns_with_the_heading() {
+        let reset = leaning_sample(1, 18.0, 0.0, 0.0)
+            .posture
+            .expect("posture")
+            .reference;
+        let reset = reset.expect("reference");
+        // The same pose after a 90 deg turn about up: the line leans 90 deg further round.
+        let turned = leaning_sample(
+            2,
+            18.0,
+            std::f64::consts::FRAC_PI_2,
+            std::f64::consts::FRAC_PI_2,
+        )
+        .posture
+        .expect("posture")
+        .reference
+        .expect("reference");
+        let lean = turned.lean_from(&reset);
+        assert!(lean.angle_rad.to_degrees() < 0.01, "{lean:?}");
+        // Without the heading change the same line is 25 deg away (2 * 18 * sin... a chord), so
+        // the rotation is what removes it.
+        let unturned = LeanReference {
+            yaw_rad: reset.yaw_rad,
+            ..turned
+        };
+        assert!(unturned.lean_from(&reset).angle_rad.to_degrees() > 20.0);
+        // A 16 deg lean added toward the same side is 16 deg from the reset line.
+        let more = leaning_sample(3, 34.0, 0.0, 0.0)
+            .posture
+            .expect("posture")
+            .reference
+            .expect("reference");
+        assert!((more.lean_from(&reset).angle_rad.to_degrees() - 16.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_lean_added_to_the_reset_pose_is_not_upright_and_a_fall_trips_relative() {
+        let mut c = fall_criterion();
+        c.fall_tilt_deg = 30.0;
+        let mut open = OpenBalanceAttempt::fresh();
+        open = match fed_from_reset(&open, &leaning_sample(1, 18.0, 0.0, 0.0), &c) {
+            BalanceAttemptStep::Continue(next) => next,
+            other => panic!("{other:?}"),
+        };
+        // 16 deg more lean (max 15): the tilt test fails; 31 deg more passes the fall tilt (30).
+        let mut s = leaning_sample(2, 34.0, 0.0, 0.0);
+        s.score_posture_from(open.reset_posture.as_ref());
+        assert!((s.scored_tilt_deg() - 16.0).abs() < 1e-9);
+        assert!(non_upright_reasons(&s, &c, None).tilt);
+        for seq in 2..=5 {
+            open = match fed_from_reset(&open, &leaning_sample(seq, 34.0, 0.0, 0.0), &c) {
+                BalanceAttemptStep::Continue(next) => next,
+                other => panic!("{other:?}"),
+            };
+        }
+        assert_eq!(
+            open.fall_bursts, 0,
+            "16 deg from reset is below the fall tilt"
+        );
+        let mut fell = None;
+        for seq in 6..=11 {
+            if let BalanceAttemptStep::Finished(r) =
+                fed_from_reset(&open, &leaning_sample(seq, 49.0, 0.0, 0.0), &c)
+            {
+                fell = Some(r);
+                break;
+            }
+            open = match fed_from_reset(&open, &leaning_sample(seq, 49.0, 0.0, 0.0), &c) {
+                BalanceAttemptStep::Continue(next) => next,
+                _ => unreachable!(),
+            };
+        }
+        let record = fell.expect("31 deg from the reset pose trips the fall");
+        assert_eq!(record.outcome, BalanceAttemptOutcome::Fell);
+        assert!((record.final_tilt_deg - 31.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_stand_pose_that_leans_is_a_success_through_the_phase_runner() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 1.0;
+        // The posture line stands 18 deg off vertical (max 15), held still.
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, _| Scripted {
+                tilt_deg: 18.0,
+                ..upright_step()
+            }),
+        );
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
+        assert!(attempt.final_tilt_deg < 0.01, "{}", attempt.final_tilt_deg);
+        assert!((attempt.reset_tilt_deg.expect("reset") - 18.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn window_cover_counts_a_trailing_window_only_when_it_continues_a_completed_one() {
+        let mut tally = AdaptiveAttemptTally {
+            bursts: 160.0,
+            success_windows: 1,
+            window_covered_s: 3.0,
+            window_s: 2.0,
+            ..AdaptiveAttemptTally::default()
+        };
+        let cover = |t: &AdaptiveAttemptTally| t.window_cover_fraction(0.05);
+        assert!(
+            (cover(&tally) - 3.0 / 8.0).abs() < 1e-9,
+            "a fresh partial is not counted"
+        );
+        tally.partial_continues = true;
+        assert!((cover(&tally) - 5.0 / 8.0).abs() < 1e-9);
+        tally.success_windows = 0;
+        assert_eq!(cover(&tally), 0.0, "no completed window, no cover");
+    }
+
+    #[test]
+    fn a_standing_cap_that_is_not_whole_windows_is_a_success_with_full_cover() {
+        // 8 s cap, 3 s windows: two whole windows and a 2 s tail that continues them.
+        let mut c = quick_adaptive();
+        c.hold_s = 3.0;
+        c.attempt_cap_s = 8.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let attempt = &report.attempts[0];
+        let stats = attempt.adaptive.expect("stats");
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success, "{stats:?}");
+        assert_eq!(stats.success_windows, 2);
+        assert!(
+            (stats.window_cover_fraction - 1.0).abs() < 1e-9,
+            "{stats:?}"
+        );
+        assert_eq!(stats.demotion_reason, None);
+    }
+
+    #[test]
+    fn a_cap_with_no_completed_window_is_demoted_and_says_why() {
+        // Standing the whole cap, but with the support never idle no window can complete.
+        let mut c = quick_adaptive();
+        c.idle_fraction = 0.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let attempt = &report.attempts[0];
+        let stats = attempt.adaptive.expect("stats");
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(stats.success_windows, 0);
+        assert_eq!(stats.window_cover_fraction, 0.0);
+        assert_eq!(stats.demotion_reason, Some(WindowDemotion::NoSuccessWindow));
+    }
+
+    #[test]
+    fn the_attempts_table_carries_reset_tilt_cover_and_demotion() {
+        let mut c = quick_adaptive();
+        c.idle_fraction = 0.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered = Vec::new();
+        let report = adaptive_train(
+            &c,
+            &mut mock,
+            &[1],
+            None,
+            BalanceRewardPolicy::Affect,
+            &mut delivered,
+        );
+        let mut record = report.attempts[0].clone();
+        record.reset_tilt_deg = Some(7.5);
+        let spec = attempts_table_spec(false);
+        let row = attempt_row("train", 0, &record, false);
+        assert_eq!(spec.columns.len(), row.len());
+        let at = |name: &str| {
+            let index = spec
+                .columns
+                .iter()
+                .position(|col| col.name == name)
+                .unwrap_or_else(|| panic!("column {name}"));
+            row[index].clone()
+        };
+        assert_eq!(at("reset_tilt"), RunDataValue::Float(7.5));
+        assert_eq!(at("window_cover_fraction"), RunDataValue::Float(0.0));
+        assert_eq!(
+            at("demotion_reason"),
+            RunDataValue::text("no_success_window")
+        );
     }
 
     #[test]
@@ -11458,8 +12445,10 @@ mod tests {
         let mut mock = MockController::new(
             0.05,
             2,
-            Box::new(|_, t| Scripted {
+            // (k 0 is the sizing read, k 1 the reset sample.) The posture line leans 2 deg at the reset sample and 6 deg after: 4 deg from reset.
+            Box::new(|k, t| Scripted {
                 down: t < 1.0,
+                tilt_deg: if k <= 1 { 1.0 } else { 3.0 },
                 ..upright_step()
             }),
         );
@@ -12106,6 +13095,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(
             &mut run,
@@ -12395,7 +13385,8 @@ mod tests {
         assert_eq!(first.outcome, BalanceAttemptOutcome::LostStance);
         let first_stats = first.adaptive.expect("stats");
         assert_eq!(first_stats.a_start, 0.2);
-        assert_eq!(first.stance_lost_tilt_deg, Some(2.0));
+        // Tilt is measured from the reset pose: the stance is lost with the lean unchanged.
+        assert_eq!(first.stance_lost_tilt_deg, Some(0.0));
         let second_stats = second.adaptive.expect("stats");
         // The slow average fades during the attempt, then a loss moves it at least halfway to 1.
         assert!(
@@ -12406,9 +13397,10 @@ mod tests {
         assert!(second_stats.a_slow_start > first_stats.a_slow_start);
         assert!(second_stats.a_start >= second_stats.a_slow_start - 1e-9);
         assert!((second.support_level - second_stats.a_start).abs() < 1e-12);
-        assert_eq!(second_stats.learned_loss_tilt_deg, Some(2.0));
+        // Measured from the reset pose, the lean at the loss is 0.
+        assert_eq!(second_stats.learned_loss_tilt_deg, Some(0.0));
         let next = report.adaptive_state_next.expect("state");
-        assert_eq!(next.loss_tilts_deg, vec![2.0, 2.0]);
+        assert_eq!(next.loss_tilts_deg, vec![0.0, 0.0]);
         assert!(next.a_slow >= second_stats.a_slow_start);
     }
 
@@ -12795,9 +13787,10 @@ mod tests {
         );
         let stats = attempt.adaptive.expect("stats");
         assert!(stats.lost_stance && stats.standing_fraction < 1.0);
-        // The tilt at the first burst off the stance is kept (the scripted tilt is 2 deg), and
-        // the loss feeds the learned limit the next attempt starts from.
-        assert_eq!(attempt.stance_lost_tilt_deg, Some(2.0));
+        // The tilt at the first burst off the stance is kept (measured from the reset pose, the
+        // scripted 2 deg lean is 0), and the loss feeds the learned limit the next attempt starts
+        // from.
+        assert_eq!(attempt.stance_lost_tilt_deg, Some(0.0));
         assert_eq!(
             stats.learned_loss_tilt_deg, None,
             "learned only after the loss"
@@ -12808,7 +13801,7 @@ mod tests {
                 .as_ref()
                 .expect("state")
                 .loss_tilts_deg,
-            vec![2.0]
+            vec![0.0]
         );
         assert!(
             report.cone_min_above_loss_tilt,
@@ -13050,6 +14043,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(
             &mut run,
@@ -13472,8 +14466,8 @@ mod tests {
             .map(|a| f64::from(a.bursts) * 0.05)
             .sum();
         assert!(block.timeline.last().expect("last").t_s <= scored_s + 1e-6);
-        // tilt 2 of max 15, fixed level: a constant deviation
-        assert!((block.timeline[0].deviation_mean - 2.0 / 15.0).abs() < 1e-9);
+        // a constant 2 deg lean held from the reset pose is no deviation from it
+        assert!(block.timeline[0].deviation_mean.abs() < 1e-9);
         // adaptive: the applied level starts at the ceiling and falls
         let c = quick_adaptive();
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
@@ -13539,6 +14533,7 @@ mod tests {
             recovery: &TEST_RECOVERY,
             burst: &RUNNING_CLOCK,
             memory_counters: None,
+            reset_latch: None,
         };
         run_balance_phase(
             &mut run,
@@ -13836,6 +14831,231 @@ mod tests {
         .expect("parse");
         assert_eq!(parsed.actuators["joint_a"], 0.25);
         assert_eq!(parsed.actuator_force["joint_a"], 3.5);
+    }
+
+    // ---- pause and resume ----
+
+    /// One segment of a split run. `pause_at_attempt_start` asks for the pause-stop (a skip in
+    /// boundary mode) when the n-th attempt of the segment starts. Returns the report, the
+    /// export, the scheduled events applied and the attempt-table indices.
+    fn balance_segment(
+        c: &BalanceFeetCriterion,
+        seeds: &[u64],
+        from: &crate::resume::ResumeFrom,
+        pause_at_attempt_start: Option<usize>,
+    ) -> (
+        BalancePhaseReport,
+        crate::resume::ResumeExport,
+        Vec<String>,
+        Vec<String>,
+    ) {
+        balance_segment_with_fault(c, seeds, from, pause_at_attempt_start, None)
+    }
+
+    /// `balance_segment`, with the controller link failing once at the n-th measure call of the
+    /// segment (that attempt is discarded and re-run).
+    fn balance_segment_with_fault(
+        c: &BalanceFeetCriterion,
+        seeds: &[u64],
+        from: &crate::resume::ResumeFrom,
+        pause_at_attempt_start: Option<usize>,
+        fail_measure_at: Option<usize>,
+    ) -> (
+        BalancePhaseReport,
+        crate::resume::ResumeExport,
+        Vec<String>,
+        Vec<String>,
+    ) {
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        if let Some(at) = fail_measure_at {
+            mock.failures = Some(Box::new(move |kind, n| {
+                (kind == "measure" && n == at as u32)
+                    .then(|| TrainerError::Transient("HTTP 503 busy".to_string()))
+            }));
+        }
+        let mut tape = RecordingRunDataSink::default();
+        let cancel = CancelToken::new();
+        let pauser = cancel.clone();
+        let mut starts = 0usize;
+        let mut applied: Vec<String> = Vec::new();
+        let mut apply = |action: &ScheduledAction| -> Result<(), TrainerError> {
+            match action {
+                ScheduledAction::AttemptStart => {
+                    starts += 1;
+                    if Some(starts) == pause_at_attempt_start {
+                        pauser.skip();
+                    }
+                }
+                ScheduledAction::SetMappingPsc { src, .. } => applied.push(src.clone()),
+                _ => {}
+            }
+            Ok(())
+        };
+        let mut events = CollectingEventSink::default();
+        let run_id = rid();
+        let mut run = BalancePhaseRun {
+            phase: "train",
+            seeds,
+            criterion: c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: None,
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+            data: Some(&mut tape),
+            apply_event: if c.scheduled_events.is_empty() && pause_at_attempt_start.is_none() {
+                None
+            } else {
+                Some(&mut apply)
+            },
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
+            memory_counters: None,
+            reset_latch: None,
+        };
+        let (report, export) = run_balance_phase_from(
+            &mut run,
+            from,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &cancel,
+        )
+        .expect("segment");
+        drop(run);
+        let indices = tape
+            .rows_of("attempts")
+            .iter()
+            .map(|row| format!("{:?}", row[1]))
+            .collect();
+        (report, export, applied, indices)
+    }
+
+    /// Splits a run at `pause_at` (the attempt in which the pause is asked) and checks it
+    /// against the unsplit run.
+    fn assert_balance_split_equals_unsplit(
+        c: &BalanceFeetCriterion,
+        pause_at: usize,
+        expected_units: u64,
+    ) {
+        assert_balance_split_with_fault(c, pause_at, Some(expected_units), None);
+    }
+
+    /// `assert_balance_split_equals_unsplit` with a link fault in the first segment (and in the
+    /// unsplit run): the last segment's report must hold the discards, the assist timeline and
+    /// the deviation timeline of the whole run.
+    fn assert_balance_split_with_fault(
+        c: &BalanceFeetCriterion,
+        pause_at: usize,
+        expected_units: Option<u64>,
+        fault: Option<usize>,
+    ) {
+        use crate::resume::ResumeFrom;
+        let seeds: Vec<u64> = (1..=6).collect();
+        let (unsplit, unsplit_export, unsplit_applied, unsplit_indices) =
+            balance_segment_with_fault(c, &seeds, &ResumeFrom::default(), None, fault);
+        assert!(!unsplit_export.partial);
+        assert_eq!(unsplit_export.units_done, 6);
+
+        let (first, first_export, first_applied, first_indices) = balance_segment_with_fault(
+            c,
+            &seeds,
+            &ResumeFrom::default().at_boundary(),
+            Some(pause_at),
+            fault,
+        );
+        assert!(
+            first.skipped && first_export.partial,
+            "paused segment is partial"
+        );
+        if let Some(units) = expected_units {
+            assert_eq!(first_export.units_done, units);
+        }
+        // The state survives a JSON round trip, as it does through the saved cursor.
+        let saved = serde_json::to_string(&first_export).unwrap();
+        let export: crate::resume::ResumeExport = serde_json::from_str(&saved).unwrap();
+        let (second, second_export, second_applied, second_indices) =
+            balance_segment(c, &seeds, &ResumeFrom::from_export(&export), None);
+        assert!(!second_export.partial);
+        assert_eq!(second_export.units_done, 6);
+
+        // Same attempts in the same order, probes included, with the same support levels.
+        let merged: Vec<_> = first
+            .attempts
+            .iter()
+            .chain(&second.attempts)
+            .cloned()
+            .collect();
+        assert_eq!(merged, unsplit.attempts);
+        // Attempt indices continue across the segments.
+        let merged_indices: Vec<_> = first_indices.into_iter().chain(second_indices).collect();
+        assert_eq!(merged_indices, unsplit_indices);
+        // The schedule continues too: events fire once per attempt in every segment.
+        assert_eq!(
+            first_applied.len() + second_applied.len(),
+            unsplit_applied.len()
+        );
+        assert_eq!(second.support_level_next, unsplit.support_level_next);
+        assert_eq!(second.adaptive_state_next, unsplit.adaptive_state_next);
+        assert_eq!(second_export.engine_state, unsplit_export.engine_state);
+        // The last segment's report carries what the earlier ones kept, in order.
+        assert_eq!(second.discarded_attempts, unsplit.discarded_attempts);
+        assert_eq!(second.assist_timeline, unsplit.assist_timeline);
+        assert_eq!(second.deviation_assist, unsplit.deviation_assist);
+    }
+
+    #[test]
+    fn balance_split_at_every_attempt_keeps_discards_and_timelines() {
+        let mut c = pause_criterion();
+        c.support_mode = AssistMode::Adaptive;
+        let (unsplit, _, _, _) = balance_segment_with_fault(
+            &c,
+            &(1..=6).collect::<Vec<u64>>(),
+            &crate::resume::ResumeFrom::default(),
+            None,
+            Some(8),
+        );
+        assert_eq!(
+            unsplit.discarded_attempts.len(),
+            1,
+            "the fault discards one"
+        );
+        assert!(!unsplit.assist_timeline.is_empty());
+        assert!(unsplit.deviation_assist.is_some());
+        for pause_at in 1..=5 {
+            assert_balance_split_with_fault(&c, pause_at, None, Some(8));
+        }
+    }
+
+    fn pause_criterion() -> BalanceFeetCriterion {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.2;
+        c.hold_s = 0.6;
+        c.attempt_cap_s = 2.0;
+        // The level drops every 2 successful attempts, so a pause after 3 lands mid-block.
+        c.attempts_per_level = 2;
+        c.probe_every = 4;
+        c.scheduled_events = vec![event(0.3, "late"), event(0.1, "early")];
+        c
+    }
+
+    #[test]
+    fn balance_split_with_scheduled_events_equals_unsplit_mid_block() {
+        // Pause asked in attempt 3: stops after it, before the probe due after attempt 4.
+        assert_balance_split_equals_unsplit(&pause_criterion(), 3, 3);
+    }
+
+    #[test]
+    fn balance_pause_waits_for_the_due_probe_so_the_cadence_stays_aligned() {
+        // Pause asked in attempt 4: its probe still runs, then the segment stops.
+        assert_balance_split_equals_unsplit(&pause_criterion(), 4, 4);
+    }
+
+    #[test]
+    fn balance_adaptive_split_equals_unsplit() {
+        let mut c = pause_criterion();
+        c.support_mode = AssistMode::Adaptive;
+        assert_balance_split_equals_unsplit(&c, 3, 3);
     }
 }
 
@@ -14394,5 +15614,140 @@ mod walk_tests {
         s.walk = None;
         let open = OpenBalanceAttempt::for_attempt(1.0, 0.0);
         assert!(observe_balance_sample(&open, &s, &c, 1).is_err());
+    }
+}
+
+#[cfg(test)]
+mod live_reading_tests {
+    use super::*;
+
+    fn setup() -> BalanceFeetCriterion {
+        BalanceFeetCriterion::new(
+            "torso",
+            vec!["foot_a".to_string(), "foot_b".to_string()],
+            "head",
+            15.0,
+            1.0,
+            10.0,
+        )
+    }
+
+    /// A reply whose head stands `lean_deg` off vertical toward `heading` above the feet
+    /// midpoint, read with the torso heading `yaw`.
+    fn reply(lean_deg: f64, heading: f64, yaw: f64, steps: u64) -> Measurement {
+        let t = lean_deg.to_radians();
+        let top = [
+            t.sin() * heading.cos(),
+            t.sin() * heading.sin(),
+            t.cos(),
+        ];
+        serde_json::from_value(serde_json::json!({
+            "sim_time_s": 0.0,
+            "physics_steps": steps,
+            "episode_id": 3,
+            "bodies": {
+                "torso": {"tilt_rad": 0.1, "heading": {"yaw_rad": yaw}},
+                "foot_a": {"tilt_rad": 0.0, "com": [0.1, 0.0, 0.0]},
+                "foot_b": {"tilt_rad": 0.0, "com": [-0.1, 0.0, 0.0]},
+                "head": {"tilt_rad": 0.0, "com": top},
+            },
+            "contacts": [{"touching": true}, {"touching": true}],
+            "link": {"state": "linked", "epoch": 1},
+        }))
+        .expect("reply")
+    }
+
+    /// The runner's scored tilt for a reply: sample, then score against the latched line.
+    fn runner_scored(reply: &Measurement, reset: Option<&LeanReference>) -> f64 {
+        let c = setup();
+        let posture = measure_posture(reply, &c).expect("posture");
+        let yaw = reply.bodies["torso"].heading.as_ref().and_then(|h| h.yaw_rad);
+        let mut s = BalanceSample {
+            seq: 1,
+            seed: 1,
+            tilt_deg: 0.0,
+            posture: Some(posture.sample(yaw)),
+            contacts: vec![true, true],
+            terminal: None,
+            support_level: None,
+            settling: false,
+            perturbing: false,
+            support_need: None,
+            support_effort: None,
+            support_torque_nm: None,
+            support_force_n: None,
+            other_contact_touching: false,
+            other_contact_bodies: Vec::new(),
+            torso_height_m: None,
+            reset_height_m: None,
+            assist_slow: None,
+            assist_rise: None,
+            actuators: Default::default(),
+            actuator_force: Default::default(),
+            stability: None,
+            walk: None,
+        };
+        s.score_posture_from(reset);
+        s.scored_tilt_deg()
+    }
+
+    #[test]
+    fn live_reading_equals_the_runner_scored_tilt() {
+        let c = setup();
+        let reset = latch_reference(&reply(18.0, 0.4, 0.0, 10), &c).expect("latch");
+        for (lean, heading, yaw) in [(18.0, 0.4, 0.0), (34.0, 0.4, 0.0), (10.0, 1.2, 0.3)] {
+            let r = reply(lean, heading, yaw, 20);
+            let live = live_balance_reading(&r, &c, Some(&reset));
+            let scored = live.scored_tilt_deg.expect("scored");
+            assert!((scored - runner_scored(&r, Some(&reset))).abs() <= 1e-9);
+            assert!(live.reference_latched);
+        }
+    }
+
+    #[test]
+    fn a_non_vertical_reset_pose_reads_zero() {
+        let c = setup();
+        let r = reply(18.0, 0.4, 0.0, 10);
+        let reset = latch_reference(&r, &c).expect("latch");
+        let live = live_balance_reading(&r, &c, Some(&reset));
+        assert!(live.scored_tilt_deg.expect("scored") < 1e-9);
+        assert!((live.absolute_tilt_deg.expect("abs") - 18.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_heading_turn_alone_adds_no_tilt() {
+        let c = setup();
+        let reset = latch_reference(&reply(18.0, 0.0, 0.0, 10), &c).expect("latch");
+        let turned = reply(18.0, 0.9, 0.9, 20);
+        let live = live_balance_reading(&turned, &c, Some(&reset));
+        assert!(live.scored_tilt_deg.expect("scored") < 1e-9);
+    }
+
+    #[test]
+    fn without_a_reference_the_scored_tilt_is_the_absolute_one() {
+        let c = setup();
+        let live = live_balance_reading(&reply(18.0, 0.4, 0.0, 10), &c, None);
+        assert!(!live.reference_latched);
+        assert_eq!(live.scored_tilt_deg, live.absolute_tilt_deg);
+        assert!((live.scored_tilt_deg.expect("scored") - 18.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_partial_setup_returns_its_rows_without_error() {
+        let mut c = setup();
+        c.posture_top_body = String::new();
+        let r = reply(18.0, 0.4, 0.0, 10);
+        let live = live_balance_reading(&r, &c, None);
+        assert_eq!(live.scored_tilt_deg, None);
+        assert_eq!(live.absolute_tilt_deg, None);
+        assert!(live.torso_tilt_deg.is_some());
+        assert_eq!(live.contacts.len(), 2);
+        assert_eq!(live.contacts[0].touching, Some(true));
+        assert!(live.all_contacts_touch);
+        assert!(latch_reference(&r, &c).is_none());
+        // No contact bodies at all: still no error.
+        c.contact_bodies.clear();
+        let live = live_balance_reading(&r, &c, None);
+        assert!(live.contacts.is_empty() && live.torso_tilt_deg.is_some());
     }
 }

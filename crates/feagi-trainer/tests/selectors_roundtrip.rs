@@ -13,7 +13,7 @@ use feagi_trainer::binding::{
 };
 use feagi_trainer::contracts::common::{DatasetVersionId, Modality, OutputType, SampleId, Split};
 use feagi_trainer::contracts::ir_sample::{IRSample, Payload};
-use feagi_trainer::contracts::prediction_record::TypedPrediction;
+use feagi_trainer::contracts::prediction_record::{ClassReadout, TypedPrediction};
 
 use feagi_sensorimotor::data_types::Percentage;
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
@@ -214,8 +214,12 @@ fn decoder_argmaxes_strongest_class_channel() {
     };
     let prediction = decoder.decode(motor, &profile).expect("decode");
     match prediction {
-        TypedPrediction::Class { class_id, scores } => {
-            assert_eq!(class_id, 1, "class 1 had the strongest activation");
+        TypedPrediction::Class { readout, scores } => {
+            assert_eq!(
+                readout,
+                ClassReadout::Class(1),
+                "class 1 had the strongest activation"
+            );
             assert_eq!(scores.len(), 3);
             assert!(scores[1] > scores[0] && scores[1] > scores[2]);
         }

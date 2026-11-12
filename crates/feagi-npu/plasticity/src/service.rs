@@ -28,8 +28,8 @@ use crate::episodic_scan::{
 };
 use crate::log_rate_limiter::{BurstLogRateLimiter, TimeLogRateLimiter};
 use crate::memory_neuron_array::{
-    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason,
-    RemovedMemoryNeuron,
+    ChangeEntry, MemoryChangeRecord, MemoryNeuronArray, MemoryNeuronDetail,
+    MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, RemovedMemoryNeuron,
 };
 use crate::memory_stats_cache::{self, MemoryPoolCounters, MemoryPoolSnapshot, MemoryStatsCache};
 use crate::mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding};
@@ -916,18 +916,21 @@ impl PlasticityService {
                 pattern_detector.get_detector(*memory_area_idx, area_config.temporal_depth);
 
             let change_encoding = area_config.mp_mode.change_encoding();
-            let detected = match change_encoding {
-                Some(encoding) => Self::encode_change_steps(
+            // Kept after detection: a new neuron records these steps by voxel position.
+            let change_steps = change_encoding.and_then(|encoding| {
+                Self::encode_change_steps(
                     &encoding,
                     area_config.upstream_areas.len(),
                     mp_windows.as_deref(),
                 )
-                .and_then(|steps| {
+            });
+            let detected = match change_encoding {
+                Some(encoding) => change_steps.as_deref().and_then(|steps| {
                     detector.detect_change_pattern(
                         *memory_area_idx,
                         &area_config.upstream_areas,
                         &encoding,
-                        &steps,
+                        steps,
                         Some(area_config.temporal_depth),
                     )
                 }),
@@ -1118,6 +1121,15 @@ impl PlasticityService {
                             neuron_idx,
                             Self::spatial_signature_from_replay(&replay_frames),
                         );
+                        if let Some(steps) = change_steps.as_deref() {
+                            let mut upstream_sorted = area_config.upstream_areas.clone();
+                            upstream_sorted.sort_unstable();
+                            if let Some(record) =
+                                Self::change_record_from_steps(&upstream_sorted, steps)
+                            {
+                                array.set_change_record(neuron_idx, record);
+                            }
+                        }
                         encoded_this_burst.push((
                             *memory_area_idx,
                             neuron_idx,
@@ -1432,6 +1444,38 @@ impl PlasticityService {
             }
         }
         Some(steps)
+    }
+
+    /// Keep the encoded change steps of a new neuron by upstream neuron id.
+    ///
+    /// `steps` is the flat output of [`Self::encode_change_steps`]: step-major, one entry per
+    /// upstream area in `upstream_sorted` order. Only regroups what is in hand: no NPU access.
+    /// Resolution to voxel position happens at export. Returns `None` for a malformed shape.
+    fn change_record_from_steps(
+        upstream_sorted: &[u32],
+        steps: &[ChangeStep],
+    ) -> Option<MemoryChangeRecord> {
+        let area_count = upstream_sorted.len();
+        if area_count == 0 || steps.len() % area_count != 0 {
+            return None;
+        }
+        let record_steps = steps
+            .chunks(area_count)
+            .map(|step_group| {
+                step_group
+                    .iter()
+                    .map(|step| {
+                        let mut entries: Vec<ChangeEntry> = step.clone();
+                        entries.sort_unstable();
+                        entries
+                    })
+                    .collect()
+            })
+            .collect();
+        Some(MemoryChangeRecord {
+            upstream_areas: upstream_sorted.to_vec(),
+            steps: record_steps,
+        })
     }
 
     /// Empty replay frames are a fault only when this memory area has a twin to drive.
@@ -5894,5 +5938,60 @@ mod tests {
             "combined sample should recall class 0 after being linked; memory fires: {:?}",
             rig.memory_fires_since(before)
         );
+    }
+
+    #[test]
+    fn change_record_keeps_encoded_ids_and_needs_no_npu() {
+        let encoding = MpChangeEncoding::Differential { quantization: 1.0 };
+        let frame = |entries: &[(u32, f32)]| -> crate::mp_change_encoder::MpFrame {
+            entries.iter().copied().collect()
+        };
+        // Two steps over two upstream areas, step-major; the second area is silent in step 0.
+        let steps = vec![
+            encoding.encode_step(
+                &frame(&[(11, 1.0), (4, 2.0)]),
+                &frame(&[(11, 4.0), (4, 2.0)]),
+            ),
+            ChangeStep::new(),
+            encoding.encode_step(&frame(&[(9, 1.0)]), &frame(&[(9, 3.0)])),
+            encoding.encode_step(&frame(&[]), &frame(&[(20, 5.0)])),
+        ];
+        // The signature takes no NPU handle, so the call itself shows creation needs none.
+        let record =
+            PlasticityService::change_record_from_steps(&[5, 6], &steps).expect("record is built");
+        assert_eq!(record.upstream_areas, vec![5, 6]);
+        assert_eq!(record.steps.len(), 2);
+        assert_eq!(record.steps[0][0], vec![(4, 0), (11, 3)]);
+        assert!(record.steps[0][1].is_empty(), "empty steps are kept");
+        assert_eq!(record.steps[1][0], vec![(9, 2)]);
+        assert_eq!(record.steps[1][1], vec![(20, 5)]);
+        assert!(PlasticityService::change_record_from_steps(&[5, 6], &steps[..3]).is_none());
+        assert!(PlasticityService::change_record_from_steps(&[], &steps).is_none());
+    }
+
+    /// Structural check: the creation-side builder and its call site take no NPU argument and
+    /// make no area-wide call. Resolving ids is the export's job.
+    #[test]
+    fn change_record_creation_path_takes_no_npu_and_no_area_wide_call() {
+        let source = include_str!("service.rs");
+        let tests_start = source.find("#[cfg(test)]\nmod tests").expect("tests module");
+        let production = &source[..tests_start];
+        let start = production
+            .find("fn change_record_from_steps(")
+            .expect("builder exists");
+        let end = start + production[start..].find("\n    }\n").expect("builder end");
+        let builder = &production[start..end];
+        let signature = &builder[..builder.find('{').expect("body")];
+        for forbidden in ["npu", "Npu", "NPU", "Arc<"] {
+            assert!(!signature.contains(forbidden), "signature mentions {forbidden}");
+        }
+        for forbidden in ["npu", "get_neurons_in_cortical_area", "get_neuron_coordinates", "lock("] {
+            assert!(!builder.contains(forbidden), "builder uses {forbidden}");
+        }
+        let call_site = production
+            .find("Self::change_record_from_steps(&upstream_sorted, steps)")
+            .expect("call site");
+        let call = &production[call_site.saturating_sub(40)..call_site + 80];
+        assert!(!call.contains("npu"), "call site passes an NPU handle");
     }
 }

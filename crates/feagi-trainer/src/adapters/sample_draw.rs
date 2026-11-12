@@ -37,6 +37,21 @@ impl SplitMix64 {
     }
 }
 
+/// A uniform random permutation of `0..len` (full Fisher-Yates), fixed by `seed`.
+///
+/// Shares the generator and unbiased bounded draw with [`draw_indices`], so the same
+/// `(len, seed)` gives the same order on every platform.
+pub fn shuffled_order(len: usize, seed: u64) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..len).collect();
+    let mut rng = SplitMix64::new(seed);
+    for slot in 0..len.saturating_sub(1) {
+        let remaining = (len - slot) as u64;
+        let pick = slot + rng.next_below(remaining) as usize;
+        order.swap(slot, pick);
+    }
+    order
+}
+
 /// Indices of `keep` items drawn uniformly without replacement from `0..len`, ascending.
 ///
 /// Ascending order keeps the drawn items in their dataset order, so only membership depends

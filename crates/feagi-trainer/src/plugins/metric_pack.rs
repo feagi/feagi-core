@@ -27,6 +27,12 @@ pub struct ConfusionMatrix {
     pub class_ids: Vec<u32>,
     /// `counts[true_index][pred_index]` occurrences.
     pub counts: Vec<Vec<u64>>,
+    /// `no_answer[true_index]`: samples of that true class whose readout had no class channel
+    /// above 0 (or no motor frame at all). They are wrong, and no class's false positive.
+    pub no_answer: Vec<u64>,
+    /// `tied[true_index]`: samples of that true class whose top score was shared by two or more
+    /// classes. They are wrong, and no class's false positive.
+    pub tied: Vec<u64>,
 }
 
 /// The result of evaluating a metric pack.

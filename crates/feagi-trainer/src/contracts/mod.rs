@@ -29,8 +29,10 @@ pub use dataset_manifest::{DatasetManifest, SplitDescriptor};
 pub use evaluation_spec::EvaluationSpec;
 pub use ir_sample::{CoordinateFrame, HoldEnd, IRSample, Payload, TypedTarget};
 pub use metric_stats::MetricStat;
-pub use prediction_record::{PredictionRecord, TypedPrediction, UNPREDICTED_PIXEL};
-pub use run_event::{AttemptStand, ClassBreakdown, MetricScope, RunEvent, RunEventKind};
+pub use prediction_record::{ClassReadout, PredictionRecord, TypedPrediction, UNPREDICTED_PIXEL};
+pub use run_event::{
+    AttemptStand, ClassBreakdown, ConfusionSummary, MetricScope, RunEvent, RunEventKind,
+};
 pub use run_spec::{
     CoderBinding, ExecutionMode, PinnedBinding, RewardPolicyBinding, RunSpec, SamplerBinding,
 };

@@ -68,6 +68,35 @@ pub struct SerializableLongTermMemoryNeuron {
     /// tag `ltm_class_channel_weights_v1`.
     #[serde(skip)]
     pub class_channel_weights: Vec<(u32, f32)>,
+    /// Id-independent change record of a change-encoded (`mp_differential` / `mp_ratio`)
+    /// memory neuron, used to rebuild its pattern hash on lite import.
+    ///
+    /// Schema v1 bincode is positional and immutable, so this field is omitted from that
+    /// layout. Connectome I/O stores records in metadata tag `ltm_change_records_v1`.
+    #[serde(skip)]
+    pub change_record: Option<SerializableChangeRecord>,
+}
+
+/// One bucketed MP change at a voxel of an upstream area: `(x, y, z, ordinal, bucket)`.
+///
+/// `ordinal` is the neuron's rank among the neurons sharing that voxel in its area, in
+/// ascending neuron id order, the same convention lite synapse references use.
+#[cfg(feature = "std")]
+pub type SerializableChangeEntry = (u32, u32, u32, u32, i64);
+
+/// Id-independent record of the MP changes that formed a change-encoded memory neuron.
+///
+/// Neuron ids are not stable across a lite rebuild, so the record names upstream neurons by
+/// voxel position instead. It is not a replay frame: change-encoded memories never replay.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SerializableChangeRecord {
+    /// Base64 cortical ids of the upstream areas, in the order they were hashed (ascending
+    /// cortical index at creation).
+    pub upstream_cortical_ids: Vec<String>,
+    /// `steps[step][upstream position]` lists the changes of one upstream area in one step,
+    /// oldest step first. Empty steps are kept: step position is part of the identity.
+    pub steps: Vec<Vec<Vec<SerializableChangeEntry>>>,
 }
 
 /// Learned episodic replay frame for one long-term memory neuron.
@@ -1357,6 +1386,7 @@ mod tests {
             spatial_signature: None,
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
+            change_record: None,
         }];
 
         let ltm_ids = HashSet::from([50_000_001]);

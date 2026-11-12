@@ -17,6 +17,28 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// as `unpredicted_label`. Segmentation class ids stay below it.
 pub const UNPREDICTED_PIXEL: u8 = u8::MAX;
 
+/// What a class readout answered. Both non-class outcomes are scored as wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassReadout {
+    /// One class had the strictly highest positive score.
+    Class(u32),
+    /// No class channel fired (or no frame arrived).
+    NoAnswer,
+    /// Two or more classes shared the top positive score exactly.
+    Tied,
+}
+
+impl ClassReadout {
+    /// The answered class, or `None` for [`ClassReadout::NoAnswer`] and [`ClassReadout::Tied`].
+    pub fn class_id(&self) -> Option<u32> {
+        match self {
+            Self::Class(id) => Some(*id),
+            Self::NoAnswer | Self::Tied => None,
+        }
+    }
+}
+
 /// A typed prediction, selected by `OutputType`.
 ///
 /// Mirrors `TypedTarget` but carries prediction-specific detail (e.g. per-class scores).
@@ -27,8 +49,8 @@ pub const UNPREDICTED_PIXEL: u8 = u8::MAX;
 pub enum TypedPrediction {
     /// Single-label class prediction with optional per-class scores.
     Class {
-        /// Predicted class index.
-        class_id: u32,
+        /// What the readout answered: a class, no answer, or a tie for the top score.
+        readout: ClassReadout,
         /// Optional per-class scores aligned to class index (empty if unavailable).
         scores: Vec<f64>,
     },
@@ -85,7 +107,7 @@ mod tests {
             sample_id: SampleId("iris-0001".to_string()),
             output_type: OutputType::Class,
             prediction: TypedPrediction::Class {
-                class_id: 0,
+                readout: ClassReadout::Class(0),
                 scores: vec![0.8, 0.1, 0.1],
             },
             target: Some(TypedTarget::Class {

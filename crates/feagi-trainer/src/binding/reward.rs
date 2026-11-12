@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::ir_sample::TypedTarget;
-use crate::contracts::prediction_record::TypedPrediction;
+use crate::contracts::prediction_record::{ClassReadout, TypedPrediction};
 use crate::error::TrainerError;
 
 /// A FEAGI Core affect channel a reward signal stimulates.
@@ -81,7 +81,15 @@ impl RewardPolicy for PainPleasureReward {
         target: &TypedTarget,
     ) -> Result<Vec<RewardSignal>, TrainerError> {
         let predicted_class = match predicted {
-            TypedPrediction::Class { class_id, .. } => *class_id,
+            // No answer or a tie: nothing fires, neither pleasure nor pain.
+            TypedPrediction::Class {
+                readout: ClassReadout::NoAnswer | ClassReadout::Tied,
+                ..
+            } => return Ok(Vec::new()),
+            TypedPrediction::Class {
+                readout: ClassReadout::Class(id),
+                ..
+            } => *id,
             other => {
                 return Err(TrainerError::Config(format!(
                 "pain_pleasure reward supports single-label class predictions only, got {other:?}"
@@ -362,8 +370,20 @@ mod tests {
 
     fn predict(id: u32) -> TypedPrediction {
         TypedPrediction::Class {
-            class_id: id,
+            readout: ClassReadout::Class(id),
             scores: vec![],
+        }
+    }
+
+    #[test]
+    fn no_answer_and_tied_fire_nothing() {
+        let policy = PainPleasureReward::new(0.8).unwrap();
+        for readout in [ClassReadout::NoAnswer, ClassReadout::Tied] {
+            let prediction = TypedPrediction::Class {
+                readout,
+                scores: vec![0.0; 3],
+            };
+            assert!(policy.reward(&prediction, &class(0)).unwrap().is_empty());
         }
     }
 

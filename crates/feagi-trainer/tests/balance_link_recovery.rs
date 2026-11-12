@@ -258,6 +258,7 @@ fn run_phase(
         recovery,
         burst: &RunningClock(std::sync::atomic::AtomicU64::new(0)),
         memory_counters: None,
+        reset_latch: None,
     };
     run_balance_phase(
         &mut run,

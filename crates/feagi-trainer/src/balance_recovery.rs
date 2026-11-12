@@ -384,6 +384,20 @@ impl RecoveryState {
         })
     }
 
+    /// Starts the bookkeeping for a later segment of a phase: the earlier segments' discards
+    /// count toward `max_discarded_attempts` and stay in the report, like an unsplit run's.
+    ///
+    /// # Errors
+    /// [`TrainerError::Config`] when `config` is invalid.
+    pub fn resume(
+        config: &RecoveryConfig,
+        discarded: Vec<DiscardedAttempt>,
+    ) -> Result<Self, TrainerError> {
+        let mut state = Self::new(config)?;
+        state.discarded = discarded;
+        Ok(state)
+    }
+
     /// A watch for one attempt.
     pub fn watch<'c>(&self, clock: &'c dyn BurstClock) -> AttemptWatch<'c> {
         AttemptWatch::new(clock, Duration::from_secs_f64(self.config.burst_stall_s))

@@ -263,6 +263,8 @@ mod tests {
             images_subdir: Some("images".to_string()),
             labels_subdir: Some("labels".to_string()),
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         }
     }
 
@@ -395,6 +397,8 @@ mod tests {
             images_subdir: None,
             labels_subdir: None,
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         };
         let adapter = ImageFolderSegmentationAdapter::new(config);
         let source = DatasetSource {
@@ -444,6 +448,8 @@ mod tests {
             images_subdir: None,
             labels_subdir: None,
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         };
         let adapter = ImageFolderSegmentationAdapter::new(config);
         let source = DatasetSource {

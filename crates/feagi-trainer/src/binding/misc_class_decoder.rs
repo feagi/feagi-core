@@ -8,7 +8,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 use feagi_structures::genomic::MotorCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
-use crate::binding::decoder::{DecoderPlugin, SlotDecoder};
+use crate::binding::decoder::{class_from_scores, DecoderPlugin, SlotDecoder};
 use crate::binding::profile::DecoderBindingProfile;
 use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::prediction_record::TypedPrediction;
@@ -57,17 +57,15 @@ impl MiscClassDecoder {
     }
 
     fn prediction(scores: Vec<f64>) -> Result<TypedPrediction, TrainerError> {
-        let class_id = scores
-            .iter()
-            .enumerate()
-            .reduce(|best, current| if current.1 > best.1 { current } else { best })
-            .map(|(index, _)| index as u32)
-            .ok_or_else(|| {
-                TrainerError::Evaluation(
-                    "misc class decoder received an empty score vector".to_string(),
-                )
-            })?;
-        Ok(TypedPrediction::Class { class_id, scores })
+        if scores.is_empty() {
+            return Err(TrainerError::Evaluation(
+                "misc class decoder received an empty score vector".to_string(),
+            ));
+        }
+        Ok(TypedPrediction::Class {
+            readout: class_from_scores(&scores),
+            scores,
+        })
     }
 }
 
@@ -114,6 +112,7 @@ impl SlotDecoder for MiscClassDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contracts::prediction_record::ClassReadout;
     use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
 
     fn profile(classes: u32) -> DecoderBindingProfile {
@@ -137,8 +136,8 @@ mod tests {
         let mut decoder = MiscClassDecoder::new();
         let pred = decoder.decode(motor, &profile(5)).expect("decode");
         match pred {
-            TypedPrediction::Class { class_id, scores } => {
-                assert_eq!(class_id, 3);
+            TypedPrediction::Class { readout, scores } => {
+                assert_eq!(readout, ClassReadout::Class(3));
                 assert!((scores[3] - 0.9).abs() < 1e-6);
             }
             other => panic!("{other:?}"),

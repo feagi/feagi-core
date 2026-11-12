@@ -23,7 +23,7 @@
 //! let snapshot = load_connectome("brain.connectome")?;
 //! ```
 
-use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
+use feagi_npu_neural::types::connectome::{ConnectomeSnapshot, SerializableChangeRecord};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -35,6 +35,10 @@ use crate::brain_artifact::ArtifactVersionComponent;
 
 /// Metadata tag holding associative class-channel weights outside schema v1 bincode.
 const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
+
+/// Metadata tag holding id-independent change records of change-encoded long-term memory
+/// neurons outside schema v1 bincode.
+const LTM_CHANGE_RECORDS_TAG: &str = "ltm_change_records_v1";
 
 /// Metadata tag holding per-synapse modulation groups outside schema v1 bincode.
 const SYNAPSE_MODULATION_GROUPS_TAG: &str = "synapse_modulation_groups_v1";
@@ -55,6 +59,12 @@ struct LearningFreezeRecord {
 struct ClassChannelWeightRecord {
     neuron_id: u32,
     weights: Vec<(u32, f32)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ChangeRecordEntry {
+    neuron_id: u32,
+    record: SerializableChangeRecord,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -201,6 +211,7 @@ fn write_connectome_to_writer<W: Write>(
     let mut export_snapshot = snapshot.clone();
     crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
     persist_class_channel_weights_for_schema_v1(&mut export_snapshot)?;
+    persist_change_records_for_schema_v1(&mut export_snapshot)?;
     persist_modulation_groups_for_schema_v1(&mut export_snapshot)?;
     persist_learning_freeze_for_schema_v1(&mut export_snapshot)?;
     let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
@@ -354,6 +365,7 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     let mut snapshot: ConnectomeSnapshot =
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
     restore_class_channel_weights_for_schema_v1(&mut snapshot)?;
+    restore_change_records_for_schema_v1(&mut snapshot)?;
     restore_modulation_groups_for_schema_v1(&mut snapshot)?;
     restore_learning_freeze_for_schema_v1(&mut snapshot)?;
 
@@ -456,6 +468,72 @@ fn restore_class_channel_weights_for_schema_v1(snapshot: &mut ConnectomeSnapshot
         missing.sort_unstable();
         return Err(ConnectomeError::BrainArtifact(format!(
             "class channel weights refer to unknown long-term memory neurons: {missing:?}"
+        )));
+    }
+    Ok(())
+}
+
+/// Keep change records out of the positional schema v1 neuron record, like class-channel
+/// weights. Records of neurons that are not long-term memory are not written.
+fn persist_change_records_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let records: Vec<ChangeRecordEntry> = snapshot
+        .long_term_memory_neurons
+        .iter()
+        .filter(|neuron| neuron.is_longterm_memory)
+        .filter_map(|neuron| {
+            neuron
+                .change_record
+                .as_ref()
+                .map(|record| ChangeRecordEntry {
+                    neuron_id: neuron.neuron_id,
+                    record: record.clone(),
+                })
+        })
+        .collect();
+    if records.is_empty() {
+        snapshot.metadata.tags.remove(LTM_CHANGE_RECORDS_TAG);
+        return Ok(());
+    }
+    let encoded = serde_json::to_string(&records).map_err(|error| {
+        ConnectomeError::Serialization(format!(
+            "failed to encode long-term memory change records: {error}"
+        ))
+    })?;
+    snapshot
+        .metadata
+        .tags
+        .insert(LTM_CHANGE_RECORDS_TAG.to_string(), encoded);
+    Ok(())
+}
+
+fn restore_change_records_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let Some(encoded) = snapshot.metadata.tags.get(LTM_CHANGE_RECORDS_TAG) else {
+        return Ok(());
+    };
+    let records: Vec<ChangeRecordEntry> = serde_json::from_str(encoded).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!(
+            "long-term memory change records tag is invalid: {error}"
+        ))
+    })?;
+    let mut by_id = std::collections::HashMap::new();
+    for entry in records {
+        if by_id.insert(entry.neuron_id, entry.record).is_some() {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "duplicate change record for long-term memory neuron {}",
+                entry.neuron_id
+            )));
+        }
+    }
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        if let Some(record) = by_id.remove(&neuron.neuron_id) {
+            neuron.change_record = Some(record);
+        }
+    }
+    if !by_id.is_empty() {
+        let mut missing: Vec<u32> = by_id.into_keys().collect();
+        missing.sort_unstable();
+        return Err(ConnectomeError::BrainArtifact(format!(
+            "change records refer to unknown long-term memory neurons: {missing:?}"
         )));
     }
     Ok(())
@@ -793,6 +871,7 @@ mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             }],
             long_term_memory_replay_frames: vec![(
                 50_000_000,
@@ -965,6 +1044,7 @@ mod tests {
                     spatial_signature: None,
                     class_channels: Vec::new(),
                     class_channel_weights: Vec::new(),
+                    change_record: None,
                 },
                 SerializableLongTermMemoryNeuron {
                     neuron_id: 50_002_623,
@@ -982,6 +1062,7 @@ mod tests {
                     spatial_signature: None,
                     class_channels: vec![4, 9],
                     class_channel_weights: weights.clone(),
+                    change_record: None,
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
@@ -1100,6 +1181,105 @@ mod tests {
         current.learning_frozen_mappings.clear();
         assert!(bincode::serialize(&current).unwrap() == body);
         assert!(bincode::serialize(&snapshot).unwrap() == body);
+    }
+
+    fn change_encoded_neuron(
+        neuron_id: u32,
+        entries_per_area_step: usize,
+    ) -> SerializableLongTermMemoryNeuron {
+        use feagi_npu_neural::types::connectome::SerializableChangeRecord;
+        let entries = |seed: u32| -> Vec<(u32, u32, u32, u32, i64)> {
+            (0..entries_per_area_step as u32)
+                .map(|i| (i * 3 + seed, i + 1, 0, i % 2, i64::from(i) - 4))
+                .collect()
+        };
+        SerializableLongTermMemoryNeuron {
+            neuron_id,
+            cortical_area_idx: 2,
+            cortical_id: Some("bU1OSVNUXx8=".to_string()),
+            pattern_hash: Some(7),
+            is_longterm_memory: true,
+            is_active: true,
+            lifespan_current: 10,
+            lifespan_initial: 10,
+            lifespan_growth_rate: 1.0,
+            creation_burst: 1,
+            last_activation_burst: 2,
+            activation_count: 2,
+            spatial_signature: None,
+            class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
+            change_record: Some(SerializableChangeRecord {
+                upstream_cortical_ids: vec!["area_a".to_string(), "area_b".to_string()],
+                steps: vec![vec![entries(0), Vec::new()], vec![entries(1), entries(2)]],
+            }),
+        }
+    }
+
+    /// Change records travel in a metadata tag, never in the positional body, so the body
+    /// stays byte-identical to the layout every older reader decodes.
+    #[test]
+    fn change_records_round_trip_full_and_lite_outside_the_body() {
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        for mode in [ConnectomePersistMode::Full, ConnectomePersistMode::Lite] {
+            let mut snapshot = neutral_snapshot(mode);
+            let mut without_record = change_encoded_neuron(50_000_001, 2);
+            without_record.change_record = None;
+            snapshot.long_term_memory_neurons =
+                vec![change_encoded_neuron(50_000_000, 2), without_record];
+
+            let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+            let loaded = load_connectome_from_bytes(&bytes).unwrap();
+            assert!(loaded.metadata.tags.contains_key(LTM_CHANGE_RECORDS_TAG));
+            assert_eq!(
+                loaded.long_term_memory_neurons[0].change_record,
+                snapshot.long_term_memory_neurons[0].change_record
+            );
+            assert!(
+                loaded.long_term_memory_neurons[1].change_record.is_none(),
+                "a legacy row stays without a record"
+            );
+
+            let mut stripped = snapshot.clone();
+            stripped
+                .long_term_memory_neurons
+                .iter_mut()
+                .for_each(|n| n.change_record = None);
+            assert!(
+                bincode::serialize(&snapshot).unwrap() == bincode::serialize(&stripped).unwrap(),
+                "records must not enter the positional body"
+            );
+
+            let reloaded = load_connectome_from_bytes(
+                &save_connectome_to_bytes(&{
+                    let mut cleared = loaded.clone();
+                    cleared
+                        .long_term_memory_neurons
+                        .iter_mut()
+                        .for_each(|n| n.change_record = None);
+                    cleared
+                })
+                .unwrap(),
+            )
+            .unwrap();
+            assert!(!reloaded.metadata.tags.contains_key(LTM_CHANGE_RECORDS_TAG));
+        }
+    }
+
+    /// An artifact written before change records existed has no tag and still decodes.
+    #[test]
+    fn artifact_without_change_record_tag_still_decodes() {
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        let mut snapshot = neutral_snapshot(ConnectomePersistMode::Lite);
+        let mut legacy_row = change_encoded_neuron(50_000_000, 2);
+        legacy_row.change_record = None;
+        snapshot.long_term_memory_neurons = vec![legacy_row];
+        let loaded =
+            load_connectome_from_bytes(&save_connectome_to_bytes(&snapshot).unwrap()).unwrap();
+        assert!(!loaded.metadata.tags.contains_key(LTM_CHANGE_RECORDS_TAG));
+        assert_eq!(loaded.long_term_memory_neurons.len(), 1);
+        assert!(loaded.long_term_memory_neurons[0].change_record.is_none());
+        assert_eq!(loaded.long_term_memory_neurons[0].pattern_hash, Some(7));
     }
 
     #[test]

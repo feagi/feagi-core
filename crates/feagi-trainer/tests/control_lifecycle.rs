@@ -18,8 +18,8 @@ use feagi_trainer::contracts::common::{PluginId, Split};
 use feagi_trainer::contracts::ir_sample::Payload;
 use feagi_trainer::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
 use feagi_trainer::contracts::{
-    DatasetVersionId, IRSample, Modality, OutputType, PluginRef, RunEventKind, RunId, RunStatus,
-    RunSummary, SampleId, ScorecardId, TypedPrediction, TypedTarget,
+    ClassReadout, DatasetVersionId, IRSample, Modality, OutputType, PluginRef, RunEventKind, RunId,
+    RunStatus, RunSummary, SampleId, ScorecardId, TypedPrediction, TypedTarget,
 };
 use feagi_trainer::control::{
     CancelToken, ClosureRunControl, CollectingEventSink, RunControl, RunEventSink,
@@ -78,7 +78,7 @@ impl DecoderPlugin for ArgmaxDecoder {
             .map(|(idx, _)| idx as u32)
             .ok_or_else(|| TrainerError::Runtime("empty motor frame".to_string()))?;
         Ok(TypedPrediction::Class {
-            class_id: argmax,
+            readout: ClassReadout::Class(argmax),
             scores: motor,
         })
     }

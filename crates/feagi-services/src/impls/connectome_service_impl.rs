@@ -4120,7 +4120,10 @@ impl ConnectomeServiceImpl {
                     skip_incompatible_long_term_memory_rows(&self.connectome, &mut snapshot);
             }
             #[cfg(feature = "plasticity")]
-            rehash_lite_long_term_memory_patterns(&self.connectome, &mut snapshot)?;
+            {
+                outcome.memory_neurons_without_change_record =
+                    rehash_lite_long_term_memory_patterns(&self.connectome, &mut snapshot)?;
+            }
             lite_overlay_needed = true;
         } else {
             if let Some(ref genome_json) = snapshot.genome_json {
@@ -4171,8 +4174,17 @@ impl ConnectomeServiceImpl {
             self.sync_modulators_after_full_import()?;
         }
 
+        // Records come back in id form for both modes, so the next save still has them. Rows
+        // whose record no longer resolves load without one and join the legacy count.
         #[cfg(feature = "plasticity")]
-        restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
+        {
+            let unresolved =
+                restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
+            merge_rows_without_change_record(
+                &mut outcome.memory_neurons_without_change_record,
+                unresolved,
+            );
+        }
 
         if lite_overlay_needed {
             apply_lite_synapse_overlay(&self.connectome, &snapshot)?;
@@ -4273,6 +4285,12 @@ fn attach_long_term_memory_to_snapshot(
 
     let ltm = collect_long_term_memory_neurons(connectome)?;
     let ltm_ids: HashSet<u32> = ltm.iter().map(|n| n.neuron_id).collect();
+    // Creation keeps change steps by upstream neuron id. They are resolved to voxel position
+    // below, before any validator or skip looks at the rows.
+    let id_records: HashMap<u32, feagi_npu_plasticity::MemoryChangeRecord> = ltm
+        .iter()
+        .filter_map(|detail| Some((detail.neuron_id, detail.change_record.clone()?)))
+        .collect();
     snapshot.long_term_memory_neurons = ltm
         .into_iter()
         .map(|detail| SerializableLongTermMemoryNeuron {
@@ -4294,8 +4312,10 @@ fn attach_long_term_memory_to_snapshot(
             spatial_signature: detail.spatial_signature,
             class_channels: detail.class_channels,
             class_channel_weights: detail.class_channel_weights,
+            change_record: None,
         })
         .collect();
+    resolve_change_records_for_export(connectome, snapshot, &id_records);
     snapshot.retain_regular_and_long_term_memory_synapses(&ltm_ids);
     attach_long_term_memory_replay_frames(connectome, snapshot, &ltm_ids)?;
     // Rows that no longer fit their area are left out of the artifact, so a save never writes
@@ -4311,16 +4331,36 @@ fn attach_long_term_memory_to_snapshot(
     Ok(())
 }
 
-/// True when lite import must rebuild this memory's pattern from replay frames.
-///
-/// A memory area fed only by other memory areas does not form a twin, so it has no replay
-/// frames. Its stored pattern hash is the record. A non-memory episodic source is rebuilt
-/// from voxel coordinates and still requires frames.
+/// What a lite row needs in the artifact so import can rebuild its pattern hash.
 #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
-fn lite_replay_frames_required(manager: &ConnectomeManager, memory_id: &CorticalID) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LiteRowNeeds {
+    /// The stored pattern hash is the record, and import keeps it.
+    Nothing,
+    /// Fired-set modes: the pattern is rebuilt from replay frames.
+    ReplayFrames,
+    /// Change modes: the pattern is rebuilt from the row's id-independent change steps.
+    ChangeSteps,
+}
+
+/// The one predicate for what a lite row needs. Export validation, the incompatible-row
+/// skip and the import rehash all use it, so save and load never disagree.
+///
+/// A memory area fed only by other memory areas does not form a twin, so it needs nothing:
+/// its stored pattern hash is the record. Otherwise the area's current effective MP mode
+/// decides: change modes need change steps, fired-set modes need replay frames. A row that
+/// carries a change record inside an area that is no longer change-encoded is a leftover of
+/// a mode switch (the switch only purges rows that have replay frames); its hash can no
+/// longer be matched or rebuilt, so it needs nothing and is kept as stored.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn lite_row_needs(
+    manager: &ConnectomeManager,
+    memory_id: &CorticalID,
+    row_has_change_record: bool,
+) -> LiteRowNeeds {
     use feagi_structures::genomic::cortical_area::CorticalAreaType;
 
-    manager
+    let fed_by_non_memory_area = manager
         .get_episodic_memory_upstream_cortical_areas(memory_id)
         .iter()
         .any(|idx| {
@@ -4331,7 +4371,215 @@ fn lite_replay_frames_required(manager: &ConnectomeManager, memory_id: &Cortical
                 Some(area) => !matches!(area.cortical_type, CorticalAreaType::Memory(_)),
                 None => true,
             }
+        });
+    if !fed_by_non_memory_area {
+        return LiteRowNeeds::Nothing;
+    }
+    let area_is_change_encoded = live_memory_area_shape(manager, memory_id)
+        .is_some_and(|shape| shape.mp_mode().change_encoding().is_some());
+    if area_is_change_encoded {
+        LiteRowNeeds::ChangeSteps
+    } else if row_has_change_record {
+        LiteRowNeeds::Nothing
+    } else {
+        LiteRowNeeds::ReplayFrames
+    }
+}
+
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+type VoxelCoordinate = (u32, u32, u32);
+/// Neuron ids of one area at each voxel, ascending. The position of an id in its voxel's list
+/// is its in-voxel ordinal: the one rule lite synapse references and change records share.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+type NeuronsByVoxel = HashMap<VoxelCoordinate, Vec<u32>>;
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+type VoxelIndexes = HashMap<u32, NeuronsByVoxel>;
+
+/// Every neuron of one area grouped by voxel, ids ascending. `Err` names a neuron that has no
+/// coordinates.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn neurons_by_voxel(
+    npu: &feagi_npu_burst_engine::DynamicNPU,
+    area_idx: u32,
+) -> Result<NeuronsByVoxel, u32> {
+    let mut by_voxel = NeuronsByVoxel::new();
+    for neuron_id in npu.get_neurons_in_cortical_area(area_idx) {
+        let coordinates = npu.get_neuron_coordinates(neuron_id).ok_or(neuron_id)?;
+        by_voxel.entry(coordinates).or_default().push(neuron_id);
+    }
+    for ids in by_voxel.values_mut() {
+        ids.sort_unstable();
+    }
+    Ok(by_voxel)
+}
+
+/// Voxel index of each requested area, one pass per area. An area with a coordinate-less
+/// neuron is left out, so records that need it do not resolve.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn voxel_indexes_for_areas(
+    npu: &feagi_npu_burst_engine::DynamicNPU,
+    areas: &HashSet<u32>,
+) -> VoxelIndexes {
+    areas
+        .iter()
+        .filter_map(|area_idx| Some((*area_idx, neurons_by_voxel(npu, *area_idx).ok()?)))
+        .collect()
+}
+
+/// The neuron at a voxel and in-voxel ordinal, or `None` when the area has no such neuron.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn neuron_at_voxel_ordinal(
+    by_voxel: &NeuronsByVoxel,
+    voxel: VoxelCoordinate,
+    ordinal: u32,
+) -> Option<u32> {
+    by_voxel.get(&voxel)?.get(ordinal as usize).copied()
+}
+
+/// Voxel and in-voxel ordinal of every neuron in a voxel index: the inverse of
+/// [`neuron_at_voxel_ordinal`].
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn voxel_ordinals(by_voxel: &NeuronsByVoxel) -> HashMap<u32, (VoxelCoordinate, u32)> {
+    by_voxel
+        .iter()
+        .flat_map(|(voxel, ids)| {
+            ids.iter()
+                .enumerate()
+                .map(move |(ordinal, id)| (*id, (*voxel, ordinal as u32)))
         })
+        .collect()
+}
+
+/// Id form of a saved voxel-keyed change record, resolved against the live voxel index. The
+/// record's upstream cortical ids become live indexes, the per-step columns follow ascending
+/// live index (the order the detector hashes in) and each step's pairs are ordered by id.
+/// `None` when an upstream area is not live, repeats, or a voxel ordinal has no neuron.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn change_record_to_ids(
+    record: &feagi_npu_neural::types::connectome::SerializableChangeRecord,
+    live_indexes: &HashMap<String, u32>,
+    voxel_indexes: &VoxelIndexes,
+) -> Option<feagi_npu_plasticity::MemoryChangeRecord> {
+    let mut order: Vec<(u32, usize)> = record
+        .upstream_cortical_ids
+        .iter()
+        .enumerate()
+        .map(|(position, id)| live_indexes.get(id).map(|idx| (*idx, position)))
+        .collect::<Option<_>>()?;
+    order.sort_unstable();
+    if order.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return None;
+    }
+    let steps = record
+        .steps
+        .iter()
+        .map(|step| {
+            order
+                .iter()
+                .map(|(live_idx, position)| {
+                    let entries = step.get(*position)?;
+                    if entries.is_empty() {
+                        return Some(Vec::new());
+                    }
+                    let by_voxel = voxel_indexes.get(live_idx)?;
+                    let mut pairs = entries
+                        .iter()
+                        .map(|&(x, y, z, ordinal, bucket)| {
+                            Some((neuron_at_voxel_ordinal(by_voxel, (x, y, z), ordinal)?, bucket))
+                        })
+                        .collect::<Option<Vec<_>>>()?;
+                    pairs.sort_unstable_by_key(|(id, _)| *id);
+                    Some(pairs)
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(feagi_npu_plasticity::MemoryChangeRecord {
+        upstream_areas: order.iter().map(|(idx, _)| *idx).collect(),
+        steps,
+    })
+}
+
+/// Voxel form of a change record kept by neuron id: ids become `(voxel, in-voxel ordinal)` and
+/// upstream indexes become cortical ids. `None` when an upstream area has no name, or an id no
+/// longer resolves (deleted neuron, or an id outside the area).
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn change_record_to_voxels(
+    record: &feagi_npu_plasticity::MemoryChangeRecord,
+    located: &HashMap<u32, HashMap<u32, (VoxelCoordinate, u32)>>,
+    cortical_area_names: &ahash::AHashMap<u32, String>,
+) -> Option<feagi_npu_neural::types::connectome::SerializableChangeRecord> {
+    let upstream_cortical_ids = record
+        .upstream_areas
+        .iter()
+        .map(|idx| cortical_area_names.get(idx).cloned())
+        .collect::<Option<Vec<String>>>()?;
+    let steps = record
+        .steps
+        .iter()
+        .map(|step| {
+            if step.len() != record.upstream_areas.len() {
+                return None;
+            }
+            step.iter()
+                .zip(&record.upstream_areas)
+                .map(|(entries, area_idx)| {
+                    let mut resolved = entries
+                        .iter()
+                        .map(|&(neuron_id, bucket)| {
+                            let ((x, y, z), ordinal) = *located.get(area_idx)?.get(&neuron_id)?;
+                            Some((x, y, z, ordinal, bucket))
+                        })
+                        .collect::<Option<Vec<_>>>()?;
+                    resolved.sort_unstable();
+                    Some(resolved)
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(
+        feagi_npu_neural::types::connectome::SerializableChangeRecord {
+            upstream_cortical_ids,
+            steps,
+        },
+    )
+}
+
+/// Resolve the id-form change records of exported long-term rows to voxel position. One pass
+/// per upstream area, shared by all rows, under one NPU lock. A row whose record cannot be
+/// resolved (no NPU, an area with a coordinate-less neuron, an id that no longer exists) is
+/// left without a record: a legacy row that keeps its stored hash.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn resolve_change_records_for_export(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    id_records: &HashMap<u32, feagi_npu_plasticity::MemoryChangeRecord>,
+) {
+    let areas: HashSet<u32> = snapshot
+        .long_term_memory_neurons
+        .iter()
+        .filter_map(|neuron| id_records.get(&neuron.neuron_id))
+        .flat_map(|record| record.upstream_areas.iter().copied())
+        .collect();
+    if areas.is_empty() {
+        return;
+    }
+    let npu_arc = connectome.read().get_npu().cloned();
+    let guard = npu_arc.as_ref().and_then(|npu_arc| npu_arc.lock().ok());
+    let located: HashMap<u32, HashMap<u32, (VoxelCoordinate, u32)>> = match &guard {
+        Some(npu) => voxel_indexes_for_areas(npu, &areas)
+            .into_iter()
+            .map(|(area_idx, by_voxel)| (area_idx, voxel_ordinals(&by_voxel)))
+            .collect(),
+        None => HashMap::new(),
+    };
+    drop(guard);
+    let names = snapshot.cortical_area_names.clone();
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        neuron.change_record = id_records
+            .get(&neuron.neuron_id)
+            .and_then(|record| change_record_to_voxels(record, &located, &names));
+    }
 }
 
 /// Reject snapshots whose long-term memory rows can never be imported again.
@@ -4357,6 +4605,8 @@ fn validate_exported_long_term_memory(
             row.neuron_id, row.memory_cortical_id, row.mismatch
         )));
     }
+    let mut legacy_change_rows: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     for neuron in &snapshot.long_term_memory_neurons {
         if !neuron.is_longterm_memory || !neuron.is_active {
             continue;
@@ -4384,8 +4634,21 @@ fn validate_exported_long_term_memory(
                 memory_id.as_base_64()
             )));
         }
-        if !require_replay_frames || !lite_replay_frames_required(&manager, &memory_id) {
+        if !require_replay_frames {
             continue;
+        }
+        match lite_row_needs(&manager, &memory_id, neuron.change_record.is_some()) {
+            LiteRowNeeds::Nothing => continue,
+            LiteRowNeeds::ChangeSteps => {
+                // A row without a usable record keeps its stored hash.
+                if neuron.change_record.is_none() {
+                    *legacy_change_rows
+                        .entry(memory_id.as_base_64())
+                        .or_default() += 1;
+                }
+                continue;
+            }
+            LiteRowNeeds::ReplayFrames => {}
         }
         let has_frames = snapshot
             .long_term_memory_replay_frames
@@ -4398,6 +4661,14 @@ fn validate_exported_long_term_memory(
                 memory_id.as_base_64()
             )));
         }
+    }
+    for (area, count) in &legacy_change_rows {
+        warn!(
+            target: "feagi-services",
+            "Lite export keeps {} change-encoded long-term memory neuron(s) in area {} with their stored hash: they have no usable change record (none was stored, or its upstream neurons no longer resolve), so a lite load cannot rebuild their pattern",
+            count,
+            area
+        );
     }
     Ok(())
 }
@@ -4433,13 +4704,23 @@ fn live_idx_by_cortical_id(
     snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
 ) -> HashMap<String, u32> {
     let mut map = HashMap::new();
-    let ids = snapshot.cortical_area_names.values().chain(
-        snapshot
-            .long_term_memory_replay_frames
-            .iter()
-            .flat_map(|(_, frames)| frames.iter())
-            .filter_map(|frame| frame.upstream_cortical_id.as_ref()),
-    );
+    let ids = snapshot
+        .cortical_area_names
+        .values()
+        .chain(
+            snapshot
+                .long_term_memory_replay_frames
+                .iter()
+                .flat_map(|(_, frames)| frames.iter())
+                .filter_map(|frame| frame.upstream_cortical_id.as_ref()),
+        )
+        .chain(
+            snapshot
+                .long_term_memory_neurons
+                .iter()
+                .filter_map(|neuron| neuron.change_record.as_ref())
+                .flat_map(|record| record.upstream_cortical_ids.iter()),
+        );
     for name in ids {
         if let Ok(id) = CorticalID::try_from_base_64(name) {
             if let Some(idx) = manager.get_cortical_idx(&id) {
@@ -4450,13 +4731,50 @@ fn live_idx_by_cortical_id(
     map
 }
 
-/// Active long-term memory rows whose replay frames do not fit their area's current pattern
-/// shape. This is the one predicate behind the save validator, the save-side exclusion and the
-/// loader skip, so save and load never disagree.
+/// First reason a change record does not fit the area's live pattern shape, or `None`.
 ///
-/// Only rows the lite loader would rebuild from replay frames are judged: the area has episodic
-/// upstream areas and at least one of them is not a memory area. Rows without frames are left
-/// to the existing frame-presence checks.
+/// The record must hold one step per window transition and name exactly the area's live
+/// upstream set. Upstream ids resolve through `live_idx`, since indexes are reassigned by a
+/// lite rebuild.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn change_record_mismatch(
+    record: &feagi_npu_neural::types::connectome::SerializableChangeRecord,
+    shape: &feagi_npu_plasticity::MemoryAreaShape,
+    live_idx: &HashMap<String, u32>,
+) -> Option<feagi_npu_plasticity::MemoryShapeMismatch> {
+    use feagi_npu_plasticity::MemoryShapeMismatch;
+
+    let expected_steps = shape.temporal_depth().saturating_sub(1);
+    if record.steps.len() as u32 != expected_steps {
+        return Some(MemoryShapeMismatch::ChangeStepsMismatch {
+            steps: record.steps.len() as u32,
+            expected: expected_steps,
+        });
+    }
+    let mut resolved: Vec<u32> = Vec::with_capacity(record.upstream_cortical_ids.len());
+    for id in &record.upstream_cortical_ids {
+        match live_idx.get(id) {
+            Some(idx) => resolved.push(*idx),
+            None => return Some(MemoryShapeMismatch::ChangeUpstreamMismatch),
+        }
+    }
+    resolved.sort_unstable();
+    let same_set = resolved == shape.upstream_areas();
+    let well_shaped = record
+        .steps
+        .iter()
+        .all(|step| step.len() == record.upstream_cortical_ids.len());
+    (!same_set || !well_shaped).then_some(MemoryShapeMismatch::ChangeUpstreamMismatch)
+}
+
+/// Active long-term memory rows that do not fit their area's current pattern shape: replay
+/// frames for fired-set rows, change records for change-encoded rows. This is the one
+/// predicate behind the save validator, the save-side exclusion and the loader skip, so save
+/// and load never disagree.
+///
+/// Only rows the lite loader would rebuild are judged (`lite_row_needs`): the area has
+/// episodic upstream areas and at least one of them is not a memory area. Rows without
+/// frames or a record are left to the existing presence checks and the legacy-row path.
 #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
 fn incompatible_long_term_memory_rows(
     manager: &ConnectomeManager,
@@ -4470,7 +4788,8 @@ fn incompatible_long_term_memory_rows(
         .map(|(neuron_id, frames)| (*neuron_id, frames))
         .collect();
     let live_idx = live_idx_by_cortical_id(manager, snapshot);
-    let mut shapes: HashMap<u32, Option<feagi_npu_plasticity::MemoryAreaShape>> = HashMap::new();
+    type Judged = Option<(LiteRowNeeds, feagi_npu_plasticity::MemoryAreaShape)>;
+    let mut judged_by_area: HashMap<(u32, bool), Judged> = HashMap::new();
     let mut rows = Vec::new();
     for neuron in &snapshot.long_term_memory_neurons {
         if !neuron.is_longterm_memory || !neuron.is_active {
@@ -4479,49 +4798,64 @@ fn incompatible_long_term_memory_rows(
         let Some(memory_id) = manager.get_cortical_id(neuron.cortical_area_idx).copied() else {
             continue;
         };
-        let shape = shapes
-            .entry(neuron.cortical_area_idx)
+        let has_record = neuron.change_record.is_some();
+        let judged = judged_by_area
+            .entry((neuron.cortical_area_idx, has_record))
             .or_insert_with(|| {
                 let shape = live_memory_area_shape(manager, &memory_id)?;
-                (!shape.upstream_areas().is_empty()
-                    && lite_replay_frames_required(manager, &memory_id))
-                .then_some(shape)
+                if shape.upstream_areas().is_empty() {
+                    return None;
+                }
+                match lite_row_needs(manager, &memory_id, has_record) {
+                    LiteRowNeeds::Nothing => None,
+                    needs => Some((needs, shape)),
+                }
             })
             .as_ref();
-        let Some(shape) = shape else {
+        let Some((needs, shape)) = judged else {
             continue;
         };
-        let Some(frames) = frames_by_neuron.get(&neuron.neuron_id) else {
-            continue;
-        };
-        let mut shaped = Vec::with_capacity(frames.len());
-        let mut unresolved = None;
-        for frame in frames.iter() {
-            let saved_idx = frame.upstream_area_idx;
-            match resolve_replay_upstream_index(
-                saved_idx,
-                frame.upstream_cortical_id.as_deref(),
-                snapshot
-                    .cortical_area_names
-                    .get(&saved_idx)
-                    .map(String::as_str),
-                &live_idx,
-                shape.upstream_areas(),
-            ) {
-                Ok(upstream_area_idx) => shaped.push(ReplayFrameShape {
-                    offset: frame.offset,
-                    upstream_area_idx,
-                    has_membrane_potentials: frame.membrane_potentials.is_some(),
-                }),
-                Err(_) => {
-                    unresolved = Some(MemoryShapeMismatch::UpstreamNotConfigured {
-                        upstream_area_idx: saved_idx,
-                    });
-                    break;
-                }
+        let mismatch = match (needs, neuron.change_record.as_ref()) {
+            (LiteRowNeeds::ChangeSteps, Some(record)) => {
+                change_record_mismatch(record, shape, &live_idx)
             }
-        }
-        if let Some(mismatch) = unresolved.or_else(|| shape.mismatch(&shaped)) {
+            // Replay frames judge fired-set rows, and rows a change area inherited from a
+            // fired-set era (they have frames and no record).
+            _ => {
+                let Some(frames) = frames_by_neuron.get(&neuron.neuron_id) else {
+                    continue;
+                };
+                let mut shaped = Vec::with_capacity(frames.len());
+                let mut unresolved = None;
+                for frame in frames.iter() {
+                    let saved_idx = frame.upstream_area_idx;
+                    match resolve_replay_upstream_index(
+                        saved_idx,
+                        frame.upstream_cortical_id.as_deref(),
+                        snapshot
+                            .cortical_area_names
+                            .get(&saved_idx)
+                            .map(String::as_str),
+                        &live_idx,
+                        shape.upstream_areas(),
+                    ) {
+                        Ok(upstream_area_idx) => shaped.push(ReplayFrameShape {
+                            offset: frame.offset,
+                            upstream_area_idx,
+                            has_membrane_potentials: frame.membrane_potentials.is_some(),
+                        }),
+                        Err(_) => {
+                            unresolved = Some(MemoryShapeMismatch::UpstreamNotConfigured {
+                                upstream_area_idx: saved_idx,
+                            });
+                            break;
+                        }
+                    }
+                }
+                unresolved.or_else(|| shape.mismatch(&shaped))
+            }
+        };
+        if let Some(mismatch) = mismatch {
             rows.push(IncompatibleLtmRow {
                 neuron_id: neuron.neuron_id,
                 memory_cortical_id: memory_id.as_base_64(),
@@ -5114,8 +5448,8 @@ fn resolve_replay_upstream_index(
 fn rehash_lite_long_term_memory_patterns(
     connectome: &RwLock<ConnectomeManager>,
     snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-) -> ServiceResult<()> {
-    use feagi_npu_plasticity::{PatternConfig, PatternDetector};
+) -> ServiceResult<Vec<MemoryNeuronsWithoutChangeRecord>> {
+    use feagi_npu_plasticity::{MpChangeEncoding, PatternConfig, PatternDetector};
 
     struct RehashPlan {
         neuron_id: u32,
@@ -5123,15 +5457,22 @@ fn rehash_lite_long_term_memory_patterns(
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
     }
-    type VoxelCoordinate = (u32, u32, u32);
-    type NeuronsByVoxel = HashMap<VoxelCoordinate, Vec<u32>>;
-    type NeuronsByAreaAndVoxel = HashMap<u32, NeuronsByVoxel>;
+    /// A change-encoded row, rebuilt from the change record the row carries.
+    struct ChangeRehashPlan {
+        neuron_pos: usize,
+        memory_cortical_id: String,
+        encoding: MpChangeEncoding,
+        upstream_areas: Vec<u32>,
+    }
 
-    let (plans, cortical_id_to_live_idx) = {
+    let (plans, change_plans, mut legacy_change_rows, cortical_id_to_live_idx) = {
         let manager = connectome.read();
         let cortical_id_to_live_idx = live_idx_by_cortical_id(&manager, snapshot);
         let mut plans = Vec::new();
-        for neuron in &snapshot.long_term_memory_neurons {
+        let mut change_plans = Vec::new();
+        let mut legacy_change_rows: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for (neuron_pos, neuron) in snapshot.long_term_memory_neurons.iter().enumerate() {
             if !neuron.is_longterm_memory || !neuron.is_active {
                 continue;
             }
@@ -5164,20 +5505,52 @@ fn rehash_lite_long_term_memory_patterns(
             let mut upstream_areas =
                 manager.get_episodic_memory_upstream_cortical_areas(&memory_id);
             upstream_areas.sort_unstable();
-            if upstream_areas.is_empty() || !lite_replay_frames_required(&manager, &memory_id) {
+            if upstream_areas.is_empty() {
                 continue;
             }
-            plans.push(RehashPlan {
-                neuron_id: neuron.neuron_id,
-                memory_area_idx: neuron.cortical_area_idx,
-                temporal_depth: memory_properties.temporal_depth,
-                upstream_areas,
-            });
+            match lite_row_needs(&manager, &memory_id, neuron.change_record.is_some()) {
+                LiteRowNeeds::Nothing => continue,
+                LiteRowNeeds::ReplayFrames => plans.push(RehashPlan {
+                    neuron_id: neuron.neuron_id,
+                    memory_area_idx: neuron.cortical_area_idx,
+                    temporal_depth: memory_properties.temporal_depth,
+                    upstream_areas,
+                }),
+                LiteRowNeeds::ChangeSteps => {
+                    // A row without a usable record keeps its stored hash.
+                    if neuron.change_record.is_none() {
+                        *legacy_change_rows
+                            .entry(memory_id.as_base_64())
+                            .or_default() += 1;
+                        continue;
+                    }
+                    let encoding = live_memory_area_shape(&manager, &memory_id)
+                        .and_then(|shape| shape.mp_mode().change_encoding())
+                        .ok_or_else(|| {
+                            ServiceError::InvalidInput(format!(
+                                "Cannot rehash LTM neuron {}: area '{}' has no change encoding",
+                                neuron.neuron_id,
+                                memory_id.as_base_64()
+                            ))
+                        })?;
+                    change_plans.push(ChangeRehashPlan {
+                        neuron_pos,
+                        memory_cortical_id: memory_id.as_base_64(),
+                        encoding,
+                        upstream_areas,
+                    });
+                }
+            }
         }
-        (plans, cortical_id_to_live_idx)
+        (
+            plans,
+            change_plans,
+            legacy_change_rows,
+            cortical_id_to_live_idx,
+        )
     };
-    if plans.is_empty() {
-        return Ok(());
+    if plans.is_empty() && change_plans.is_empty() {
+        return Ok(rows_without_change_record(legacy_change_rows, "Lite load"));
     }
     let npu_arc = connectome
         .read()
@@ -5190,25 +5563,23 @@ fn rehash_lite_long_term_memory_patterns(
         .lock()
         .map_err(|_| ServiceError::Backend("Failed to lock NPU for LTM rehash".to_string()))?;
     let mut rebuilt_hashes = HashMap::new();
-    let mut neurons_by_area_and_voxel = NeuronsByAreaAndVoxel::new();
+    let mut neurons_by_area_and_voxel = VoxelIndexes::new();
     for upstream_area_idx in plans
         .iter()
         .flat_map(|plan| plan.upstream_areas.iter().copied())
+        .chain(
+            change_plans
+                .iter()
+                .flat_map(|plan| plan.upstream_areas.iter().copied()),
+        )
         .collect::<HashSet<_>>()
     {
-        let mut neurons_by_voxel = NeuronsByVoxel::new();
-        for neuron_id in npu.get_neurons_in_cortical_area(upstream_area_idx) {
-            let coordinates = npu.get_neuron_coordinates(neuron_id).ok_or_else(|| {
-                ServiceError::InvalidState(format!(
-                    "Cannot rehash lite LTM patterns: rebuilt neuron {} has no coordinates",
-                    neuron_id
-                ))
-            })?;
-            neurons_by_voxel
-                .entry(coordinates)
-                .or_default()
-                .push(neuron_id);
-        }
+        let neurons_by_voxel = neurons_by_voxel(&npu, upstream_area_idx).map_err(|neuron_id| {
+            ServiceError::InvalidState(format!(
+                "Cannot rehash lite LTM patterns: rebuilt neuron {} has no coordinates",
+                neuron_id
+            ))
+        })?;
         neurons_by_area_and_voxel.insert(upstream_area_idx, neurons_by_voxel);
     }
 
@@ -5307,6 +5678,32 @@ fn rehash_lite_long_term_memory_patterns(
             })?;
         rebuilt_hashes.insert(plan.neuron_id, pattern.pattern_hash);
     }
+    // Change rows: resolve the voxel-keyed record to rebuilt neuron ids with the shared
+    // resolver and hash exactly as the live detector does (steps oldest first, upstream areas
+    // by ascending live index, empty steps kept, pairs ordered by the new neuron id). A record
+    // that does not resolve leaves the row as a legacy row with its stored hash.
+    let mut demoted: Vec<(usize, String)> = Vec::new();
+    for plan in &change_plans {
+        let neuron = &snapshot.long_term_memory_neurons[plan.neuron_pos];
+        let resolved = neuron
+            .change_record
+            .as_ref()
+            .and_then(|record| {
+                change_record_to_ids(record, &cortical_id_to_live_idx, &neurons_by_area_and_voxel)
+            })
+            .filter(|record| record.upstream_areas == plan.upstream_areas);
+        match resolved {
+            Some(record) => {
+                let steps: Vec<Vec<(u32, i64)>> = record.steps.into_iter().flatten().collect();
+                rebuilt_hashes.insert(neuron.neuron_id, plan.encoding.pattern_hash(&steps));
+            }
+            None => demoted.push((plan.neuron_pos, plan.memory_cortical_id.clone())),
+        }
+    }
+    for (neuron_pos, memory_cortical_id) in demoted {
+        snapshot.long_term_memory_neurons[neuron_pos].change_record = None;
+        *legacy_change_rows.entry(memory_cortical_id).or_default() += 1;
+    }
     drop(npu);
 
     for neuron in &mut snapshot.long_term_memory_neurons {
@@ -5314,14 +5711,35 @@ fn rehash_lite_long_term_memory_patterns(
             neuron.pattern_hash = Some(*pattern_hash);
         }
     }
-    Ok(())
+    Ok(rows_without_change_record(legacy_change_rows, "Lite load"))
+}
+
+/// Per-area counts of change-encoded rows kept with their stored hash for lack of a usable
+/// change record, with one warning per area.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn rows_without_change_record(
+    rows: std::collections::BTreeMap<String, usize>,
+    stage: &str,
+) -> Vec<MemoryNeuronsWithoutChangeRecord> {
+    rows.into_iter()
+        .map(|(cortical_id, count)| {
+            warn!(
+                target: "feagi-services",
+                "{} keeps {} change-encoded long-term memory neuron(s) in area {} with their stored hash: they have no usable change record (none was stored, or its upstream neurons no longer resolve), so they may not match again",
+                stage,
+                count,
+                cortical_id
+            );
+            MemoryNeuronsWithoutChangeRecord { cortical_id, count }
+        })
+        .collect()
 }
 
 #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
 fn restore_long_term_memory_from_snapshot(
     connectome: &RwLock<ConnectomeManager>,
     snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-) -> ServiceResult<()> {
+) -> ServiceResult<Vec<MemoryNeuronsWithoutChangeRecord>> {
     use feagi_npu_plasticity::MemoryNeuronDetail;
 
     let executor = {
@@ -5330,31 +5748,75 @@ fn restore_long_term_memory_from_snapshot(
     };
     let Some(executor) = executor else {
         if snapshot.long_term_memory_neurons.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         return Err(ServiceError::Backend(
             "Connectome snapshot contains long-term memory neurons but no plasticity executor is attached".to_string(),
         ));
     };
+    let live_indexes: HashMap<String, u32> = {
+        let manager = connectome.read();
+        snapshot
+            .long_term_memory_neurons
+            .iter()
+            .filter_map(|n| n.change_record.as_ref())
+            .flat_map(|record| record.upstream_cortical_ids.iter())
+            .filter_map(|name| {
+                let id = CorticalID::try_from_base_64(name).ok()?;
+                Some((name.clone(), manager.get_cortical_idx(&id)?))
+            })
+            .collect()
+    };
+    // The voxel index of every upstream area a record names, one pass per area, built after
+    // the rebuild or snapshot apply so ids are the live ones.
+    let voxel_indexes: VoxelIndexes = {
+        let areas: HashSet<u32> = live_indexes.values().copied().collect();
+        let npu_arc = connectome.read().get_npu().cloned();
+        let guard = npu_arc
+            .as_ref()
+            .filter(|_| !areas.is_empty())
+            .and_then(|npu_arc| npu_arc.lock().ok());
+        let indexes = match &guard {
+            Some(npu) => voxel_indexes_for_areas(npu, &areas),
+            None => VoxelIndexes::new(),
+        };
+        drop(guard);
+        indexes
+    };
+    let mut unresolved: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     let details: Vec<MemoryNeuronDetail> = snapshot
         .long_term_memory_neurons
         .iter()
         .filter(|n| n.is_longterm_memory && n.is_active)
-        .map(|n| MemoryNeuronDetail {
-            neuron_id: n.neuron_id,
-            cortical_area_idx: n.cortical_area_idx,
-            pattern_hash: n.pattern_hash,
-            is_longterm_memory: n.is_longterm_memory,
-            is_active: n.is_active,
-            lifespan_current: n.lifespan_current,
-            lifespan_initial: n.lifespan_initial,
-            lifespan_growth_rate: n.lifespan_growth_rate,
-            creation_burst: n.creation_burst,
-            last_activation_burst: n.last_activation_burst,
-            activation_count: n.activation_count,
-            spatial_signature: n.spatial_signature,
-            class_channels: n.class_channels.clone(),
-            class_channel_weights: n.class_channel_weights.clone(),
+        .map(|n| {
+            let change_record = n.change_record.as_ref().and_then(|record| {
+                let resolved = change_record_to_ids(record, &live_indexes, &voxel_indexes);
+                if resolved.is_none() {
+                    if let Some(memory_id) = connectome.read().get_cortical_id(n.cortical_area_idx)
+                    {
+                        *unresolved.entry(memory_id.as_base_64()).or_default() += 1;
+                    }
+                }
+                resolved
+            });
+            MemoryNeuronDetail {
+                neuron_id: n.neuron_id,
+                cortical_area_idx: n.cortical_area_idx,
+                pattern_hash: n.pattern_hash,
+                is_longterm_memory: n.is_longterm_memory,
+                is_active: n.is_active,
+                lifespan_current: n.lifespan_current,
+                lifespan_initial: n.lifespan_initial,
+                lifespan_growth_rate: n.lifespan_growth_rate,
+                creation_burst: n.creation_burst,
+                last_activation_burst: n.last_activation_burst,
+                activation_count: n.activation_count,
+                spatial_signature: n.spatial_signature,
+                class_channels: n.class_channels.clone(),
+                class_channel_weights: n.class_channel_weights.clone(),
+                change_record,
+            }
         })
         .collect();
     let exec = executor
@@ -5362,7 +5824,24 @@ fn restore_long_term_memory_from_snapshot(
         .map_err(|_| ServiceError::Backend("Failed to lock plasticity executor".to_string()))?;
     exec.restore_long_term_memory_neurons(&details)
         .map_err(ServiceError::Backend)?;
-    Ok(())
+    Ok(rows_without_change_record(unresolved, "Connectome load"))
+}
+
+/// Add per-area legacy counts from a later stage into the outcome's list.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn merge_rows_without_change_record(
+    outcome_rows: &mut Vec<MemoryNeuronsWithoutChangeRecord>,
+    more: Vec<MemoryNeuronsWithoutChangeRecord>,
+) {
+    for extra in more {
+        match outcome_rows
+            .iter_mut()
+            .find(|row| row.cortical_id == extra.cortical_id)
+        {
+            Some(row) => row.count += extra.count,
+            None => outcome_rows.push(extra),
+        }
+    }
 }
 
 /// Rewrite snapshot cortical indexes to the live ConnectomeManager indexes.
@@ -10673,6 +11152,7 @@ mod tests {
                     spatial_signature: None,
                     class_channels: Vec::new(),
                     class_channel_weights: Vec::new(),
+                    change_record: None,
                 }])
                 .map_err(crate::types::ServiceError::Backend)?;
             }
@@ -11035,6 +11515,7 @@ mod tests {
                         spatial_signature: None,
                         class_channels: Vec::new(),
                         class_channel_weights: Vec::new(),
+                        change_record: None,
                     },
                     MemoryNeuronDetail {
                         neuron_id: second_ltm_id,
@@ -11051,6 +11532,7 @@ mod tests {
                         spatial_signature: None,
                         class_channels: Vec::new(),
                         class_channel_weights: Vec::new(),
+                        change_record: None,
                     },
                 ])
                 .map_err(crate::types::ServiceError::Backend)?;
@@ -11807,6 +12289,7 @@ mod tests {
                     spatial_signature: None,
                     class_channels: Vec::new(),
                     class_channel_weights: Vec::new(),
+                    change_record: None,
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
@@ -12096,6 +12579,7 @@ mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             }],
             long_term_memory_replay_frames: if replay_frames.is_empty() {
                 Vec::new()
@@ -12417,7 +12901,7 @@ mod tests {
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
         };
-        super::restore_long_term_memory_from_snapshot(&connectome, &snapshot)
+        super::restore_long_term_memory_from_snapshot(&connectome, &snapshot).map(|_| ())
     }
 
     #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
@@ -12461,6 +12945,7 @@ mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
@@ -12545,6 +13030,7 @@ mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
@@ -13075,5 +13561,649 @@ mod plasticity_in_place_update_tests {
             &[rule("projector", true, 10), rule("projector", true, 10)]
         ));
         assert!(!differs(&[], &base));
+    }
+}
+
+/// Lite save and load of long-term memory neurons in change-encoded (`mp_differential` /
+/// `mp_ratio`) memory areas. Names are neutral; the brain is built by the tests.
+#[cfg(all(test, feature = "connectome-io", feature = "plasticity"))]
+mod change_encoded_lite_tests {
+    use super::{ConnectomeServiceImpl, ServiceResult};
+    use crate::traits::ConnectomeService;
+    use feagi_brain_development::ConnectomeManager;
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+    use feagi_npu_neural::types::connectome::{
+        ConnectomePersistMode, ConnectomeSnapshot, SerializableChangeRecord,
+    };
+    use feagi_npu_plasticity::executor::PlasticityExecutor;
+    use feagi_npu_plasticity::mp_change_encoder::{ChangeStep, MpFrame};
+    use feagi_npu_plasticity::{
+        AsyncPlasticityExecutor, MemoryMpMode, MemoryNeuronDetail, MpChangeEncoding,
+        PlasticityConfig,
+    };
+    use feagi_npu_runtime::StdRuntime;
+    use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        MemoryCorticalType,
+    };
+    use parking_lot::RwLock;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    const LTM_ID: u32 = 50_000_000;
+    const STORED_HASH: u64 = 0xDEAD;
+    const UPSTREAM_A: &[u8; 8] = b"cchgupaa";
+    const UPSTREAM_B: &[u8; 8] = b"cchgupbb";
+    const MEMORY: &[u8; 8] = b"mchgmem1";
+
+    /// One upstream neuron by position, with its MP in each of the three window frames.
+    struct Upstream {
+        area: usize,
+        voxel: (u32, u32, u32),
+        ordinal: u32,
+        mp: [Option<f32>; 3],
+    }
+
+    /// Area A has two neurons in each of two voxels; area B has one. The first voxel of A is
+    /// shared by two firing neurons, and B is silent over the first transition (an empty step).
+    fn upstream_neurons() -> Vec<Upstream> {
+        let n = |area, voxel, ordinal, mp| Upstream {
+            area,
+            voxel,
+            ordinal,
+            mp,
+        };
+        vec![
+            n(0, (0, 0, 0), 0, [Some(1.0), Some(3.0), Some(4.0)]),
+            n(0, (0, 0, 0), 1, [Some(2.0), Some(1.0), Some(3.0)]),
+            n(0, (1, 0, 0), 0, [None, None, None]),
+            n(0, (1, 0, 0), 1, [None, Some(1.0), Some(1.0)]),
+            n(1, (0, 0, 0), 0, [None, None, Some(5.0)]),
+        ]
+    }
+
+    fn encoding(mode: &str) -> MpChangeEncoding {
+        match mode {
+            "mp_differential" => MpChangeEncoding::Differential { quantization: 1.0 },
+            _ => MpChangeEncoding::Ratio {
+                quantization_percent: 20.0,
+            },
+        }
+    }
+
+    /// The window the detector would encode, for the given neuron ids and area hash order.
+    fn window_steps(
+        enc: &MpChangeEncoding,
+        neurons: &[Upstream],
+        id_of: &dyn Fn(&Upstream) -> u32,
+        area_order: &[usize],
+    ) -> Vec<ChangeStep> {
+        let frame = |area: usize, t: usize| -> MpFrame {
+            neurons
+                .iter()
+                .filter(|n| n.area == area)
+                .filter_map(|n| n.mp[t].map(|mp| (id_of(n), mp)))
+                .collect()
+        };
+        let mut steps = Vec::new();
+        for t in 1..3 {
+            for &area in area_order {
+                steps.push(enc.encode_step(&frame(area, t - 1), &frame(area, t)));
+            }
+        }
+        steps
+    }
+
+    fn genome(mode: &str) -> feagi_evolutionary::RuntimeGenome {
+        let dims = |x| CorticalAreaDimensions::new(x, 1, 1).expect("dims");
+        let id_a = CorticalID::try_from_bytes(UPSTREAM_A).unwrap();
+        let id_b = CorticalID::try_from_bytes(UPSTREAM_B).unwrap();
+        let id_m = CorticalID::try_from_bytes(MEMORY).unwrap();
+        let feeds_memory = serde_json::json!({
+            id_m.as_base_64(): [{
+                "morphology_id": "episodic_memory",
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": false,
+                "synaptic_delay_bursts": 1
+            }]
+        });
+        let upstream = |id, name: &str, x| {
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                dims(x),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            area.properties
+                .insert("cortical_mapping_dst".to_string(), feeds_memory.clone());
+            area
+        };
+        let mut area_a = upstream(id_a, "upstream-a", 2);
+        area_a
+            .properties
+            .insert("neurons_per_voxel".to_string(), serde_json::json!(2));
+        let area_b = upstream(id_b, "upstream-b", 1);
+        let mut memory = CorticalArea::new(
+            id_m,
+            0,
+            "change-memory".to_string(),
+            dims(1),
+            (3, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        memory
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(3));
+        memory
+            .properties
+            .insert("mp_change_mode".to_string(), serde_json::json!(mode));
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "change-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([id_a, id_b, id_m]);
+        let region_id = region.region_id.to_string();
+        feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "change-lite".to_string(),
+                genome_title: "change-lite".to_string(),
+                genome_description: String::new(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_id.clone()),
+            },
+            cortical_areas: HashMap::from([(id_a, area_a), (id_b, area_b), (id_m, memory)]),
+            brain_regions: HashMap::from([(region_id, region)]),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        }
+    }
+
+    struct Brain {
+        service: ConnectomeServiceImpl,
+        connectome: Arc<RwLock<ConnectomeManager>>,
+        npu: Arc<TracingMutex<DynamicNPU>>,
+        exec: Arc<std::sync::Mutex<AsyncPlasticityExecutor>>,
+    }
+
+    fn empty_brain(name: &'static str, genome: Option<feagi_evolutionary::RuntimeGenome>) -> Brain {
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(
+                RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8).expect("npu"),
+            ),
+            name,
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+        let exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(exec.clone());
+        }
+        let service = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(genome)));
+        Brain {
+            service,
+            connectome,
+            npu,
+            exec,
+        }
+    }
+
+    /// Live neuron id of an upstream neuron: its rank among the area's neurons at the voxel.
+    fn live_id(brain: &Brain, neuron: &Upstream) -> u32 {
+        let manager = brain.connectome.read();
+        let area = [UPSTREAM_A, UPSTREAM_B][neuron.area];
+        let id = CorticalID::try_from_bytes(area).unwrap();
+        let mut at_voxel: Vec<u32> = manager
+            .get_neurons_in_area(&id)
+            .into_iter()
+            .filter(|n| manager.get_neuron_coordinates(*n) == neuron.voxel)
+            .map(|n| n as u32)
+            .collect();
+        at_voxel.sort_unstable();
+        at_voxel[neuron.ordinal as usize]
+    }
+
+    fn live_area_order(brain: &Brain) -> Vec<usize> {
+        let manager = brain.connectome.read();
+        let idx = |bytes| manager.get_cortical_idx(&CorticalID::try_from_bytes(bytes).unwrap());
+        let mut order = vec![(idx(UPSTREAM_A), 0usize), (idx(UPSTREAM_B), 1usize)];
+        order.sort();
+        order.into_iter().map(|(_, area)| area).collect()
+    }
+
+    /// A source brain whose neuron ids differ from any rebuilt brain, holding one long-term
+    /// change-encoded neuron. Returns its lite export and the hash of the same window under
+    /// the source's own neuron ids.
+    async fn lite_export(
+        mode: &str,
+        with_record: bool,
+    ) -> ServiceResult<(ConnectomeSnapshot, u64)> {
+        Ok(export_source(mode, with_record, ConnectomePersistMode::Lite, |_| {})
+            .await?
+            .0)
+    }
+
+    /// Same source brain as [`lite_export`], exported in `persist` mode. `tamper` edits the
+    /// id-form record before it is attached. Also returns the source brain.
+    async fn export_source(
+        mode: &str,
+        with_record: bool,
+        persist: ConnectomePersistMode,
+        tamper: impl FnOnce(&mut feagi_npu_plasticity::MemoryChangeRecord),
+    ) -> ServiceResult<((ConnectomeSnapshot, u64), Brain)> {
+        let genome = genome(mode);
+        let source = empty_brain("change-lite-source-npu", Some(genome.clone()));
+        let neurons = upstream_neurons();
+        let enc = encoding(mode);
+        let (record_steps, source_hash, a_idx, b_idx, mem_idx) = {
+            let mut manager = source.connectome.write();
+            let ids: HashMap<&[u8; 8], CorticalID> = [UPSTREAM_A, UPSTREAM_B, MEMORY]
+                .into_iter()
+                .map(|b| (b, CorticalID::try_from_bytes(b).unwrap()))
+                .collect();
+            for id in [UPSTREAM_A, UPSTREAM_B, MEMORY] {
+                let area = genome.cortical_areas[&ids[id]].clone();
+                manager.add_cortical_area(area)?;
+            }
+            // Dead neurons first: source neuron ids cannot equal the rebuilt ones.
+            let mut dead = Vec::new();
+            for _ in 0..5 {
+                dead.push(manager.add_neuron(
+                    &ids[UPSTREAM_B],
+                    0,
+                    0,
+                    0,
+                    1.0,
+                    0.0,
+                    0.1,
+                    0.0,
+                    0,
+                    1,
+                    1.0,
+                    3,
+                    1,
+                    false,
+                )?);
+            }
+            {
+                let mut npu = source.npu.lock().expect("npu");
+                for id in dead {
+                    assert!(npu.delete_neuron(id as u32));
+                }
+            }
+            let mut source_ids = Vec::new();
+            for neuron in &neurons {
+                let area = [UPSTREAM_A, UPSTREAM_B][neuron.area];
+                let (x, y, z) = neuron.voxel;
+                source_ids.push(manager.add_neuron(
+                    &ids[area], x, y, z, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+                )? as u32);
+            }
+            let id_of = |n: &Upstream| {
+                let position = neurons
+                    .iter()
+                    .position(|other| std::ptr::eq(other, n))
+                    .expect("known neuron");
+                source_ids[position]
+            };
+            let a_idx = manager.get_cortical_idx(&ids[UPSTREAM_A]).unwrap();
+            let b_idx = manager.get_cortical_idx(&ids[UPSTREAM_B]).unwrap();
+            let mem_idx = manager.get_cortical_idx(&ids[MEMORY]).unwrap();
+            let order: Vec<usize> = if a_idx < b_idx {
+                vec![0, 1]
+            } else {
+                vec![1, 0]
+            };
+            let steps = window_steps(&enc, &neurons, &id_of, &order);
+            let source_hash = enc.pattern_hash(&steps);
+            // The sidecar holds the encoded steps by neuron id, as creation takes them.
+            let record_steps: Vec<Vec<Vec<feagi_npu_plasticity::ChangeEntry>>> =
+                steps.chunks(2).map(<[_]>::to_vec).collect();
+            (record_steps, source_hash, a_idx, b_idx, mem_idx)
+        };
+        {
+            let exec = source.exec.lock().expect("exec");
+            PlasticityExecutor::register_memory_area(
+                &*exec,
+                mem_idx,
+                "change-memory".to_string(),
+                3,
+                vec![a_idx, b_idx],
+                None,
+                MemoryMpMode::Change(enc),
+            );
+            let mut upstream = vec![a_idx, b_idx];
+            upstream.sort_unstable();
+            exec.restore_long_term_memory_neurons(&[MemoryNeuronDetail {
+                neuron_id: LTM_ID,
+                cortical_area_idx: mem_idx,
+                pattern_hash: Some(STORED_HASH),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 120,
+                lifespan_initial: 30,
+                lifespan_growth_rate: 2.5,
+                creation_burst: 3,
+                last_activation_burst: 4,
+                activation_count: 5,
+                spatial_signature: None,
+                class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
+                change_record: with_record.then(|| {
+                    let mut record = feagi_npu_plasticity::MemoryChangeRecord {
+                        upstream_areas: upstream,
+                        steps: record_steps,
+                    };
+                    tamper(&mut record);
+                    record
+                }),
+            }])
+            .map_err(crate::types::ServiceError::Backend)?;
+        }
+        source
+            .connectome
+            .write()
+            .rebind_npu_runtime_after_connectome_apply()?;
+        source
+            .npu
+            .lock()
+            .expect("npu")
+            .register_dynamic_neuron_mapping(LTM_ID, CorticalID::try_from_bytes(MEMORY).unwrap());
+        let exported = source.service.export_connectome(persist).await?;
+        Ok(((exported, source_hash), source))
+    }
+
+    /// Import into a fresh brain; returns the brain, the outcome, and the neuron's stored hash.
+    async fn import(
+        snapshot: ConnectomeSnapshot,
+    ) -> ServiceResult<(Brain, crate::types::ConnectomeImportOutcome, u64)> {
+        let target = empty_brain("change-lite-target-npu", None);
+        let outcome = target.service.import_connectome(snapshot).await?;
+        let hash = target
+            .exec
+            .lock()
+            .expect("exec")
+            .memory_neuron_detail(LTM_ID)
+            .expect("the long-term neuron loads")
+            .pattern_hash
+            .expect("hash");
+        Ok((target, outcome, hash))
+    }
+
+    /// What the detector would hash for the same window on the rebuilt brain.
+    fn detector_hash(brain: &Brain, mode: &str) -> u64 {
+        let neurons = upstream_neurons();
+        let ids: Vec<u32> = neurons.iter().map(|n| live_id(brain, n)).collect();
+        let id_of = |n: &Upstream| {
+            ids[neurons
+                .iter()
+                .position(|other| std::ptr::eq(other, n))
+                .unwrap()]
+        };
+        let enc = encoding(mode);
+        enc.pattern_hash(&window_steps(
+            &enc,
+            &neurons,
+            &id_of,
+            &live_area_order(brain),
+        ))
+    }
+
+    fn reverse_upstream_order(record: &mut SerializableChangeRecord) {
+        record.upstream_cortical_ids.reverse();
+        for step in &mut record.steps {
+            step.reverse();
+        }
+    }
+
+    async fn round_trip(mode: &str) -> ServiceResult<()> {
+        let (exported, source_hash) = lite_export(mode, true).await?;
+        let row = &exported.long_term_memory_neurons[0];
+        let record = row
+            .change_record
+            .as_ref()
+            .expect("export carries the record");
+        let a_b64 = CorticalID::try_from_bytes(UPSTREAM_A).unwrap().as_base_64();
+        let b_b64 = CorticalID::try_from_bytes(UPSTREAM_B).unwrap().as_base_64();
+        assert_eq!(record.steps.len(), 2, "temporal depth 3 gives two steps");
+        let mut named = record.upstream_cortical_ids.clone();
+        named.sort();
+        let mut expected_names = vec![a_b64, b_b64];
+        expected_names.sort();
+        assert_eq!(named, expected_names);
+        assert!(
+            exported.long_term_memory_replay_frames.is_empty(),
+            "change modes never carry replay frames"
+        );
+        let voxel_with_two = record
+            .steps
+            .iter()
+            .flatten()
+            .flatten()
+            .any(|(x, y, z, ordinal, _)| (*x, *y, *z) == (0, 0, 0) && *ordinal == 1);
+        assert!(
+            voxel_with_two,
+            "the second neuron of a shared voxel is kept"
+        );
+        if mode == "mp_differential" {
+            assert!(
+                record.steps[0].iter().any(Vec::is_empty),
+                "an empty step stays in the record"
+            );
+        }
+
+        let (target, outcome, hash) = import(exported.clone()).await?;
+        let expected = detector_hash(&target, mode);
+        assert_ne!(
+            expected, source_hash,
+            "precondition: rebuilt neuron ids must change the hash"
+        );
+        assert_ne!(hash, STORED_HASH);
+        assert_eq!(hash, expected, "{mode}: rehash equals the detector's hash");
+        assert!(outcome.memory_neurons_without_change_record.is_empty());
+        assert!(outcome.memory_neurons_skipped.is_empty());
+        let restored = target
+            .exec
+            .lock()
+            .expect("exec")
+            .memory_neuron_detail(LTM_ID)
+            .and_then(|detail| detail.change_record)
+            .expect("the record survives the load, so the next save carries it");
+        assert!(restored.upstream_areas.windows(2).all(|w| w[0] < w[1]));
+        assert!(
+            target
+                .npu
+                .lock()
+                .expect("npu")
+                .get_memory_replay_frames(LTM_ID)
+                .is_none(),
+            "no replay frames are registered for a change mode"
+        );
+
+        // The upstream areas saved in the opposite index order land on the same hash.
+        let mut flipped = exported;
+        reverse_upstream_order(
+            flipped.long_term_memory_neurons[0]
+                .change_record
+                .as_mut()
+                .unwrap(),
+        );
+        let (_, _, flipped_hash) = import(flipped).await?;
+        assert_eq!(
+            flipped_hash, expected,
+            "{mode}: saved order must not matter"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn differential_round_trip_rebuilds_the_detector_hash() -> ServiceResult<()> {
+        round_trip("mp_differential").await
+    }
+
+    #[tokio::test]
+    async fn ratio_round_trip_rebuilds_the_detector_hash() -> ServiceResult<()> {
+        round_trip("mp_ratio").await
+    }
+
+    #[tokio::test]
+    async fn legacy_row_without_record_exports_and_imports_with_its_stored_hash(
+    ) -> ServiceResult<()> {
+        let (exported, _) = lite_export("mp_differential", false).await?;
+        let row = &exported.long_term_memory_neurons[0];
+        assert!(row.change_record.is_none());
+        assert_eq!(row.pattern_hash, Some(STORED_HASH));
+
+        let (_, outcome, hash) = import(exported).await?;
+        assert_eq!(hash, STORED_HASH, "a legacy row keeps its stored hash");
+        assert_eq!(outcome.memory_neurons_without_change_record.len(), 1);
+        assert_eq!(outcome.memory_neurons_without_change_record[0].count, 1);
+        assert_eq!(
+            outcome.memory_neurons_without_change_record[0].cortical_id,
+            CorticalID::try_from_bytes(MEMORY).unwrap().as_base_64()
+        );
+        assert!(outcome.memory_neurons_skipped.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn record_that_no_longer_fits_the_area_is_skipped_not_fatal() -> ServiceResult<()> {
+        let (mut exported, _) = lite_export("mp_differential", true).await?;
+        exported.long_term_memory_neurons[0]
+            .change_record
+            .as_mut()
+            .unwrap()
+            .steps
+            .pop();
+        let target = empty_brain("change-lite-skip-npu", None);
+        let outcome = target.service.import_connectome(exported).await?;
+        assert_eq!(outcome.total_memory_neurons_skipped(), 1);
+        assert_eq!(
+            outcome.memory_neurons_skipped[0]
+                .reasons
+                .get("change_steps_mismatch"),
+            Some(&1)
+        );
+        assert!(target
+            .exec
+            .lock()
+            .expect("exec")
+            .memory_neuron_detail(LTM_ID)
+            .is_none());
+        Ok(())
+    }
+
+    /// An id that no longer resolves at export leaves a legacy row: kept with its stored hash,
+    /// counted on import, and the export itself succeeds.
+    #[tokio::test]
+    async fn unresolvable_id_at_export_yields_a_kept_counted_legacy_row() -> ServiceResult<()> {
+        let ((exported, _), _source) = export_source(
+            "mp_differential",
+            true,
+            ConnectomePersistMode::Lite,
+            |record| {
+                let entry = record
+                    .steps
+                    .iter_mut()
+                    .flatten()
+                    .find_map(|entries| entries.first_mut())
+                    .expect("the window has an entry");
+                entry.0 = u32::MAX - 7;
+            },
+        )
+        .await?;
+        assert_eq!(exported.long_term_memory_neurons.len(), 1);
+        let row = &exported.long_term_memory_neurons[0];
+        assert!(row.change_record.is_none(), "the row has no record");
+        assert_eq!(row.pattern_hash, Some(STORED_HASH));
+
+        let (_, outcome, hash) = import(exported).await?;
+        assert_eq!(hash, STORED_HASH, "the row keeps its stored hash");
+        assert_eq!(outcome.memory_neurons_without_change_record.len(), 1);
+        assert_eq!(outcome.memory_neurons_without_change_record[0].count, 1);
+        assert!(outcome.memory_neurons_skipped.is_empty());
+        Ok(())
+    }
+
+    /// A full load restores the record in id form, so the next full save carries it again.
+    #[tokio::test]
+    async fn full_save_load_save_keeps_the_record() -> ServiceResult<()> {
+        let ((first, _), _source) = export_source(
+            "mp_differential",
+            true,
+            ConnectomePersistMode::Full,
+            |_| {},
+        )
+        .await?;
+        let first_record = first.long_term_memory_neurons[0]
+            .change_record
+            .clone()
+            .expect("the first save carries the record");
+        let (target, outcome, _) = import(first).await?;
+        assert!(outcome.memory_neurons_without_change_record.is_empty());
+        let second = target
+            .service
+            .export_connectome(ConnectomePersistMode::Full)
+            .await?;
+        assert_eq!(
+            second.long_term_memory_neurons[0].change_record.as_ref(),
+            Some(&first_record),
+            "the second save keeps the record"
+        );
+        Ok(())
+    }
+
+    /// A lite load restores the record in id form after the rehash, so the next lite save
+    /// carries it and a second lite load still rebuilds the detector's hash.
+    #[tokio::test]
+    async fn lite_save_load_save_keeps_the_record() -> ServiceResult<()> {
+        let mode = "mp_differential";
+        let (first, _) = lite_export(mode, true).await?;
+        let (middle, outcome, _) = import(first).await?;
+        assert!(outcome.memory_neurons_without_change_record.is_empty());
+        let second = middle
+            .service
+            .export_connectome(ConnectomePersistMode::Lite)
+            .await?;
+        assert!(
+            second.long_term_memory_neurons[0].change_record.is_some(),
+            "the second save keeps the record"
+        );
+        let (last, outcome, hash) = import(second).await?;
+        assert!(outcome.memory_neurons_without_change_record.is_empty());
+        assert_eq!(
+            hash,
+            detector_hash(&last, mode),
+            "the hash still matches the detector after the second load"
+        );
+        Ok(())
     }
 }

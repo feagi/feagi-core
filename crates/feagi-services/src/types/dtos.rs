@@ -77,11 +77,27 @@ pub struct MemoryNeuronsSkipped {
     pub reasons: std::collections::BTreeMap<String, usize>,
 }
 
+/// Change-encoded long-term memory rows a load kept with their stored pattern hash because
+/// they have no usable change record: none was stored (saved before records existed), or its
+/// upstream neurons no longer resolve. Their hashes depend on neuron ids that a lite rebuild
+/// reassigns, so they may no longer match the pattern they were learned from.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MemoryNeuronsWithoutChangeRecord {
+    /// Memory cortical area (base64 cortical ID).
+    pub cortical_id: String,
+    /// Rows kept unchanged in this area.
+    pub count: usize,
+}
+
 /// Result of a connectome import.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConnectomeImportOutcome {
     /// Long-term memory rows left out of the load, per memory area. Empty when none.
     pub memory_neurons_skipped: Vec<MemoryNeuronsSkipped>,
+    /// Change-encoded long-term rows kept with their stored hash for lack of a usable change
+    /// record, per memory area. Empty when none.
+    #[serde(default)]
+    pub memory_neurons_without_change_record: Vec<MemoryNeuronsWithoutChangeRecord>,
 }
 
 impl ConnectomeImportOutcome {

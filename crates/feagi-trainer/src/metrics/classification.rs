@@ -1,12 +1,16 @@
 //! Classification metric pack — accuracy, macro precision/recall/F1, and confusion matrix.
 //!
 //! Operates on single-label class predictions and targets. Aggregates are computed over the
-//! union of observed class ids; macro averages weight every class equally.
+//! union of target class ids and answered prediction class ids; macro averages weight every
+//! class equally. A readout with no class (silent) or a tie for the top score is wrong for its
+//! true class, counted in that class's total, and never a false positive for any class.
 
 use std::collections::BTreeMap;
 
 use crate::contracts::common::{PluginId, PluginRef};
-use crate::contracts::{ClassBreakdown, TypedPrediction, TypedTarget};
+use crate::contracts::{
+    ClassBreakdown, ClassReadout, ConfusionSummary, TypedPrediction, TypedTarget,
+};
 use crate::error::TrainerError;
 use crate::plugins::{ClassMetrics, ConfusionMatrix, MetricPackPlugin, MetricResult};
 
@@ -23,10 +27,10 @@ impl ClassificationMetricPack {
         Self
     }
 
-    /// Extracts the predicted class id, erroring on a non-class prediction variant.
-    fn predicted_class(prediction: &TypedPrediction) -> Result<u32, TrainerError> {
+    /// Extracts the readout, erroring on a non-class variant.
+    fn predicted_readout(prediction: &TypedPrediction) -> Result<ClassReadout, TrainerError> {
         match prediction {
-            TypedPrediction::Class { class_id, .. } => Ok(*class_id),
+            TypedPrediction::Class { readout, .. } => Ok(*readout),
             other => Err(TrainerError::Evaluation(format!(
                 "classification pack requires Class predictions, got {other:?}"
             ))),
@@ -44,14 +48,8 @@ impl ClassificationMetricPack {
     }
 }
 
-/// Per-class correct counts for the results view.
-///
-/// A class is included only when at least one scored target used it. The label is the first
-/// target label recorded for that class id. When a target has no label, the class id text is used.
-pub fn class_breakdown_rows(
-    matrix: &ConfusionMatrix,
-    targets: &[TypedTarget],
-) -> Vec<ClassBreakdown> {
+/// First recorded target label per class id.
+fn target_labels(targets: &[TypedTarget]) -> BTreeMap<u32, String> {
     let mut labels: BTreeMap<u32, String> = BTreeMap::new();
     for target in targets {
         if let TypedTarget::Class {
@@ -65,12 +63,51 @@ pub fn class_breakdown_rows(
             labels.entry(*class_id).or_insert_with(|| label.clone());
         }
     }
+    labels
+}
+
+/// Sparse, publishable form of a confusion matrix. Labels are the first target label of each
+/// class, or the class id text.
+pub fn confusion_summary(matrix: &ConfusionMatrix, targets: &[TypedTarget]) -> ConfusionSummary {
+    let labels = target_labels(targets);
+    let mut cells = Vec::new();
+    for (true_index, row) in matrix.counts.iter().enumerate() {
+        for (answered_index, &count) in row.iter().enumerate() {
+            if count > 0 {
+                cells.push([true_index as u64, answered_index as u64, count]);
+            }
+        }
+    }
+    ConfusionSummary {
+        class_ids: matrix.class_ids.clone(),
+        labels: matrix
+            .class_ids
+            .iter()
+            .map(|id| labels.get(id).cloned().unwrap_or_else(|| id.to_string()))
+            .collect(),
+        cells,
+        no_answer: matrix.no_answer.clone(),
+        tied: matrix.tied.clone(),
+    }
+}
+
+/// Per-class correct counts for the results view.
+///
+/// A class is included only when at least one scored target used it. The label is the first
+/// target label recorded for that class id. When a target has no label, the class id text is used.
+pub fn class_breakdown_rows(
+    matrix: &ConfusionMatrix,
+    targets: &[TypedTarget],
+) -> Vec<ClassBreakdown> {
+    let labels = target_labels(targets);
     matrix
         .class_ids
         .iter()
         .enumerate()
         .filter_map(|(index, class_id)| {
-            let total: u64 = matrix.counts[index].iter().sum();
+            let no_answer = matrix.no_answer.get(index).copied().unwrap_or(0);
+            let tied = matrix.tied.get(index).copied().unwrap_or(0);
+            let total: u64 = matrix.counts[index].iter().sum::<u64>() + no_answer + tied;
             if total == 0 {
                 return None;
             }
@@ -83,6 +120,8 @@ pub fn class_breakdown_rows(
                     .unwrap_or_else(|| class_id.to_string()),
                 correct,
                 total,
+                no_answer,
+                tied,
             })
         })
         .collect()
@@ -114,20 +153,20 @@ impl MetricPackPlugin for ClassificationMetricPack {
             ));
         }
 
-        let predicted: Vec<u32> = predictions
+        let predicted: Vec<ClassReadout> = predictions
             .iter()
-            .map(Self::predicted_class)
+            .map(Self::predicted_readout)
             .collect::<Result<_, _>>()?;
         let actual: Vec<u32> = targets
             .iter()
             .map(Self::target_class)
             .collect::<Result<_, _>>()?;
 
-        // Sorted union of all observed class ids defines the matrix axes.
+        // Sorted union of target classes and answered prediction classes defines the axes.
         let mut class_ids: Vec<u32> = predicted
             .iter()
-            .chain(actual.iter())
-            .copied()
+            .filter_map(ClassReadout::class_id)
+            .chain(actual.iter().copied())
             .collect::<std::collections::BTreeSet<u32>>()
             .into_iter()
             .collect();
@@ -141,13 +180,20 @@ impl MetricPackPlugin for ClassificationMetricPack {
         let n = class_ids.len();
 
         let mut counts = vec![vec![0u64; n]; n];
+        let mut no_answer = vec![0u64; n];
+        let mut tied = vec![0u64; n];
         let mut correct = 0u64;
         for (p, a) in predicted.iter().zip(actual.iter()) {
-            let pi = index_of[p];
             let ai = index_of[a];
-            counts[ai][pi] += 1;
-            if p == a {
-                correct += 1;
+            match p {
+                ClassReadout::Class(p) => {
+                    counts[ai][index_of[p]] += 1;
+                    if p == a {
+                        correct += 1;
+                    }
+                }
+                ClassReadout::NoAnswer => no_answer[ai] += 1,
+                ClassReadout::Tied => tied[ai] += 1,
             }
         }
 
@@ -159,7 +205,7 @@ impl MetricPackPlugin for ClassificationMetricPack {
         for (i, row) in counts.iter().enumerate() {
             let tp = row[i] as f64;
             let predicted_positives: u64 = counts.iter().map(|r| r[i]).sum();
-            let actual_positives: u64 = row.iter().sum();
+            let actual_positives: u64 = row.iter().sum::<u64>() + no_answer[i] + tied[i];
 
             let precision = if predicted_positives == 0 {
                 0.0
@@ -196,7 +242,12 @@ impl MetricPackPlugin for ClassificationMetricPack {
 
         Ok(MetricResult {
             metrics,
-            confusion: Some(ConfusionMatrix { class_ids, counts }),
+            confusion: Some(ConfusionMatrix {
+                class_ids,
+                counts,
+                no_answer,
+                tied,
+            }),
         })
     }
 }
@@ -207,7 +258,7 @@ mod tests {
 
     fn class_pred(id: u32) -> TypedPrediction {
         TypedPrediction::Class {
-            class_id: id,
+            readout: ClassReadout::Class(id),
             scores: vec![],
         }
     }
@@ -274,6 +325,98 @@ mod tests {
         assert_eq!(rows[0].total, 1);
         assert_eq!(rows[1].class_id, 3);
         assert_eq!(rows[1].label, "dog");
+    }
+
+    fn silent_pred() -> TypedPrediction {
+        TypedPrediction::Class {
+            readout: ClassReadout::NoAnswer,
+            scores: vec![0.0; 10],
+        }
+    }
+
+    #[test]
+    fn all_silent_readout_scores_zero_with_no_answer_rows() {
+        let pack = ClassificationMetricPack::new();
+        let mut preds = Vec::new();
+        let mut targets = Vec::new();
+        for class in 0..10u32 {
+            for _ in 0..10 {
+                preds.push(silent_pred());
+                targets.push(class_target(class));
+            }
+        }
+        let result = pack.evaluate(&preds, &targets).expect("evaluate");
+        for key in ["accuracy", "macro_precision", "macro_recall", "macro_f1"] {
+            assert_eq!(result.metrics[key], 0.0, "{key}");
+        }
+        let rows = class_breakdown_rows(result.confusion.as_ref().expect("confusion"), &targets);
+        assert_eq!(rows.len(), 10);
+        for row in &rows {
+            assert_eq!((row.correct, row.total, row.no_answer), (0, 10, 10));
+        }
+        assert_eq!(rows.iter().map(|r| r.total).sum::<u64>(), 100);
+    }
+
+    #[test]
+    fn no_answer_counts_in_recall_but_not_precision() {
+        let pack = ClassificationMetricPack::new();
+        // class 0: one right, one silent; class 1: one right.
+        let preds = vec![class_pred(0), silent_pred(), class_pred(1)];
+        let targets = vec![class_target(0), class_target(0), class_target(1)];
+        let result = pack.evaluate(&preds, &targets).expect("evaluate");
+        assert!((result.metrics["accuracy"] - 2.0 / 3.0).abs() < 1e-12);
+        // recall: class 0 = 1/2, class 1 = 1; precision unchanged: both 1.
+        assert!((result.metrics["macro_recall"] - 0.75).abs() < 1e-12);
+        assert_eq!(result.metrics["macro_precision"], 1.0);
+        let cm = result.confusion.expect("confusion");
+        assert_eq!(cm.no_answer, vec![1, 0]);
+    }
+
+    #[test]
+    fn tied_counts_as_wrong_in_accuracy_and_recall_but_not_precision() {
+        let pack = ClassificationMetricPack::new();
+        let tied = || TypedPrediction::Class {
+            readout: ClassReadout::Tied,
+            scores: vec![0.5, 0.5],
+        };
+        let mut preds = Vec::new();
+        let mut targets = Vec::new();
+        // Class 0: 6 right, 1 answered 1, 2 tied, 1 silent.
+        for _ in 0..6 {
+            preds.push(class_pred(0));
+            targets.push(class_target(0));
+        }
+        preds.push(class_pred(1));
+        targets.push(class_target(0));
+        for _ in 0..2 {
+            preds.push(tied());
+            targets.push(class_target(0));
+        }
+        preds.push(silent_pred());
+        targets.push(class_target(0));
+        // Class 1: 10 right.
+        for _ in 0..10 {
+            preds.push(class_pred(1));
+            targets.push(class_target(1));
+        }
+        let result = pack.evaluate(&preds, &targets).expect("evaluate");
+        assert!((result.metrics["accuracy"] - 0.80).abs() < 1e-12);
+        let cm = result.confusion.expect("confusion");
+        assert_eq!(cm.tied, vec![2, 0]);
+        assert_eq!(cm.no_answer, vec![1, 0]);
+        let row_sum = |i: usize| cm.counts[i].iter().sum::<u64>() + cm.no_answer[i] + cm.tied[i];
+        assert_eq!((row_sum(0), row_sum(1)), (10, 10));
+        // recall(0) = 6/10, precision(0) = 6/6, precision(1) = 10/11.
+        let macro_recall = (0.6 + 1.0) / 2.0;
+        assert!((result.metrics["macro_recall"] - macro_recall).abs() < 1e-12);
+        let macro_precision = (1.0 + 10.0 / 11.0) / 2.0;
+        assert!((result.metrics["macro_precision"] - macro_precision).abs() < 1e-12);
+        let rows = class_breakdown_rows(&cm, &targets);
+        assert_eq!((rows[0].total, rows[0].tied, rows[0].no_answer), (10, 2, 1));
+        let summary = confusion_summary(&cm, &targets);
+        assert_eq!(summary.cells, vec![[0, 0, 6], [0, 1, 1], [1, 1, 10]]);
+        assert_eq!(summary.tied, vec![2, 0]);
+        assert_eq!(summary.labels, vec!["0".to_string(), "1".to_string()]);
     }
 
     #[test]

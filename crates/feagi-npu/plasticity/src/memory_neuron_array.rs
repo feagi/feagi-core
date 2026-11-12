@@ -125,6 +125,23 @@ struct AreaEvictionPolicy {
     eviction: LtmEviction,
 }
 
+/// One bucketed MP change of an upstream neuron: `(neuron id, bucket)`.
+pub type ChangeEntry = (u32, i64);
+
+/// The MP changes that formed a change-encoded memory neuron, by upstream neuron id.
+///
+/// Pattern hashes of change-encoded memories are over `(upstream neuron id, bucket)` pairs.
+/// The ids are taken as encoded, with no lookup, at neuron creation. A connectome export
+/// resolves them to voxel position and in-voxel ordinal, because ids do not survive a lite
+/// rebuild. This is not a replay frame: change-encoded memories never replay.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryChangeRecord {
+    /// Upstream cortical indexes in the order they were hashed (ascending).
+    pub upstream_areas: Vec<u32>,
+    /// `steps[step][upstream position]`, oldest step first. Empty entries are kept.
+    pub steps: Vec<Vec<Vec<ChangeEntry>>>,
+}
+
 /// Snapshot of a single memory neuron for API / inspection (plasticity array only).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryNeuronDetail {
@@ -148,6 +165,9 @@ pub struct MemoryNeuronDetail {
     /// Associative weight of each bound class channel. Absent weights are unset.
     #[serde(default)]
     pub class_channel_weights: Vec<(u32, f32)>,
+    /// Change record (by neuron id) of a change-encoded neuron that has one.
+    #[serde(default)]
+    pub change_record: Option<MemoryChangeRecord>,
 }
 
 /// Memory neuron array statistics
@@ -204,6 +224,8 @@ pub struct MemoryNeuronArray {
     class_channels: HashMap<usize, HashSet<u32>>,
     /// Associative weight for each bound class channel while reward training is on.
     class_channel_weights: HashMap<usize, HashMap<u32, f32>>,
+    /// Change records (by upstream neuron id) of change-encoded neurons.
+    change_records: HashMap<usize, MemoryChangeRecord>,
     /// Decisions waiting for a later answer, and which pattern was already corrected.
     presentation_ledger: crate::classifier_reward::PresentationLedger,
     /// LTM-only index: (cortical_area_idx, spatial_signature) -> neuron indices.
@@ -260,6 +282,7 @@ impl MemoryNeuronArray {
             spatial_signature: HashMap::new(),
             class_channels: HashMap::new(),
             class_channel_weights: HashMap::new(),
+            change_records: HashMap::new(),
             presentation_ledger: crate::classifier_reward::PresentationLedger::default(),
             spatial_ltm_index: HashMap::new(),
             id_manager: NeuronIdManager::new(),
@@ -937,6 +960,7 @@ impl MemoryNeuronArray {
                     pairs
                 })
                 .unwrap_or_default(),
+            change_record: self.change_records.get(&idx).cloned(),
         })
     }
 
@@ -1111,6 +1135,9 @@ impl MemoryNeuronArray {
                 neuron_idx,
                 detail.class_channel_weights.iter().copied().collect(),
             );
+        }
+        if let Some(record) = &detail.change_record {
+            self.change_records.insert(neuron_idx, record.clone());
         }
         if detail.is_longterm_memory {
             self.index_spatial_ltm(neuron_idx);
@@ -1354,6 +1381,19 @@ impl MemoryNeuronArray {
         }
         self.class_channels.remove(&neuron_idx);
         self.class_channel_weights.remove(&neuron_idx);
+        self.change_records.remove(&neuron_idx);
+    }
+
+    /// Attach the change record of a change-encoded neuron.
+    pub fn set_change_record(&mut self, neuron_idx: usize, record: MemoryChangeRecord) {
+        if self.is_valid_index(neuron_idx) && self.is_active[neuron_idx] {
+            self.change_records.insert(neuron_idx, record);
+        }
+    }
+
+    /// Change record of an active neuron slot, when it has one.
+    pub fn change_record(&self, neuron_idx: usize) -> Option<&MemoryChangeRecord> {
+        self.change_records.get(&neuron_idx)
     }
 
     /// Get comprehensive statistics
@@ -1528,6 +1568,7 @@ impl MemoryNeuronArray {
         self.spatial_signature.clear();
         self.class_channels.clear();
         self.class_channel_weights.clear();
+        self.change_records.clear();
         self.presentation_ledger = crate::classifier_reward::PresentationLedger::default();
         self.spatial_ltm_index.clear();
 
@@ -2208,12 +2249,43 @@ mod tests {
             spatial_signature: None,
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
+            change_record: None,
         }];
         let skipped = restored
             .restore_long_term_memory_neurons(&stm_only)
             .unwrap();
         assert_eq!(skipped, 0);
         assert!(restored.export_long_term_memory_neurons().is_empty());
+    }
+
+    #[test]
+    fn change_record_travels_with_detail_restore_and_is_cleaned_on_removal() {
+        let mut array = MemoryNeuronArray::new(100);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let idx = array.create_memory_neuron(0x21, 3, 0, &config).unwrap();
+        let record = MemoryChangeRecord {
+            upstream_areas: vec![1, 2],
+            steps: vec![vec![vec![(7, -2)], Vec::new()]],
+        };
+        array.set_change_record(idx, record.clone());
+        array.check_longterm_conversion(100);
+        let id = array.get_neuron_id(idx).unwrap();
+        let exported = array.export_long_term_memory_neurons();
+        assert_eq!(exported[0].change_record.as_ref(), Some(&record));
+
+        let mut restored = MemoryNeuronArray::new(100);
+        restored
+            .restore_long_term_memory_neurons(&exported)
+            .unwrap();
+        let restored_idx = restored.find_neuron_index_by_global_id(id).unwrap();
+        assert_eq!(restored.change_record(restored_idx), Some(&record));
+
+        restored.remove_neurons_by_id(&[id], MemoryNeuronRemovalReason::Evicted);
+        assert!(restored.change_record(restored_idx).is_none());
     }
 
     #[test]
@@ -2690,6 +2762,7 @@ mod tests {
             spatial_signature: None,
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
+            change_record: None,
         };
         // Pool of 3, five records: the three most recent survive and the call is Ok.
         let mut array = MemoryNeuronArray::new(3);
@@ -2737,6 +2810,7 @@ mod tests {
             spatial_signature: None,
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
+            change_record: None,
         };
         // Pool of 2. The oldest record has the highest id, so it is dropped while its id is
         // above every kept id. A duplicate and an out-of-range record must not fail the call.

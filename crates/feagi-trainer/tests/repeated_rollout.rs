@@ -22,8 +22,9 @@ use feagi_trainer::contracts::run_spec::{
     CoderBinding, ExecutionMode, PinnedBinding, RewardPolicyBinding, SamplerBinding,
 };
 use feagi_trainer::contracts::{
-    BackendFingerprint, ContentHash, DatasetAssetId, DatasetVersionId, IRSample, PluginRef, RunId,
-    RunSpec, ScorecardId, ScorecardStatus, ScorecardVisibility, SplitId, TypedPrediction,
+    BackendFingerprint, ClassReadout, ContentHash, DatasetAssetId, DatasetVersionId, IRSample,
+    PluginRef, RunId, RunSpec, ScorecardId, ScorecardStatus, ScorecardVisibility, SplitId,
+    TypedPrediction,
 };
 use feagi_trainer::error::TrainerError;
 use feagi_trainer::executor::{
@@ -92,7 +93,7 @@ impl DecoderPlugin for ArgmaxDecoder {
             .map(|(idx, _)| idx as u32)
             .ok_or_else(|| TrainerError::Runtime("empty motor frame".to_string()))?;
         Ok(TypedPrediction::Class {
-            class_id: argmax,
+            readout: ClassReadout::Class(argmax),
             scores: motor,
         })
     }

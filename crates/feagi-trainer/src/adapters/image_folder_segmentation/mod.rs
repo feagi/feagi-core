@@ -68,6 +68,12 @@ pub struct ImageFolderSegmentationConfig {
     /// Official Cityscapes trainId → output Z or `ignore_label`. Length 19 when set.
     #[serde(default)]
     pub train_id_remap: Option<Vec<u8>>,
+    /// Caps the split at this many pairs. `None` keeps all.
+    #[serde(default)]
+    pub max_samples: Option<u64>,
+    /// With `max_samples`, keep a seeded uniform subset instead of the first pairs.
+    #[serde(default)]
+    pub sample_draw_seed: Option<u64>,
 }
 
 /// One indexed image/mask pair. Pixels are loaded on visit, not during discover.
@@ -181,7 +187,19 @@ impl ImageFolderSegmentationAdapter {
     ) -> Result<(DatasetManifest, Vec<ImageLabelPair>), TrainerError> {
         let root = Self::dataset_root(source)?;
         let pairs = self.discover_pairs(root)?;
-        Ok((self.manifest_from_pairs(source, &pairs), pairs))
+        // Dataset identity is the split on disk; the cap is a run setting.
+        let mut manifest = self.manifest_from_pairs(source, &pairs);
+        let pairs = crate::adapters::class_keep::apply_max_samples(
+            pairs,
+            self.config.max_samples,
+            self.config.sample_draw_seed,
+        )?;
+        if self.config.max_samples.is_some() {
+            if let Some(split) = manifest.splits.first_mut() {
+                split.sample_count = pairs.len() as u64;
+            }
+        }
+        Ok((manifest, pairs))
     }
 
     /// Decodes one indexed pair into an [`IRSample`].
@@ -738,6 +756,8 @@ mod tests {
             images_subdir: Some("images".to_string()),
             labels_subdir: Some("labels".to_string()),
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         };
         let adapter = ImageFolderSegmentationAdapter::new(config);
         let source = DatasetSource {
@@ -779,6 +799,59 @@ mod tests {
     }
 
     #[test]
+    fn max_samples_caps_the_indexed_pairs_and_the_manifest_count() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let images = root.join("images");
+        let labels = root.join("labels");
+        fs::create_dir_all(&images).expect("mkdir");
+        fs::create_dir_all(&labels).expect("mkdir");
+        for name in ["a", "b", "c"] {
+            write_rgb_png(&images.join(format!("{name}.png")), 2, 2);
+            write_png(&labels.join(format!("{name}.png")), 2, 2, 1);
+        }
+        let config = |max_samples, sample_draw_seed| ImageFolderSegmentationConfig {
+            dataset_name: "mini_seg".to_string(),
+            layout: SegmentationDatasetLayout::PairedFolders,
+            split: Split::Train,
+            split_id: SplitId("train".to_string()),
+            class_count: 4,
+            ignore_label: 255,
+            feed_width: 2,
+            feed_height: 2,
+            cityscapes_split: None,
+            images_subdir: Some("images".to_string()),
+            labels_subdir: Some("labels".to_string()),
+            train_id_remap: None,
+            max_samples,
+            sample_draw_seed,
+        };
+        let source = DatasetSource {
+            uri: root.to_string_lossy().into_owned(),
+            bytes: Vec::new(),
+        };
+        let all = ImageFolderSegmentationAdapter::new(config(None, None))
+            .index(&source)
+            .expect("index");
+        assert_eq!(all.1.len(), 3);
+        let first = ImageFolderSegmentationAdapter::new(config(Some(2), None))
+            .index(&source)
+            .expect("index");
+        assert_eq!(first.1.len(), 2);
+        assert_eq!(first.0.splits[0].sample_count, 2);
+        // The dataset identity is the split on disk, not the cap.
+        assert_eq!(first.0.content_hash, all.0.content_hash);
+        let drawn = ImageFolderSegmentationAdapter::new(config(Some(2), Some(7)))
+            .index(&source)
+            .expect("index");
+        assert_eq!(drawn.1.len(), 2);
+        let streamed = ImageFolderSegmentationAdapter::new(config(Some(1), None))
+            .stream(&source, &SplitId("train".to_string()))
+            .expect("stream");
+        assert_eq!(streamed.len(), 1);
+    }
+
+    #[test]
     fn stream_reports_ingest_progress() {
         let dir = tempdir().expect("tempdir");
         let root = dir.path();
@@ -804,6 +877,8 @@ mod tests {
             images_subdir: Some("images".to_string()),
             labels_subdir: Some("labels".to_string()),
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         };
         let reports = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let adapter = ImageFolderSegmentationAdapter::new(config.clone()).with_ingest_progress({
@@ -850,6 +925,8 @@ mod tests {
             images_subdir: None,
             labels_subdir: None,
             train_id_remap: None,
+            max_samples: None,
+            sample_draw_seed: None,
         }
     }
 

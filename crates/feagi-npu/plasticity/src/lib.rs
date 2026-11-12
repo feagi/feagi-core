@@ -55,8 +55,8 @@ pub use episodic_scan::{
     spatial_signature_hash, window_relative_coords, ScanKernel, ScanWindow,
 };
 pub use memory_neuron_array::{
-    LtmEviction, MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
-    MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron,
+    ChangeEntry, LtmEviction, MemoryChangeRecord, MemoryNeuronArray, MemoryNeuronDetail,
+    MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron,
 };
 pub use memory_shape::{MemoryAreaShape, MemoryShapeMismatch, ReplayFrameShape};
 pub use memory_stats_cache::{

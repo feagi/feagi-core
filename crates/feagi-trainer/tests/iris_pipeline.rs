@@ -7,7 +7,7 @@
 
 use feagi_trainer::adapters::{TabularCsvAdapter, TabularCsvConfig};
 use feagi_trainer::contracts::common::Split;
-use feagi_trainer::contracts::{SplitId, TypedPrediction, TypedTarget};
+use feagi_trainer::contracts::{ClassReadout, SplitId, TypedPrediction, TypedTarget};
 use feagi_trainer::metrics::ClassificationMetricPack;
 use feagi_trainer::plugins::{AdapterPlugin, DatasetSource, MetricPackPlugin, SamplerPlugin};
 use feagi_trainer::samplers::SequentialSampler;
@@ -76,7 +76,7 @@ fn iris_pure_pipeline_composes() {
             label: None,
         });
         predictions.push(TypedPrediction::Class {
-            class_id: predicted,
+            readout: ClassReadout::Class(predicted),
             scores: vec![],
         });
     }

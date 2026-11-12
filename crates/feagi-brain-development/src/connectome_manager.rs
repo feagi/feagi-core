@@ -11186,6 +11186,7 @@ pub(crate) mod tests {
                 spatial_signature: None,
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
+                change_record: None,
             }])
             .expect("seeded long-term memory neuron");
             assert_eq!(

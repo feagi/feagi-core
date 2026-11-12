@@ -42,7 +42,7 @@ pub mod segmentation_mask_decoder;
 pub mod stub_runtime;
 
 pub use class_decoder::ClassDecoder;
-pub use decoder::{DecoderPlugin, SlotDecoder};
+pub use decoder::{class_from_scores, DecoderPlugin, SlotDecoder};
 pub use encoder::{EncoderPlugin, ObservationEncoder, TickEncoder};
 pub use encoding_scheme::{BinSpacing, EncodingScheme, ResolvedEncodingScheme};
 pub use environment::{Action, Environment, Observation, StepOutcome, StubEnvironment};

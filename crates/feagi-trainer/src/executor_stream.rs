@@ -22,6 +22,7 @@ use crate::executor::{
     emit_no_detection_warning, evaluate_or_empty, rollout_summary, ExecutorConfig, RolloutOutcome,
 };
 use crate::plugins::MetricPackPlugin;
+use crate::resume::{PredictionState, ResumeFrom};
 use crate::run_data::{ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
 
 /// Closed-loop stream rollout: one burst per analog sample, score at each hold end.
@@ -40,6 +41,56 @@ pub fn run_stream_rollout_with_events<R, E, D, RP, M>(
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
     data: Option<&mut dyn RunDataSink>,
+) -> Result<RolloutOutcome, TrainerError>
+where
+    R: FeagiRuntime,
+    E: TickEncoder<Frame = R::SensoryFrame>,
+    D: SlotDecoder<Frame = R::MotorFrame>,
+    RP: RewardPolicy,
+    M: MetricPackPlugin,
+{
+    run_stream_rollout_with_events_from(
+        run_id,
+        samples,
+        runtime,
+        encoder,
+        encoder_profile,
+        decoder,
+        decoder_profile,
+        reward_policy,
+        metric_pack,
+        config,
+        events,
+        cancel,
+        data,
+        &ResumeFrom::default(),
+    )
+}
+
+/// Same as [`run_stream_rollout_with_events`], continuing from `resume` ("pause and save, resume
+/// later").
+///
+/// Train mode resumes at sample `first_index` (a whole number of batches); infer mode at hold
+/// `first_index` (the ticks after the previous hold end are replayed). With
+/// `resume.boundary_stop` a skip is honoured only at the batch / hold boundary, so the segment
+/// never ends in the middle of one. Infer carries the earlier holds' predictions in the engine
+/// state, so a split run scores like an unsplit one.
+#[allow(clippy::too_many_arguments)]
+pub fn run_stream_rollout_with_events_from<R, E, D, RP, M>(
+    run_id: &RunId,
+    samples: &[IRSample],
+    runtime: &mut R,
+    encoder: &mut E,
+    encoder_profile: &EncoderBindingProfile,
+    decoder: &mut D,
+    decoder_profile: &DecoderBindingProfile,
+    reward_policy: &RP,
+    metric_pack: &M,
+    config: &ExecutorConfig,
+    events: &mut dyn RunEventSink,
+    cancel: &CancelToken,
+    data: Option<&mut dyn RunDataSink>,
+    resume: &ResumeFrom,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -85,6 +136,7 @@ where
             cancel,
             data,
             stream.parallel_width,
+            resume,
         ),
         StreamMode::Infer => run_stream_infer(
             run_id,
@@ -100,6 +152,7 @@ where
             events,
             cancel,
             data,
+            resume,
         ),
     }
 }
@@ -175,6 +228,7 @@ fn run_stream_train<R, E, D, RP, M>(
     cancel: &CancelToken,
     mut data: Option<&mut dyn RunDataSink>,
     parallel_width: u32,
+    resume: &ResumeFrom,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -184,10 +238,20 @@ where
     M: MetricPackPlugin,
 {
     let total_samples = samples.len() as u64;
-    let mut done = 0u64;
+    resume.check_within(total_samples, "sample")?;
+    if !resume.first_index.is_multiple_of(u64::from(parallel_width)) {
+        return Err(TrainerError::Config(format!(
+            "resume index {} is not a whole number of batches of {parallel_width}",
+            resume.first_index
+        )));
+    }
+    let mut done = resume.first_index;
     begin_stream_data(data.as_deref_mut(), "train", false);
 
-    'train: for batch in samples.chunks(parallel_width as usize) {
+    'train: for batch in samples
+        .chunks(parallel_width as usize)
+        .skip((resume.first_index / u64::from(parallel_width)) as usize)
+    {
         cancel.interrupt(format!("stopped after {done} of {total_samples} samples"))?;
         if cancel.is_skipped() {
             break 'train;
@@ -217,7 +281,7 @@ where
 
         for tick in 0..length {
             cancel.interrupt(format!("stopped after {done} of {total_samples} samples"))?;
-            if cancel.is_skipped() {
+            if cancel.is_skipped() && !resume.boundary_stop {
                 break 'train;
             }
             let amplitudes: Vec<f64> = series.iter().map(|values| values[tick]).collect();
@@ -261,7 +325,7 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
-                    predicted_class: None,
+                    readout: None,
                     class_scores: Vec::new(),
                     stand: None,
                 },
@@ -282,7 +346,7 @@ where
                 image_png_base64: None,
                 mask_png_base64: None,
                 preview_name: None,
-                predicted_class: None,
+                readout: None,
                 class_scores: Vec::new(),
                 stand: None,
             },
@@ -318,6 +382,7 @@ fn run_stream_infer<R, E, D, RP, M>(
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
     mut data: Option<&mut dyn RunDataSink>,
+    resume: &ResumeFrom,
 ) -> Result<RolloutOutcome, TrainerError>
 where
     R: FeagiRuntime,
@@ -326,9 +391,8 @@ where
     RP: RewardPolicy,
     M: MetricPackPlugin,
 {
-    let mut predictions = Vec::new();
-    let mut scored_predictions = Vec::new();
-    let mut scored_targets = Vec::new();
+    let mut predictions = PredictionState::restore(resume)?;
+    let (mut scored_predictions, mut scored_targets) = PredictionState::scored(&predictions);
     let total_holds: u64 = samples
         .iter()
         .map(|sample| infer_hold_ends(sample).map(|ends| ends.len() as u64))
@@ -340,19 +404,49 @@ where
             "stream infer produced no hold ends".to_string(),
         ));
     }
-    let mut done = 0u64;
+    resume.check_within(total_holds, "hold")?;
+    let mut done = resume.first_index;
+    // Resume point: the sample holding hold number `first_index`, starting at the tick after the
+    // previous hold end of that sample (tick 0 when it is the sample's first hold).
+    let (mut start_sample, mut start_tick) = (0usize, 0usize);
+    if resume.first_index > 0 {
+        let mut seen = 0u64;
+        'locate: for (sample_index, sample) in samples.iter().enumerate() {
+            let holds = infer_hold_ends(sample)?;
+            for hold_index in 0..holds.len() {
+                if seen == resume.first_index {
+                    start_sample = sample_index;
+                    start_tick = if hold_index == 0 {
+                        0
+                    } else {
+                        holds[hold_index - 1].sample_index as usize + 1
+                    };
+                    break 'locate;
+                }
+                seen += 1;
+            }
+        }
+    }
     begin_stream_data(data.as_deref_mut(), "infer", true);
 
-    'infer: for sample in samples {
+    'infer: for (sample_index, sample) in samples.iter().enumerate().skip(start_sample) {
         let series = time_series_samples(sample)?;
         let holds = infer_hold_ends(sample)?;
         let hold_by_tick: BTreeMap<usize, u32> = holds
             .iter()
             .map(|hold| (hold.sample_index as usize, hold.class_id))
             .collect();
-        for (tick, amplitude) in series.iter().enumerate() {
+        if resume.boundary_stop && cancel.is_skipped() && done > resume.first_index {
+            break 'infer;
+        }
+        let first_tick = if sample_index == start_sample {
+            start_tick
+        } else {
+            0
+        };
+        for (tick, amplitude) in series.iter().enumerate().skip(first_tick) {
             cancel.interrupt(format!("stopped after {done} of {total_holds} holds"))?;
-            if cancel.is_skipped() {
+            if cancel.is_skipped() && !resume.boundary_stop {
                 break 'infer;
             }
             let frame = encoder.encode_tick(
@@ -388,7 +482,7 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
-                    predicted_class: None,
+                    readout: None,
                     class_scores: Vec::new(),
                     stand: None,
                 },
@@ -466,11 +560,21 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
-                    predicted_class: None,
+                    readout: None,
                     class_scores: Vec::new(),
                     stand: None,
                 },
             ));
+            // Pause-save stops right after a hold end that is not the sample's last (the hold
+            // boundary); after the last one it waits for the sample's trailing ticks and stops
+            // at the top of the next sample, so no tick is lost on resume.
+            let last_of_sample = holds
+                .iter()
+                .all(|hold| (hold.sample_index as usize) <= tick);
+            if resume.boundary_stop && cancel.is_skipped() && done < total_holds && !last_of_sample
+            {
+                break 'infer;
+            }
         }
     }
 
@@ -509,6 +613,7 @@ fn finish_rollout<M: MetricPackPlugin>(
                 &metric_result,
                 &scored_targets,
             ),
+            confusion: crate::executor::confusion_event(&metric_result, &scored_targets),
             metrics: metric_result.metrics.clone(),
         },
     ));
@@ -520,10 +625,13 @@ fn finish_rollout<M: MetricPackPlugin>(
         metric_result.metrics.clone(),
         skipped,
     );
+    let resume =
+        crate::resume::PredictionState::export(processed_samples, total_samples, &predictions);
     Ok(RolloutOutcome {
         summary,
         predictions,
         metric_result,
+        resume,
     })
 }
 
@@ -580,6 +688,14 @@ fn infer_hold_ends(sample: &IRSample) -> Result<&[HoldEnd], TrainerError> {
         ))),
     }
 }
+
+/// Run controls this engine's loop honours (pause, skip and cancel; at the sample or hold).
+pub const CONTROL: crate::control::EngineControl = crate::control::EngineControl {
+    pause: true,
+    skip: true,
+    cancel: true,
+    boundary: crate::control::ControlBoundary::Sample,
+};
 
 #[cfg(test)]
 mod tests {
@@ -651,13 +767,8 @@ mod tests {
             }
             let start = motor.len().saturating_sub(profile.class_count as usize);
             let scores = motor[start..].to_vec();
-            let class_id = scores
-                .iter()
-                .enumerate()
-                .max_by(|a, b| a.1.partial_cmp(b.1).expect("ord"))
-                .map(|(i, _)| i as u32)
-                .unwrap_or(0);
-            Ok(vec![TypedPrediction::Class { class_id, scores }])
+            let readout = crate::binding::class_from_scores(&scores);
+            Ok(vec![TypedPrediction::Class { readout, scores }])
         }
     }
 
@@ -1090,5 +1201,241 @@ mod tests {
         assert_eq!(outcome.summary.evaluated_samples, 1);
         assert_eq!(outcome.predictions.len(), 1);
         assert_eq!(runtime.inner.burst_count(), 1);
+    }
+
+    /// Runtime wrapper that asks for a skip (the pause-stop) after `at` steps.
+    struct SkipAtStep {
+        inner: StubFeagiRuntime,
+        cancel: CancelToken,
+        at: u32,
+        steps: u32,
+    }
+
+    impl FeagiRuntime for SkipAtStep {
+        type SensoryFrame = Vec<f64>;
+        type MotorFrame = Vec<f64>;
+
+        fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError> {
+            self.inner.submit_sensory(frame)
+        }
+
+        fn submit_reward(
+            &mut self,
+            signals: &[crate::binding::reward::RewardSignal],
+        ) -> Result<(), TrainerError> {
+            self.inner.submit_reward(signals)
+        }
+
+        fn step(&mut self, ticks: u32) -> Result<(), TrainerError> {
+            self.inner.step(ticks)?;
+            self.steps += 1;
+            if self.steps == self.at {
+                self.cancel.skip();
+            }
+            Ok(())
+        }
+
+        fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
+            self.inner.collect_motor()
+        }
+    }
+
+    fn class_zero_runtime(cancel: &CancelToken, at: Option<u32>) -> SkipAtStep {
+        SkipAtStep {
+            inner: StubFeagiRuntime::new(
+                |_| {
+                    let mut motor = vec![0.0, 0.0, 0.0];
+                    motor[0] = 1.0;
+                    motor
+                },
+                false,
+            ),
+            cancel: cancel.clone(),
+            at: at.unwrap_or(u32::MAX),
+            steps: 0,
+        }
+    }
+
+    fn infer_episode(id: &str, holds: &[(u64, u32)]) -> IRSample {
+        IRSample {
+            schema_version: crate::contracts::ir_sample::SCHEMA_VERSION,
+            sample_id: SampleId(id.to_string()),
+            dataset_version_id: DatasetVersionId("t@1".to_string()),
+            split: Split::Test,
+            modality: Modality::TimeSeries,
+            payload: Payload::TimeSeries {
+                sample_rate_hz: 360.0,
+                channel_ids: vec!["lead_0".to_string()],
+                samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
+                hold_ends: Some(
+                    holds
+                        .iter()
+                        .map(|(sample_index, class_id)| HoldEnd {
+                            sample_index: *sample_index,
+                            class_id: *class_id,
+                        })
+                        .collect(),
+                ),
+            },
+            target: None,
+            output_type: OutputType::Class,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    fn run_stream(
+        samples: &[IRSample],
+        profile: &EncoderBindingProfile,
+        from: &ResumeFrom,
+        skip_at: Option<u32>,
+    ) -> (RolloutOutcome, u64, usize) {
+        let cancel = CancelToken::new();
+        let mut runtime = class_zero_runtime(&cancel, skip_at);
+        let mut encoder = EchoTickEncoder;
+        let mut decoder = TailArgmax;
+        let reward = PainPleasureReward::new(0.5).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = NoopEventSink;
+        let mut data = crate::run_data::RecordingRunDataSink::default();
+        let outcome = run_stream_rollout_with_events_from(
+            &RunId("run-stream-split".to_string()),
+            samples,
+            &mut runtime,
+            &mut encoder,
+            profile,
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &ExecutorConfig {
+                ticks_per_sample: 1,
+                silence_bursts: 0,
+            },
+            &mut sink,
+            &cancel,
+            Some(&mut data),
+            from,
+        )
+        .expect("rollout");
+        let bursts = runtime.inner.burst_count();
+        let tick_rows = data.rows_of("ticks").len();
+        (outcome, bursts, tick_rows)
+    }
+
+    #[test]
+    fn infer_split_at_a_hold_equals_unsplit_including_a_mid_sample_resume() {
+        let samples = vec![
+            infer_episode("ep-a", &[(1, 0), (3, 1)]),
+            infer_episode("ep-b", &[(2, 0), (4, 1)]),
+        ];
+        let profile = stream_profile(StreamMode::Infer);
+        let (unsplit, unsplit_bursts, unsplit_rows) =
+            run_stream(&samples, &profile, &ResumeFrom::default(), None);
+        assert_eq!(unsplit.summary.evaluated_samples, 4);
+        // Pause asked at step 1 (the first hold's tick) and at step 3 (inside the second hold).
+        for (skip_at, expected_done) in [(1u32, 1u64), (3, 2)] {
+            let (first, first_bursts, first_rows) = run_stream(
+                &samples,
+                &profile,
+                &ResumeFrom::default().at_boundary(),
+                Some(skip_at),
+            );
+            assert!(first.resume.partial);
+            assert_eq!(
+                first.resume.units_done, expected_done,
+                "stops at a hold end"
+            );
+            let export: crate::resume::ResumeExport =
+                serde_json::from_str(&serde_json::to_string(&first.resume).unwrap()).unwrap();
+            let (second, second_bursts, second_rows) =
+                run_stream(&samples, &profile, &ResumeFrom::from_export(&export), None);
+            assert!(!second.resume.partial);
+            assert_eq!(second.predictions, unsplit.predictions);
+            assert_eq!(second.metric_result, unsplit.metric_result);
+            assert_eq!(
+                second.summary.evaluated_samples,
+                unsplit.summary.evaluated_samples
+            );
+            assert_eq!(second.summary.status, unsplit.summary.status);
+            assert_eq!(
+                first_bursts + second_bursts,
+                unsplit_bursts,
+                "no tick lost or repeated"
+            );
+            assert_eq!(first_rows + second_rows, unsplit_rows);
+        }
+    }
+
+    #[test]
+    fn train_pause_stops_at_the_batch_and_resumes_at_the_next_one() {
+        let samples: Vec<IRSample> = (0..4).map(|i| beat(i % 3, vec![0.1, 0.2, 0.3])).collect();
+        let mut profile = stream_profile(StreamMode::Train);
+        profile.stream.as_mut().unwrap().parallel_width = 2;
+        let (unsplit, unsplit_bursts, _) =
+            run_stream(&samples, &profile, &ResumeFrom::default(), None);
+        assert_eq!(
+            unsplit.summary.status,
+            crate::contracts::RunStatus::Completed
+        );
+
+        // Without the boundary mode a skip cuts the batch after its first tick.
+        let (cut, _, _) = run_stream(&samples, &profile, &ResumeFrom::default(), Some(1));
+        assert_eq!(cut.resume.units_done, 0);
+
+        let (first, first_bursts, _) = run_stream(
+            &samples,
+            &profile,
+            &ResumeFrom::default().at_boundary(),
+            Some(1),
+        );
+        assert!(first.resume.partial);
+        assert_eq!(first.resume.units_done, 2, "the batch in progress finished");
+        let (second, second_bursts, _) = run_stream(
+            &samples,
+            &profile,
+            &ResumeFrom::from_export(&first.resume),
+            None,
+        );
+        assert!(!second.resume.partial);
+        assert_eq!(
+            second.summary.status,
+            crate::contracts::RunStatus::Completed
+        );
+        assert_eq!(second.summary.total_samples, 4);
+        assert_eq!(first_bursts + second_bursts, unsplit_bursts);
+    }
+
+    #[test]
+    fn train_resume_off_a_batch_boundary_is_refused() {
+        let samples: Vec<IRSample> = (0..4).map(|i| beat(i % 3, vec![0.1])).collect();
+        let mut profile = stream_profile(StreamMode::Train);
+        profile.stream.as_mut().unwrap().parallel_width = 2;
+        let cancel = CancelToken::new();
+        let mut runtime = class_zero_runtime(&cancel, None);
+        let result = run_stream_rollout_with_events_from(
+            &RunId("r".to_string()),
+            &samples,
+            &mut runtime,
+            &mut EchoTickEncoder,
+            &profile,
+            &mut TailArgmax,
+            &decoder_profile(),
+            &PainPleasureReward::new(0.5).unwrap(),
+            &ClassificationMetricPack::new(),
+            &ExecutorConfig {
+                ticks_per_sample: 1,
+                silence_bursts: 0,
+            },
+            &mut NoopEventSink,
+            &cancel,
+            None,
+            &ResumeFrom {
+                first_index: 1,
+                ..ResumeFrom::default()
+            },
+        );
+        assert!(matches!(result, Err(TrainerError::Config(_))));
     }
 }

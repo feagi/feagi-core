@@ -152,6 +152,7 @@ fn iris_scorecard() -> Scorecard {
         },
         metrics,
         class_breakdown: Vec::new(),
+        confusion: None,
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,

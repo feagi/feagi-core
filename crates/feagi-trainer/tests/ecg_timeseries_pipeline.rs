@@ -9,7 +9,7 @@ use feagi_trainer::adapters::{
 };
 use feagi_trainer::contracts::common::Split;
 use feagi_trainer::contracts::ir_sample::Payload;
-use feagi_trainer::contracts::{SplitId, TypedPrediction, TypedTarget};
+use feagi_trainer::contracts::{ClassReadout, SplitId, TypedPrediction, TypedTarget};
 use feagi_trainer::metrics::ClassificationMetricPack;
 use feagi_trainer::plugins::{AdapterPlugin, DatasetSource, MetricPackPlugin, SamplerPlugin};
 use feagi_trainer::samplers::SequentialSampler;
@@ -112,7 +112,7 @@ fn wfdb_event_windows_compose_with_classification_metrics() {
             label: None,
         });
         predictions.push(TypedPrediction::Class {
-            class_id,
+            readout: ClassReadout::Class(class_id),
             scores: vec![],
         });
     }

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::common::{RunId, ScorecardId};
+use super::prediction_record::ClassReadout;
 
 /// Wire/format version of the `RunEvent` contract.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -29,8 +30,32 @@ pub struct ClassBreakdown {
     pub label: String,
     /// Samples of this class whose prediction matched the target.
     pub correct: u64,
-    /// Samples of this class in the scored set.
+    /// Samples of this class in the scored set, including no-answer samples.
     pub total: u64,
+    /// Samples of this class whose class output never fired (or had no frame). They count as
+    /// wrong and are included in `total`.
+    #[serde(default)]
+    pub no_answer: u64,
+    /// Samples of this class whose readout shared the top score between two or more classes.
+    /// They count as wrong and are included in `total`.
+    #[serde(default)]
+    pub tied: u64,
+}
+
+/// A confusion matrix in its published, sparse form. Axis index `i` is `class_ids[i]` and
+/// `labels[i]`; rows are the true class, columns the answered class.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ConfusionSummary {
+    /// Class ids of the axes, ascending.
+    pub class_ids: Vec<u32>,
+    /// Operator-facing label of each axis, aligned to `class_ids`.
+    pub labels: Vec<String>,
+    /// Nonzero cells as `[true_index, answered_index, count]`.
+    pub cells: Vec<[u64; 3]>,
+    /// Per true class: samples that got no answer (nothing fired, or no frame).
+    pub no_answer: Vec<u64>,
+    /// Per true class: samples whose top score was shared by two or more classes.
+    pub tied: Vec<u64>,
 }
 
 /// Stand time of one finished balance attempt, attached to a progress event.
@@ -111,9 +136,9 @@ pub enum RunEventKind {
         /// Operator-facing name of the pair just submitted (image file path tail).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         preview_name: Option<String>,
-        /// Class chosen from the decoder OPU for this sample.
+        /// What the decoder OPU answered for this sample. Absent when the sample was not scored.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        predicted_class: Option<u32>,
+        readout: Option<ClassReadout>,
         /// Per-class confidence read from that OPU. Empty when the sample was not scored.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         class_scores: Vec<f64>,
@@ -131,6 +156,9 @@ pub enum RunEventKind {
         /// Per-class correct counts. Empty for metric packs that are not classification.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         class_breakdown: Vec<ClassBreakdown>,
+        /// Sparse confusion matrix. Absent for metric packs that are not classification.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confusion: Option<ConfusionSummary>,
     },
     /// A `Scorecard` has been produced and persisted by the host.
     ScorecardReady {
@@ -219,7 +247,7 @@ mod tests {
                 image_png_base64: None,
                 mask_png_base64: None,
                 preview_name: None,
-                predicted_class: Some(1),
+                readout: Some(ClassReadout::Class(1)),
                 class_scores: vec![0.2, 0.8],
                 stand: None,
             },
@@ -269,6 +297,7 @@ mod tests {
                 scope: MetricScope::Aggregate,
                 metrics,
                 class_breakdown: Vec::new(),
+                confusion: None,
             },
         );
         let failed = RunEvent::new(

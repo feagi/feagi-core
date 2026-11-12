@@ -115,6 +115,13 @@ pub enum MemoryShapeMismatch {
         area_mode: &'static str,
         frames_carry_mp: bool,
     },
+    /// A change record has a different number of steps than the area's window yields.
+    ChangeStepsMismatch {
+        steps: u32,
+        expected: u32,
+    },
+    /// A change record's upstream areas are not the area's upstream set.
+    ChangeUpstreamMismatch,
 }
 
 impl MemoryShapeMismatch {
@@ -124,6 +131,8 @@ impl MemoryShapeMismatch {
             Self::OffsetExceedsDepth { .. } => "replay_offset_exceeds_temporal_depth",
             Self::UpstreamNotConfigured { .. } => "replay_upstream_not_configured",
             Self::MpEncodingMismatch { .. } => "mp_encoding_mismatch",
+            Self::ChangeStepsMismatch { .. } => "change_steps_mismatch",
+            Self::ChangeUpstreamMismatch => "change_upstream_mismatch",
         }
     }
 }
@@ -149,6 +158,13 @@ impl core::fmt::Display for MemoryShapeMismatch {
                 f,
                 "membrane-potential encoding '{area_mode}' does not match frames (carry MP: {frames_carry_mp})"
             ),
+            Self::ChangeStepsMismatch { steps, expected } => write!(
+                f,
+                "change record has {steps} steps but the temporal window yields {expected}"
+            ),
+            Self::ChangeUpstreamMismatch => {
+                write!(f, "change record upstream areas do not match the area's upstream set")
+            }
         }
     }
 }

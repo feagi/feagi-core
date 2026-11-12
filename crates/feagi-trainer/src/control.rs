@@ -21,6 +21,30 @@ use std::time::{Duration, Instant};
 use crate::contracts::{RunEvent, RunEventKind, RunStatus, RunSummary};
 use crate::error::TrainerError;
 
+/// Where a run honours pause and skip: a skip or pause takes effect at the next boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlBoundary {
+    /// Closed-loop engines: the attempt in progress finishes first.
+    Attempt,
+    /// Dataset engines: the sample (or hold) in progress finishes first.
+    Sample,
+}
+
+/// Which run controls an engine's loop honours, and at what boundary. Each engine exports one
+/// `CONTROL`; hosts read it instead of keeping their own per-task switches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EngineControl {
+    /// The loop parks while [`CancelToken::pause`] is set.
+    pub pause: bool,
+    /// The loop ends the split early on [`CancelToken::skip`] and scores what was seen.
+    pub skip: bool,
+    /// The loop aborts on [`CancelToken::cancel`].
+    pub cancel: bool,
+    /// Where pause and skip take effect.
+    pub boundary: ControlBoundary,
+}
+
 /// Shared flags the host uses to stop or pause a run.
 #[derive(Debug)]
 struct CancelInner {
@@ -555,5 +579,34 @@ mod tests {
             event_kinds(&sink).as_slice(),
             [RunEventKind::Running, RunEventKind::Cancelled { .. }]
         ));
+    }
+}
+
+#[cfg(test)]
+mod engine_control_tests {
+    use super::*;
+
+    const ALL_CONTROLS: EngineControl = EngineControl {
+        pause: true,
+        skip: true,
+        cancel: true,
+        boundary: ControlBoundary::Sample,
+    };
+
+    #[test]
+    fn dataset_engines_honour_every_control_at_the_sample() {
+        assert_eq!(crate::executor::CONTROL, ALL_CONTROLS);
+        assert_eq!(crate::executor_stream::CONTROL, ALL_CONTROLS);
+    }
+
+    #[test]
+    fn closed_loop_engines_honour_every_control_at_the_attempt() {
+        let attempt = EngineControl {
+            boundary: ControlBoundary::Attempt,
+            ..ALL_CONTROLS
+        };
+        assert_eq!(crate::balance_feet::CONTROL, attempt);
+        assert_eq!(crate::pole_balance::CONTROL, attempt);
+        assert_eq!(crate::reach_hold::CONTROL, attempt);
     }
 }

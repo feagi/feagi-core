@@ -20,7 +20,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
-use crate::binding::decoder::DecoderPlugin;
+use crate::binding::decoder::{class_from_scores, DecoderPlugin};
 use crate::binding::profile::DecoderBindingProfile;
 use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::prediction_record::TypedPrediction;
@@ -94,22 +94,9 @@ impl DecoderPlugin for ClassDecoder {
             }
         }
 
-        let class_id = argmax(&scores).ok_or_else(|| {
-            TrainerError::Evaluation("no class channels decoded from motor frame".to_string())
-        })?;
-
         Ok(TypedPrediction::Class {
-            class_id: class_id as u32,
+            readout: class_from_scores(&scores),
             scores,
         })
     }
-}
-
-/// Returns the index of the maximum score, ties broken by lowest index. `None` if empty.
-fn argmax(scores: &[f64]) -> Option<usize> {
-    scores
-        .iter()
-        .enumerate()
-        .reduce(|best, current| if current.1 > best.1 { current } else { best })
-        .map(|(index, _)| index)
 }

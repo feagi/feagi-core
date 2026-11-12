@@ -30,7 +30,7 @@ use crate::executor::{ExecutorConfig, ScorecardProvenance};
 use crate::metrics::{ClassificationMetricPack, SegmentationMetricPack};
 use crate::planned_samples::PlannedSamples;
 use crate::plugins::{AdapterPlugin, DatasetSource, SamplerPlugin};
-use crate::samplers::SequentialSampler;
+use crate::samplers::{SequentialSampler, ShuffledSampler};
 
 /// Reward-policy plugin id the CLI resolves to [`PainPleasureReward`](crate::binding::PainPleasureReward).
 pub const SUPPORTED_REWARD_ID: &str = "reward.pain_pleasure";
@@ -157,11 +157,7 @@ impl RunConfig {
             Ok(())
         };
 
-        check(
-            "sampler",
-            &spec.sampler.plugin.id.0,
-            SequentialSampler::PLUGIN_ID,
-        )?;
+        self.sampler_order_check()?;
 
         match spec.adapter.id.0.as_str() {
             TabularCsvAdapter::PLUGIN_ID => {
@@ -390,10 +386,7 @@ impl RunConfig {
                 let (manifest, samples) =
                     Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?;
                 progress("Ordering samples", None, None);
-                Ok((
-                    manifest,
-                    Self::order_memory_samples(samples, self.run_spec.sampler.seed),
-                ))
+                Ok((manifest, self.order_memory_samples(samples)))
             }
             DatasetAdapterConfig::ImageClassification(config) => {
                 progress("Scanning classified images", None, None);
@@ -407,7 +400,7 @@ impl RunConfig {
                     )));
                 }
                 progress("Ordering samples", None, None);
-                let order = SequentialSampler::new().plan(images.len(), self.run_spec.sampler.seed);
+                let order = self.sampler_plan(images.len());
                 let version_id = manifest.dataset_version_id.clone();
                 Ok((
                     manifest,
@@ -432,7 +425,7 @@ impl RunConfig {
                     Some(pair_count),
                 );
                 progress("Ordering samples", None, None);
-                let order = SequentialSampler::new().plan(pairs.len(), self.run_spec.sampler.seed);
+                let order = self.sampler_plan(pairs.len());
                 let version_id = manifest.dataset_version_id.clone();
                 Ok((
                     manifest,
@@ -445,16 +438,36 @@ impl RunConfig {
                 let (manifest, samples) =
                     Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?;
                 progress("Ordering samples", None, None);
-                Ok((
-                    manifest,
-                    Self::order_memory_samples(samples, self.run_spec.sampler.seed),
-                ))
+                Ok((manifest, self.order_memory_samples(samples)))
             }
         }
     }
 
-    fn order_memory_samples(samples: Vec<IRSample>, seed: u64) -> PlannedSamples {
-        let order = SequentialSampler::new().plan(samples.len(), seed);
+    /// Rejects a sampler id the CLI does not ship.
+    fn sampler_order_check(&self) -> Result<(), TrainerError> {
+        match self.run_spec.sampler.plugin.id.0.as_str() {
+            SequentialSampler::PLUGIN_ID | ShuffledSampler::PLUGIN_ID => Ok(()),
+            other => Err(TrainerError::Config(format!(
+                "unsupported sampler '{other}' (the CLI supports '{}' and '{}')",
+                SequentialSampler::PLUGIN_ID,
+                ShuffledSampler::PLUGIN_ID
+            ))),
+        }
+    }
+
+    /// Visiting order for `count` samples, from the run spec's sampler plugin and seed.
+    /// `validate_supported` has already rejected unknown ids; an unknown id falls back to file
+    /// order so planning never panics.
+    fn sampler_plan(&self, count: usize) -> Vec<usize> {
+        let seed = self.run_spec.sampler.seed;
+        match self.run_spec.sampler.plugin.id.0.as_str() {
+            ShuffledSampler::PLUGIN_ID => ShuffledSampler::new().plan(count, seed),
+            _ => SequentialSampler::new().plan(count, seed),
+        }
+    }
+
+    fn order_memory_samples(&self, samples: Vec<IRSample>) -> PlannedSamples {
+        let order = self.sampler_plan(samples.len());
         let ordered = order.iter().map(|&i| samples[i].clone()).collect();
         PlannedSamples::from_ordered(ordered)
     }
@@ -501,8 +514,8 @@ impl RunConfig {
         }
     }
 
-    /// Seed of the capped split's random subset. `None` when the split is uncapped, keeps its
-    /// first samples, or the adapter has no cap (segmentation).
+    /// Seed of the capped split's random subset. `None` when the split is uncapped, or keeps its
+    /// first samples.
     pub fn sample_draw_seed(&self) -> Option<u64> {
         let (max_samples, seed) = match &self.dataset.adapter {
             DatasetAdapterConfig::Tabular(config) => (config.max_samples, config.sample_draw_seed),
@@ -512,7 +525,9 @@ impl RunConfig {
             DatasetAdapterConfig::TimeSeries(config) => {
                 (config.max_samples, config.sample_draw_seed)
             }
-            DatasetAdapterConfig::ImageFolder(_) => (None, None),
+            DatasetAdapterConfig::ImageFolder(config) => {
+                (config.max_samples, config.sample_draw_seed)
+            }
         };
         max_samples.and(seed)
     }
@@ -635,6 +650,47 @@ impl RunConfig {
         data: Option<&mut dyn crate::run_data::RunDataSink>,
         repeat: u64,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
+        self.execute_remote_with_data_from(
+            manifest,
+            samples,
+            connection,
+            identity,
+            events,
+            cancel,
+            data,
+            repeat,
+            &crate::resume::ResumeFrom::default(),
+        )
+        .map(|(summary, scorecard, _)| (summary, scorecard))
+    }
+
+    /// [`Self::execute_remote_with_data`] continuing from `resume` ("pause and save, resume
+    /// later"). Also returns where the segment ended: `partial` when a skip stopped it before
+    /// every sample (or batch / hold) ran. The summary, metrics and scorecard cover the earlier
+    /// segments' predictions too, so a split run scores like an unsplit one.
+    ///
+    /// # Errors
+    /// Same as [`Self::execute_remote_with_events`], plus a resume point past the last unit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute_remote_with_data_from(
+        &self,
+        manifest: &DatasetManifest,
+        samples: &PlannedSamples,
+        connection: &RemoteConnection,
+        identity: &AgentIdentity,
+        events: &mut dyn crate::control::RunEventSink,
+        cancel: &crate::control::CancelToken,
+        data: Option<&mut dyn crate::run_data::RunDataSink>,
+        repeat: u64,
+        resume: &crate::resume::ResumeFrom,
+    ) -> Result<
+        (
+            crate::contracts::RunSummary,
+            crate::contracts::Scorecard,
+            crate::resume::ResumeExport,
+        ),
+        TrainerError,
+    > {
         use crate::adapters::{ImageFolderSegmentationAdapter, TimeSeriesPackageAdapter};
         use crate::binding::{
             ClassDecoder, ImageFrameEncoder, MiscClassDecoder, MiscStreamEncoder, NoAffectReward,
@@ -642,9 +698,9 @@ impl RunConfig {
         };
         use crate::contracts::ExecutionMode;
         use crate::executor::{
-            assemble_scorecard_with_skip, run_rollout_with_events, scorecard_skip_from_summary,
+            assemble_scorecard_with_skip, run_rollout_with_events_from, scorecard_skip_from_summary,
         };
-        use crate::executor_stream::run_stream_rollout_with_events;
+        use crate::executor_stream::run_stream_rollout_with_events_from;
         use std::time::Duration;
 
         if self.run_spec.execution_mode != ExecutionMode::Remote {
@@ -684,7 +740,7 @@ impl RunConfig {
                 let mut decoder = ClassDecoder::new();
                 let reward = NoAffectReward;
                 let metric = ClassificationMetricPack::new();
-                run_rollout_with_events(
+                run_rollout_with_events_from(
                     &self.run_spec.run_id,
                     samples,
                     &mut runtime,
@@ -699,6 +755,7 @@ impl RunConfig {
                     cancel,
                     data,
                     repeat,
+                    resume,
                 )
             }
             TimeSeriesPackageAdapter::PLUGIN_ID => {
@@ -707,7 +764,7 @@ impl RunConfig {
                 if self.encoder_profile.stream.is_some() {
                     let mut encoder = MiscStreamEncoder::new();
                     let mut decoder = MiscClassDecoder::new();
-                    run_stream_rollout_with_events(
+                    run_stream_rollout_with_events_from(
                         &self.run_spec.run_id,
                         samples.as_ordered_slice()?,
                         &mut runtime,
@@ -721,11 +778,12 @@ impl RunConfig {
                         events,
                         cancel,
                         data,
+                        resume,
                     )
                 } else {
                     let mut encoder = PopulationEncoder::new();
                     let mut decoder = ClassDecoder::new();
-                    run_rollout_with_events(
+                    run_rollout_with_events_from(
                         &self.run_spec.run_id,
                         samples,
                         &mut runtime,
@@ -740,6 +798,7 @@ impl RunConfig {
                         cancel,
                         data,
                         repeat,
+                        resume,
                     )
                 }
             }
@@ -748,7 +807,7 @@ impl RunConfig {
                 let mut decoder = MiscClassDecoder::new();
                 let reward = NoAffectReward;
                 let metric = ClassificationMetricPack::new();
-                run_rollout_with_events(
+                run_rollout_with_events_from(
                     &self.run_spec.run_id,
                     samples,
                     &mut runtime,
@@ -763,6 +822,7 @@ impl RunConfig {
                     cancel,
                     data,
                     repeat,
+                    resume,
                 )
             }
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
@@ -775,7 +835,7 @@ impl RunConfig {
                 })?;
                 let reward = NoAffectReward;
                 let metric = SegmentationMetricPack::new();
-                run_rollout_with_events(
+                run_rollout_with_events_from(
                     &self.run_spec.run_id,
                     samples,
                     &mut runtime,
@@ -790,6 +850,7 @@ impl RunConfig {
                     cancel,
                     data,
                     repeat,
+                    resume,
                 )
             }
             other => {
@@ -813,18 +874,20 @@ impl RunConfig {
             .collect();
         let class_breakdown =
             crate::executor::class_breakdown_event(&outcome.metric_result, &scored_targets);
+        let confusion = crate::executor::confusion_event(&outcome.metric_result, &scored_targets);
         let scorecard = assemble_scorecard_with_skip(
             &self.run_spec,
             &outcome.summary.metrics,
             scorecard_skip_from_summary(&outcome.summary),
             provenance,
             class_breakdown,
+            confusion,
         );
 
         let mut summary = outcome.summary;
         summary.scorecard_id = Some(scorecard_id);
 
-        Ok((summary, scorecard))
+        Ok((summary, scorecard, outcome.resume))
     }
 }
 
@@ -1102,6 +1165,36 @@ mod tests {
     }
 
     #[test]
+    fn sampler_defaults_to_file_order_and_shuffled_is_selectable() {
+        let mut config = run_config();
+        assert_eq!(config.sampler_plan(6), vec![0, 1, 2, 3, 4, 5]);
+        config.run_spec.sampler.plugin.id = PluginId(ShuffledSampler::PLUGIN_ID.to_string());
+        assert!(config.validate_supported().is_ok());
+        let order = config.sampler_plan(6);
+        assert_ne!(order, vec![0, 1, 2, 3, 4, 5]);
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![0, 1, 2, 3, 4, 5]);
+        assert_eq!(order, ShuffledSampler::new().plan(6, 42));
+    }
+
+    #[test]
+    fn unknown_sampler_plugin_is_a_clear_error() {
+        let mut config = run_config();
+        config.run_spec.sampler.plugin.id = PluginId("bogus".to_string());
+        let err = config.validate_supported().unwrap_err().to_string();
+        assert!(err.contains("unsupported sampler 'bogus'"), "{err}");
+    }
+
+    #[test]
+    fn sequential_sampler_json_parses_unchanged() {
+        let json = serde_json::to_string(&run_config()).expect("serialize");
+        assert!(json.contains("\"sequential\""));
+        let restored = RunConfig::from_json(&json).expect("parse");
+        assert_eq!(restored.sampler_plan(3), vec![0, 1, 2]);
+    }
+
+    #[test]
     fn plan_ingests_and_orders_samples() {
         let config = run_config();
         let source = DatasetSource {
@@ -1147,6 +1240,8 @@ mod tests {
                 images_subdir: Some("images".to_string()),
                 labels_subdir: Some("labels".to_string()),
                 train_id_remap: None,
+                max_samples: None,
+                sample_draw_seed: None,
             }),
         };
         let source = DatasetSource {

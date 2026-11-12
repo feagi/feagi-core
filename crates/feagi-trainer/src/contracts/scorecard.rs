@@ -24,7 +24,7 @@ use super::common::{
     GenomeVersionId, MetadataMap, PluginRef, QuantizationFingerprint, ScorecardId, SplitId,
 };
 use super::metric_stats::MetricStat;
-use super::run_event::ClassBreakdown;
+use super::run_event::{ClassBreakdown, ConfusionSummary};
 
 /// Wire/format version of the `Scorecard` contract.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -128,6 +128,10 @@ pub struct Scorecard {
     /// verification identity.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub class_breakdown: Vec<ClassBreakdown>,
+    /// Sparse confusion matrix of a single-label classification score. Older scorecards omit
+    /// it and load without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confusion: Option<ConfusionSummary>,
     /// Per-metric distribution across N-seed repeats (mean/stddev/confidence interval).
     ///
     /// Present only for multi-seed runs; omitted (and absent from the wire form) for single
@@ -191,6 +195,7 @@ mod tests {
             },
             metrics,
             class_breakdown: Vec::new(),
+            confusion: None,
             metric_stats: None,
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
@@ -295,11 +300,34 @@ mod tests {
             label: "3".to_string(),
             correct: 8,
             total: 10,
+            no_answer: 2,
+            tied: 1,
         }];
         let counted_json = serde_json::to_string(&counted).expect("serialize");
         assert!(counted_json.contains("\"class_breakdown\""));
         let restored: Scorecard = serde_json::from_str(&counted_json).expect("deserialize");
         assert_eq!(restored.class_breakdown, counted.class_breakdown);
+
+        // A scorecard written before the confusion matrix existed loads without one.
+        assert!(!json.contains("confusion"));
+        assert!(restored.confusion.is_none());
+        let mut with_matrix = counted.clone();
+        with_matrix.confusion = Some(ConfusionSummary {
+            class_ids: vec![3],
+            labels: vec!["3".to_string()],
+            cells: vec![[0, 0, 8]],
+            no_answer: vec![1],
+            tied: vec![1],
+        });
+        let matrix_json = serde_json::to_string(&with_matrix).expect("serialize");
+        let back: Scorecard = serde_json::from_str(&matrix_json).expect("deserialize");
+        assert_eq!(back.confusion, with_matrix.confusion);
+
+        // A breakdown row written before `no_answer` existed still loads, with zero.
+        let old: ClassBreakdown =
+            serde_json::from_str(r#"{"class_id":1,"label":"1","correct":3,"total":4}"#)
+                .expect("deserialize old row");
+        assert_eq!(old.no_answer, 0);
     }
 
     #[test]
