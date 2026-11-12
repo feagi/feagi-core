@@ -8,7 +8,7 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal};
-use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64};
+use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64, NMFoundationPowerQuantedKind};
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
 //region Cortical Subtype
@@ -96,9 +96,13 @@ impl CorticalIdentifierFoundation {
 
 //region Power
 
-pub enum
+//pub enum CTFoundationPowerQuantedNMs {
+//    FoundationPower(NMFoundationPowerQuantedKind),
+//}
 
-pub struct CorticalTypeFoundationPower
+pub struct CorticalTypeFoundationPowerNMFoundationPower(pub NMFoundationPowerQuantedKind);
+
+impl CorticalTypeFoundation<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPowerNMFoundationPower
 
 /*
 /// Fires every burst

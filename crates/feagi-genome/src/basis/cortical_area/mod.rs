@@ -8,7 +8,7 @@ use crate::basis::cortical_area::processing::{CTGeneratorProcessingSubTyped, CTS
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault};
 use crate::basis::cortical_area::cortical_identifiers::CorticalAreaInnerID;
 
 //region Cortical Type
@@ -24,7 +24,7 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     /// What restrictions, if any, should be on the neuron layout?
     type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization>:
         NeuronLayoutRestrictor< // layouts must match
-            FIQ, CorticalLevelContext=<<Self::NeuronLayout as NeuronLayoutTag>::Layout<FIQ> as NeuronLayout<FIQ>>::CorticalLevelContext
+            FIQ, NeuronLayout=<Self::NeuronLayout as NeuronLayoutTag>::Layout<FIQ>
     >;
 
     /// What method of inner ID is used for this cortical type
@@ -135,7 +135,7 @@ where
     fn uniform_default_generator_defaults<
         FIQ: FeagiIndexQuantization,
     >
-    () -> NeurogenesisGeneratorUniformDefaultInitParameters<NM>
+    () -> NeurogenesisGeneratorUniformDefault<FIQ, NM>
     where
         NM: NeuronModel<NeurogenesisGenerator<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>>
     ;
