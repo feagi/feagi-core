@@ -4,9 +4,9 @@ use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor, NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind};
 use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor, NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantKind};
-use crate::neuron_models::models::exclusive_death::quantizations::{NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted, NMExclusiveDeathNeurogenesisGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageQuanted, NMExclusiveDeathQuantKind};
-use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisGeneratorPrecursorQuanted, NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantKind};
-use crate::neuron_models::models::memory_fire_hashing::quantizations::{NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted, NMMemoryFireHashingNeurogenesisGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageQuanted, NMMemoryFireHashingQuantKind};
+use crate::neuron_models::models::exclusive_death::quantizations::{NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor, NMExclusiveDeathNeurogenesisGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageQuanted, NMExclusiveDeathQuantKind};
+use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor, NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantKind};
+use crate::neuron_models::models::memory_fire_hashing::quantizations::{NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor, NMMemoryFireHashingNeurogenesisGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingNeurogenesisStorageQuanted, NMMemoryFireHashingQuantKind};
 
 pub mod feagi_advanced;
 pub mod feagi_simple;
@@ -23,9 +23,9 @@ pub mod neurogenesis;
 pub enum NMNeurogenesisGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
     FeagiAdvanced(NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>),
     FeagiSimple(NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>),
-    ExclusiveDeath(NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>),
-    ExclusivePower(NMExclusivePowerNeurogenesisGeneratorPrecursorQuanted<FIQ>),
-    MemoryFireHashing(NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ>)
+    ExclusiveDeath(NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+    ExclusivePower(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+    MemoryFireHashing(NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>)
 }
 
 

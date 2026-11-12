@@ -3,7 +3,7 @@ pub mod processing;
 pub mod cortical_identifiers;
 
 use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::foundation::{CTGeneratorFoundationSubTyped, CTStorageFoundationSubTyped, CTStorageOrGeneratorFoundationSubTyped, CorticalTypeFoundationSubtypeKind};
+use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGeneratorPrecursor, CTFoundationSubtypedKind, CTFoundationSubtypedStorage, CTFoundationSubtypedStorageOrGeneratorPrecursor};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -69,7 +69,7 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 #[repr(C, u8)]
 #[derive(Copy, Clone, Debug)]
 pub enum CorticalTypedKind{
-    Foundation() = 0,
+    Foundation(CTFoundationSubtypedKind) = 0,
     Processing(CTProcessingSubtypedKind) = 1,
 }
 
@@ -77,7 +77,7 @@ pub enum CorticalTypedKind{
 #[serde(bound = "")]
 pub enum CorticalTypedGeneratorPrecursor<FIQ: FeagiIndexQuantization>
 {
-    Foundation(<FIQ>),
+    Foundation(CTFoundationSubtypedGeneratorPrecursor<FIQ>),
     Processing(CTProcessingSubtypedGeneratorPrecursor<FIQ>)
 }
 
@@ -85,7 +85,7 @@ pub enum CorticalTypedGeneratorPrecursor<FIQ: FeagiIndexQuantization>
 #[serde(bound = "")]
 pub enum CorticalTypedStorage<FIQ: FeagiIndexQuantization>
 {
-    Foundation(<FIQ>),
+    Foundation(CTFoundationSubtypedStorage<FIQ>),
     Processing(CTProcessingSubtypedStorage<FIQ>)
 }
 
@@ -93,7 +93,7 @@ pub enum CorticalTypedStorage<FIQ: FeagiIndexQuantization>
 #[serde(bound = "")]
 pub enum CorticalTypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization>
 {
-    Foundation(<FIQ>),
+    Foundation(CTFoundationSubtypedStorageOrGeneratorPrecursor<FIQ>),
     Processing(CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ>)
 }
 

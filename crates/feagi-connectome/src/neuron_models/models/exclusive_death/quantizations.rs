@@ -51,15 +51,16 @@ impl NMExclusiveDeathQuantedKind {
 //region Generators
 
 /// The data needed to create the generator of the Exclusive Death Neuron Model, for a given quantization
-#[derive(Debug, Clone)]
-pub enum NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Float16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat16>),
     BFloat16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantBFloat16>),
     Float32(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat32>),
     Float64(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat64>)
 }
 
-impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ> {
     /// The quantization of the precursor held
     pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
         match self {
@@ -423,16 +424,16 @@ impl TryFrom<NMQuantedKind> for NMExclusiveDeathQuantedKind {
     }
 }
 
-impl<FIQ> From<NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+impl<FIQ> From<NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+    fn from(value: NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
         NMNeurogenesisGeneratorPrecursorModeled::ExclusiveDeath(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMExclusiveDeathNeurogenesisGeneratorPrecursorQuanted<FIQ>
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {

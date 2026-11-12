@@ -38,12 +38,13 @@ impl NMMemoryFireHashingQuantedKind {
 //region Generators
 
 /// The data needed to create the generator of the Memory Fire Hashing Neuron Model, for a given quantization
-#[derive(Debug, Clone)]
-pub enum NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
 }
 
-impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ> {
     /// The quantization of the precursor held
     pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
         match self {
@@ -210,16 +211,16 @@ impl TryFrom<NMQuantedKind> for NMMemoryFireHashingQuantedKind {
     }
 }
 
-impl<FIQ> From<NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+impl<FIQ> From<NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+    fn from(value: NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
         NMNeurogenesisGeneratorPrecursorModeled::MemoryFireHashing(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisGeneratorPrecursorQuanted<FIQ>
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {

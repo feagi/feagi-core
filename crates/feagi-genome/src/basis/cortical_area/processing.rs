@@ -204,6 +204,8 @@ pub mod interconnect {
         FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedStorage<FIQ>),
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
     pub enum CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
         FeagiAdvanced(CTProcessingInterconnectNMFeagiAdvancedQuantedStorageOrGeneratorPrecursor<FIQ>),
         FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedStorageOrGeneratorPrecursor<FIQ>),
@@ -222,10 +224,14 @@ pub enum CTProcessingSubtypedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Interconnect(CTProcessingInterconnectNMModeledGeneratorPrecursor<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTProcessingSubtypedStorage<FIQ: FeagiIndexQuantization> {
     Interconnect(CTProcessingInterconnectNMModeledStorage<FIQ>)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Interconnect(CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor<FIQ>)
 }

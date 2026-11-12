@@ -1,16 +1,12 @@
 use serde::{Deserialize, Serialize};
-use feagi_basis::neurons::CorticalAreaNeuronPotential;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor};
-use crate::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeKind};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
+use crate::basis::cortical_area::CorticalType;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::models::exclusive_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal};
-use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted, NMFoundationPowerNeurogenesisStorageQuanted, NMFoundationPowerQuantBFloat16, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32, NMFoundationPowerQuantFloat64, NMFoundationPowerQuantedKind};
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
+use crate::basis::cortical_area::foundation::power::{CTFoundationPowerNMModeledGeneratorPrecursor, CTFoundationPowerNMModeledKind, CTFoundationPowerNMModeledStorage, CTFoundationPowerNMModeledStorageOrGeneratorPrecursor};
+
+
 //region Cortical Subtype
 
 /// These are the core cortical areas of FEAGI, that typically have some unique functionality
@@ -23,42 +19,222 @@ pub trait CorticalTypeFoundation<NM>: CorticalType<
 >
 where
     NM: NeuronModel<NeuronLayoutTag=NeuronLayoutTagVoxel>
-{
+{}
 
+/// Fires every burst
+pub mod power {
+
+    //region Supported Neuron Models for Power
+
+    use serde::{Deserialize, Serialize};
+    use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+    use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+    use crate::basis::cortical_area::foundation::power::exclusive_power::{CTFoundationPowerNMExclusivePowerQuantedGeneratorPrecursor, CTFoundationPowerNMExclusivePowerQuantedKind, CTFoundationPowerNMExclusivePowerQuantedStorage, CTFoundationPowerNMExclusivePowerQuantedStorageOrGeneratorPrecursor};
+
+    /// The NMs / Quants allowed for this Cortical Type
+    pub trait CTFoundationPowerNM: NeuronModel
+    {
+        /// Spawns the generator precursor, effectively the default parameters for creating a cortical area
+        fn spawn_neurogenesis_generator_preview<
+            FIQ: FeagiIndexQuantization,
+            Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
+        >() -> Self::NeurogenesisGeneratorPrecursor<FIQ>;
+    }
+
+    /// Default dimensions to use for this cortical type. Power is always exactly a single neuron
+    const DEFAULT_DIMENSIONS: [usize; 4] = [1, 1, 1, 1]; // TODO direct const of DimensionalCorticalAreaDimensions
+
+
+    pub mod exclusive_power {
+        use serde::{Deserialize, Serialize};
+        use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+        use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+        use feagi_connectome::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal};
+        use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64, NMExclusivePowerQuantedKind};
+        use crate::basis::cortical_area::foundation::power::{CTFoundationPowerNM, DEFAULT_DIMENSIONS};
+
+        impl CTFoundationPowerNM for NMExclusivePowerQuantFloat16 {
+            fn spawn_neurogenesis_generator_preview<
+                FIQ: FeagiIndexQuantization,
+                Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>
+            () -> Self::NeurogenesisGeneratorPrecursor<FIQ> {
+                // Power has nothing to configure
+                Self::NeurogenesisGeneratorPrecursor {
+                    universal_properties: NeuronModelUniversalCorticalProperties {
+                        cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                        is_psp_uniform: false,
+                        is_psp_using_neuron_potential: false,
+                    },
+                    cortical_context: DimensionalCorticalAreaDimensions::new_dimensions_from_usize(DEFAULT_DIMENSIONS).unwrap(),
+                    cortical_properties: NMExclusivePowerDataCorticalProperties::new(),
+                    cortical_internal: NMExclusivePowerDataCorticalInternal::new(),
+                    cortical_variance: NMExclusivePowerDataCorticalVariance::new(),
+                    neuron_internal: NMExclusivePowerDataNeuronInternal::new(),
+                }
+            }
+        }
+
+        impl CTFoundationPowerNM for NMExclusivePowerQuantBFloat16 {
+            fn spawn_neurogenesis_generator_preview<
+                FIQ: FeagiIndexQuantization,
+                Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>
+            () -> Self::NeurogenesisGeneratorPrecursor<FIQ> {
+                // Power has nothing to configure
+                Self::NeurogenesisGeneratorPrecursor {
+                    universal_properties: NeuronModelUniversalCorticalProperties {
+                        cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                        is_psp_uniform: false,
+                        is_psp_using_neuron_potential: false,
+                    },
+                    cortical_context: DimensionalCorticalAreaDimensions::new_dimensions_from_usize(DEFAULT_DIMENSIONS).unwrap(),
+                    cortical_properties: NMExclusivePowerDataCorticalProperties::new(),
+                    cortical_internal: NMExclusivePowerDataCorticalInternal::new(),
+                    cortical_variance: NMExclusivePowerDataCorticalVariance::new(),
+                    neuron_internal: NMExclusivePowerDataNeuronInternal::new(),
+                }
+            }
+        }
+
+        impl CTFoundationPowerNM for NMExclusivePowerQuantFloat32 {
+            fn spawn_neurogenesis_generator_preview<
+                FIQ: FeagiIndexQuantization,
+                Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>
+            () -> Self::NeurogenesisGeneratorPrecursor<FIQ> {
+                // Power has nothing to configure
+                Self::NeurogenesisGeneratorPrecursor {
+                    universal_properties: NeuronModelUniversalCorticalProperties {
+                        cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                        is_psp_uniform: false,
+                        is_psp_using_neuron_potential: false,
+                    },
+                    cortical_context: DimensionalCorticalAreaDimensions::new_dimensions_from_usize(DEFAULT_DIMENSIONS).unwrap(),
+                    cortical_properties: NMExclusivePowerDataCorticalProperties::new(),
+                    cortical_internal: NMExclusivePowerDataCorticalInternal::new(),
+                    cortical_variance: NMExclusivePowerDataCorticalVariance::new(),
+                    neuron_internal: NMExclusivePowerDataNeuronInternal::new(),
+                }
+            }
+        }
+
+        impl CTFoundationPowerNM for NMExclusivePowerQuantFloat64 {
+            fn spawn_neurogenesis_generator_preview<
+                FIQ: FeagiIndexQuantization,
+                Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>
+            () -> Self::NeurogenesisGeneratorPrecursor<FIQ> {
+                // Power has nothing to configure
+                Self::NeurogenesisGeneratorPrecursor {
+                    universal_properties: NeuronModelUniversalCorticalProperties {
+                        cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
+                        is_psp_uniform: false,
+                        is_psp_using_neuron_potential: false,
+                    },
+                    cortical_context: DimensionalCorticalAreaDimensions::new_dimensions_from_usize(DEFAULT_DIMENSIONS).unwrap(),
+                    cortical_properties: NMExclusivePowerDataCorticalProperties::new(),
+                    cortical_internal: NMExclusivePowerDataCorticalInternal::new(),
+                    cortical_variance: NMExclusivePowerDataCorticalVariance::new(),
+                    neuron_internal: NMExclusivePowerDataNeuronInternal::new(),
+                }
+            }
+        }
+
+        #[derive(Copy, Clone, Debug)]
+        pub enum CTFoundationPowerNMExclusivePowerQuantedKind {
+            Float16(NMExclusivePowerQuantedKind),
+            BFloat16(NMExclusivePowerQuantedKind),
+            Float32(NMExclusivePowerQuantedKind),
+            Float64(NMExclusivePowerQuantedKind),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTFoundationPowerNMExclusivePowerQuantedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Float16(<NMExclusivePowerQuantFloat16 as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+            BFloat16(<NMExclusivePowerQuantBFloat16 as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+            Float32(<NMExclusivePowerQuantFloat32 as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+            Float64(<NMExclusivePowerQuantFloat64 as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTFoundationPowerNMExclusivePowerQuantedStorage<FIQ: FeagiIndexQuantization> {
+            Float16(NeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat16>),
+            BFloat16(NeurogenesisStorage<FIQ, NMExclusivePowerQuantBFloat16>),
+            Float32(NeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat32>),
+            Float64(NeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat64>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTFoundationPowerNMExclusivePowerQuantedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Float16(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+            BFloat16(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+            Float32(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+            Float64(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+        }
+
+    }
+
+    // NOTE: Power only has 1 neuron model
+
+    #[derive(Copy, Clone, Debug)]
+    pub enum CTFoundationPowerNMModeledKind {
+        ExclusivePower(CTFoundationPowerNMExclusivePowerQuantedKind),
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
+    pub enum CTFoundationPowerNMModeledGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+        ExclusivePower(CTFoundationPowerNMExclusivePowerQuantedGeneratorPrecursor<FIQ>),
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
+    pub enum CTFoundationPowerNMModeledStorage<FIQ: FeagiIndexQuantization> {
+        ExclusivePower(CTFoundationPowerNMExclusivePowerQuantedStorage<FIQ>),
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
+    pub enum CTFoundationPowerNMModeledStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+        ExclusivePower(CTFoundationPowerNMExclusivePowerQuantedStorageOrGeneratorPrecursor<FIQ>),
+    }
+
+    //endregion
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, Hash)]
-pub enum CorticalTypeFoundationSubtypeKind {
-    Power = 0,
+#[derive(Copy, Clone, Debug)]
+pub enum CTFoundationSubtypedKind {
+    Power(CTFoundationPowerNMModeledKind),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum CTFoundationSubtypedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+    Power(CTFoundationPowerNMModeledGeneratorPrecursor<FIQ>)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum CTFoundationSubtypedStorage<FIQ: FeagiIndexQuantization> {
+    Power(CTFoundationPowerNMModeledStorage<FIQ>)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum CTFoundationSubtypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+    Power(CTFoundationPowerNMModeledStorageOrGeneratorPrecursor<FIQ>)
 }
 
 //endregion
 
-//region Cortical Subtype Enums
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Power(CTGeneratorFoundationPowerModeled<FIQ>)
-}
+// TODO this is very noisy in this file, yes, but these will be migrated to macros eventually
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageFoundationSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Power(CTStorageFoundationPowerModeled<FIQ>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageOrGeneratorFoundationSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Power(CTStorageOrGeneratorFoundationPowerModeled<FIQ>)
-}
-
-//endregion
 
 //region CorticalIdentifier
 
@@ -89,317 +265,5 @@ impl CorticalIdentifierFoundation {
     }
 
 }
-
-//endregion
-
-//region Subtypes
-
-//region Power
-
-//pub enum CTFoundationPowerQuantedNMs {
-//    FoundationPower(NMFoundationPowerQuantedKind),
-//}
-
-pub struct CorticalTypeFoundationPowerNMFoundationPower(pub NMFoundationPowerQuantedKind);
-
-impl CorticalTypeFoundation<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPowerNMFoundationPower
-
-/*
-/// Fires every burst
-pub struct CorticalTypeFoundationPower;
-
-//region Float16
-
-impl CorticalTypeFoundation<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPower
-{}
-
-impl CorticalType<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPower
-{
-    type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
-        1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
-    >;
-    type IdentifierInner = [u8; 6];
-    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = ();
-    type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
-    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
-    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
-
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
-        _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat16,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
-
-        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
-        // Power has nothing to configure, so the generator is entirely its defaults
-        let generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
-
-        let layout = NeuronLayoutOf::<NMFoundationPowerQuantFloat16, FIQ>::new(cortical_layout);
-
-        let generator = NeurogenesisGeneratorUniformDefault::new(
-            generator_defaults,
-            layout
-        );
-        Ok (
-            CTGeneratorTyped::Foundation(
-                CTGeneratorFoundationSubTyped::Power(
-                    CTGeneratorFoundationPowerModeled::FoundationPower(
-                        NMFoundationPowerNeurogenesisGeneratorQuanted::Float16(
-                            generator
-                        )
-                    )
-                )
-            )
-        )
-    }
-}
-
-impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFoundationPowerQuantFloat16> for CorticalTypeFoundationPower
-{
-    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFoundationPowerQuantFloat16> {
-        NeurogenesisGeneratorUniformDefaultInitParameters {
-            universal_properties: NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
-            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
-            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
-            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
-        }
-    }
-}
-
-//endregion
-
-
-//region BFloat16
-
-impl CorticalTypeFoundation<NMFoundationPowerQuantBFloat16> for CorticalTypeFoundationPower
-{}
-
-impl CorticalType<NMFoundationPowerQuantBFloat16> for CorticalTypeFoundationPower
-{
-    type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
-        1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
-    >;
-    type IdentifierInner = [u8; 6];
-    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = ();
-    type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
-    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
-    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
-
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
-        _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantBFloat16,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
-
-        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
-        // Power has nothing to configure, so the generator is entirely its defaults
-        let generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
-
-        let layout = NeuronLayoutOf::<NMFoundationPowerQuantBFloat16, FIQ>::new(cortical_layout);
-
-        let generator = NeurogenesisGeneratorUniformDefault::new(
-            generator_defaults,
-            layout
-        );
-        Ok (
-            CTGeneratorTyped::Foundation(
-                CTGeneratorFoundationSubTyped::Power(
-                    CTGeneratorFoundationPowerModeled::FoundationPower(
-                        NMFoundationPowerNeurogenesisGeneratorQuanted::BFloat16(
-                            generator
-                        )
-                    )
-                )
-            )
-        )
-    }
-}
-
-impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFoundationPowerQuantBFloat16> for CorticalTypeFoundationPower
-{
-    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFoundationPowerQuantBFloat16> {
-        NeurogenesisGeneratorUniformDefaultInitParameters {
-            universal_properties: NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
-            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
-            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
-            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
-        }
-    }
-}
-
-//endregion
-
-
-//region Float32
-
-impl CorticalTypeFoundation<NMFoundationPowerQuantFloat32> for CorticalTypeFoundationPower
-{}
-
-impl CorticalType<NMFoundationPowerQuantFloat32> for CorticalTypeFoundationPower
-{
-    type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
-        1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
-    >;
-    type IdentifierInner = [u8; 6];
-    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = ();
-    type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
-    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
-    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
-
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
-        _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat32,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
-
-        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
-        // Power has nothing to configure, so the generator is entirely its defaults
-        let generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
-
-        let layout = NeuronLayoutOf::<NMFoundationPowerQuantFloat32, FIQ>::new(cortical_layout);
-
-        let generator = NeurogenesisGeneratorUniformDefault::new(
-            generator_defaults,
-            layout
-        );
-        Ok (
-            CTGeneratorTyped::Foundation(
-                CTGeneratorFoundationSubTyped::Power(
-                    CTGeneratorFoundationPowerModeled::FoundationPower(
-                        NMFoundationPowerNeurogenesisGeneratorQuanted::Float32(
-                            generator
-                        )
-                    )
-                )
-            )
-        )
-    }
-}
-
-impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFoundationPowerQuantFloat32> for CorticalTypeFoundationPower
-{
-    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFoundationPowerQuantFloat32> {
-        NeurogenesisGeneratorUniformDefaultInitParameters {
-            universal_properties: NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
-            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
-            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
-            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
-        }
-    }
-}
-
-//endregion
-
-
-//region Float64
-
-impl CorticalTypeFoundation<NMFoundationPowerQuantFloat64> for CorticalTypeFoundationPower
-{}
-
-impl CorticalType<NMFoundationPowerQuantFloat64> for CorticalTypeFoundationPower
-{
-    type NeuronLayout = NeuronLayoutTagVoxel;
-    type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelBound<FIQ,
-        1, 1, 1, 1, 2, 2, 2, 2 // XYZD min (inclusive) XYZD max (exclusive), so exactly 1x1x1x1
-    >;
-    type IdentifierInner = [u8; 6];
-    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization> = ();
-    type CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind;
-    const CORTICAL_AREA_TYPE_KIND: CorticalTypeKind = CorticalTypeKind::Foundation;
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum = CorticalTypeFoundationSubtypeKind::Power;
-    const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::RootOrInner;
-
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
-        _parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<NMFoundationPowerQuantFloat64,
-            FIQ>) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError> {
-
-        Self::NeuronLayoutRestrictor::<FIQ>::validate_cortical_context(&cortical_layout)?;
-        // Power has nothing to configure, so the generator is entirely its defaults
-        let generator_defaults = Self::uniform_default_generator_defaults::<FIQ>();
-
-        let layout = NeuronLayoutOf::<NMFoundationPowerQuantFloat64, FIQ>::new(cortical_layout);
-
-        let generator = NeurogenesisGeneratorUniformDefault::new(
-            generator_defaults,
-            layout
-        );
-        Ok (
-            CTGeneratorTyped::Foundation(
-                CTGeneratorFoundationSubTyped::Power(
-                    CTGeneratorFoundationPowerModeled::FoundationPower(
-                        NMFoundationPowerNeurogenesisGeneratorQuanted::Float64(
-                            generator
-                        )
-                    )
-                )
-            )
-        )
-    }
-}
-
-impl CorticalSubTypeUsesDefaultCorticalGenerator<NMFoundationPowerQuantFloat64> for CorticalTypeFoundationPower
-{
-    fn uniform_default_generator_defaults<FIQ: FeagiIndexQuantization>() -> NeurogenesisGeneratorUniformDefaultInitParameters<NMFoundationPowerQuantFloat64> {
-        NeurogenesisGeneratorUniformDefaultInitParameters {
-            universal_properties: NeuronModelUniversalCorticalProperties {
-                cortical_level_psp: CorticalAreaNeuronPotential::QUANT_ONE,
-                is_psp_uniform: false,
-                is_psp_using_neuron_potential: false,
-            },
-            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
-            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
-            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
-            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
-        }
-    }
-}
-
-//endregion
-
-
-
-
- */
-// NOTE: these only have 1 neuron model
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
-    FoundationPower(NMFoundationPowerNeurogenesisGeneratorQuanted<FIQ>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
-    FoundationPower(NMFoundationPowerNeurogenesisStorageQuanted<FIQ>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageOrGeneratorFoundationPowerModeled<FIQ: FeagiIndexQuantization> {
-    FoundationPower(NMFoundationPowerNeurogenesisStorageOrGeneratorQuanted<FIQ>)
-}
-
-
-//endregion
 
 //endregion
