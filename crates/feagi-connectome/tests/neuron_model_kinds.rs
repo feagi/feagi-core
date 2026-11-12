@@ -1,6 +1,7 @@
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit};
 use feagi_connectome::neuron_models::models::foundation_power::quantizations::{NMFoundationPowerQuantFloat16, NMFoundationPowerQuantKind};
-use feagi_connectome::neuron_models::models::{NMKind, NMModelKind, NeuronModelEnumConversionError};
+use feagi_connectome::neuron_models::models::kind::{NMKind, NMModelKind};
+use feagi_connectome::neuron_models::models::NeuronModelEnumConversionError;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 #[test]

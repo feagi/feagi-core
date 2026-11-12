@@ -23,18 +23,17 @@ use feagi_connectome::neuron_models::models::foundation_power::{
     NMFoundationPowerDataNeuronInternal, NMFoundationPowerTrait,
 };
 use feagi_connectome::neuron_models::models::NMNeurogenesisStorageOrGeneratorModeled;
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::connectome_editing::{
     ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepCorticalAreaAdd,
 };
 use feagi_connectome_neural::neural_basis::engine::{BurstEngine, BurstEngineIndex};
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGeneratorPrecursor;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
+use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantizationStandard;
+use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_connectome_neural::neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelIndex};
 
 type Fiq = FeagiIndexQuantizationStandard;
@@ -42,6 +41,7 @@ type Visualization = BurstVisualizationData<Fiq>;
 type Transmitter = thingbuf_sender::Sender;
 type Engine = CpuBurstEngine<Fiq, Transmitter>;
 type Area = NMNeurogenesisStorageOrGeneratorModeled<Fiq>;
+type Unbound = NeuronLayoutRestrictorVoxelUnbound<Fiq>;
 
 /// Names the halves of the visualization channel without depending on thingbuf directly
 mod thingbuf_sender {
@@ -55,8 +55,8 @@ mod thingbuf_sender {
 
 //region Helpers
 
-fn voxel_layout(dimensions: [usize; 4]) -> NeuronLayoutVoxel<Fiq> {
-    NeuronLayoutVoxel::new(DimensionalCorticalAreaDimensions::new_dimensions_from_usize(dimensions).unwrap())
+fn dimensions(dimensions: [usize; 4]) -> DimensionalCorticalAreaDimensions<<Fiq as FeagiIndexQuantization>::NeuronIndexQuant> {
+    DimensionalCorticalAreaDimensions::new_dimensions_from_usize(dimensions).unwrap()
 }
 
 fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
@@ -68,20 +68,20 @@ fn universal<NM: NeuronModel>() -> NeuronModelUniversalCorticalProperties<NM> {
 }
 
 /// The generator of an area whose neurons always fire
-fn power_generator<NM>(dimensions: [usize; 4]) -> NeurogenesisFromStorageOrByGenerator<Fiq, NM, NeurogenesisGeneratorUniformDefault<Fiq, NM>>
+fn power_generator<NM>(dims: [usize; 4]) -> NeurogenesisFromStorageOrByGenerator<Fiq, NM, NeurogenesisGeneratorUniformDefault<Fiq, NM>>
 where
-    NM: NMFoundationPowerTrait + NeuronModel<NeurogenesisGenerator<Fiq> = NeurogenesisGeneratorUniformDefault<Fiq, NM>>,
+    NM: NMFoundationPowerTrait
+        + NeuronModel<NeuronLayoutTag = NeuronLayoutTagVoxel, NeurogenesisGenerator<Fiq> = NeurogenesisGeneratorUniformDefault<Fiq, NM>>,
 {
-    NeurogenesisFromStorageOrByGenerator::ByGenerator(NeurogenesisGeneratorUniformDefault::new(
-        NeurogenesisGeneratorUniformDefaultInitParameters {
-            universal_properties: universal(),
-            cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
-            cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
-            cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
-            neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
-        },
-        voxel_layout(dimensions),
-    ))
+    let precursor = NeurogenesisGeneratorPrecursorUniformDefault::<Fiq, NM> {
+        universal_properties: universal(),
+        cortical_context: dimensions(dims),
+        cortical_properties: NMFoundationPowerDataCorticalProperties::new(),
+        cortical_internal: NMFoundationPowerDataCorticalInternal::new(),
+        cortical_variance: NMFoundationPowerDataCorticalVariance::new(),
+        neuron_internal: NMFoundationPowerDataNeuronInternal::new(),
+    };
+    NeurogenesisFromStorageOrByGenerator::ByGenerator(precursor.into_generator::<Unbound>().unwrap())
 }
 
 fn power_area_float_16(dimensions: [usize; 4]) -> Area {
@@ -97,19 +97,17 @@ fn power_area_float_64(dimensions: [usize; 4]) -> Area {
 }
 
 /// An area whose neurons never fire
-fn death_area_float_32(dimensions: [usize; 4]) -> Area {
-    Area::FoundationDeath(NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::Float32(NeurogenesisFromStorageOrByGenerator::ByGenerator(
-        NeurogenesisGeneratorUniformDefault::<Fiq, NMFoundationDeathQuantFloat32>::new(
-            NeurogenesisGeneratorUniformDefaultInitParameters {
-                universal_properties: universal(),
-                cortical_properties: NMFoundationDeathDataCorticalProperties::new(),
-                cortical_internal: NMFoundationDeathDataCorticalInternal::new(),
-                cortical_variance: NMFoundationDeathDataCorticalVariance::new(),
-                neuron_internal: NMFoundationDeathDataNeuronInternal::new(),
-            },
-            voxel_layout(dimensions),
-        ),
-    )))
+fn death_area_float_32(dims: [usize; 4]) -> Area {
+    let precursor = NeurogenesisGeneratorPrecursorUniformDefault::<Fiq, NMFoundationDeathQuantFloat32> {
+        universal_properties: universal(),
+        cortical_context: dimensions(dims),
+        cortical_properties: NMFoundationDeathDataCorticalProperties::new(),
+        cortical_internal: NMFoundationDeathDataCorticalInternal::new(),
+        cortical_variance: NMFoundationDeathDataCorticalVariance::new(),
+        neuron_internal: NMFoundationDeathDataNeuronInternal::new(),
+    };
+    let generator = NMFoundationDeathQuantFloat32::spawn_neurogenesis_generator_from_precursor::<Fiq, Unbound>(precursor).unwrap();
+    Area::FoundationDeath(NMFoundationDeathNeurogenesisStorageOrGeneratorQuanted::Float32(NeurogenesisFromStorageOrByGenerator::ByGenerator(generator)))
 }
 
 /// A CPU burst engine without cortical areas, and the receiver of its visualization
