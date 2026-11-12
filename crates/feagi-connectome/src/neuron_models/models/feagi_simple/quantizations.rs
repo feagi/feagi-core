@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalScratch, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleDataNeuronScratch, NMFeagiSimpleDataNeuronVariance, NMFeagiSimpleTrait};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
@@ -21,9 +21,19 @@ impl NMFeagiSimpleQuantKind {
     pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
 }
 
+/// The data needed to create the generator of the Feagi Simple Neuron Model, for a given quantization
 #[derive(Debug, Clone)]
 pub enum NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit()
+    Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+    /// The quantization of the precursor held
+    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
+        }
+    }
 }
 
 /// Allows Neurogenesis of the Feagi Simple Neuron Model by its generator for a given quantization

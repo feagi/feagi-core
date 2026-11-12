@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait};
-use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
@@ -14,6 +15,21 @@ use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuant
 /// Describes the quantization of the Feagi Advanced Neuron Model
 pub enum NMFeagiAdvancedQuantKind {
     Standard32Bit,
+}
+
+/// The data needed to create the generator of the Feagi Advanced Neuron Model, for a given quantization
+#[derive(Debug, Clone)]
+pub enum NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+    /// The quantization of the precursor held
+    pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit,
+        }
+    }
 }
 
 /// Allows Neurogenesis of the Feagi Advanced Neuron Model by its generator for a given quantization
@@ -83,6 +99,8 @@ impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFeagiAdvancedDataCorticalInternal<Self>;
@@ -116,6 +134,37 @@ impl TryFrom<NMKind> for NMFeagiAdvancedQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FeagiAdvanced(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FeagiAdvanced,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+        NMNeurogenesisGeneratorPrecursorModeled::FeagiAdvanced(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisGeneratorPrecursorModeled::FeagiAdvanced(v) => {
                 Ok(v)
             },
             _ => {

@@ -95,7 +95,8 @@ impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagi
         layout: &NeuronLayoutOf<FIQ, NM>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
-        let coordinates = layout.get_neuron_layout_context(index);
+        let coordinates = layout.get_neuron_layout_context(index)
+            .expect("Neuron index during neurogenesis must come from this layout"); // TODO Address This Properly
         let [x, y, z, _d] = coordinates.as_slice();
         NMFeagiAdvancedDataNeuronVariance::new(
             self.firing_threshold_increment_x * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*x)

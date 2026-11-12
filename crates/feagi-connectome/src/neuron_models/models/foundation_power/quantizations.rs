@@ -1,7 +1,8 @@
 use crate::neuron_models::models::foundation_power::{NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalScratch, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal, NMFoundationPowerDataNeuronScratch, NMFoundationPowerDataNeuronVariance, NMFoundationPowerTrait};
-use crate::neuron_models::models::{NMKind, NMModelKind, NMNeurogenesisGeneratorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use crate::neuron_models::models::kind::{NMKind, NMModelKind};
+use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
@@ -16,6 +17,27 @@ pub enum NMFoundationPowerQuantKind {
     BFloat16,
     Float32,
     Float64,
+}
+
+/// The data needed to create the generator of the Foundation Power Neuron Model, for a given quantization
+#[derive(Debug, Clone)]
+pub enum NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+    Float16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFoundationPowerQuantFloat16>),
+    BFloat16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFoundationPowerQuantBFloat16>),
+    Float32(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFoundationPowerQuantFloat32>),
+    Float64(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFoundationPowerQuantFloat64>)
+}
+
+impl<FIQ: FeagiIndexQuantization> NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+    /// The quantization of the precursor held
+    pub const fn quant_kind(&self) -> NMFoundationPowerQuantKind {
+        match self {
+            Self::Float16(_) => NMFoundationPowerQuantKind::Float16,
+            Self::BFloat16(_) => NMFoundationPowerQuantKind::BFloat16,
+            Self::Float32(_) => NMFoundationPowerQuantKind::Float32,
+            Self::Float64(_) => NMFoundationPowerQuantKind::Float64,
+        }
+    }
 }
 
 /// Allows Neurogenesis of the Foundation Power Neuron Model by its generator for a given quantization
@@ -103,6 +125,8 @@ impl NeuronModel for NMFoundationPowerQuantFloat16 {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFoundationPowerDataCorticalInternal<Self>;
@@ -135,6 +159,8 @@ impl NeuronModel for NMFoundationPowerQuantBFloat16 {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFoundationPowerDataCorticalInternal<Self>;
@@ -167,6 +193,8 @@ impl NeuronModel for NMFoundationPowerQuantFloat32 {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFoundationPowerDataCorticalInternal<Self>;
@@ -199,6 +227,8 @@ impl NeuronModel for NMFoundationPowerQuantFloat64 {
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
+        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMFoundationPowerDataCorticalProperties<Self>;
     type CorticalDataInternal = NMFoundationPowerDataCorticalInternal<Self>;
@@ -232,6 +262,37 @@ impl TryFrom<NMKind> for NMFoundationPowerQuantKind {
         let actual = value.model_kind();
         match value {
             NMKind::FoundationPower(v) => {
+                Ok(v)
+            },
+            _ => {
+                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                    expected: NMModelKind::FoundationPower,
+                    actual,
+                })
+            }
+        }
+    }
+}
+
+impl<FIQ> From<NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn from(value: NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+        NMNeurogenesisGeneratorPrecursorModeled::FoundationPower(value)
+    }
+}
+
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFoundationPowerNeurogenesisGeneratorPrecursorQuanted<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    type Error = NeuronModelEnumConversionError<NMModelKind>;
+
+    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
+        let actual = value.model_kind();
+        match value {
+            NMNeurogenesisGeneratorPrecursorModeled::FoundationPower(v) => {
                 Ok(v)
             },
             _ => {
