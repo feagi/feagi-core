@@ -1,30 +1,54 @@
-pub mod container_brain_region;
+use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::basis::brain_region::BrainRegionID;
+use crate::genome::genomes::brain_region::BrainRegionSet;
+use crate::genome::genomes::{CachingContext, CachingContextCaching, GenomeReadingInterface};
+
 pub mod container_cortical_area;
+
+
+
+pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
+    brain_regions: BrainRegionSet<<CachingContextCaching as CachingContext>::BrainRegion>,
+    cortical_areas: FIQ
+}
+
+impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
+    
+}
+
+
+impl<FIQ: FeagiIndexQuantization> GenomeReadingInterface<FIQ, CachingContextCaching> for GenomeDesigner<FIQ> {
+    fn get_all_brain_regions(&self) -> &BrainRegionSet<<CachingContextCaching as CachingContext>::BrainRegion> {
+        &self.brain_regions
+    }
+}
+
+
+
+
+
+
+
+/*
 
 use container_brain_region::{BrainRegionContainerRuntimeEnumMut, BrainRegionContainerRuntimeEnumRef};
 use std::collections::HashMap;
 use feagi_basis::neurons::DimensionalCorticalAreaDimensions;
-use feagi_basis::voxels::CorticalAreaVoxelDimensions;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayout;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
 use crate::basis::brain_region::BrainRegionID;
 use crate::genome::genome_object::{GenomeObjectCoordinate2D, GenomeObjectCoordinate3D, GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::designer::container_brain_region::{BrainRegionContainerInnerRuntime, BrainRegionContainerRootRuntime};
 use crate::genome::genomes::GenomeError;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat32};
-use feagi_connectome::neuron_models::models::NeurogenesisByGeneratorTypeOf;
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
+use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::{CTGeneratorTyped, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType};
-use crate::basis::cortical_area::foundation::{CTGeneratorFoundationPowerModeled, CTGeneratorFoundationSubTyped, CorticalIdentifierFoundation, CorticalTypeFoundationPower};
+use crate::basis::cortical_area::foundation::{CTGeneratorFoundationPowerModeled, CTGeneratorFoundationSubTyped, CorticalIdentifierFoundation};
 use crate::genome::genomes::designer::container_cortical_area::{CorticalAreaContainer};
 
 /// A dynamic Genome that stores genomic level data for the running feagi brain and acts
 /// as the interface and translator for modifications to that brain directly on the genome and
 /// through the NPU
-
 pub struct DesignerGenome<FIQ: FeagiIndexQuantization> {
     root_brain_region: BrainRegionContainerRootRuntime,
     inner_brain_regions: HashMap<BrainRegionID, BrainRegionContainerInnerRuntime>,
@@ -152,6 +176,7 @@ impl<FIQ: FeagiIndexQuantization> DesignerGenome<FIQ> {
 
 
 
+ */
 
 
-}
+
