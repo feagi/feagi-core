@@ -46,14 +46,15 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     /// What regions is this cortical type allowed within the genome?
     const ALLOWED_REGIONS: CorticalAllowedRegions;
 
-    /// Creates a generator enum given the parameters and layout. Be sure the implementation
-    /// verifys the cortical layout!
-    fn create_cortical_area_generator<FIQ: FeagiIndexQuantization>(
-        parameters: Self::CorticalAreaGeneratorParameters<FIQ>,
-        cortical_layout: CorticalLayoutContextOf<FIQ, NM>
-    ) -> Result<CTGeneratorTyped<FIQ>, NeuronLayoutError>;
+    /// Get the precursor to the neurogenesis generator for this cortical type / model. This
+    /// effectively is the default values for cortical generation for the given neuron model.
+    /// some precursors allow changing of the parameters before submitting it for generation
+    fn get_neurogenesis_generator_precursor<FIQ: FeagiIndexQuantization>()
+        -> NM::NeurogenesisGeneratorPrecursor<FIQ>;
 
     //region Default impls
+
+
 
     // TODO Cortical Identifier Conversions
 

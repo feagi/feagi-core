@@ -13,7 +13,10 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
-    
+
+    pub fn new_barebones_genome() -> Self { // TODO move to storage
+        todo!()
+    }
 }
 
 

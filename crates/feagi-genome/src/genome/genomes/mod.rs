@@ -7,6 +7,7 @@ use crate::genome::genomes::brain_region::{BrainRegionCachingContext, BrainRegio
 pub mod designer;
 pub mod storage;
 pub mod brain_region;
+pub mod cortical_area;
 
 /// Allows reading of Genome implementation internal states in a straightforward manner. Reading is
 /// safe so this can be publicly exposed

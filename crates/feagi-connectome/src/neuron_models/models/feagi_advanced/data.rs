@@ -3,10 +3,14 @@ use feagi_basis::create_wrapped_quantized_decimal;
 use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 
-create_wrapped_quantized_decimal!(
-    /// For handling timing
-    pub Period
-);
+pub mod wrapped {
+    use feagi_basis::create_wrapped_quantized_decimal;
+
+    create_wrapped_quantized_decimal!(
+        /// For handling amounts of time
+        pub Period
+    );
+}
 
 //region Cortical Properties
 
@@ -14,7 +18,7 @@ create_wrapped_quantized_decimal!(
 pub struct NMFeagiAdvancedDataCorticalProperties<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How long till a neuron of the cortical area can fire again"]
-    pub refractory_period: Period<NM::Period>,
+    pub refractory_period: wrapped::Period<NM::Period>,
 
     #[doc = " At what threshold do we fire"]
     pub firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
@@ -36,26 +40,6 @@ pub struct NMFeagiAdvancedDataCorticalProperties<NM: NMFeagiAdvancedTrait> {
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalProperties<NM> {
-    pub const fn new(
-        refractory_period: Period<NM::Period>,
-        firing_threshold: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        leak_coefficient: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        leak_variability: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        postsynaptic_current: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        postsynaptic_current_max: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        degeneration: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>
-    ) -> Self {
-        Self {
-            refractory_period,
-            firing_threshold,
-            leak_coefficient,
-            leak_variability,
-            postsynaptic_current,
-            postsynaptic_current_max,
-            degeneration,
-        }
-    }
-
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
@@ -66,15 +50,15 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalProperties<NM> {
     {
         use ::feagi_basis::quantization::quantizable::QuantizedDecimalTrait;
         Ok(
-            NMFeagiAdvancedDataCorticalProperties::new(
-                QuantizedDecimalTrait::try_to_quantization(self.refractory_period)?,
-                QuantizedDecimalTrait::try_to_quantization(self.firing_threshold)?,
-                QuantizedDecimalTrait::try_to_quantization(self.leak_coefficient)?,
-                QuantizedDecimalTrait::try_to_quantization(self.leak_variability)?,
-                QuantizedDecimalTrait::try_to_quantization(self.postsynaptic_current)?,
-                QuantizedDecimalTrait::try_to_quantization(self.postsynaptic_current_max)?,
-                QuantizedDecimalTrait::try_to_quantization(self.degeneration)?
-            )
+            NMFeagiAdvancedDataCorticalProperties {
+                refractory_period: QuantizedDecimalTrait::try_to_quantization(self.refractory_period)?,
+                firing_threshold: QuantizedDecimalTrait::try_to_quantization(self.firing_threshold)?,
+                leak_coefficient: QuantizedDecimalTrait::try_to_quantization(self.leak_coefficient)?,
+                leak_variability: QuantizedDecimalTrait::try_to_quantization(self.leak_variability)?,
+                postsynaptic_current: QuantizedDecimalTrait::try_to_quantization(self.postsynaptic_current)?,
+                postsynaptic_current_max: QuantizedDecimalTrait::try_to_quantization(self.postsynaptic_current_max)?,
+                degeneration: QuantizedDecimalTrait::try_to_quantization(self.degeneration)?
+            }
         )
     }
 }
@@ -90,17 +74,10 @@ for NMFeagiAdvancedDataCorticalProperties<NM> {}
 pub struct NMFeagiAdvancedDataCorticalInternal<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalInternal<NM> {
-    pub const fn new() -> Self {
-        Self {
-            _p: ::core::marker::PhantomData
-        }
-    }
-
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
     pub fn requantize<To: NMFeagiAdvancedTrait>(&self)
@@ -110,9 +87,13 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalInternal<NM> {
         >
     {
         Ok(
-            NMFeagiAdvancedDataCorticalInternal::new()
+            NMFeagiAdvancedDataCorticalInternal::default()
         )
     }
+}
+
+impl<NM: NMFeagiAdvancedTrait> Default for NMFeagiAdvancedDataCorticalInternal<NM> {
+    fn default() -> Self { Self {_p: Default::default()} }
 }
 
 impl<NM: NMFeagiAdvancedTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataInternalSpecification<NM>
@@ -126,16 +107,10 @@ for NMFeagiAdvancedDataCorticalInternal<NM> {}
 pub struct NMFeagiAdvancedDataCorticalScratch<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalScratch<NM> {
-    pub const fn new() -> Self {
-        Self {
-            _p: ::core::marker::PhantomData
-        }
-    }
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
@@ -146,9 +121,13 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalScratch<NM> {
         >
     {
         Ok(
-            NMFeagiAdvancedDataCorticalScratch::new()
+            NMFeagiAdvancedDataCorticalScratch::default()
         )
     }
+}
+
+impl<NM: NMFeagiAdvancedTrait> Default for NMFeagiAdvancedDataCorticalScratch<NM> {
+    fn default() -> Self { Self {_p: Default::default()} }
 }
 
 impl<NM: NMFeagiAdvancedTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataScratchSpecification<NM>
@@ -169,25 +148,10 @@ pub struct NMFeagiAdvancedDataCorticalVariance<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How much fire threshold increases in a cortical area on the Z direction"]
     pub firing_threshold_increment_z: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-
-    #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
-    pub const fn new(
-        firing_threshold_increment_x: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        firing_threshold_increment_y: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-        firing_threshold_increment_z: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>
-    ) -> Self {
-        Self {
-            firing_threshold_increment_x,
-            firing_threshold_increment_y,
-            firing_threshold_increment_z,
-            _p: ::core::marker::PhantomData
-        }
-    }
+
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
@@ -199,11 +163,11 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
     {
         use ::feagi_basis::quantization::quantizable::QuantizedDecimalTrait;
         Ok(
-            NMFeagiAdvancedDataCorticalVariance::new(
-                QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_x)?,
-                QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_y)?,
-                QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_z)?
-            )
+            NMFeagiAdvancedDataCorticalVariance {
+                firing_threshold_increment_x: QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_x)?,
+                firing_threshold_increment_y: QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_y)?,
+                firing_threshold_increment_z: QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_increment_z)?
+            }
         )
     }
 }
@@ -216,17 +180,10 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataCorticalVariance<NM> {
 pub struct NMFeagiAdvancedDataNeuronInternal<NM: NMFeagiAdvancedTrait> {
 
     #[doc = " How many more bursts the neuron is refractory for"]
-    pub refractory_countdown: Period<NM::Period>,
+    pub refractory_countdown: wrapped::Period<NM::Period>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronInternal<NM> {
-    pub const fn new(
-        refractory_countdown: Period<NM::Period>
-    ) -> Self {
-        Self {
-            refractory_countdown,
-        }
-    }
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
@@ -238,9 +195,9 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronInternal<NM> {
     {
         use ::feagi_basis::quantization::quantizable::QuantizedDecimalTrait;
         Ok(
-            NMFeagiAdvancedDataNeuronInternal::new(
-                QuantizedDecimalTrait::try_to_quantization(self.refractory_countdown)?
-            )
+            NMFeagiAdvancedDataNeuronInternal{
+                refractory_countdown: QuantizedDecimalTrait::try_to_quantization(self.refractory_countdown)?
+            }
         )
     }
 }
@@ -256,16 +213,10 @@ for NMFeagiAdvancedDataNeuronInternal<NM> {}
 pub struct NMFeagiAdvancedDataNeuronScratch<NM: NMFeagiAdvancedTrait> {
 
     #[serde(skip)]
-    #[doc = r" Public so that this struct may be written out with its fields named"]
-    pub _p: ::core::marker::PhantomData<NM>,
+    _p: ::core::marker::PhantomData<NM>,
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronScratch<NM> {
-    pub const fn new() -> Self {
-        Self {
-            _p: ::core::marker::PhantomData
-        }
-    }
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
@@ -276,9 +227,13 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronScratch<NM> {
         >
     {
         Ok(
-            NMFeagiAdvancedDataNeuronScratch::new()
+            NMFeagiAdvancedDataNeuronScratch::default()
         )
     }
+}
+
+impl<NM: NMFeagiAdvancedTrait> Default for NMFeagiAdvancedDataNeuronScratch<NM> {
+    fn default() -> Self { Self {_p: Default::default()} }
 }
 
 impl<NM: NMFeagiAdvancedTrait> feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronDataScratchSpecification<NM>
@@ -297,13 +252,6 @@ pub struct NMFeagiAdvancedDataNeuronVariance<NM: NMFeagiAdvancedTrait> {
 }
 
 impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronVariance<NM> {
-    pub const fn new(
-        firing_threshold_offset: CorticalAreaNeuronPotential<NM::MembranePotentialQuant>,
-    ) -> Self {
-        Self {
-            firing_threshold_offset,
-        }
-    }
 
     #[doc = r" Converts to the quantization of `To`. Returns an error if a decimal becomes"]
     #[doc = r" infinite or NaN"]
@@ -315,9 +263,9 @@ impl<NM: NMFeagiAdvancedTrait> NMFeagiAdvancedDataNeuronVariance<NM> {
     {
         use ::feagi_basis::quantization::quantizable::QuantizedDecimalTrait;
         Ok(
-            NMFeagiAdvancedDataNeuronVariance::new(
-                QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_offset)?
-            )
+            NMFeagiAdvancedDataNeuronVariance {
+                firing_threshold_offset: QuantizedDecimalTrait::try_to_quantization(self.firing_threshold_offset)?
+            }
         )
     }
 }

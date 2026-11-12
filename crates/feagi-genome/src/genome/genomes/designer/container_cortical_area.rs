@@ -8,19 +8,6 @@ use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::CTGeneratorTyped;
 
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub struct CorticalAreaContainer<FIQ: FeagiIndexQuantization> {
-    pub metadata: GenomeObjectMetadata,
-    pub positioning: GenomeObjectPositioning,
-    pub parent_id: BrainRegionID,
-    pub incoming_mappings: HashSet<CorticalIdentifier>,
-    pub outgoing_mappings: HashSet<CorticalIdentifier>,
-    pub genome_generator: CTGeneratorTyped<FIQ> // As long as its not a storage type, this needs to be small
-}
-
-
-
 
 
 
