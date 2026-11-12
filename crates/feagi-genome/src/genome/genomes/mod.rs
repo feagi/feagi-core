@@ -1,11 +1,10 @@
 use std::collections::HashSet;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::BrainRegionID;
-use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::genome::genomes::brain_region::{BrainRegionCachingContext, BrainRegionCachingContextCaching, BrainRegionCachingContextNone, BrainRegionContainer, BrainRegionContainerRef, BrainRegionHierarchyContextRoot, BrainRegionSet};
+use crate::genome::genomes::cortical_area::{CorticalAreaCachingContext, CorticalAreaCachingContextCaching, CorticalAreaCachingContextNone};
 
 pub mod designer;
-pub mod storage;
 pub mod brain_region;
 pub mod cortical_area;
 
@@ -115,18 +114,21 @@ pub(crate) trait GenomeInternalModificationInterface<FIQ: FeagiIndexQuantization
 
 pub trait CachingContext {
     type BrainRegion: BrainRegionCachingContext;
+    type CorticalArea: CorticalAreaCachingContext;
 }
 
 pub struct CachingContextNone;
 
 impl CachingContext for CachingContextNone {
-    type BrainRegion =BrainRegionCachingContextNone;
+    type BrainRegion = BrainRegionCachingContextNone;
+    type CorticalArea = CorticalAreaCachingContextNone;
 }
 
 pub struct CachingContextCaching;
 
 impl CachingContext for CachingContextCaching {
     type BrainRegion = BrainRegionCachingContextCaching;
+    type CorticalArea = CorticalAreaCachingContextCaching;
 }
 
 

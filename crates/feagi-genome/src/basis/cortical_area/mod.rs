@@ -58,12 +58,8 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     //endregion
 }
 
-//endregion
-
 
 //region Cortical Type Enums
-
-
 
 /// A nested enum representing the type and the subtype of a cortical area
 #[repr(C, u8)]
@@ -97,20 +93,11 @@ pub enum CorticalTypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization>
     Processing(CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ>)
 }
 
-//region Impls
-
-impl From<CorticalTypeAndSubtype> for CorticalTypeKind {
-    fn from(value: CorticalTypeAndSubtype) -> Self {
-        match value {
-            CorticalTypeAndSubtype::Foundation(_) => CorticalTypeKind::Foundation,
-            CorticalTypeAndSubtype::Processing(_) => CorticalTypeKind::Processing,
-        }
-    }
-}
-
 //endregion
 
 //endregion
+
+
 
 //region Subtype Common Traits
 

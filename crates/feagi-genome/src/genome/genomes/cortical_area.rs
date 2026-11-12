@@ -3,11 +3,16 @@ use serde::{Deserialize, Serialize};
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
-use crate::basis::cortical_area::CTGeneratorTyped;
+use crate::basis::cortical_area::{CorticalTypedGeneratorPrecursor, CorticalTypedStorage, CorticalTypedStorageOrGeneratorPrecursor};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
-pub struct CorticalAreaSet<FIQ: FeagiIndexQuantization, CachingContext: CorticalAreaCachingContext> {
-    areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ, CachingContext>>
+pub struct CorticalAreaSet<FIQ, CachingContext, NeuronDataContext>
+where
+    FIQ: FeagiIndexQuantization,
+    CachingContext: CorticalAreaCachingContext,
+    NeuronDataContext: StoredNeuronDataContext <FIQ>
+{
+    areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ, CachingContext, NeuronDataContext>>
 }
 
 
@@ -32,12 +37,16 @@ pub struct CorticalAreaCachingContextCaching {
 impl CorticalAreaCachingContext for CorticalAreaCachingContextCaching {}
 
 
+/// If we only allow storage, Generator, or Either
+pub trait StoredNeuronDataContext<FIQ: FeagiIndexQuantization> {
 
-pub trait StoredNeuronDataContext<FIQ: FeagiIndexQuantization>: Default {
-    /// If we only allow storage, Generator, or Either
-    type NeurogenesisType<FIQ>;
 }
 
+impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedGeneratorPrecursor<FIQ> {}
+
+impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorage<FIQ> {}
+
+impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorageOrGeneratorPrecursor<FIQ> {}
 
 //endregion
 
@@ -55,9 +64,9 @@ where
     metadata: GenomeObjectMetadata,
     positioning: GenomeObjectPositioning,
     parent_id: BrainRegionID,
-    genome_generator: CTGeneratorTyped<FIQ>, // As long as its not a storage type, this needs to be small
+    cortical_data: NeuronDataContext,
     caching: CachingContext,
-    _p: core::marker::PhantomData<NeuronDataContext>
+    _p: core::marker::PhantomData<FIQ>
 }
 
 
