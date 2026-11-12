@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
-use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
+use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
@@ -175,19 +175,15 @@ impl From<NMMemoryFireHashingQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMMemoryFireHashingQuantKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMKind::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -200,19 +196,15 @@ impl From<NMMemoryFireHashingQuantedKind> for NMQuantedKind {
 }
 
 impl TryFrom<NMQuantedKind> for NMMemoryFireHashingQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMQuantedKind::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -231,19 +223,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMMemoryFire
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorPrecursorModeled::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -262,19 +250,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMMemoryFireHashingNe
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorModeled::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -293,19 +277,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMMemoryFireHashingNeur
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageModeled::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -324,19 +304,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMMemoryFire
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageOrGeneratorModeled::MemoryFireHashing(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::MemoryFireHashing,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }

@@ -12,21 +12,6 @@ use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFi
 
 
 
-/// Describes the neuron model alone, without its quantization
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub enum NMModelKind {
-    FeagiAdvanced,
-    FeagiSimple,
-    ExclusiveDeath,
-    ExclusivePower,
-    MemoryFireHashing,
-}
-
-
-
-
-
-
 /// Describes the neuron model, with a nested enum then describing the quantization
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub enum NMKind {
@@ -35,19 +20,6 @@ pub enum NMKind {
     ExclusiveDeath(NMExclusiveDeathQuantKind),
     ExclusivePower(NMExclusivePowerQuantKind),
     MemoryFireHashing(NMMemoryFireHashingQuantKind),
-}
-
-impl NMKind {
-    /// The neuron model, without its quantization
-    pub const fn model_kind(&self) -> NMModelKind {
-        match self {
-            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
-            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
-            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
-            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
-        }
-    }
 }
 
 /// Describes the neuron model, with a nested enum then holding the quantization marker struct
@@ -61,17 +33,6 @@ pub enum NMQuantedKind {
 }
 
 impl NMQuantedKind {
-    /// The neuron model, without its quantization
-    pub const fn model_kind(&self) -> NMModelKind {
-        match self {
-            Self::FeagiAdvanced(_) => NMModelKind::FeagiAdvanced,
-            Self::FeagiSimple(_) => NMModelKind::FeagiSimple,
-            Self::ExclusiveDeath(_) => NMModelKind::ExclusiveDeath,
-            Self::ExclusivePower(_) => NMModelKind::ExclusivePower,
-            Self::MemoryFireHashing(_) => NMModelKind::MemoryFireHashing,
-        }
-    }
-
     /// The model and quantization of any neuron model, from its marker struct type
     pub fn from_nm_quant<NM>() -> NMQuantedKind
     where

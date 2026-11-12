@@ -1,5 +1,5 @@
 use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
-use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
+use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
 use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
 use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
@@ -389,19 +389,15 @@ impl From<NMExclusivePowerQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMExclusivePowerQuantKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMKind::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -414,19 +410,15 @@ impl From<NMExclusivePowerQuantedKind> for NMQuantedKind {
 }
 
 impl TryFrom<NMQuantedKind> for NMExclusivePowerQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMQuantedKind::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -445,19 +437,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMExclusiveP
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorPrecursorModeled::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -476,19 +464,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMExclusivePowerNeuro
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorModeled::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -507,19 +491,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMExclusivePowerNeuroge
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageModeled::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -538,19 +518,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMExclusiveP
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageOrGeneratorModeled::ExclusivePower(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::ExclusivePower,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }

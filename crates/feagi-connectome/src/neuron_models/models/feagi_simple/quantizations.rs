@@ -7,7 +7,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::N
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
-use crate::neuron_models::models::kind::{NMKind, NMModelKind, NMQuantedKind};
+use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
 
 //region enums
 
@@ -193,19 +193,15 @@ impl From<NMFeagiSimpleQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMFeagiSimpleQuantKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMKind::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -218,19 +214,15 @@ impl From<NMFeagiSimpleQuantedKind> for NMQuantedKind {
 }
 
 impl TryFrom<NMQuantedKind> for NMFeagiSimpleQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMQuantedKind::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -249,19 +241,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiSimpl
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -280,19 +268,15 @@ impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMFeagiSimpleNeurogen
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisGeneratorModeled::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -311,19 +295,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMFeagiSimpleNeurogenes
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageModeled::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
@@ -342,19 +322,15 @@ impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMFeagiSimpl
 where
     FIQ: FeagiIndexQuantization,
 {
-    type Error = NeuronModelEnumConversionError<NMModelKind>;
+    type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.model_kind();
         match value {
             NMNeurogenesisStorageOrGeneratorModeled::FeagiSimple(v) => {
                 Ok(v)
             },
             _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMModelKind::FeagiSimple,
-                    actual,
-                })
+                Err(NeuronModelEnumConversionError::IncompatibleModel)
             }
         }
     }
