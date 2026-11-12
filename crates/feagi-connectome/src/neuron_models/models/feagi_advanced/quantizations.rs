@@ -40,12 +40,13 @@ impl NMFeagiAdvancedQuantedKind {
 //region Generators
 
 /// The data needed to create the generator of the Feagi Advanced Neuron Model, for a given quantization
-#[derive(Debug, Clone)]
-pub enum NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
 
-impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ> {
     /// The quantization of the precursor held
     pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
         match self {
@@ -90,11 +91,11 @@ impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageQuanted<FIQ>
 /// generator, for a given quantization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub enum NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+pub enum NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> {
     Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>)
 }
 
-impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ> {
     /// The quantization of the storage or generator held
     pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
         match self {
@@ -212,16 +213,16 @@ impl TryFrom<NMQuantedKind> for NMFeagiAdvancedQuantedKind {
     }
 }
 
-impl<FIQ> From<NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+impl<FIQ> From<NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+    fn from(value: NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
         NMNeurogenesisGeneratorPrecursorModeled::FeagiAdvanced(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
@@ -293,16 +294,16 @@ where
     }
 }
 
-impl<FIQ> From<NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
+impl<FIQ> From<NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
+    fn from(value: NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>) -> Self {
         NMNeurogenesisStorageOrGeneratorModeled::FeagiAdvanced(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>
+impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {

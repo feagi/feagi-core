@@ -45,12 +45,13 @@ impl NMFeagiSimpleQuantedKind {
 //region Generators
 
 /// The data needed to create the generator of the Feagi Simple Neuron Model, for a given quantization
-#[derive(Debug, Clone)]
-pub enum NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ: FeagiIndexQuantization> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
     Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
 }
 
-impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ> {
     /// The quantization of the precursor held
     pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
         match self {
@@ -228,16 +229,16 @@ impl TryFrom<NMQuantedKind> for NMFeagiSimpleQuantedKind {
     }
 }
 
-impl<FIQ> From<NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
+impl<FIQ> From<NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
-    fn from(value: NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>) -> Self {
+    fn from(value: NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
         NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiSimpleNeurogenesisGeneratorPrecursorQuanted<FIQ>
+impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {

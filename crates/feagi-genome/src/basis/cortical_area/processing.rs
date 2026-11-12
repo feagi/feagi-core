@@ -4,7 +4,7 @@ use crate::basis::cortical_area::{CorticalSubTypeUsesDefaultCorticalGenerator, C
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
-
+use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledGeneratorPrecursor, CTProcessingInterconnectNMModeledKind, CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor};
 
 
 //region Cortical Subtype
@@ -20,11 +20,14 @@ pub mod interconnect {
 
     //region Supported Neuron Models for Interconnect
 
+    use serde::{Deserialize, Serialize};
     use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
     use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
     use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
     use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantedKind;
     use feagi_connectome::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantedKind;
+    use crate::basis::cortical_area::processing::interconnect::feagi_advanced::{CTProcessingInterconnectNMFeagiAdvancedQuantedGeneratorPrecursor, CTProcessingInterconnectNMFeagiAdvancedQuantedKind, CTProcessingInterconnectNMFeagiAdvancedQuantedStorage, CTProcessingInterconnectNMFeagiAdvancedQuantedStorageOrGeneratorPrecursor};
+    use crate::basis::cortical_area::processing::interconnect::feagi_simple::{CTProcessingInterconnectNMFeagiSimpleQuantedGeneratorPrecursor, CTProcessingInterconnectNMFeagiSimpleQuantedKind, CTProcessingInterconnectNMFeagiSimpleQuantedStorage, CTProcessingInterconnectNMFeagiSimpleQuantedStorageOrGeneratorPrecursor};
 
     /// The NMs / Quants allowed for this Cortical Type
     pub trait CTProcessingInterconnectNM: NeuronModel
@@ -41,12 +44,15 @@ pub mod interconnect {
 
 
     pub mod feagi_advanced {
+        use serde::{Deserialize, Serialize};
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
         use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
         use feagi_connectome::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal};
-        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind};
+        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind, NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor};
         use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiAdvancedQuantStandard32Bit {
@@ -84,28 +90,42 @@ pub mod interconnect {
                 }
             }
         }
-
-        pub enum CTProcessingInterconnectKindModeled<FIQ: FeagiIndexQuantization> {
+        
+        #[derive(Copy, Clone, Debug)]
+        pub enum CTProcessingInterconnectNMFeagiAdvancedQuantedKind {
             Standard32Bit(NMFeagiAdvancedQuantedKind)
         }
-        
-        pub enum CTProcessingInterconnectGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
-            Standard32Bit(NMFeagiAdvancedQuantStandard32Bit::NeurogenesisGeneratorPrecursor<FIQ>),
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiAdvancedQuantedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(<NMFeagiAdvancedQuantStandard32Bit as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiAdvancedQuantedStorage<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NeurogenesisStorage<FIQ, NMFeagiAdvancedQuantStandard32Bit>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiAdvancedQuantedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>),
         }
         
-
-        
-        
-
 
     }
 
     pub mod feagi_simple {
+        use serde::{Deserialize, Serialize};
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
         use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-        use feagi_connectome::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantStandard32Bit;
+        use feagi_connectome::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor, NMFeagiSimpleQuantStandard32Bit, NMFeagiSimpleQuantedKind};
         use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiSimpleQuantStandard32Bit {
@@ -138,42 +158,82 @@ pub mod interconnect {
             }
         }
 
+        #[derive(Copy, Clone, Debug)]
+        pub enum CTProcessingInterconnectNMFeagiSimpleQuantedKind {
+            Standard32Bit(NMFeagiSimpleQuantedKind)
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiSimpleQuantedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(<NMFeagiSimpleQuantStandard32Bit as NeuronModel>::NeurogenesisGeneratorPrecursor<FIQ>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiSimpleQuantedStorage<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NeurogenesisStorage<FIQ, NMFeagiSimpleQuantStandard32Bit>),
+        }
+
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(bound = "")]
+        pub enum CTProcessingInterconnectNMFeagiSimpleQuantedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+            Standard32Bit(NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+        }
+        
         
     }
 
-    
-    
-    
+    #[derive(Copy, Clone, Debug)]
     pub enum CTProcessingInterconnectNMModeledKind {
-        FeagiAdvanced(NMFeagiAdvancedQuantedKind),
-        FeagiSimple(NMFeagiSimpleQuantedKind),
+        FeagiAdvanced(CTProcessingInterconnectNMFeagiAdvancedQuantedKind),
+        FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedKind),
     }
 
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
+    pub enum CTProcessingInterconnectNMModeledGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+        FeagiAdvanced(CTProcessingInterconnectNMFeagiAdvancedQuantedGeneratorPrecursor<FIQ>),
+        FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedGeneratorPrecursor<FIQ>),
+    }
 
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(bound = "")]
+    pub enum CTProcessingInterconnectNMModeledStorage<FIQ: FeagiIndexQuantization> {
+        FeagiAdvanced(CTProcessingInterconnectNMFeagiAdvancedQuantedStorage<FIQ>),
+        FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedStorage<FIQ>),
+    }
+
+    pub enum CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+        FeagiAdvanced(CTProcessingInterconnectNMFeagiAdvancedQuantedStorageOrGeneratorPrecursor<FIQ>),
+        FeagiSimple(CTProcessingInterconnectNMFeagiSimpleQuantedStorageOrGeneratorPrecursor<FIQ>),
+    }
+    
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum CTProcessingSubtypedKind {
+    Interconnect(CTProcessingInterconnectNMModeledKind),
+}
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub enum CTProcessingSubtypedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+    Interconnect(CTProcessingInterconnectNMModeledGeneratorPrecursor<FIQ>)
+}
 
+pub enum CTProcessingSubtypedStorage<FIQ: FeagiIndexQuantization> {
+    Interconnect(CTProcessingInterconnectNMModeledStorage<FIQ>)
+}
 
-
-//region Enum NMForCTProcessingInterconnect
-
-
+pub enum CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+    Interconnect(CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor<FIQ>)
+}
 
 //endregion
 
 
-
-
-
-
-//region FeagiSimple
-
-
-//endregion
-
-
-
+/*
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum CTGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuantization> {
@@ -195,51 +255,14 @@ pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuanti
     FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
 }
 
-//endregion
 
-
-
-//endregion
-
-
-//region Enums
-
-
-//endregion
-
-//endregion
+ */
 
 
 
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, Hash)]
-pub enum CorticalTypeProcessingSubtypeKind {
-    Interconnect = 0,
-}
 
-//region Cortical Subtype Enums
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Interconnect(CTGeneratorProcessingInterconnectModeled<FIQ>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageProcessingSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Interconnect(CTStorageProcessingInterconnectModeled<FIQ>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CTStorageOrGeneratorProcessingSubTyped<FIQ: FeagiIndexQuantization>
-{
-    Interconnect(CTStorageOrGeneratorProcessingInterconnectModeled<FIQ>)
-}
 
 //endregion
 

@@ -1,3 +1,4 @@
+use serde::Serialize;
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::neuron_layout::{NeuronLayoutError, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
@@ -15,7 +16,7 @@ where
 }
 
 /// The data needed to build the Neurogenesis Generator for a given neuron model
-pub trait NeurogenesisGeneratorPrecursor<FIQ, NM>: Sized + Clone // NOTE: probably shouldnt be serializable? at least not required
+pub trait NeurogenesisGeneratorPrecursor<FIQ, NM>: Sized + Clone + Serialize + serde::de::DeserializeOwned
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel

@@ -5,7 +5,7 @@
 //! quantization of one means adding its store as a field of [`CpuNeuronModelStoreList`], and to
 //! `new`, `add_cortical_area` and `run_neuron_phase` of its `CpuNeuronModelStores` implementation
 
-use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedQuantStandard32Bit};
+use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedQuantStandard32Bit};
 use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleQuantStandard32Bit};
 use crate::neuron_models::models::exclusive_death::quantizations::{
     NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathQuantBFloat16, NMExclusiveDeathQuantFloat16, NMExclusiveDeathQuantFloat32,
@@ -86,7 +86,7 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
         neurogenesis: Self::CorticalAreaNeurogenesisDispatch,
         engine: &mut CpuEngineNeuronData<FIQ>,
     ) -> Result<CpuAddedCorticalArea<FIQ>, CpuAddCorticalAreaError> {
-        use NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted as FeagiAdvanced;
+        use NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator as FeagiAdvanced;
         use NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted as FeagiSimple;
         use NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted as ExclusiveDeath;
         use NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted as ExclusivePower;
