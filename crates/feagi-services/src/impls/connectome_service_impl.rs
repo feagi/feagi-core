@@ -3067,12 +3067,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
         })
     }
 
-    async fn update_cortical_mapping(
+    async fn update_cortical_mapping_with_mode(
         &self,
         src_area_id: String,
         dst_area_id: String,
         mapping_data: Vec<serde_json::Value>,
-    ) -> ServiceResult<usize> {
+    ) -> ServiceResult<MappingUpdateOutcome> {
         debug!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
               src_area_id, dst_area_id, mapping_data.len());
 
@@ -3338,10 +3338,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 src_area_id,
                 dst_area_id
             );
-            return Ok(self
-                .connectome
-                .read()
-                .count_mapping_synapses(&src_id, &dst_id));
+            return Ok(MappingUpdateOutcome {
+                synapse_count: self
+                    .connectome
+                    .read()
+                    .count_mapping_synapses(&src_id, &dst_id),
+                apply_mode: MappingApplyMode::InPlace,
+            });
         }
 
         // Decision point: rules that differ from the stored ones only in plasticity settings
@@ -3400,7 +3403,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     src_area_id,
                     dst_area_id
                 );
-                return Ok(manager.count_mapping_synapses(&src_id, &dst_id));
+                return Ok(MappingUpdateOutcome {
+                    synapse_count: manager.count_mapping_synapses(&src_id, &dst_id),
+                    apply_mode: MappingApplyMode::InPlace,
+                });
             }
             let previous_morphology = existing_mapping
                 .as_ref()
@@ -3572,7 +3578,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
         }
 
-        Ok(region_io.0)
+        Ok(MappingUpdateOutcome {
+            synapse_count: region_io.0,
+            apply_mode: MappingApplyMode::Rebuilt,
+        })
     }
 
     // Note: unit tests for mapping persistence behavior are below in this module.
@@ -13543,6 +13552,53 @@ mod plasticity_in_place_update_tests {
         assert_eq!(rebuilt.len(), 2);
         assert_ne!(rebuilt, learned, "rebuild resets learned weights");
         assert!(rebuilt.iter().all(|(_, _, w)| f32::from_bits(*w) == 25.0));
+    }
+
+    /// The reply says whether the change was applied in place or the mapping was rebuilt.
+    #[tokio::test]
+    async fn mapping_update_reports_apply_mode() {
+        use crate::types::MappingApplyMode::{InPlace, Rebuilt};
+        let (svc, _npu, src_id, dst_id, _srcs) = fixture();
+        let (s, d) = (src_id.as_base_64(), dst_id.as_base_64());
+        let mode = |rules: Vec<serde_json::Value>| {
+            let (svc, s, d) = (&svc, s.clone(), d.clone());
+            async move {
+                svc.update_cortical_mapping_with_mode(s, d, rules)
+                    .await
+                    .unwrap()
+            }
+        };
+
+        // New mapping: synapses are built.
+        let first = mode(vec![rule("projector", true, 10)]).await;
+        assert_eq!((first.apply_mode, first.synapse_count), (Rebuilt, 2));
+        // Plasticity-only change: applied in place.
+        let flag_off = mode(vec![rule("projector", false, 10)]).await;
+        assert_eq!((flag_off.apply_mode, flag_off.synapse_count), (InPlace, 2));
+        // Identical rules: nothing touched.
+        assert_eq!(
+            mode(vec![rule("projector", false, 10)]).await.apply_mode,
+            InPlace
+        );
+        // Structural change: rebuilt.
+        assert_eq!(
+            mode(vec![rule("block_to_block", false, 10)])
+                .await
+                .apply_mode,
+            Rebuilt
+        );
+        // Array-format rule differing from the stored one is never applied in place.
+        let array_rule = serde_json::json!(["projector", 1, 25, false, 1, 1, 1, 10]);
+        let arr = svc
+            .update_cortical_mapping_with_mode(s.clone(), d.clone(), vec![array_rule])
+            .await;
+        assert_eq!(arr.unwrap().apply_mode, Rebuilt);
+        // The trait's count-only method still returns the synapse count.
+        let n = svc
+            .update_cortical_mapping(s, d, vec![rule("projector", true, 10)])
+            .await
+            .unwrap();
+        assert_eq!(n, 2);
     }
 
     #[test]

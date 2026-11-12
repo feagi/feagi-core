@@ -372,8 +372,8 @@ pub async fn put_mapping_properties(
     let connectome_service = state.connectome_service.as_ref();
 
     // Update the cortical mapping (this modifies ConnectomeManager and regenerates synapses)
-    let synapse_count = connectome_service
-        .update_cortical_mapping(
+    let outcome = connectome_service
+        .update_cortical_mapping_with_mode(
             src_area.to_string(),
             dst_area.to_string(),
             mapping_string.clone(),
@@ -385,7 +385,8 @@ pub async fn put_mapping_properties(
             _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
         })?;
 
-    info!(target: "feagi-api", "Cortical mapping updated successfully: {} synapses created", synapse_count);
+    let synapse_count = outcome.synapse_count;
+    info!(target: "feagi-api", "Cortical mapping updated successfully ({}): {} synapses", outcome.apply_mode.as_str(), synapse_count);
 
     // Return success response matching Python format
     let mut response = HashMap::new();
@@ -400,10 +401,33 @@ pub async fn put_mapping_properties(
         "synapse_count".to_string(),
         serde_json::json!(synapse_count),
     );
+    // "in_place": nothing rebuilt (unchanged rules, or a plasticity-only change applied to the
+    // existing synapses, learned weights kept). "rebuilt": synapses regenerated from the rules.
+    response.insert(
+        "apply_mode".to_string(),
+        serde_json::json!(outcome.apply_mode.as_str()),
+    );
     response.insert("src_region".to_string(), serde_json::json!(null)); // TODO: Add region context
     response.insert("dst_region".to_string(), serde_json::json!(null)); // TODO: Add region context
 
     Ok(Json(response))
+}
+
+/// GET /v1/cortical_mapping/rule_schema
+/// Fields of a dict-format mapping rule: type, range, default, allowed values, and whether the
+/// field only configures plasticity. Served from the same table the validator reads.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/rule_schema",
+    tag = "cortical_mapping",
+    responses(
+        (status = 200, description = "Mapping rule field schema", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_rule_schema(State(_state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(
+        feagi_brain_development::mapping_rule_schema::mapping_rule_schema_json(),
+    ))
 }
 
 /// GET /v1/cortical_mapping/mapping

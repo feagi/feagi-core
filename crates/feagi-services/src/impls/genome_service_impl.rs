@@ -4488,6 +4488,8 @@ impl GenomeServiceImpl {
             })?;
 
         // Step 1: Update RuntimeGenome dimensions/density
+        // Per-device dimensions re-derived from a plain resize of an IPU/OPU area (see below).
+        let mut derived_per_device_dims: Option<Value> = None;
         let (old_dimensions, old_density, new_dimensions, new_density) = {
             let mut genome_guard = genome_store.write();
             let genome = genome_guard
@@ -4592,6 +4594,41 @@ impl GenomeServiceImpl {
                 let (width, height, depth) = parse_triplet(dims).unwrap_or((1, 1, 1));
                 area.dimensions =
                     CorticalAreaDimensions::new(width as u32, height as u32, depth as u32)?;
+
+                // The caller sent total dimensions only. An IPU/OPU area keeps a per-device
+                // size next to `dev_count`; re-derive it from the new total so the two agree
+                // (X is split across devices, as in the per-device branch above).
+                if matches!(
+                    area.cortical_type,
+                    CorticalAreaType::BrainInput(_) | CorticalAreaType::BrainOutput(_)
+                ) {
+                    let dev_count = area
+                        .properties
+                        .get("dev_count")
+                        .and_then(parse_dev_count)
+                        .unwrap_or(1);
+                    if width % dev_count != 0 {
+                        warn!(
+                            "[STRUCTURAL-REBUILD] width {} is not divisible by dev_count {} for area {}; per-device width rounds down",
+                            width, dev_count, cortical_id
+                        );
+                    }
+                    let per_x = (width / dev_count).max(1);
+                    let as_object = area
+                        .properties
+                        .get("cortical_dimensions_per_device")
+                        .is_some_and(|v| v.is_object());
+                    let derived = if as_object {
+                        serde_json::json!({"x": per_x, "y": height, "z": depth})
+                    } else {
+                        serde_json::json!([per_x, height, depth])
+                    };
+                    area.properties.insert(
+                        "cortical_dimensions_per_device".to_string(),
+                        derived.clone(),
+                    );
+                    derived_per_device_dims = Some(derived);
+                }
             }
 
             // Apply density changes
@@ -4762,7 +4799,10 @@ impl GenomeServiceImpl {
                     area.properties
                         .insert("dev_count".to_string(), dev_count.clone());
                 }
-                if let Some(per_device_dims) = changes.get("cortical_dimensions_per_device") {
+                if let Some(per_device_dims) = changes
+                    .get("cortical_dimensions_per_device")
+                    .or(derived_per_device_dims.as_ref())
+                {
                     area.properties.insert(
                         "cortical_dimensions_per_device".to_string(),
                         per_device_dims.clone(),
@@ -5069,6 +5109,16 @@ impl GenomeServiceImpl {
             manager.sync_cortical_ids_to_npu().map_err(|e| {
                 ServiceError::Backend(format!(
                     "Failed to sync cortical IDs to NPU after rebuild: {}",
+                    e
+                ))
+            })?;
+            // The rebuild creates neurons directly on the NPU, so the per-area neuron counts
+            // (cache and StateManager) are recorded here, and the per-area flags (PSP mode,
+            // MP-driven PSP, degeneration) are pushed to the NPU again from the stored properties.
+            manager.record_area_neurons_rebuilt(&cortical_id_typed, neurons_created as usize);
+            manager.sync_cortical_area_flags_to_npu().map_err(|e| {
+                ServiceError::Backend(format!(
+                    "Failed to sync cortical area flags to NPU after rebuild: {}",
                     e
                 ))
             })?;
@@ -7982,6 +8032,260 @@ mod tests {
             twins.get(&field_a.as_base_64()).is_some(),
             "a rejected twin-map write must leave the previous map in place"
         );
+    }
+
+    use std::sync::Arc;
+
+    /// IPU-like area on a real NPU, present in both the connectome and the RuntimeGenome.
+    struct ResizeFixture {
+        area_id: feagi_structures::genomic::cortical_area::CorticalID,
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        connectome: Arc<parking_lot::RwLock<feagi_brain_development::ConnectomeManager>>,
+        genome_store: Arc<parking_lot::RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+    }
+
+    /// `id` must be unique per test: the StateManager is a process-wide singleton.
+    fn resize_fixture(id: &[u8; 8], dims: (u32, u32, u32), dev_count: u64) -> ResizeFixture {
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use parking_lot::RwLock;
+
+        let area_id = CorticalID::try_from_bytes(id).unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            0,
+            "input-like".to_string(),
+            CorticalAreaDimensions::new(dims.0, dims.1, dims.2).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        for (k, v) in [
+            ("mp_driven_psp", serde_json::json!(true)),
+            ("psp_uniform_distribution", serde_json::json!(true)),
+            ("firing_threshold", serde_json::json!(3.0)),
+            ("leak_coefficient", serde_json::json!(0.25)),
+            ("dev_count", serde_json::json!(dev_count)),
+            (
+                "cortical_dimensions_per_device",
+                serde_json::json!([dims.0 as u64 / dev_count, dims.1, dims.2]),
+            ),
+        ] {
+            area.properties.insert(k.to_string(), v);
+        }
+
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(
+                RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).expect("npu"),
+            ),
+            "ResizeFixtureNpu",
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.add_cortical_area(area.clone()).unwrap();
+            manager.create_neurons_for_area(&area_id).unwrap();
+            manager.sync_cortical_area_flags_to_npu().unwrap();
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "resize".to_string(),
+                genome_title: "resize".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(area_id, area)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        ResizeFixture {
+            area_id,
+            npu,
+            connectome,
+            genome_store: Arc::new(RwLock::new(Some(genome))),
+        }
+    }
+
+    fn resize(
+        f: &ResizeFixture,
+        changes: HashMap<String, serde_json::Value>,
+    ) -> crate::types::CorticalAreaInfo {
+        super::GenomeServiceImpl::do_localized_rebuild(
+            &f.area_id.as_base_64(),
+            changes,
+            f.connectome.clone(),
+            f.genome_store.clone(),
+            None,
+        )
+        .expect("localized rebuild")
+    }
+
+    /// A resize keeps the area's neuron parameters and PSP flags, in the connectome, the
+    /// RuntimeGenome, and the NPU, and the neurons are rebuilt with the stored threshold/leak.
+    #[test]
+    fn resize_preserves_area_properties_in_connectome_genome_and_npu() {
+        let f = resize_fixture(b"cst_rsa_", (4, 2, 1), 2);
+        let changes = HashMap::from([("dimensions".to_string(), serde_json::json!([6, 2, 1]))]);
+        let info = resize(&f, changes);
+        assert_eq!(info.dimensions, (6, 2, 1));
+
+        let check = |props: &HashMap<String, serde_json::Value>, place: &str| {
+            assert_eq!(
+                props.get("mp_driven_psp"),
+                Some(&serde_json::json!(true)),
+                "{place}"
+            );
+            assert_eq!(
+                props.get("psp_uniform_distribution"),
+                Some(&serde_json::json!(true)),
+                "{place}"
+            );
+            assert_eq!(
+                props.get("firing_threshold"),
+                Some(&serde_json::json!(3.0)),
+                "{place}"
+            );
+            assert_eq!(
+                props.get("leak_coefficient"),
+                Some(&serde_json::json!(0.25)),
+                "{place}"
+            );
+        };
+        check(
+            &f.connectome
+                .read()
+                .get_cortical_area(&f.area_id)
+                .unwrap()
+                .properties,
+            "connectome",
+        );
+        check(
+            &f.genome_store
+                .read()
+                .as_ref()
+                .unwrap()
+                .cortical_areas
+                .get(&f.area_id)
+                .unwrap()
+                .properties,
+            "RuntimeGenome",
+        );
+
+        let npu = f.npu.lock().unwrap();
+        assert!(
+            npu.get_mp_driven_psp_for_cortical(&f.area_id),
+            "NPU mp_driven_psp"
+        );
+        assert!(
+            npu.get_psp_uniform_distribution_for_cortical(&f.area_id),
+            "NPU psp_uniform_distribution"
+        );
+        let idx = f.connectome.read().get_cortical_idx(&f.area_id).unwrap();
+        let neurons = npu.get_neurons_in_cortical_area(idx);
+        assert_eq!(neurons.len(), 12);
+        let first = neurons[0] as usize;
+        assert_eq!(
+            npu.get_neuron_property_by_index(first, "threshold"),
+            Some(3.0)
+        );
+        assert_eq!(
+            npu.get_neuron_property_by_index(first, "leak_coefficient"),
+            Some(0.25)
+        );
+    }
+
+    /// A plain resize of an IPU/OPU area re-derives the per-device size from the new total.
+    #[test]
+    fn resize_rederives_per_device_dimensions() {
+        let f = resize_fixture(b"cst_rsb_", (4, 2, 1), 2);
+        let changes = HashMap::from([("dimensions".to_string(), serde_json::json!([6, 4, 1]))]);
+        resize(&f, changes);
+        let want = serde_json::json!([3, 4, 1]);
+        assert_eq!(
+            f.connectome
+                .read()
+                .get_cortical_area(&f.area_id)
+                .unwrap()
+                .properties
+                .get("cortical_dimensions_per_device"),
+            Some(&want),
+            "connectome"
+        );
+        assert_eq!(
+            f.genome_store
+                .read()
+                .as_ref()
+                .unwrap()
+                .cortical_areas
+                .get(&f.area_id)
+                .unwrap()
+                .properties
+                .get("cortical_dimensions_per_device"),
+            Some(&want),
+            "RuntimeGenome"
+        );
+        // A caller-sent per-device size still wins and is stored as sent.
+        let changes = HashMap::from([
+            (
+                "cortical_dimensions_per_device".to_string(),
+                serde_json::json!([5, 1, 1]),
+            ),
+            ("dev_count".to_string(), serde_json::json!(2)),
+        ]);
+        let info = resize(&f, changes);
+        assert_eq!(info.dimensions, (10, 1, 1));
+    }
+
+    /// After a resize, the per-area neuron count equals the new voxel count (cache and state).
+    #[test]
+    fn resize_updates_neuron_count_cache() {
+        let f = resize_fixture(b"cst_rsc_", (4, 2, 1), 2);
+        assert_eq!(f.connectome.read().get_neuron_count_in_area(&f.area_id), 8);
+        resize(
+            &f,
+            HashMap::from([("dimensions".to_string(), serde_json::json!([6, 4, 1]))]),
+        );
+        assert_eq!(
+            f.connectome.read().get_neuron_count_in_area(&f.area_id),
+            24,
+            "cache after growing"
+        );
+        resize(
+            &f,
+            HashMap::from([("dimensions".to_string(), serde_json::json!([2, 1, 1]))]),
+        );
+        assert_eq!(
+            f.connectome.read().get_neuron_count_in_area(&f.area_id),
+            2,
+            "cache after shrinking"
+        );
+        let stats = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_area_stats(&f.area_id.as_base_64())
+            .map(|s| s.neuron_count);
+        assert_eq!(stats, Some(2), "StateManager per-area count");
     }
 
     #[test]

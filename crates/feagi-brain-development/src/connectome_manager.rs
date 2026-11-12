@@ -4242,26 +4242,6 @@ impl ConnectomeManager {
         })
     }
 
-    /// Rule keys that only configure plasticity. Changing them never changes which synapses
-    /// exist or their stored weights (the initial weight comes from
-    /// `postSynapticCurrent_multiplier`, which is structural and not listed here).
-    const PLASTICITY_ONLY_RULE_KEYS: [&'static str; 14] = [
-        "plasticity_flag",
-        "plasticity_mode",
-        "plasticity_window",
-        "plasticity_constant",
-        "ltp_multiplier",
-        "ltd_multiplier",
-        "eligibility_decay_bursts",
-        "plasticity_eta",
-        "max_weight",
-        "one_sided_firing",
-        "modulators",
-        "classifier_instance_reward",
-        "reward_source_area",
-        "punishment_source_area",
-    ];
-
     /// True when `new_rules` equals `old_rules` rule-for-rule (same count and order) except for
     /// plasticity-only keys, so the update can be applied with
     /// [`Self::apply_mapping_plasticity_in_place`] instead of rebuilding synapses.
@@ -4279,7 +4259,7 @@ impl ConnectomeManager {
             };
             let structural = |obj: &serde_json::Map<String, serde_json::Value>| {
                 obj.iter()
-                    .filter(|(k, _)| !Self::PLASTICITY_ONLY_RULE_KEYS.contains(&k.as_str()))
+                    .filter(|(k, _)| !crate::mapping_rule_schema::is_plasticity_only_key(k))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect::<serde_json::Map<String, serde_json::Value>>()
             };
@@ -4791,7 +4771,7 @@ impl ConnectomeManager {
                         "max_weight must be a number on mapping {src} -> {dst}"
                     ))
                 }
-                Some(v) if v.is_nan() || v <= 0.0 => {
+                Some(v) if !crate::mapping_rule_schema::MAX_WEIGHT.accepts_number(v) => {
                     return Err(format!(
                         "max_weight must be strictly positive (got {v}) on mapping {src} -> {dst}"
                     ));
@@ -4811,7 +4791,7 @@ impl ConnectomeManager {
                         "plasticity_eta must be a number on mapping {src} -> {dst}"
                     ))
                 }
-                Some(v) if v.is_nan() || v <= 0.0 || !v.is_finite() => {
+                Some(v) if !crate::mapping_rule_schema::PLASTICITY_ETA.accepts_number(v) => {
                     return Err(format!(
                         "plasticity_eta must be finite and strictly positive (got {v}) on mapping {src} -> {dst}"
                     ));
@@ -5445,16 +5425,19 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltp_multiplier = i8::try_from(ltp_i64).map_err(|_| {
-            BduError::Internal(format!(
-                "ltp_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
-                i8::MIN,
-                i8::MAX,
-                ltp_i64,
-                src_area_id,
-                dst_area_id
-            ))
-        })?;
+        let ltp_multiplier = i8::try_from(ltp_i64)
+            .ok()
+            .filter(|v| crate::mapping_rule_schema::LTP_MULTIPLIER.accepts_number(*v as f64))
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "ltp_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                    i8::MIN,
+                    i8::MAX,
+                    ltp_i64,
+                    src_area_id,
+                    dst_area_id
+                ))
+            })?;
         let ltd_i64 = rule_obj
             .get("ltd_multiplier")
             .and_then(Self::json_number_as_i64_for_stdp)
@@ -5464,16 +5447,19 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltd_multiplier = i8::try_from(ltd_i64).map_err(|_| {
-            BduError::Internal(format!(
-                "ltd_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
-                i8::MIN,
-                i8::MAX,
-                ltd_i64,
-                src_area_id,
-                dst_area_id
-            ))
-        })?;
+        let ltd_multiplier = i8::try_from(ltd_i64)
+            .ok()
+            .filter(|v| crate::mapping_rule_schema::LTD_MULTIPLIER.accepts_number(*v as f64))
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "ltd_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                    i8::MIN,
+                    i8::MAX,
+                    ltd_i64,
+                    src_area_id,
+                    dst_area_id
+                ))
+            })?;
 
         // Resolve plasticity_mode with legacy fallback (auto-migrate strategy):
         //   - new genomes set `plasticity_mode: "off" | "stdp" | "rstdp"` directly;
@@ -5523,7 +5509,7 @@ impl ConnectomeManager {
                         src_area_id, dst_area_id
                     ))
                 })?;
-            if raw.is_nan() || raw <= 0.0 {
+            if !crate::mapping_rule_schema::MAX_WEIGHT.accepts_number(raw) {
                 return Err(BduError::Internal(format!(
                     "max_weight must be strictly positive (got {}) on mapping {} -> {}",
                     raw, src_area_id, dst_area_id
@@ -5551,7 +5537,7 @@ impl ConnectomeManager {
                         src_area_id, dst_area_id
                     ))
                 })?;
-            if raw.is_nan() || raw <= 0.0 || !raw.is_finite() {
+            if !crate::mapping_rule_schema::PLASTICITY_ETA.accepts_number(raw) {
                 return Err(BduError::Internal(format!(
                     "plasticity_eta must be finite and strictly positive (got {}) on mapping {} -> {}",
                     raw, src_area_id, dst_area_id
@@ -8598,6 +8584,28 @@ impl ConnectomeManager {
         }
     }
 
+    /// Record that `created` neurons were created directly on the NPU for an area that was just
+    /// emptied (the localized rebuild after a resize bypasses `create_neurons_for_area`, the
+    /// usual writer of these counts). Sets the per-area cache and StateManager count to
+    /// `created` and adds the neurons to the StateManager totals (the deletion before it
+    /// subtracted them).
+    pub fn record_area_neurons_rebuilt(&self, cortical_id: &CorticalID, created: usize) {
+        self.cached_neuron_counts_per_area
+            .write()
+            .entry(*cortical_id)
+            .or_insert_with(|| AtomicUsize::new(0))
+            .store(created, Ordering::Relaxed);
+        {
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            state_manager.set_cortical_area_neuron_count(&cortical_id.as_base_64(), created);
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(created as u32);
+            core_state.add_regular_neuron_count(created as u32);
+        }
+        self.update_cached_neuron_count();
+    }
+
     /// Refresh cached neuron count for a single cortical area from the NPU.
     ///
     /// Returns the refreshed count if successful.
@@ -10164,6 +10172,13 @@ impl ConnectomeManager {
             core_state.subtract_regular_neuron_count(deleted_count as u32);
             for (cortical_id, count) in per_area_deleted {
                 state_manager.subtract_cortical_area_neuron_count(&cortical_id, count);
+                // Keep the lock-free per-area cache (read by `get_neuron_count_in_area`) in step.
+                if let Ok(id) = CorticalID::try_from_base_64(&cortical_id) {
+                    if let Some(cached) = self.cached_neuron_counts_per_area.read().get(&id) {
+                        let current = cached.load(Ordering::Relaxed);
+                        cached.store(current.saturating_sub(count), Ordering::Relaxed);
+                    }
+                }
             }
         }
 

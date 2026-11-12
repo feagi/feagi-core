@@ -37,6 +37,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod connectivity;
 pub mod connectome_manager;
 pub mod cortical_type_utils;
+pub mod mapping_rule_schema;
 #[cfg(feature = "plasticity")]
 pub mod memory_mp_mode;
 pub mod neuroembryogenesis;

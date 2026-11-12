@@ -481,12 +481,12 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
-    async fn update_cortical_mapping(
+    async fn update_cortical_mapping_with_mode(
         &self,
         _src_area_id: String,
         _dst_area_id: String,
         _mapping_data: Vec<serde_json::Value>,
-    ) -> ServiceResult<usize> {
+    ) -> ServiceResult<MappingUpdateOutcome> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),
         ))

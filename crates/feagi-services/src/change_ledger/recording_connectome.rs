@@ -263,16 +263,16 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(())
     }
 
-    async fn update_cortical_mapping(
+    async fn update_cortical_mapping_with_mode(
         &self,
         src_area_id: String,
         dst_area_id: String,
         mapping_data: Vec<Value>,
-    ) -> ServiceResult<usize> {
+    ) -> ServiceResult<MappingUpdateOutcome> {
         let before = mapping_rules(self.inner.as_ref(), &src_area_id, &dst_area_id).await;
-        let synapses = self
+        let outcome = self
             .inner
-            .update_cortical_mapping(
+            .update_cortical_mapping_with_mode(
                 src_area_id.clone(),
                 dst_area_id.clone(),
                 mapping_data.clone(),
@@ -288,7 +288,7 @@ impl ConnectomeService for RecordingConnectomeService {
             before,
             after,
         );
-        Ok(synapses)
+        Ok(outcome)
     }
 
     // Learning-freeze switches are brain-instance runtime state, not genome edits: forwarded

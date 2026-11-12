@@ -27,6 +27,39 @@ pub struct IOCodingOptions {
 }
 
 // ============================================================================
+// MAPPING UPDATE DTOs
+// ============================================================================
+
+/// How a mapping update was applied to the live brain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MappingApplyMode {
+    /// Nothing was rebuilt: the rules were unchanged, or only plasticity settings changed and
+    /// were applied to the existing synapses (learned weights kept).
+    InPlace,
+    /// The mapping's synapses were pruned and regenerated from the new rules.
+    Rebuilt,
+}
+
+impl MappingApplyMode {
+    /// Wire name (`"in_place"` / `"rebuilt"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InPlace => "in_place",
+            Self::Rebuilt => "rebuilt",
+        }
+    }
+}
+
+/// Result of a cortical mapping update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MappingUpdateOutcome {
+    /// Synapses the mapping holds after the call.
+    pub synapse_count: usize,
+    pub apply_mode: MappingApplyMode,
+}
+
+// ============================================================================
 // NEURON DTOs
 // ============================================================================
 

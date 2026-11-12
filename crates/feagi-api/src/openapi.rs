@@ -252,6 +252,7 @@ use crate::{
         crate::endpoints::cortical_mapping::get_mapping,
         crate::endpoints::cortical_mapping::get_mapping_list,
         crate::endpoints::cortical_mapping::get_twin_diagnostic,
+        crate::endpoints::cortical_mapping::get_rule_schema,
         crate::endpoints::cortical_mapping::delete_mapping,
         crate::endpoints::cortical_mapping::put_plasticity_frozen,
         crate::endpoints::cortical_mapping::get_plasticity_frozen,

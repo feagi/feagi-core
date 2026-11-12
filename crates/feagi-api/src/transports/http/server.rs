@@ -826,6 +826,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(cortical_mapping::get_mapping_list),
         )
         .route(
+            "/cortical_mapping/rule_schema",
+            get(cortical_mapping::get_rule_schema),
+        )
+        .route(
             "/cortical_mapping/twin_diagnostic",
             get(cortical_mapping::get_twin_diagnostic),
         )

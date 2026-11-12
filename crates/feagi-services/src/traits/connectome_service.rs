@@ -375,7 +375,22 @@ pub trait ConnectomeService: Send + Sync {
         src_area_id: String,
         dst_area_id: String,
         mapping_data: Vec<serde_json::Value>,
-    ) -> ServiceResult<usize>;
+    ) -> ServiceResult<usize> {
+        Ok(self
+            .update_cortical_mapping_with_mode(src_area_id, dst_area_id, mapping_data)
+            .await?
+            .synapse_count)
+    }
+
+    /// Same as [`Self::update_cortical_mapping`], and also reports how the change was applied:
+    /// `InPlace` (rules unchanged, or plasticity-only change applied to the existing synapses)
+    /// or `Rebuilt` (synapses regenerated; array-format rules are always rebuilt).
+    async fn update_cortical_mapping_with_mode(
+        &self,
+        src_area_id: String,
+        dst_area_id: String,
+        mapping_data: Vec<serde_json::Value>,
+    ) -> ServiceResult<MappingUpdateOutcome>;
 
     /// Freeze (`true`) or resume (`false`) weight commits and associative synapse
     /// synthesis on `src -> dst`, keeping the rule and learned weights in place.
