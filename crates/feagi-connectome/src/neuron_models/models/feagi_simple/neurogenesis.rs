@@ -11,15 +11,6 @@ use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisValidatedGeneratorQuanted, NMFeagiSimpleQuantKind, NMFeagiSimpleQuantStandard32Bit};
-#[cfg(feature = "alloc")]
-use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisValidatedStorageQuanted, NMFeagiSimpleNeurogenesisValidatedStorageOrGeneratorQuanted};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf};
-#[cfg(feature = "alloc")]
-use crate::neuron_models::models::{NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
-#[cfg(feature = "alloc")]
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::{ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator};
 
 //region Defaults
 
@@ -65,114 +56,6 @@ impl<NM: NMFeagiSimpleTrait> CorticalDataVarianceSpecification<NM> for NMFeagiSi
         _index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> NMFeagiSimpleDataNeuronVariance<NM> {
         NMFeagiSimpleDataNeuronVariance::default()
-    }
-}
-
-//endregion
-
-//region Quant Level Conversions
-
-impl<FIQ: FeagiIndexQuantization> From<NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ> {
-    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisGeneratorQuanted::Standard32Bit(v) => Ok(v),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOf<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisStorageQuanted<FIQ> {
-    fn from(value: NeurogenesisFromStorageOf<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisStorageQuanted::Standard32Bit(v) => Ok(v),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ> {
-    fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(v) => Ok(v),
-        }
-    }
-}
-
-impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisValidatedGeneratorQuanted<FIQ> {
-    fn from(value: ValidatedNeurogenesisGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisValidatedGeneratorQuanted<FIQ>> for ValidatedNeurogenesisGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisValidatedGeneratorQuanted::Standard32Bit(v) => Ok(v),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorage<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisValidatedStorageQuanted<FIQ> {
-    fn from(value: ValidatedNeurogenesisStorage<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisValidatedStorageQuanted<FIQ>> for ValidatedNeurogenesisStorage<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisValidatedStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisValidatedStorageQuanted::Standard32Bit(v) => Ok(v),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorageOrGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>> for NMFeagiSimpleNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
-    fn from(value: ValidatedNeurogenesisStorageOrGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit>) -> Self {
-        Self::Standard32Bit(value)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> TryFrom<NMFeagiSimpleNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NMFeagiSimpleQuantStandard32Bit> {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
-
-    fn try_from(value: NMFeagiSimpleNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMFeagiSimpleNeurogenesisValidatedStorageOrGeneratorQuanted::Standard32Bit(v) => Ok(v),
-        }
     }
 }
 

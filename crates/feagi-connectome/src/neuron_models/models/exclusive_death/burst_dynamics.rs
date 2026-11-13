@@ -37,7 +37,7 @@ where
 //endregion
 
 
-
+/*
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM>
 for ExclusiveDeathBurstEngineDynamics<FIQ, NM>
@@ -71,4 +71,6 @@ where
     }
 }
 
+
+ */
 

@@ -27,8 +27,7 @@ pub mod neuron_pattern;
 /// as the data its dynamics use and the neuron layout it expects. Note that this trait
 /// is extended to a certain models trait before being implemented, this is not implemented
 /// directly
-pub trait NeuronModel: MembranePotentialQuantization 
-+ Into<<Self as NeuronModel>::QuantedKind> + TryFrom<<Self as NeuronModel>::QuantedKind> {
+pub trait NeuronModel: MembranePotentialQuantization {
 
     /// What neuron layout this neuron model expects
     type NeuronLayoutTag: NeuronLayoutTag;
@@ -74,21 +73,15 @@ pub trait NeuronModel: MembranePotentialQuantization
     /// The Quant Kind enum for this neuron model
     type QuantKind;
     
-    /// The Quanted Kind enum for this neuron model, actually wraps the marker
-    type QuantedKind;
-
     
     /// The Quant of this model represented as the Quant Kind Enum wrapper
     const QUANT_KIND: Self::QuantKind;
-
-    /// The Quanted Kind enum for this neuron model, actually wraps the marker
-    const QUANTED_KIND: Self::QuantedKind;
     
     //region Default Impls
 
     // NOTE: Many of these are defined here due to uses in the enums
 
-    // NOTE: Explicitly No spawning function for `NeurogenesisGeneratorPrecursor` as
+    // NOTE: Explicitly No spawning function for `NeurogenesisGenerator` as
     // different cortical types may wish to have some differing implementations (though the
     // NM does specify the generator and precursor type) IE different defaults
 
