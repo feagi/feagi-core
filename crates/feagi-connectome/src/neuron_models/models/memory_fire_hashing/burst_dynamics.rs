@@ -1,9 +1,4 @@
-use crate::neuron_models::models::memory_fire_hashing::data::Period;
 use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use feagi_basis::prelude::*;
-use feagi_basis::BurstIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 

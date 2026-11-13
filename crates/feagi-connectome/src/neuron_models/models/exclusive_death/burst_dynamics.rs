@@ -1,11 +1,7 @@
 use crate::neuron_models::models::exclusive_death::NMExclusiveDeathTrait;
-use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-pub struct ExclusiveDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusiveDeathTrait>(
-    core::marker::PhantomData<(FIQ, NM)>,
-);
+pub struct ExclusiveDeathBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusiveDeathTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
 //region Common
 impl<FIQ, NM> ExclusiveDeathBurstEngineDynamics<FIQ, NM>
@@ -35,7 +31,6 @@ where
 {
 }
 //endregion
-
 
 /*
 #[cfg(feature = "burst-engine-cpu")]
@@ -73,4 +68,3 @@ where
 
 
  */
-

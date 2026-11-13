@@ -1,6 +1,6 @@
-use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind};
-use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantFloat16, NMExclusivePowerQuantKind, NMExclusivePowerQuantedKind};
-use feagi_connectome::neuron_models::models::kind::{NMKind, NMQuantedKind};
+use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit};
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantFloat16, NMExclusivePowerQuantKind};
+use feagi_connectome::neuron_models::models::kind::NMKind;
 use feagi_connectome::neuron_models::models::NeuronModelEnumConversionError;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
@@ -32,36 +32,4 @@ fn serde_round_trip() {
     let json = serde_json::to_string(&kind).unwrap();
     assert_eq!(json, r#"{"ExclusivePower":"Float64"}"#);
     assert_eq!(serde_json::from_str::<NMKind>(&json).unwrap(), kind);
-}
-
-#[test]
-fn quanted_kind_nests_into_nm_quanted_kind_and_back() {
-    let kind: NMQuantedKind = NMExclusivePowerQuantedKind::from(NMExclusivePowerQuantFloat16).into();
-    assert_eq!(kind, NMQuantedKind::ExclusivePower(NMExclusivePowerQuantedKind::Float16(NMExclusivePowerQuantFloat16)));
-
-    let model_level = NMExclusivePowerQuantedKind::try_from(kind).unwrap();
-    assert_eq!(model_level.quant_kind(), NMExclusivePowerQuantKind::Float16);
-    assert_eq!(NMExclusivePowerQuantFloat16::try_from(model_level).unwrap(), NMExclusivePowerQuantFloat16);
-}
-
-#[test]
-fn nm_quanted_kind_from_any_neuron_model() {
-    assert_eq!(
-        NMQuantedKind::from_nm_quant::<NMExclusivePowerQuantFloat16>(),
-        NMQuantedKind::ExclusivePower(NMExclusivePowerQuantedKind::Float16(NMExclusivePowerQuantFloat16)),
-    );
-    assert_eq!(
-        NMQuantedKind::from_nm_quant::<NMFeagiAdvancedQuantStandard32Bit>(),
-        NMQuantedKind::FeagiAdvanced(NMFeagiAdvancedQuantedKind::Standard32Bit(NMFeagiAdvancedQuantStandard32Bit)),
-    );
-}
-
-#[test]
-fn unwrapping_nm_quanted_kind_as_another_model_errors() {
-    let kind: NMQuantedKind = NMFeagiAdvancedQuantStandard32Bit::QUANTED_KIND.into();
-    assert_eq!(kind, NMQuantedKind::FeagiAdvanced(NMFeagiAdvancedQuantedKind::Standard32Bit(NMFeagiAdvancedQuantStandard32Bit)));
-    assert!(matches!(
-        NMExclusivePowerQuantedKind::try_from(kind),
-        Err(NeuronModelEnumConversionError::IncompatibleModel)
-    ));
 }

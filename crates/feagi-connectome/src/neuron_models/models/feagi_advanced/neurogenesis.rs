@@ -1,5 +1,5 @@
 //! How the scratch and variance data of `FeagiAdvanced` neurons is generated: the
-//! `NeuronModel::NeurogenesisDefaults` of every quantization level of the model. Its
+//! `NeuronModel::NeurogenesisScratchVarianceDefaults` of every quantization level of the model. Its
 //! `NeuronModel::NeurogenesisByGenerator` is the shared `NeurogenesisGeneratorUniformDefault`
 // TODO these are stubs, fill them in
 
@@ -17,9 +17,9 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 /// Generates the scratch and variance data of `FeagiAdvanced` neurons
 #[derive(Clone, Debug)]
-pub struct FeagiAdvancedScratchVarianceGenerator<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
+pub struct FeagiAdvancedNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiAdvancedScratchVarianceGenerator<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiAdvancedNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiAdvancedTrait,
@@ -56,17 +56,16 @@ impl<NM: NMFeagiAdvancedTrait> CorticalDataVarianceSpecification<NM> for NMFeagi
         layout: &NeuronLayoutOf<FIQ, NM>,
         index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> NMFeagiAdvancedDataNeuronVariance<NM> {
-        let coordinates = layout.get_neuron_layout_context(index)
+        let coordinates = layout
+            .get_neuron_layout_context(index)
             .expect("Neuron index during neurogenesis must come from this layout"); // TODO Address This Properly
         let [x, y, z, _d] = coordinates.as_slice();
 
         let firing_threshold_offset = self.firing_threshold_increment_x * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*x)
             + self.firing_threshold_increment_y * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*y)
             + self.firing_threshold_increment_z * CorticalAreaNeuronPotential::from_quantized_unsigned_integer(*z);
-        
-        NMFeagiAdvancedDataNeuronVariance {
-            firing_threshold_offset,
-        }
+
+        NMFeagiAdvancedDataNeuronVariance { firing_threshold_offset }
     }
 }
 

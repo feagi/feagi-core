@@ -1,7 +1,7 @@
 //! A worker running a single burst engine at a target frequency
 
-pub mod npu_loop;
 pub mod commands;
+pub mod npu_loop;
 
 use commands::{NeuronProcessorSingleEngineCommandHandler, NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use core::marker::PhantomData;
@@ -33,7 +33,6 @@ pub type NeuronProcessorSingleEngineVisualizationTransmitter<FIQ> =
 /// visualization
 pub type NeuronProcessorSingleEngineVisualizationReceiver<FIQ> =
     <FeagiChannelAllocBuilder<BurstVisualizationData<FIQ>> as FeagiChannelBuilder<BurstVisualizationData<FIQ>>>::Receiver;
-
 
 //endregion
 
@@ -79,22 +78,27 @@ where
         visualization_transmitter: Self::BuildInputs,
     ) -> Result<
         (
-            FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, NeuronProcessorSingleEngineRequest<FIQ>, NeuronProcessorSingleEngineResponse<FIQ>>,
+            FeagiWorker<
+                FeagiStdThreadSpawner,
+                Self::ChannelBackend,
+                NeuronProcessorSingleEngineRequest<FIQ>,
+                NeuronProcessorSingleEngineResponse<FIQ>,
+            >,
             Self::BuildOutputs,
         ),
         WorkerStartError<Self::WorkerStartError>,
     > {
         let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);
         let (init_result_sender, init_result_receiver) = std::sync::mpsc::sync_channel(1);
-        let Self { initial_target_frequency, initial_visualization_frequency, engine_init_parameters } = self;
+        let Self {
+            initial_target_frequency,
+            initial_visualization_frequency,
+            engine_init_parameters,
+        } = self;
 
         let handle = spawner.spawn_worker(move || async move {
             // Index will always be zero
-            let engine = match Engine::init_burst_engine(
-                engine_init_parameters,
-                BurstEngineIndex(0),
-                visualization_transmitter,
-            ).await {
+            let engine = match Engine::init_burst_engine(engine_init_parameters, BurstEngineIndex(0), visualization_transmitter).await {
                 Ok(engine) => {
                     // The builder only stops waiting by receiving, so this cannot fail
                     let _ = init_result_sender.send(Ok(()));
@@ -117,9 +121,13 @@ where
 
         match init_result_receiver.recv() {
             Ok(Ok(())) => Ok((FeagiWorker::new(cmd_requester, handle), ())),
-            Ok(Err(error)) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::EngineInit(error))),
+            Ok(Err(error)) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::EngineInit(
+                error,
+            ))),
             // The thread exited (panicked) before reporting
-            Err(_) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::WorkerExitedDuringInit)),
+            Err(_) => Err(WorkerStartError::WorkerError(
+                NeuronProcessorSingleEngineWorkerBuilderError::WorkerExitedDuringInit,
+            )),
         }
     }
 
@@ -138,5 +146,3 @@ pub enum NeuronProcessorSingleEngineWorkerBuilderError<InitError: core::error::E
 }
 
 //endregion
-
-

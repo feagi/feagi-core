@@ -1,11 +1,11 @@
 use crate::connectome_basis::connectome_editing::ConnectomeDispatch;
-use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::neural_processors::singular::commands::NeuronProcessorSingleEngineCommandHandler;
 use crate::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_connectome_neural::neural_basis::engine::BurstEngine;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use std::ops::ControlFlow;
 use std::time::{Duration, Instant};
 
@@ -23,8 +23,6 @@ pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantizati
     let mut tick_time = Instant::now();
     let mut visualization_time = Instant::now();
 
-
-
     loop {
         // Scheduled from the previous tick so the rate does not drift. If the previous tick ran
         // over, schedule from now instead of bursting to catch up
@@ -32,10 +30,11 @@ pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantizati
         tick_time = (tick_time + tick_duration).max(Instant::now());
 
         loop {
-            match command_router.try_handle_next().await { // processes command (if exist)
+            match command_router.try_handle_next().await {
+                // processes command (if exist)
                 ControlFlow::Continue(true) => continue, // more commands in queue
-                ControlFlow::Continue(false) => break, // no more commands in queue
-                ControlFlow::Break(_) => return, // channel killbinded
+                ControlFlow::Continue(false) => break,   // no more commands in queue
+                ControlFlow::Break(_) => return,         // channel killbinded
             }
         }
 
@@ -61,8 +60,7 @@ pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantizati
         }
 
         command_router.processor_mut().engine.run_burst(send_visualization).await;
-        
-        
+
         wait_until(tick_time).await;
     }
 }
@@ -76,7 +74,10 @@ const SPIN_MARGIN: Duration = Duration::from_millis(1);
 /// Waits until `deadline` by sleeping until `SPIN_MARGIN` before it, then spinning the rest. The
 /// worker has its own thread, so this blocks that thread
 async fn wait_until(deadline: Instant) {
-    if let Some(sleep_for) = deadline.checked_duration_since(Instant::now()).and_then(|remaining| remaining.checked_sub(SPIN_MARGIN)) {
+    if let Some(sleep_for) = deadline
+        .checked_duration_since(Instant::now())
+        .and_then(|remaining| remaining.checked_sub(SPIN_MARGIN))
+    {
         std::thread::sleep(sleep_for);
     }
     while Instant::now() < deadline {

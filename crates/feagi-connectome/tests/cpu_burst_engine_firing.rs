@@ -1,3 +1,5 @@
+// Disabled while the CPU burst engine is commented out. Remove the `cfg(any())` line to re-enable
+#![cfg(any())]
 #![cfg(feature = "burst-engine-cpu")]
 
 //! Cortical areas added to the CPU burst engine fire as their neuron model says, and the engine

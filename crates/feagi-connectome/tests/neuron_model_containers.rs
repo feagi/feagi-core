@@ -63,3 +63,12 @@ fn neurogenesis_containers_resolve() {
         cloneable::<NMModeled<NMNeurogenesisValidatedStorageOrGenerator<Fiq>>>();
     }
 }
+
+#[test]
+fn modeled_serde_round_trip() {
+    let modeled: NMModeled<Marker> = NMExclusivePowerQuantFloat32::wrap::<Marker>(NMExclusivePowerQuantFloat32).into();
+    let json = serde_json::to_string(&modeled).unwrap();
+    assert_eq!(json, r#"{"ExclusivePower":{"Float32":null}}"#);
+    let back: NMModeled<Marker> = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.kind(), NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float32));
+}

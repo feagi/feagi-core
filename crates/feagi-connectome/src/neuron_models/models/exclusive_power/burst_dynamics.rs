@@ -1,12 +1,8 @@
 use crate::neuron_models::models::exclusive_power::NMExclusivePowerTrait;
-use feagi_basis::{neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential}, BurstIndex};
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-pub struct ExclusivePowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusivePowerTrait>(
-    core::marker::PhantomData<(FIQ, NM)>,
-);
+pub struct ExclusivePowerBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMExclusivePowerTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
 //region Common
 impl<FIQ, NM> ExclusivePowerBurstEngineDynamics<FIQ, NM>
@@ -36,7 +32,6 @@ where
 {
 }
 //endregion
-
 
 /*
 

@@ -1,9 +1,9 @@
 use crate::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use crate::connectome_basis::engine::EngineChangeCommandOtherError;
-use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome_neural::neural_basis::engine::BurstEngine;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use std::marker::PhantomData;
 
 /// Custom requests to the single engine neuron processor
@@ -38,8 +38,6 @@ pub enum NeuronProcessorSingleEngineResponse<FIQ: FeagiIndexQuantization> {
     Resumed,
 }
 
-
-
 #[doc(hidden)]
 /// The state of the single engine neuron processor, which its commands act upon
 pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> {
@@ -51,9 +49,8 @@ pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization
     pub(crate) _fiq: PhantomData<fn() -> FIQ>,
 }
 
-
 impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> FeagiWorkerCommandProcessor
-for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>
+    for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>
 {
     type CustomRequest = NeuronProcessorSingleEngineRequest<FIQ>;
     type CustomResponse = NeuronProcessorSingleEngineResponse<FIQ>;
@@ -103,4 +100,3 @@ impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, (
         results
     }
 }
-

@@ -1,9 +1,4 @@
-use crate::neuron_models::models::feagi_simple::data::wrapped::Period;
 use crate::neuron_models::models::feagi_simple::NMFeagiSimpleTrait;
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use feagi_basis::prelude::*;
-use feagi_basis::BurstIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
@@ -23,7 +18,8 @@ impl<FIQ, NM> NeuralBurstEngineDynamics<FIQ, NM> for FeagiSimpleBurstEngineDynam
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiSimpleTrait,
-{}
+{
+}
 
 //endregion
 
@@ -69,7 +65,7 @@ where
             *processing_buffer = CorticalAreaNeuronPotential::QUANT_ZERO;
             return false;
         }
-        
+
         let firing_threshold =
             cortical_properties.firing_threshold;
         if *processing_buffer >= firing_threshold {

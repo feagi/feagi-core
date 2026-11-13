@@ -1,9 +1,4 @@
-use crate::neuron_models::models::feagi_advanced::data::wrapped::Period;
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
-use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
-use feagi_basis::prelude::QuantizedElementBase;
-use feagi_basis::BurstIndex;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 

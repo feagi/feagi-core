@@ -1,5 +1,5 @@
 //! How the scratch and variance data of `MemoryFireHashing` neurons is generated: the
-//! `NeuronModel::NeurogenesisDefaults` of every quantization level of the model. Its
+//! `NeuronModel::NeurogenesisScratchVarianceDefaults` of every quantization level of the model. Its
 //! `NeuronModel::NeurogenesisByGenerator` is the shared `NeurogenesisGeneratorUniformDefault`
 // TODO these are stubs, fill them in
 

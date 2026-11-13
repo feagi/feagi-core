@@ -1,27 +1,28 @@
-use core::marker::PhantomData;
-use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
-use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-#[cfg(feature = "alloc")]
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
-#[cfg(feature = "alloc")]
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
-#[cfg(feature = "alloc")]
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::{ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator};
-use crate::neuron_models::models::kind::NMKind;
-use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuanted;
-use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuanted;
 use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuanted;
 use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuanted;
+use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuanted;
+use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuanted;
+use crate::neuron_models::models::kind::NMKind;
 use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuanted;
+use core::marker::PhantomData;
+#[cfg(feature = "alloc")]
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
+#[cfg(feature = "alloc")]
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::{
+    ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator,
+};
+#[cfg(feature = "alloc")]
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
+use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-pub mod feagi_advanced;
-pub mod feagi_simple;
 pub mod exclusive_death;
 pub mod exclusive_power;
-pub mod memory_fire_hashing;
+pub mod feagi_advanced;
+pub mod feagi_simple;
 pub mod kind;
-
+pub mod memory_fire_hashing;
 
 //region Containers
 
@@ -95,10 +96,14 @@ impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisValidatedStorage
 
 //endregion
 
-
 //region Modeled
 
 /// Data of container `C` for any neuron model, with a nested enum specifying the quantization
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "NMFeagiAdvancedQuanted<C>: ::serde::Serialize, NMFeagiSimpleQuanted<C>: ::serde::Serialize, NMExclusiveDeathQuanted<C>: ::serde::Serialize, NMExclusivePowerQuanted<C>: ::serde::Serialize, NMMemoryFireHashingQuanted<C>: ::serde::Serialize",
+    deserialize = "NMFeagiAdvancedQuanted<C>: ::serde::Deserialize<'de>, NMFeagiSimpleQuanted<C>: ::serde::Deserialize<'de>, NMExclusiveDeathQuanted<C>: ::serde::Deserialize<'de>, NMExclusivePowerQuanted<C>: ::serde::Deserialize<'de>, NMMemoryFireHashingQuanted<C>: ::serde::Deserialize<'de>"
+))]
 pub enum NMModeled<C: NMContainer> {
     FeagiAdvanced(NMFeagiAdvancedQuanted<C>),
     FeagiSimple(NMFeagiSimpleQuanted<C>),
@@ -160,28 +165,23 @@ where
 
 //endregion
 
-
 // These are types that allow easy referencing to certain structs
 //region Proxies
 
 /// The generator of a neuron model, the saveable data a cortical area is generated from. Its
 /// defaults are set by the cortical type
-pub type NeurogenesisByGeneratorTypeOf<FIQ, NM>
-    = <NM as NeuronModel>::NeurogenesisByGenerator<FIQ>;
+pub type NeurogenesisByGeneratorTypeOf<FIQ, NM> = <NM as NeuronModel>::NeurogenesisByGenerator<FIQ>;
 
 /// Stored neuron data of a neuron model, generating the cortical area as it was saved
 #[cfg(feature = "alloc")]
-pub type NeurogenesisFromStorageOf<FIQ, NM>
-    = NeurogenesisByStorage<FIQ, NM>;
+pub type NeurogenesisFromStorageOf<FIQ, NM> = NeurogenesisByStorage<FIQ, NM>;
 
 /// Either the stored neuron data or the generator of a neuron model. Useful for exports where
 /// storage is optional, to control export sizes
 #[cfg(feature = "alloc")]
-pub type NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM>
-    = NeurogenesisStorageOrGenerator<FIQ, NM>;
+pub type NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM> = NeurogenesisStorageOrGenerator<FIQ, NM>;
 
 //endregion
-
 
 /// when going from some enums to others. `K` is the kind enum of the enum being unwrapped, such
 /// as the `QuantKind` of a neuron model
