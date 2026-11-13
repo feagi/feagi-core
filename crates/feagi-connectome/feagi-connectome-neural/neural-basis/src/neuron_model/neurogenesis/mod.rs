@@ -5,6 +5,7 @@ pub mod validation;
 
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
+use crate::neuron_model::neurogenesis::validation::NeurogenesisValidationError;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
@@ -33,6 +34,10 @@ where
 
     fn into_model_cortical_data(self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal);
 
+    /// Structural checks against the built layout, run on every validation. Accepts everything by default
+    fn check_against_layout(&self, _layout: &NeuronLayoutOf<FIQ, NM>) -> Result<(), NeurogenesisValidationError> {
+        Ok(())
+    }
 
     fn spawn_neuron_data_at(
         &self, // NOTE: make sure the implementation makes use of variance!

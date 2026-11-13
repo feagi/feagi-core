@@ -2,7 +2,6 @@ use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutError, NeuronLayoutOf, NeuronLayoutRestrictor};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
-use serde::{Deserialize, Serialize};
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 
@@ -32,9 +31,8 @@ where
 
 
 /// A wrapped implementation of `NeurogenesisMethod` that can only be wrapped by
-/// `NeurogenesisValidator` as proof that it is safe to init
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "")]
+/// `NeurogenesisValidator` as proof that it is safe to init. Not serializable, save the precursor instead
+#[derive(Clone, Debug)]
 pub struct ValidatedNeurogenesisMethod<FIQ, NM, NGM>
 where
     FIQ: FeagiIndexQuantization,
@@ -57,6 +55,7 @@ where
     >(method_data: NGM) -> Result<Self, NeurogenesisValidationError> {
         let layout = Res::validate_and_create_neuron_layout(method_data.get_cortical_layout_context().clone())?;
         V::validate(&method_data)?;
+        method_data.check_against_layout(&layout)?;
         Ok(
             ValidatedNeurogenesisMethod {
                 method: method_data,

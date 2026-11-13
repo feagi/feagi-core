@@ -3,6 +3,7 @@ use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf};
+use crate::neuron_model::neurogenesis::validation::NeurogenesisValidationError;
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 
@@ -77,6 +78,13 @@ where
 
     fn into_model_cortical_data(self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
         (self.cortical_properties, self.cortical_internal)
+    }
+
+    fn check_against_layout(&self, layout: &NeuronLayoutOf<FIQ, NM>) -> Result<(), NeurogenesisValidationError> {
+        if layout.get_number_neurons_to_allocate_for().quant_to_usize() != self.neuron_internal.len() {
+            return Err(NeurogenesisValidationError::StorageSizeMismatch);
+        }
+        Ok(())
     }
 
     fn spawn_neuron_data_at(
