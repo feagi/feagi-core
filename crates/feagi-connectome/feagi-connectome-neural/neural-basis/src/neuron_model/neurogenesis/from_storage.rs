@@ -59,8 +59,8 @@ where
         &self.cortical_layout_context
     }
 
-    fn get_universal_cortical_properties(&self) -> NeuronModelUniversalCorticalProperties<NM> {
-        self.cortical_universal_properties
+    fn get_universal_cortical_properties(&self) -> &NeuronModelUniversalCorticalProperties<NM> {
+        &self.cortical_universal_properties
     }
 
     fn get_model_cortical_properties(&self) -> &NM::CorticalDataProperties {
