@@ -2,14 +2,15 @@ pub mod foundation;
 pub mod processing;
 pub mod cortical_identifiers;
 
-use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGeneratorPrecursor, CTFoundationSubtypedKind, CTFoundationSubtypedStorage, CTFoundationSubtypedStorageOrGeneratorPrecursor};
+use crate::basis::cortical_area::foundation::CTFoundationSubtyped;
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault};
 use crate::basis::cortical_area::cortical_identifiers::CorticalAreaInnerID;
-use crate::basis::cortical_area::processing::{CTProcessingSubtypedGeneratorPrecursor, CTProcessingSubtypedKind, CTProcessingSubtypedStorage, CTProcessingSubtypedStorageOrGeneratorPrecursor};
+use crate::basis::cortical_area::processing::CTProcessingSubtyped;
+use feagi_connectome::neuron_models::models::container::{NMContainer, NMContainerGeneratorPrecursor, NMContainerMarker, NMContainerStorage, NMContainerStorageOrGeneratorPrecursor, NMVisitor, NMVisitorMut, NMVisitorRef};
+use feagi_connectome::neuron_models::models::kind::NMKind;
 
 //region Cortical Type
 
@@ -61,36 +62,100 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 
 //region Cortical Type Enums
 
-/// A nested enum representing the type and the subtype of a cortical area
+/// The data of container `C` for any cortical area, with a nested enum per cortical type, then
+/// per subtype, then per neuron model, then per quantization. Members are reached directly through
+/// the `*Member` trait of each subtype (such as `CTProcessingInterconnectMember`)
 #[repr(C, u8)]
-#[derive(Copy, Clone, Debug)]
-pub enum CorticalTypedKind{
-    Foundation(CTFoundationSubtypedKind) = 0,
-    Processing(CTProcessingSubtypedKind) = 1,
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "CTFoundationSubtyped<C>: ::serde::Serialize, CTProcessingSubtyped<C>: ::serde::Serialize",
+    deserialize = "CTFoundationSubtyped<C>: ::serde::Deserialize<'de>, CTProcessingSubtyped<C>: ::serde::Deserialize<'de>"
+))]
+pub enum CorticalTyped<C: NMContainer> {
+    Foundation(CTFoundationSubtyped<C>) = 0,
+    Processing(CTProcessingSubtyped<C>) = 1,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CorticalTypedGeneratorPrecursor<FIQ: FeagiIndexQuantization>
-{
-    Foundation(CTFoundationSubtypedGeneratorPrecursor<FIQ>),
-    Processing(CTProcessingSubtypedGeneratorPrecursor<FIQ>)
+impl<C: NMContainer> CorticalTyped<C> {
+    /// The cortical type, subtype and member held, as marker structs
+    pub fn kind(&self) -> CorticalTypedKind {
+        match self {
+            Self::Foundation(subtyped) => CorticalTyped::Foundation(subtyped.kind()),
+            Self::Processing(subtyped) => CorticalTyped::Processing(subtyped.kind()),
+        }
+    }
+
+    /// The neuron model and quantization held
+    pub const fn nm_kind(&self) -> NMKind {
+        match self {
+            Self::Foundation(subtyped) => subtyped.nm_kind(),
+            Self::Processing(subtyped) => subtyped.nm_kind(),
+        }
+    }
+
+    /// Runs the visitor on the data held, with the neuron model it is held for
+    pub fn dispatch<V: NMVisitor<C>>(self, visitor: V) -> V::Output {
+        match self {
+            Self::Foundation(subtyped) => subtyped.dispatch(visitor),
+            Self::Processing(subtyped) => subtyped.dispatch(visitor),
+        }
+    }
+
+    /// Runs the visitor on a reference to the data held, with the neuron model it is held for
+    pub fn dispatch_ref<'a, V: NMVisitorRef<'a, C>>(&'a self, visitor: V) -> V::Output {
+        match self {
+            Self::Foundation(subtyped) => subtyped.dispatch_ref(visitor),
+            Self::Processing(subtyped) => subtyped.dispatch_ref(visitor),
+        }
+    }
+
+    /// Runs the visitor on a mutable reference to the data held, with the neuron model it is held for
+    pub fn dispatch_mut<'a, V: NMVisitorMut<'a, C>>(&'a mut self, visitor: V) -> V::Output {
+        match self {
+            Self::Foundation(subtyped) => subtyped.dispatch_mut(visitor),
+            Self::Processing(subtyped) => subtyped.dispatch_mut(visitor),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CorticalTypedStorage<FIQ: FeagiIndexQuantization>
-{
-    Foundation(CTFoundationSubtypedStorage<FIQ>),
-    Processing(CTProcessingSubtypedStorage<FIQ>)
+// Every leaf is a unit marker struct, so the kind is fully described by the variants taken
+impl Copy for CorticalTyped<NMContainerMarker> {}
+
+impl PartialEq for CorticalTyped<NMContainerMarker> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Foundation(a), Self::Foundation(b)) => a == b,
+            (Self::Processing(a), Self::Processing(b)) => a == b,
+            #[allow(unreachable_patterns)]
+            _ => false,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum CorticalTypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization>
-{
-    Foundation(CTFoundationSubtypedStorageOrGeneratorPrecursor<FIQ>),
-    Processing(CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ>)
+impl Eq for CorticalTyped<NMContainerMarker> {}
+
+/// The type, subtype, neuron model and quantization of a cortical area
+pub type CorticalTypedKind = CorticalTyped<NMContainerMarker>;
+
+/// The generator precursor of any cortical area
+pub type CorticalTypedGeneratorPrecursor<FIQ> = CorticalTyped<NMContainerGeneratorPrecursor<FIQ>>;
+
+/// The stored neuron data of any cortical area
+pub type CorticalTypedStorage<FIQ> = CorticalTyped<NMContainerStorage<FIQ>>;
+
+/// The stored neuron data or the generator precursor of any cortical area
+pub type CorticalTypedStorageOrGeneratorPrecursor<FIQ> = CorticalTyped<NMContainerStorageOrGeneratorPrecursor<FIQ>>;
+
+/// Data of the cortical type enum tree was accessed as a part it does not hold
+#[derive(Clone, Copy, PartialEq, Debug, thiserror::Error)]
+pub enum CTAccessError {
+    /// Accessed as a member (a neuron model at a quantization, in a cortical subtype) other than
+    /// the one held
+    #[error("Tried to access the cortical area member {expected:?}, but {actual:?} is held")]
+    IncorrectMember { expected: CorticalTypedKind, actual: CorticalTypedKind },
+    /// Accessed as a cortical type, subtype or neuron model other than the one held
+    #[error("Tried to access {expected} of the cortical type tree, but {actual:?} is held")]
+    IncorrectBranch { expected: &'static str, actual: CorticalTypedKind },
 }
 
 //endregion

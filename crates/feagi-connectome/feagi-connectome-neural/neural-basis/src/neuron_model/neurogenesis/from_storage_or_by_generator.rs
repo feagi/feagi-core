@@ -1,9 +1,9 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use crate::neuron_model::neurogenesis::by_generator::{NeurogenesisGenerator, NeurogenesisGeneratorPrecursor};
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
-use crate::neuron_model::neuron_layout::NeuronLayoutTag;
+use crate::neuron_model::neuron_layout::{NeuronLayoutError, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 
@@ -72,5 +72,35 @@ where
             NeurogenesisFromStorageOrByGenerator::FromStorage(s) => {s.spawn_neuron_data_at(index)}
             NeurogenesisFromStorageOrByGenerator::ByGenerator(g) => {g.spawn_neuron_data_at(index)}
         }
+    }
+}
+
+/// The data needed to spawn a cortical area of model `NM`: either its stored neuron data, or the
+/// precursor of that model's own generator. What a genome holds before the generator is built
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+// Both are serializable through the traits of FIQ and NM, not the bounds serde infers
+#[serde(bound = "")]
+pub enum NeurogenesisFromStorageOrByGeneratorPrecursor<FIQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+{
+    FromStorage(NeurogenesisStorage<FIQ, NM>),
+    ByGeneratorPrecursor(NM::NeurogenesisGeneratorPrecursor<FIQ>),
+}
+
+impl<FIQ, NM> NeurogenesisFromStorageOrByGeneratorPrecursor<FIQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+{
+    /// Builds the generator from the precursor, if held. Storage is passed through as is
+    pub fn into_storage_or_generator<Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, NM>>>(
+        self
+    ) -> Result<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM>, NeuronLayoutError> {
+        Ok(match self {
+            Self::FromStorage(storage) => NeurogenesisFromStorageOrByGenerator::FromStorage(storage),
+            Self::ByGeneratorPrecursor(precursor) => NeurogenesisFromStorageOrByGenerator::ByGenerator(precursor.into_generator::<Res>()?),
+        })
     }
 }

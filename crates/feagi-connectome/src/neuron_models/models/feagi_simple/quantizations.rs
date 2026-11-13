@@ -1,13 +1,12 @@
-use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalScratch, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleDataNeuronScratch, NMFeagiSimpleDataNeuronVariance, NMFeagiSimpleTrait};
-use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::container::{NMAccessError, NMContainer, NMContainerMarker, NMMember, NMVisitor, NMVisitorMut, NMVisitorRef};
+use crate::neuron_models::models::NMModeled;
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
-use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
+use crate::neuron_models::models::kind::NMKind;
 
 //region enums
 
@@ -21,98 +20,73 @@ impl NMFeagiSimpleQuantKind {
     pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantKind {NM::QUANT_KIND}
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum NMFeagiSimpleQuantedKind {
-    Standard32Bit(NMFeagiSimpleQuantStandard32Bit)
+/// The data of container `C` for the FeagiSimple Neuron Model, with a variant per quantization
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "C::Of<NMFeagiSimpleQuantStandard32Bit>: ::serde::Serialize",
+    deserialize = "C::Of<NMFeagiSimpleQuantStandard32Bit>: ::serde::Deserialize<'de>"
+))]
+pub enum NMFeagiSimpleQuanted<C: NMContainer> {
+    Standard32Bit(C::Of<NMFeagiSimpleQuantStandard32Bit>),
 }
+
+impl<C: NMContainer> NMFeagiSimpleQuanted<C> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
+        }
+    }
+
+    /// The model and quantization of the data held
+    pub const fn kind(&self) -> NMKind {
+        NMKind::FeagiSimple(self.quant_kind())
+    }
+
+    /// Runs the visitor on the data held, with the member it is held for
+    pub fn dispatch<V: NMVisitor<C>>(self, visitor: V) -> V::Output {
+        match self {
+            Self::Standard32Bit(data) => visitor.visit::<NMFeagiSimpleQuantStandard32Bit>(data),
+        }
+    }
+
+    /// Runs the visitor on a reference to the data held, with the member it is held for
+    pub fn dispatch_ref<'a, V: NMVisitorRef<'a, C>>(&'a self, visitor: V) -> V::Output {
+        match self {
+            Self::Standard32Bit(data) => visitor.visit::<NMFeagiSimpleQuantStandard32Bit>(data),
+        }
+    }
+
+    /// Runs the visitor on a mutable reference to the data held, with the member it is held for
+    pub fn dispatch_mut<'a, V: NMVisitorMut<'a, C>>(&'a mut self, visitor: V) -> V::Output {
+        match self {
+            Self::Standard32Bit(data) => visitor.visit::<NMFeagiSimpleQuantStandard32Bit>(data),
+        }
+    }
+}
+
+/// The marker struct of a quantization of the FeagiSimple Neuron Model
+pub type NMFeagiSimpleQuantedKind = NMFeagiSimpleQuanted<NMContainerMarker>;
 
 impl NMFeagiSimpleQuantedKind {
-    pub fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
-        match &self { 
-            NMFeagiSimpleQuantedKind::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
-        }
-        
-    }
-    
-    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> NMFeagiSimpleQuantedKind {
+    /// The marker struct of quantization `NM` of this model
+    pub fn from_nm_quant<NM: NMFeagiSimpleTrait>() -> Self {
         match NM::QUANT_KIND {
-            NMFeagiSimpleQuantKind::Standard32Bit => NMFeagiSimpleQuantedKind::Standard32Bit(NMFeagiSimpleQuantStandard32Bit)
-        }
-    }
-} 
-
-
-//region Generators
-
-/// The data needed to create the generator of the Feagi Simple Neuron Model, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ> {
-    /// The quantization of the precursor held
-    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
-        match self {
-            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
+            NMFeagiSimpleQuantKind::Standard32Bit => Self::Standard32Bit(NMFeagiSimpleQuantStandard32Bit),
         }
     }
 }
 
-/// Allows Neurogenesis of the Feagi Simple Neuron Model by its generator for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
-}
+// The marker structs are unit structs, so the kind is fully described by its quantization
+impl Copy for NMFeagiSimpleQuantedKind {}
 
-impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ> {
-    /// The quantization of the generator held
-    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
-        match self {
-            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
-        }
-    }
-    
-    // NOTE: do not offer `from_nm_quant` since the NM will not have it, thats up to the CT
-    // to provide an implementation
-}
-
-/// Allows Neurogenesis of the Feagi Simple Neuron Model from its stored data for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMFeagiSimpleNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageQuanted<FIQ> {
-    /// The quantization of the storage held
-    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
-        match self {
-            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
-        }
+impl PartialEq for NMFeagiSimpleQuantedKind {
+    fn eq(&self, other: &Self) -> bool {
+        self.quant_kind() == other.quant_kind()
     }
 }
 
-/// Allows Neurogenesis of the Feagi Simple Neuron Model from either its stored data or by its
-/// generator, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiSimpleQuantStandard32Bit>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ> {
-    /// The quantization of the storage or generator held
-    pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
-        match self {
-            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
-        }
-    }
-}
-
-//endregion
+impl Eq for NMFeagiSimpleQuantedKind {}
 
 
 //endregion
@@ -165,18 +139,45 @@ impl From<NMFeagiSimpleQuantStandard32Bit> for NMFeagiSimpleQuantedKind {
 }
 
 impl TryFrom<NMFeagiSimpleQuantedKind> for NMFeagiSimpleQuantStandard32Bit {
-    type Error = NeuronModelEnumConversionError<NMFeagiSimpleQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMFeagiSimpleQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMFeagiSimpleQuantedKind::Standard32Bit(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMFeagiSimpleQuantKind::Standard32Bit,
-                    actual,
-                })
-            }
+            NMFeagiSimpleQuanted::Standard32Bit(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMFeagiSimpleQuantStandard32Bit {
+    const KIND: NMKind = NMKind::FeagiSimple(NMFeagiSimpleQuantKind::Standard32Bit);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -194,145 +195,30 @@ impl From<NMFeagiSimpleQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMFeagiSimpleQuantKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
         match value {
-            NMKind::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMKind::FeagiSimple(quant) => Ok(quant),
+            actual => Err(NMAccessError::IncorrectModel { expected: "FeagiSimple", actual }),
         }
     }
 }
 
-impl From<NMFeagiSimpleQuantedKind> for NMQuantedKind {
-    fn from(value: NMFeagiSimpleQuantedKind) -> Self {
-        NMQuantedKind::FeagiSimple(value)
+impl<C: NMContainer> From<NMFeagiSimpleQuanted<C>> for NMModeled<C> {
+    fn from(value: NMFeagiSimpleQuanted<C>) -> Self {
+        NMModeled::FeagiSimple(value)
     }
 }
 
-impl TryFrom<NMQuantedKind> for NMFeagiSimpleQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+impl<C: NMContainer> TryFrom<NMModeled<C>> for NMFeagiSimpleQuanted<C> {
+    type Error = NMAccessError;
 
-    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+    fn try_from(value: NMModeled<C>) -> Result<Self, Self::Error> {
+        let actual = value.kind();
         match value {
-            NMQuantedKind::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
-        NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorPrecursorModeled::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisGeneratorModeled::FeagiSimple(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMFeagiSimpleNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorModeled::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageModeled::FeagiSimple(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMFeagiSimpleNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageModeled::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageOrGeneratorModeled::FeagiSimple(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageOrGeneratorModeled::FeagiSimple(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMModeled::FeagiSimple(quanted) => Ok(quanted),
+            _ => Err(NMAccessError::IncorrectModel { expected: "FeagiSimple", actual }),
         }
     }
 }

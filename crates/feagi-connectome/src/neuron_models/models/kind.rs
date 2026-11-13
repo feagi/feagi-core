@@ -1,15 +1,11 @@
+use crate::neuron_models::models::container::NMContainerMarker;
+use crate::neuron_models::models::NMModeled;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantKind;
 use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantKind;
 use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
 use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
 use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantKind;
-use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantedKind;
-use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantedKind;
-use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantedKind;
-use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantedKind;
-use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantedKind;
-
 
 
 /// Describes the neuron model, with a nested enum then describing the quantization
@@ -23,14 +19,7 @@ pub enum NMKind {
 }
 
 /// Describes the neuron model, with a nested enum then holding the quantization marker struct
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum NMQuantedKind {
-    FeagiAdvanced(NMFeagiAdvancedQuantedKind),
-    FeagiSimple(NMFeagiSimpleQuantedKind),
-    ExclusiveDeath(NMExclusiveDeathQuantedKind),
-    ExclusivePower(NMExclusivePowerQuantedKind),
-    MemoryFireHashing(NMMemoryFireHashingQuantedKind),
-}
+pub type NMQuantedKind = NMModeled<NMContainerMarker>;
 
 impl NMQuantedKind {
     /// The model and quantization of any neuron model, from its marker struct type
@@ -42,3 +31,14 @@ impl NMQuantedKind {
         NM::QUANTED_KIND.into()
     }
 }
+
+// The marker structs are unit structs, so the kind is fully described by its `NMKind`
+impl Copy for NMQuantedKind {}
+
+impl PartialEq for NMQuantedKind {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind() == other.kind()
+    }
+}
+
+impl Eq for NMQuantedKind {}

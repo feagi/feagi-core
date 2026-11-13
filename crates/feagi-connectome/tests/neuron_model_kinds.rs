@@ -1,7 +1,7 @@
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind};
 use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantFloat16, NMExclusivePowerQuantKind, NMExclusivePowerQuantedKind};
 use feagi_connectome::neuron_models::models::kind::{NMKind, NMQuantedKind};
-use feagi_connectome::neuron_models::models::NeuronModelEnumConversionError;
+use feagi_connectome::neuron_models::models::container::NMAccessError;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 
 #[test]
@@ -22,7 +22,7 @@ fn unwrapping_nm_kind_as_another_model_errors() {
     let kind: NMKind = NMFeagiAdvancedQuantKind::Standard32Bit.into();
     assert!(matches!(
         NMExclusivePowerQuantKind::try_from(kind),
-        Err(NeuronModelEnumConversionError::IncompatibleModel)
+        Err(NMAccessError::IncorrectModel { expected: "ExclusivePower", .. })
     ));
 }
 
@@ -62,6 +62,6 @@ fn unwrapping_nm_quanted_kind_as_another_model_errors() {
     assert_eq!(kind, NMQuantedKind::FeagiAdvanced(NMFeagiAdvancedQuantedKind::Standard32Bit(NMFeagiAdvancedQuantStandard32Bit)));
     assert!(matches!(
         NMExclusivePowerQuantedKind::try_from(kind),
-        Err(NeuronModelEnumConversionError::IncompatibleModel)
+        Err(NMAccessError::IncorrectModel { expected: "ExclusivePower", .. })
     ));
 }

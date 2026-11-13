@@ -5,20 +5,20 @@
 //! quantization of one means adding its store as a field of [`CpuNeuronModelStoreList`], and to
 //! `new`, `add_cortical_area` and `run_neuron_phase` of its `CpuNeuronModelStores` implementation
 
-use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedQuantStandard32Bit};
-use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleQuantStandard32Bit};
+use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuanted, NMFeagiAdvancedQuantStandard32Bit};
+use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuanted, NMFeagiSimpleQuantStandard32Bit};
 use crate::neuron_models::models::exclusive_death::quantizations::{
-    NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathQuantBFloat16, NMExclusiveDeathQuantFloat16, NMExclusiveDeathQuantFloat32,
+    NMExclusiveDeathQuanted, NMExclusiveDeathQuantBFloat16, NMExclusiveDeathQuantFloat16, NMExclusiveDeathQuantFloat32,
     NMExclusiveDeathQuantFloat64,
 };
 use crate::neuron_models::models::exclusive_power::quantizations::{
-    NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32,
+    NMExclusivePowerQuanted, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32,
     NMExclusivePowerQuantFloat64,
 };
 use crate::neuron_models::models::memory_fire_hashing::quantizations::{
-    NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted, NMMemoryFireHashingQuantStandard32Bit,
+    NMMemoryFireHashingQuanted, NMMemoryFireHashingQuantStandard32Bit,
 };
-use crate::neuron_models::models::{feagi_advanced, feagi_simple, exclusive_death, exclusive_power, memory_fire_hashing, NMNeurogenesisStorageOrGeneratorModeled};
+use crate::neuron_models::models::{feagi_advanced, feagi_simple, exclusive_death, exclusive_power, memory_fire_hashing, NMModeled, NMModeledStorageOrGenerator};
 use feagi_basis::BurstIndex;
 use feagi_connectome_neural::burst_engine_cpu::{
     BurstEngineCPURayon, CpuAddCorticalAreaError, CpuAddedCorticalArea, CpuEngineNeuronData, CpuNeuronModelStore, CpuNeuronModelStores,
@@ -63,7 +63,7 @@ pub struct CpuNeuronModelStoreList<FIQ: FeagiIndexQuantization> {
 }
 
 impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelStoreList<FIQ> {
-    type CorticalAreaNeurogenesisDispatch = NMNeurogenesisStorageOrGeneratorModeled<FIQ>;
+    type CorticalAreaNeurogenesisDispatch = NMModeledStorageOrGenerator<FIQ>;
 
     fn new() -> Self {
         Self {
@@ -86,12 +86,12 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
         neurogenesis: Self::CorticalAreaNeurogenesisDispatch,
         engine: &mut CpuEngineNeuronData<FIQ>,
     ) -> Result<CpuAddedCorticalArea<FIQ>, CpuAddCorticalAreaError> {
-        use NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator as FeagiAdvanced;
-        use NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted as FeagiSimple;
-        use NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted as ExclusiveDeath;
-        use NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted as ExclusivePower;
-        use NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted as MemoryFireHashing;
-        use NMNeurogenesisStorageOrGeneratorModeled as Model;
+        use NMFeagiAdvancedQuanted as FeagiAdvanced;
+        use NMFeagiSimpleQuanted as FeagiSimple;
+        use NMExclusiveDeathQuanted as ExclusiveDeath;
+        use NMExclusivePowerQuanted as ExclusivePower;
+        use NMMemoryFireHashingQuanted as MemoryFireHashing;
+        use NMModeled as Model;
 
         match neurogenesis {
             Model::FeagiAdvanced(FeagiAdvanced::Standard32Bit(area)) => self.feagi_advanced_standard_32_bit.add_cortical_area(area, engine),
@@ -131,5 +131,5 @@ impl<FIQ: FeagiIndexQuantization> CpuNeuronModelStores<FIQ> for CpuNeuronModelSt
 pub struct CpuConnectomeDispatch;
 
 impl<FIQ: FeagiIndexQuantization> ConnectomeVisitorDispatchWrapper<FIQ> for CpuConnectomeDispatch {
-    type CorticalAreaNeurogenesisDispatch = NMNeurogenesisStorageOrGeneratorModeled<FIQ>;
+    type CorticalAreaNeurogenesisDispatch = NMModeledStorageOrGenerator<FIQ>;
 }

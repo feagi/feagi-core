@@ -9,20 +9,20 @@ use feagi_basis::parallelism::feagi_channel::base_channels::implementations::all
 use feagi_basis::prelude::*;
 use feagi_connectome::neuron_models::cpu_burst_engine::{CpuBurstEngine, CpuConnectomeDispatch};
 use feagi_connectome::neuron_models::models::exclusive_death::quantizations::{
-    NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathQuantFloat32,
+    NMExclusiveDeathQuantFloat32,
 };
 use feagi_connectome::neuron_models::models::exclusive_death::{
     NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalVariance,
     NMExclusiveDeathDataNeuronInternal,
 };
 use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{
-    NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64,
+    NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64,
 };
 use feagi_connectome::neuron_models::models::exclusive_power::{
     NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalVariance,
     NMExclusivePowerDataNeuronInternal, NMExclusivePowerTrait,
 };
-use feagi_connectome::neuron_models::models::NMNeurogenesisStorageOrGeneratorModeled;
+use feagi_connectome::neuron_models::models::NMModeledStorageOrGenerator;
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::connectome_editing::{
     ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepCorticalAreaAdd,
@@ -40,7 +40,7 @@ type Fiq = FeagiIndexQuantizationStandard;
 type Visualization = BurstVisualizationData<Fiq>;
 type Transmitter = thingbuf_sender::Sender;
 type Engine = CpuBurstEngine<Fiq, Transmitter>;
-type Area = NMNeurogenesisStorageOrGeneratorModeled<Fiq>;
+type Area = NMModeledStorageOrGenerator<Fiq>;
 type Unbound = NeuronLayoutRestrictorVoxelUnbound<Fiq>;
 
 /// Names the halves of the visualization channel without depending on thingbuf directly
@@ -85,15 +85,15 @@ where
 }
 
 fn power_area_float_16(dimensions: [usize; 4]) -> Area {
-    Area::ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float16(power_generator::<NMExclusivePowerQuantFloat16>(dimensions)))
+    Area::from_member::<NMExclusivePowerQuantFloat16>(power_generator::<NMExclusivePowerQuantFloat16>(dimensions))
 }
 
 fn power_area_float_32(dimensions: [usize; 4]) -> Area {
-    Area::ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float32(power_generator::<NMExclusivePowerQuantFloat32>(dimensions)))
+    Area::from_member::<NMExclusivePowerQuantFloat32>(power_generator::<NMExclusivePowerQuantFloat32>(dimensions))
 }
 
 fn power_area_float_64(dimensions: [usize; 4]) -> Area {
-    Area::ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float64(power_generator::<NMExclusivePowerQuantFloat64>(dimensions)))
+    Area::from_member::<NMExclusivePowerQuantFloat64>(power_generator::<NMExclusivePowerQuantFloat64>(dimensions))
 }
 
 /// An area whose neurons never fire
@@ -107,7 +107,7 @@ fn death_area_float_32(dims: [usize; 4]) -> Area {
         neuron_internal: NMExclusiveDeathDataNeuronInternal::new(),
     };
     let generator = NMExclusiveDeathQuantFloat32::spawn_neurogenesis_generator_from_precursor::<Fiq, Unbound>(precursor).unwrap();
-    Area::ExclusiveDeath(NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted::Float32(NeurogenesisFromStorageOrByGenerator::ByGenerator(generator)))
+    Area::from_member::<NMExclusiveDeathQuantFloat32>(NeurogenesisFromStorageOrByGenerator::ByGenerator(generator))
 }
 
 /// A CPU burst engine without cortical areas, and the receiver of its visualization

@@ -1,13 +1,12 @@
 use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch, NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance, NMExclusiveDeathTrait};
-use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
-use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::kind::NMKind;
+use crate::neuron_models::models::container::{NMAccessError, NMContainer, NMContainerMarker, NMMember, NMVisitor, NMVisitorMut, NMVisitorRef};
+use crate::neuron_models::models::NMModeled;
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use half::{bf16, f16};
-use serde::{Deserialize, Serialize};
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -19,128 +18,91 @@ pub enum NMExclusiveDeathQuantKind {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum NMExclusiveDeathQuantedKind {
-    Float16(NMExclusiveDeathQuantFloat16),
-    BFloat16(NMExclusiveDeathQuantBFloat16),
-    Float32(NMExclusiveDeathQuantFloat32),
-    Float64(NMExclusiveDeathQuantFloat64)
+/// The data of container `C` for the ExclusiveDeath Neuron Model, with a variant per quantization
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "C::Of<NMExclusiveDeathQuantFloat16>: ::serde::Serialize, C::Of<NMExclusiveDeathQuantBFloat16>: ::serde::Serialize, C::Of<NMExclusiveDeathQuantFloat32>: ::serde::Serialize, C::Of<NMExclusiveDeathQuantFloat64>: ::serde::Serialize",
+    deserialize = "C::Of<NMExclusiveDeathQuantFloat16>: ::serde::Deserialize<'de>, C::Of<NMExclusiveDeathQuantBFloat16>: ::serde::Deserialize<'de>, C::Of<NMExclusiveDeathQuantFloat32>: ::serde::Deserialize<'de>, C::Of<NMExclusiveDeathQuantFloat64>: ::serde::Deserialize<'de>"
+))]
+pub enum NMExclusiveDeathQuanted<C: NMContainer> {
+    Float16(C::Of<NMExclusiveDeathQuantFloat16>),
+    BFloat16(C::Of<NMExclusiveDeathQuantBFloat16>),
+    Float32(C::Of<NMExclusiveDeathQuantFloat32>),
+    Float64(C::Of<NMExclusiveDeathQuantFloat64>),
 }
+
+impl<C: NMContainer> NMExclusiveDeathQuanted<C> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
+        match self {
+            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
+            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
+            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
+            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
+        }
+    }
+
+    /// The model and quantization of the data held
+    pub const fn kind(&self) -> NMKind {
+        NMKind::ExclusiveDeath(self.quant_kind())
+    }
+
+    /// Runs the visitor on the data held, with the member it is held for
+    pub fn dispatch<V: NMVisitor<C>>(self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusiveDeathQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusiveDeathQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusiveDeathQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusiveDeathQuantFloat64>(data),
+        }
+    }
+
+    /// Runs the visitor on a reference to the data held, with the member it is held for
+    pub fn dispatch_ref<'a, V: NMVisitorRef<'a, C>>(&'a self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusiveDeathQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusiveDeathQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusiveDeathQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusiveDeathQuantFloat64>(data),
+        }
+    }
+
+    /// Runs the visitor on a mutable reference to the data held, with the member it is held for
+    pub fn dispatch_mut<'a, V: NMVisitorMut<'a, C>>(&'a mut self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusiveDeathQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusiveDeathQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusiveDeathQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusiveDeathQuantFloat64>(data),
+        }
+    }
+}
+
+/// The marker struct of a quantization of the ExclusiveDeath Neuron Model
+pub type NMExclusiveDeathQuantedKind = NMExclusiveDeathQuanted<NMContainerMarker>;
 
 impl NMExclusiveDeathQuantedKind {
-    pub fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
-        match &self {
-            NMExclusiveDeathQuantedKind::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            NMExclusiveDeathQuantedKind::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            NMExclusiveDeathQuantedKind::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            NMExclusiveDeathQuantedKind::Float64(_) => NMExclusiveDeathQuantKind::Float64,
-        }
-    }
-
-    pub fn from_nm_quant<NM: NMExclusiveDeathTrait>() -> NMExclusiveDeathQuantedKind {
+    /// The marker struct of quantization `NM` of this model
+    pub fn from_nm_quant<NM: NMExclusiveDeathTrait>() -> Self {
         match NM::QUANT_KIND {
-            NMExclusiveDeathQuantKind::Float16 => NMExclusiveDeathQuantedKind::Float16(NMExclusiveDeathQuantFloat16),
-            NMExclusiveDeathQuantKind::BFloat16 => NMExclusiveDeathQuantedKind::BFloat16(NMExclusiveDeathQuantBFloat16),
-            NMExclusiveDeathQuantKind::Float32 => NMExclusiveDeathQuantedKind::Float32(NMExclusiveDeathQuantFloat32),
-            NMExclusiveDeathQuantKind::Float64 => NMExclusiveDeathQuantedKind::Float64(NMExclusiveDeathQuantFloat64),
+            NMExclusiveDeathQuantKind::Float16 => Self::Float16(NMExclusiveDeathQuantFloat16),
+            NMExclusiveDeathQuantKind::BFloat16 => Self::BFloat16(NMExclusiveDeathQuantBFloat16),
+            NMExclusiveDeathQuantKind::Float32 => Self::Float32(NMExclusiveDeathQuantFloat32),
+            NMExclusiveDeathQuantKind::Float64 => Self::Float64(NMExclusiveDeathQuantFloat64),
         }
     }
 }
 
+// The marker structs are unit structs, so the kind is fully described by its quantization
+impl Copy for NMExclusiveDeathQuantedKind {}
 
-//region Generators
-
-/// The data needed to create the generator of the Exclusive Death Neuron Model, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat16>),
-    BFloat16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantBFloat16>),
-    Float32(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat32>),
-    Float64(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusiveDeathQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ> {
-    /// The quantization of the precursor held
-    pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
-        }
+impl PartialEq for NMExclusiveDeathQuantedKind {
+    fn eq(&self, other: &Self) -> bool {
+        self.quant_kind() == other.quant_kind()
     }
 }
 
-/// Allows Neurogenesis of the Exclusive Death Neuron Model by its generator for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusiveDeathQuantFloat16>),
-    BFloat16(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusiveDeathQuantBFloat16>),
-    Float32(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusiveDeathQuantFloat32>),
-    Float64(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusiveDeathQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ> {
-    /// The quantization of the generator held
-    pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
-        }
-    }
-}
-
-/// Allows Neurogenesis of the Exclusive Death Neuron Model from its stored data for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusiveDeathNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisFromStorageOf<FIQ, NMExclusiveDeathQuantFloat16>),
-    BFloat16(NeurogenesisFromStorageOf<FIQ, NMExclusiveDeathQuantBFloat16>),
-    Float32(NeurogenesisFromStorageOf<FIQ, NMExclusiveDeathQuantFloat32>),
-    Float64(NeurogenesisFromStorageOf<FIQ, NMExclusiveDeathQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathNeurogenesisStorageQuanted<FIQ> {
-    /// The quantization of the storage held
-    pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
-        }
-    }
-}
-
-/// Allows Neurogenesis of the Exclusive Death Neuron Model from either its stored data or by its
-/// generator, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusiveDeathQuantFloat16>),
-    BFloat16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusiveDeathQuantBFloat16>),
-    Float32(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusiveDeathQuantFloat32>),
-    Float64(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusiveDeathQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ> {
-    /// The quantization of the storage or generator held
-    pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
-        }
-    }
-}
-
-
-//endregion
+impl Eq for NMExclusiveDeathQuantedKind {}
 
 //endregion
 
@@ -187,18 +149,45 @@ impl From<NMExclusiveDeathQuantFloat16> for NMExclusiveDeathQuantedKind {
 }
 
 impl TryFrom<NMExclusiveDeathQuantedKind> for NMExclusiveDeathQuantFloat16 {
-    type Error = NeuronModelEnumConversionError<NMExclusiveDeathQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusiveDeathQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusiveDeathQuantedKind::Float16(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusiveDeathQuantKind::Float16,
-                    actual,
-                })
-            }
+            NMExclusiveDeathQuanted::Float16(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusiveDeathQuantFloat16 {
+    const KIND: NMKind = NMKind::ExclusiveDeath(NMExclusiveDeathQuantKind::Float16);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float16(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -246,18 +235,45 @@ impl From<NMExclusiveDeathQuantBFloat16> for NMExclusiveDeathQuantedKind {
 }
 
 impl TryFrom<NMExclusiveDeathQuantedKind> for NMExclusiveDeathQuantBFloat16 {
-    type Error = NeuronModelEnumConversionError<NMExclusiveDeathQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusiveDeathQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusiveDeathQuantedKind::BFloat16(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusiveDeathQuantKind::BFloat16,
-                    actual,
-                })
-            }
+            NMExclusiveDeathQuanted::BFloat16(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusiveDeathQuantBFloat16 {
+    const KIND: NMKind = NMKind::ExclusiveDeath(NMExclusiveDeathQuantKind::BFloat16);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::BFloat16(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -305,18 +321,45 @@ impl From<NMExclusiveDeathQuantFloat32> for NMExclusiveDeathQuantedKind {
 }
 
 impl TryFrom<NMExclusiveDeathQuantedKind> for NMExclusiveDeathQuantFloat32 {
-    type Error = NeuronModelEnumConversionError<NMExclusiveDeathQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusiveDeathQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusiveDeathQuantedKind::Float32(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusiveDeathQuantKind::Float32,
-                    actual,
-                })
-            }
+            NMExclusiveDeathQuanted::Float32(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusiveDeathQuantFloat32 {
+    const KIND: NMKind = NMKind::ExclusiveDeath(NMExclusiveDeathQuantKind::Float32);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float32(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -364,18 +407,45 @@ impl From<NMExclusiveDeathQuantFloat64> for NMExclusiveDeathQuantedKind {
 }
 
 impl TryFrom<NMExclusiveDeathQuantedKind> for NMExclusiveDeathQuantFloat64 {
-    type Error = NeuronModelEnumConversionError<NMExclusiveDeathQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusiveDeathQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusiveDeathQuantedKind::Float64(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusiveDeathQuantKind::Float64,
-                    actual,
-                })
-            }
+            NMExclusiveDeathQuanted::Float64(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusiveDeathQuantFloat64 {
+    const KIND: NMKind = NMKind::ExclusiveDeath(NMExclusiveDeathQuantKind::Float64);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float64(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusiveDeath(NMExclusiveDeathQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -389,145 +459,30 @@ impl From<NMExclusiveDeathQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMExclusiveDeathQuantKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
         match value {
-            NMKind::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMKind::ExclusiveDeath(quant) => Ok(quant),
+            actual => Err(NMAccessError::IncorrectModel { expected: "ExclusiveDeath", actual }),
         }
     }
 }
 
-impl From<NMExclusiveDeathQuantedKind> for NMQuantedKind {
-    fn from(value: NMExclusiveDeathQuantedKind) -> Self {
-        NMQuantedKind::ExclusiveDeath(value)
+impl<C: NMContainer> From<NMExclusiveDeathQuanted<C>> for NMModeled<C> {
+    fn from(value: NMExclusiveDeathQuanted<C>) -> Self {
+        NMModeled::ExclusiveDeath(value)
     }
 }
 
-impl TryFrom<NMQuantedKind> for NMExclusiveDeathQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+impl<C: NMContainer> TryFrom<NMModeled<C>> for NMExclusiveDeathQuanted<C> {
+    type Error = NMAccessError;
 
-    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+    fn try_from(value: NMModeled<C>) -> Result<Self, Self::Error> {
+        let actual = value.kind();
         match value {
-            NMQuantedKind::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
-        NMNeurogenesisGeneratorPrecursorModeled::ExclusiveDeath(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorPrecursorModeled::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisGeneratorModeled::ExclusiveDeath(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMExclusiveDeathNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorModeled::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusiveDeathNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusiveDeathNeurogenesisStorageQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageModeled::ExclusiveDeath(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMExclusiveDeathNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageModeled::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageOrGeneratorModeled::ExclusiveDeath(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageOrGeneratorModeled::ExclusiveDeath(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMModeled::ExclusiveDeath(quanted) => Ok(quanted),
+            _ => Err(NMAccessError::IncorrectModel { expected: "ExclusiveDeath", actual }),
         }
     }
 }

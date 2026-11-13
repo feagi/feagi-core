@@ -1,13 +1,12 @@
 use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
-use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
-use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::kind::NMKind;
+use crate::neuron_models::models::container::{NMAccessError, NMContainer, NMContainerMarker, NMMember, NMVisitor, NMVisitorMut, NMVisitorRef};
+use crate::neuron_models::models::NMModeled;
 use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
 use half::{bf16, f16};
-use serde::{Deserialize, Serialize};
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -19,129 +18,91 @@ pub enum NMExclusivePowerQuantKind {
     Float64,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum NMExclusivePowerQuantedKind {
-    Float16(NMExclusivePowerQuantFloat16),
-    BFloat16(NMExclusivePowerQuantBFloat16),
-    Float32(NMExclusivePowerQuantFloat32),
-    Float64(NMExclusivePowerQuantFloat64)
+/// The data of container `C` for the ExclusivePower Neuron Model, with a variant per quantization
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "C::Of<NMExclusivePowerQuantFloat16>: ::serde::Serialize, C::Of<NMExclusivePowerQuantBFloat16>: ::serde::Serialize, C::Of<NMExclusivePowerQuantFloat32>: ::serde::Serialize, C::Of<NMExclusivePowerQuantFloat64>: ::serde::Serialize",
+    deserialize = "C::Of<NMExclusivePowerQuantFloat16>: ::serde::Deserialize<'de>, C::Of<NMExclusivePowerQuantBFloat16>: ::serde::Deserialize<'de>, C::Of<NMExclusivePowerQuantFloat32>: ::serde::Deserialize<'de>, C::Of<NMExclusivePowerQuantFloat64>: ::serde::Deserialize<'de>"
+))]
+pub enum NMExclusivePowerQuanted<C: NMContainer> {
+    Float16(C::Of<NMExclusivePowerQuantFloat16>),
+    BFloat16(C::Of<NMExclusivePowerQuantBFloat16>),
+    Float32(C::Of<NMExclusivePowerQuantFloat32>),
+    Float64(C::Of<NMExclusivePowerQuantFloat64>),
 }
+
+impl<C: NMContainer> NMExclusivePowerQuanted<C> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
+        match self {
+            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
+            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
+            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
+            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
+        }
+    }
+
+    /// The model and quantization of the data held
+    pub const fn kind(&self) -> NMKind {
+        NMKind::ExclusivePower(self.quant_kind())
+    }
+
+    /// Runs the visitor on the data held, with the member it is held for
+    pub fn dispatch<V: NMVisitor<C>>(self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusivePowerQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusivePowerQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusivePowerQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusivePowerQuantFloat64>(data),
+        }
+    }
+
+    /// Runs the visitor on a reference to the data held, with the member it is held for
+    pub fn dispatch_ref<'a, V: NMVisitorRef<'a, C>>(&'a self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusivePowerQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusivePowerQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusivePowerQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusivePowerQuantFloat64>(data),
+        }
+    }
+
+    /// Runs the visitor on a mutable reference to the data held, with the member it is held for
+    pub fn dispatch_mut<'a, V: NMVisitorMut<'a, C>>(&'a mut self, visitor: V) -> V::Output {
+        match self {
+            Self::Float16(data) => visitor.visit::<NMExclusivePowerQuantFloat16>(data),
+            Self::BFloat16(data) => visitor.visit::<NMExclusivePowerQuantBFloat16>(data),
+            Self::Float32(data) => visitor.visit::<NMExclusivePowerQuantFloat32>(data),
+            Self::Float64(data) => visitor.visit::<NMExclusivePowerQuantFloat64>(data),
+        }
+    }
+}
+
+/// The marker struct of a quantization of the ExclusivePower Neuron Model
+pub type NMExclusivePowerQuantedKind = NMExclusivePowerQuanted<NMContainerMarker>;
 
 impl NMExclusivePowerQuantedKind {
-    pub fn quant_kind(&self) -> NMExclusivePowerQuantKind {
-        match &self {
-            NMExclusivePowerQuantedKind::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            NMExclusivePowerQuantedKind::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            NMExclusivePowerQuantedKind::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            NMExclusivePowerQuantedKind::Float64(_) => NMExclusivePowerQuantKind::Float64,
-        }
-    }
-
-    pub fn from_nm_quant<NM: NMExclusivePowerTrait>() -> NMExclusivePowerQuantedKind {
+    /// The marker struct of quantization `NM` of this model
+    pub fn from_nm_quant<NM: NMExclusivePowerTrait>() -> Self {
         match NM::QUANT_KIND {
-            NMExclusivePowerQuantKind::Float16 => NMExclusivePowerQuantedKind::Float16(NMExclusivePowerQuantFloat16),
-            NMExclusivePowerQuantKind::BFloat16 => NMExclusivePowerQuantedKind::BFloat16(NMExclusivePowerQuantBFloat16),
-            NMExclusivePowerQuantKind::Float32 => NMExclusivePowerQuantedKind::Float32(NMExclusivePowerQuantFloat32),
-            NMExclusivePowerQuantKind::Float64 => NMExclusivePowerQuantedKind::Float64(NMExclusivePowerQuantFloat64),
+            NMExclusivePowerQuantKind::Float16 => Self::Float16(NMExclusivePowerQuantFloat16),
+            NMExclusivePowerQuantKind::BFloat16 => Self::BFloat16(NMExclusivePowerQuantBFloat16),
+            NMExclusivePowerQuantKind::Float32 => Self::Float32(NMExclusivePowerQuantFloat32),
+            NMExclusivePowerQuantKind::Float64 => Self::Float64(NMExclusivePowerQuantFloat64),
         }
     }
 }
 
+// The marker structs are unit structs, so the kind is fully described by its quantization
+impl Copy for NMExclusivePowerQuantedKind {}
 
-//region Generators
-
-/// The data needed to create the generator of the Exclusive Power Neuron Model, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusivePowerQuantFloat16>),
-    BFloat16(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>),
-    Float32(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusivePowerQuantFloat32>),
-    Float64(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMExclusivePowerQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ> {
-    /// The quantization of the precursor held
-    pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
-        }
+impl PartialEq for NMExclusivePowerQuantedKind {
+    fn eq(&self, other: &Self) -> bool {
+        self.quant_kind() == other.quant_kind()
     }
 }
 
-/// Allows Neurogenesis of the Exclusive Power Neuron Model by its generator for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-
-#[serde(bound = "")]
-pub enum NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>),
-    BFloat16(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>),
-    Float32(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>),
-    Float64(NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ> {
-    /// The quantization of the generator held
-    pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
-        }
-    }
-}
-
-/// Allows Neurogenesis of the Exclusive Power Neuron Model from its stored data for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusivePowerNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16>),
-    BFloat16(NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16>),
-    Float32(NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32>),
-    Float64(NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusivePowerNeurogenesisStorageQuanted<FIQ> {
-    /// The quantization of the storage held
-    pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
-        }
-    }
-}
-
-/// Allows Neurogenesis of the Exclusive Power Neuron Model from either its stored data or by its
-/// generator, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Float16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16>),
-    BFloat16(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16>),
-    Float32(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32>),
-    Float64(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
-    /// The quantization of the storage or generator held
-    pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
-        match self {
-            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
-        }
-    }
-}
-
-
-//endregion
+impl Eq for NMExclusivePowerQuantedKind {}
 
 //endregion
 
@@ -188,18 +149,45 @@ impl From<NMExclusivePowerQuantFloat16> for NMExclusivePowerQuantedKind {
 }
 
 impl TryFrom<NMExclusivePowerQuantedKind> for NMExclusivePowerQuantFloat16 {
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusivePowerQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerQuantedKind::Float16(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantKind::Float16,
-                    actual,
-                })
-            }
+            NMExclusivePowerQuanted::Float16(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusivePowerQuantFloat16 {
+    const KIND: NMKind = NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float16);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float16(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -247,18 +235,45 @@ impl From<NMExclusivePowerQuantBFloat16> for NMExclusivePowerQuantedKind {
 }
 
 impl TryFrom<NMExclusivePowerQuantedKind> for NMExclusivePowerQuantBFloat16 {
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusivePowerQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerQuantedKind::BFloat16(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantKind::BFloat16,
-                    actual,
-                })
-            }
+            NMExclusivePowerQuanted::BFloat16(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusivePowerQuantBFloat16 {
+    const KIND: NMKind = NMKind::ExclusivePower(NMExclusivePowerQuantKind::BFloat16);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusivePower(NMExclusivePowerQuanted::BFloat16(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::BFloat16(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -306,18 +321,45 @@ impl From<NMExclusivePowerQuantFloat32> for NMExclusivePowerQuantedKind {
 }
 
 impl TryFrom<NMExclusivePowerQuantedKind> for NMExclusivePowerQuantFloat32 {
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusivePowerQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerQuantedKind::Float32(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantKind::Float32,
-                    actual,
-                })
-            }
+            NMExclusivePowerQuanted::Float32(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusivePowerQuantFloat32 {
+    const KIND: NMKind = NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float32);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float32(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float32(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -365,18 +407,45 @@ impl From<NMExclusivePowerQuantFloat64> for NMExclusivePowerQuantedKind {
 }
 
 impl TryFrom<NMExclusivePowerQuantedKind> for NMExclusivePowerQuantFloat64 {
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMExclusivePowerQuantedKind) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerQuantedKind::Float64(s) => {Ok(s)},
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantKind::Float64,
-                    actual,
-                })
-            }
+            NMExclusivePowerQuanted::Float64(marker) => Ok(marker),
+            #[allow(unreachable_patterns)]
+            other => Err(NMAccessError::IncorrectMember { expected: <Self as NMMember>::KIND, actual: other.kind() }),
+        }
+    }
+}
+
+impl NMMember for NMExclusivePowerQuantFloat64 {
+    const KIND: NMKind = NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float64);
+    const MARKER: Self = Self;
+
+    fn into_modeled<C: NMContainer>(data: C::Of<Self>) -> NMModeled<C> {
+        NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float64(data))
+    }
+
+    fn try_from_modeled<C: NMContainer>(value: NMModeled<C>) -> Result<C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
+        }
+    }
+
+    fn try_ref_modeled<C: NMContainer>(value: &NMModeled<C>) -> Result<&C::Of<Self>, NMAccessError> {
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual: value.kind() }),
+        }
+    }
+
+    fn try_mut_modeled<C: NMContainer>(value: &mut NMModeled<C>) -> Result<&mut C::Of<Self>, NMAccessError> {
+        let actual = value.kind();
+        match value {
+            NMModeled::ExclusivePower(NMExclusivePowerQuanted::Float64(data)) => Ok(data),
+            _ => Err(NMAccessError::IncorrectMember { expected: Self::KIND, actual }),
         }
     }
 }
@@ -390,145 +459,30 @@ impl From<NMExclusivePowerQuantKind> for NMKind {
 }
 
 impl TryFrom<NMKind> for NMExclusivePowerQuantKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+    type Error = NMAccessError;
 
     fn try_from(value: NMKind) -> Result<Self, Self::Error> {
         match value {
-            NMKind::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMKind::ExclusivePower(quant) => Ok(quant),
+            actual => Err(NMAccessError::IncorrectModel { expected: "ExclusivePower", actual }),
         }
     }
 }
 
-impl From<NMExclusivePowerQuantedKind> for NMQuantedKind {
-    fn from(value: NMExclusivePowerQuantedKind) -> Self {
-        NMQuantedKind::ExclusivePower(value)
+impl<C: NMContainer> From<NMExclusivePowerQuanted<C>> for NMModeled<C> {
+    fn from(value: NMExclusivePowerQuanted<C>) -> Self {
+        NMModeled::ExclusivePower(value)
     }
 }
 
-impl TryFrom<NMQuantedKind> for NMExclusivePowerQuantedKind {
-    type Error = NeuronModelEnumConversionError<NMKind>;
+impl<C: NMContainer> TryFrom<NMModeled<C>> for NMExclusivePowerQuanted<C> {
+    type Error = NMAccessError;
 
-    fn try_from(value: NMQuantedKind) -> Result<Self, Self::Error> {
+    fn try_from(value: NMModeled<C>) -> Result<Self, Self::Error> {
+        let actual = value.kind();
         match value {
-            NMQuantedKind::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
-        NMNeurogenesisGeneratorPrecursorModeled::ExclusivePower(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorPrecursorModeled::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisGeneratorModeled::ExclusivePower(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorModeled::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusivePowerNeurogenesisStorageQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageModeled::ExclusivePower(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageModeled::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageOrGeneratorModeled::ExclusivePower(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisStorageOrGeneratorModeled::ExclusivePower(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMModeled::ExclusivePower(quanted) => Ok(quanted),
+            _ => Err(NMAccessError::IncorrectModel { expected: "ExclusivePower", actual }),
         }
     }
 }

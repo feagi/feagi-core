@@ -16,7 +16,7 @@ where
 }
 
 /// The data needed to build the Neurogenesis Generator for a given neuron model
-pub trait NeurogenesisGeneratorPrecursor<FIQ, NM>: Sized + Clone + Serialize + serde::de::DeserializeOwned
+pub trait NeurogenesisGeneratorPrecursor<FIQ, NM>: Sized + Clone + core::fmt::Debug + Serialize + serde::de::DeserializeOwned
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel
