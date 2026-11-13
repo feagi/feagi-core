@@ -1,152 +1,26 @@
 //! How the scratch and variance data of `ExclusivePower` neurons is generated: the
 //! `NeuronModel::NeurogenesisDefaults` of every quantization level of the model. Its
-//! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
+//! `NeuronModel::NeurogenesisByGenerator` is the shared `NeurogenesisGeneratorUniformDefault`
 // TODO these are stubs, fill them in
 
 use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
-use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64, NMExclusivePowerQuantKind};
 use crate::neuron_models::models::exclusive_power::NMExclusivePowerTrait;
 use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronVariance};
-use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf, NeuronModelEnumConversionError};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-//region Generator
-
-// NOTE: we are using NeurogenesisGeneratorUniformDefault, not a specific impl for this model
-
-//region Impls
-
-impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisGeneratorQuanted::Float16(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
-
-    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
-        match value {
-            NMExclusivePowerNeurogenesisGeneratorQuanted::Float16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisGeneratorQuanted::BFloat16(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
-
-    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
-        match value {
-            NMExclusivePowerNeurogenesisGeneratorQuanted::BFloat16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
-        NMExclusivePowerNeurogenesisGeneratorQuanted::Float32(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
-
-    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
-        match value {
-            NMExclusivePowerNeurogenesisGeneratorQuanted::Float32(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
-                    actual,
-                })
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
-        NMExclusivePowerNeurogenesisGeneratorQuanted::Float64(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
-
-    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
-        match value {
-            NMExclusivePowerNeurogenesisGeneratorQuanted::Float64(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
-                    actual,
-                })
-            }
-        }
-    }
-}
-
-//endregion
-
-//endregion
+use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisValidatedGeneratorQuanted, NMExclusivePowerQuantKind, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64};
+#[cfg(feature = "alloc")]
+use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisValidatedStorageQuanted, NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted};
+use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf};
+#[cfg(feature = "alloc")]
+use crate::neuron_models::models::{NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
+#[cfg(feature = "alloc")]
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::{ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator};
 
 //region Defaults
 
@@ -197,262 +71,518 @@ impl<NM: NMExclusivePowerTrait> CorticalDataVarianceSpecification<NM> for NMExcl
 
 //endregion
 
-//region Storage and StorageOrGenerator Conversions
+//region Quant Level Conversions
 
-//region Storage
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ> {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
+        Self::Float16(value)
+    }
+}
 
-impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisGeneratorQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ> {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
+        Self::BFloat16(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantBFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisGeneratorQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ> {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
+        Self::Float32(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat32> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisGeneratorQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ> {
+    fn from(value: NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
+        Self::Float64(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>> for NeurogenesisByGeneratorTypeOf<FIQ, NMExclusivePowerQuantFloat64> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisGeneratorQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisStorageQuanted::Float16(value)
+        Self::Float16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat16> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageQuanted::Float16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisStorageQuanted::BFloat16(value)
+        Self::BFloat16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantBFloat16> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageQuanted::BFloat16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
-        NMExclusivePowerNeurogenesisStorageQuanted::Float32(value)
+        Self::Float32(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat32> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageQuanted::Float32(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisStorageQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
-        NMExclusivePowerNeurogenesisStorageQuanted::Float64(value)
+        Self::Float64(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageQuanted<FIQ>> for NeurogenesisFromStorageOf<FIQ, NMExclusivePowerQuantFloat64> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageQuanted::Float64(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-//endregion
-
-//region Storage Or Generator
-
-impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float16(value)
+        Self::Float16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat16> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
-        NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::BFloat16(value)
+        Self::BFloat16(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantBFloat16> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::BFloat16(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
-        NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float32(value)
+        Self::Float32(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat32> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float32(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ> {
     fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
-        NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float64(value)
+        Self::Float64(value)
     }
 }
 
-impl<FIQ> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMExclusivePowerQuantFloat64> {
     type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
 
     fn try_from(value: NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
-        let actual = value.quant_kind();
         match value {
-            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float64(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
-                    expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
-                    actual,
-                })
-            }
+            NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
         }
     }
 }
 
-//endregion
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
+        Self::Float16(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>> for ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedGeneratorQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
+        Self::BFloat16(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>> for ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantBFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedGeneratorQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
+        Self::Float32(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>> for ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat32> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedGeneratorQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
+        Self::Float64(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>> for ValidatedNeurogenesisGenerator<FIQ, NMExclusivePowerQuantFloat64> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedGeneratorQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
+        Self::Float16(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>> for ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
+        Self::BFloat16(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>> for ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantBFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
+        Self::Float32(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>> for ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat32> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
+        Self::Float64(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>> for ValidatedNeurogenesisStorage<FIQ, NMExclusivePowerQuantFloat64> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat16>> for NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat16>) -> Self {
+        Self::Float16(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted::Float16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantBFloat16>> for NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantBFloat16>) -> Self {
+        Self::BFloat16(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantBFloat16> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted::BFloat16(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantBFloat16::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat32>> for NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat32>) -> Self {
+        Self::Float32(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat32> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted::Float32(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat32::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat64>> for NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    fn from(value: ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat64>) -> Self {
+        Self::Float64(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NMExclusivePowerQuantFloat64> {
+    type Error = NeuronModelEnumConversionError<NMExclusivePowerQuantKind>;
+
+    fn try_from(value: NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMExclusivePowerNeurogenesisValidatedStorageOrGeneratorQuanted::Float64(v) => Ok(v),
+            other => Err(NeuronModelEnumConversionError::IncompatibleUnwrap {
+                expected: NMExclusivePowerQuantFloat64::QUANT_KIND,
+                actual: other.quant_kind(),
+            }),
+        }
+    }
+}
 
 //endregion

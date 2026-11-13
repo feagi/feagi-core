@@ -1,12 +1,16 @@
-use serde::{Deserialize, Serialize};
 use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
 use crate::neuron_models::models::kind::{NMKind, NMQuantedKind};
-use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::models::{NeurogenesisByGeneratorPrecursorTypeOf, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorPrecursorUniformDefault, NeurogenesisGeneratorUniformDefault};
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use crate::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisValidatedGeneratorModeled, NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf};
+#[cfg(feature = "alloc")]
+use crate::neuron_models::models::{NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled, NMNeurogenesisValidatedStorageModeled, NMNeurogenesisValidatedStorageOrGeneratorModeled, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
+#[cfg(feature = "alloc")]
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::validation::{ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator};
+
 //region enums
 
 #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
@@ -35,33 +39,17 @@ impl NMMemoryFireHashingQuantedKind {
 }
 
 
-//region Generators
+//region Neurogenesis
 
-/// The data needed to create the generator of the Memory Fire Hashing Neuron Model, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "")]
-pub enum NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisByGeneratorPrecursorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
-}
-
-impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ> {
-    /// The quantization of the precursor held
-    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
-        match self {
-            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
-        }
-    }
-}
-
-/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model by its generator for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The neurogenesis generator of the Memory Fire Hashing Neuron Model, for a given quantization
+#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisByGeneratorTypeOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
 }
 
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ> {
-    /// The quantization of the generator held
+    /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
         match self {
             Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
@@ -69,15 +57,17 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisGeneratorQuante
     }
 }
 
-/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from its stored data for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The stored neuron data of the Memory Fire Hashing Neuron Model, for a given quantization
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ> {
-    /// The quantization of the storage held
+    /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
         match self {
             Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
@@ -85,16 +75,17 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageQuanted<
     }
 }
 
-/// Allows Neurogenesis of the Memory Fire Hashing Neuron Model from either its stored data or by its
-/// generator, for a given quantization
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The stored neuron data or the generator of the Memory Fire Hashing Neuron Model, for a given quantization
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound = "")]
 pub enum NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
-    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>)
+    Standard32Bit(NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ> {
-    /// The quantization of the storage or generator held
+    /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
         match self {
             Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
@@ -102,6 +93,54 @@ impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisStorageOrGenera
     }
 }
 
+/// The validated neurogenesis generator of the Memory Fire Hashing Neuron Model, for a given quantization
+#[derive(Debug, Clone)]
+pub enum NMMemoryFireHashingNeurogenesisValidatedGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ValidatedNeurogenesisGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
+}
+
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// The validated stored neuron data of the Memory Fire Hashing Neuron Model, for a given quantization
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone)]
+pub enum NMMemoryFireHashingNeurogenesisValidatedStorageQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ValidatedNeurogenesisStorage<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisValidatedStorageQuanted<FIQ> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+}
+
+/// The validated stored neuron data or generator of the Memory Fire Hashing Neuron Model, for a given quantization
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone)]
+pub enum NMMemoryFireHashingNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ: FeagiIndexQuantization> {
+    Standard32Bit(ValidatedNeurogenesisStorageOrGenerator<FIQ, NMMemoryFireHashingQuantStandard32Bit>),
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> NMMemoryFireHashingNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    /// The quantization of the data held
+    pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
+        match self {
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+        }
+    }
+}
 
 //endregion
 
@@ -120,10 +159,8 @@ impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
     type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::MemoryFireHashingNeurogenesisDefaults<FIQ, Self>;
 
-    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> =
         NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization> =
-        NeurogenesisGeneratorPrecursorUniformDefault<FIQ, Self>;
 
     type CorticalDataProperties = NMMemoryFireHashingDataCorticalProperties<Self>;
     type CorticalDataInternal = NMMemoryFireHashingDataCorticalInternal<Self>;
@@ -211,110 +248,112 @@ impl TryFrom<NMQuantedKind> for NMMemoryFireHashingQuantedKind {
     }
 }
 
-impl<FIQ> From<NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>> for NMNeurogenesisGeneratorPrecursorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    fn from(value: NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>) -> Self {
-        NMNeurogenesisGeneratorPrecursorModeled::MemoryFireHashing(value)
-    }
-}
-
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorPrecursorModeled<FIQ>> for NMMemoryFireHashingQuantedNeurogenesisGeneratorPrecursor<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
-    type Error = NeuronModelEnumConversionError<NMKind>;
-
-    fn try_from(value: NMNeurogenesisGeneratorPrecursorModeled<FIQ>) -> Result<Self, Self::Error> {
-        match value {
-            NMNeurogenesisGeneratorPrecursorModeled::MemoryFireHashing(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
-        }
-    }
-}
-
-impl<FIQ> From<NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>> for NMNeurogenesisGeneratorModeled<FIQ> {
     fn from(value: NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisGeneratorModeled::MemoryFireHashing(value)
+        Self::MemoryFireHashing(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisGeneratorQuanted<FIQ> {
     type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
         match value {
-            NMNeurogenesisGeneratorModeled::MemoryFireHashing(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMNeurogenesisGeneratorModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
         }
     }
 }
 
-impl<FIQ> From<NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>> for NMNeurogenesisStorageModeled<FIQ> {
     fn from(value: NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageModeled::MemoryFireHashing(value)
+        Self::MemoryFireHashing(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisStorageModeled<FIQ>> for NMMemoryFireHashingNeurogenesisStorageQuanted<FIQ> {
     type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageModeled<FIQ>) -> Result<Self, Self::Error> {
         match value {
-            NMNeurogenesisStorageModeled::MemoryFireHashing(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMNeurogenesisStorageModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
         }
     }
 }
 
-impl<FIQ> From<NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisStorageOrGeneratorModeled<FIQ> {
     fn from(value: NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Self {
-        NMNeurogenesisStorageOrGeneratorModeled::MemoryFireHashing(value)
+        Self::MemoryFireHashing(value)
     }
 }
 
-impl<FIQ> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>
-where
-    FIQ: FeagiIndexQuantization,
-{
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisStorageOrGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ> {
     type Error = NeuronModelEnumConversionError<NMKind>;
 
     fn try_from(value: NMNeurogenesisStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
         match value {
-            NMNeurogenesisStorageOrGeneratorModeled::MemoryFireHashing(v) => {
-                Ok(v)
-            },
-            _ => {
-                Err(NeuronModelEnumConversionError::IncompatibleModel)
-            }
+            NMNeurogenesisStorageOrGeneratorModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisValidatedGeneratorQuanted<FIQ>> for NMNeurogenesisValidatedGeneratorModeled<FIQ> {
+    fn from(value: NMMemoryFireHashingNeurogenesisValidatedGeneratorQuanted<FIQ>) -> Self {
+        Self::MemoryFireHashing(value)
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisValidatedGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisValidatedGeneratorQuanted<FIQ> {
+    type Error = NeuronModelEnumConversionError<NMKind>;
+
+    fn try_from(value: NMNeurogenesisValidatedGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMNeurogenesisValidatedGeneratorModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisValidatedStorageQuanted<FIQ>> for NMNeurogenesisValidatedStorageModeled<FIQ> {
+    fn from(value: NMMemoryFireHashingNeurogenesisValidatedStorageQuanted<FIQ>) -> Self {
+        Self::MemoryFireHashing(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisValidatedStorageModeled<FIQ>> for NMMemoryFireHashingNeurogenesisValidatedStorageQuanted<FIQ> {
+    type Error = NeuronModelEnumConversionError<NMKind>;
+
+    fn try_from(value: NMNeurogenesisValidatedStorageModeled<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMNeurogenesisValidatedStorageModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> From<NMMemoryFireHashingNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>> for NMNeurogenesisValidatedStorageOrGeneratorModeled<FIQ> {
+    fn from(value: NMMemoryFireHashingNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ>) -> Self {
+        Self::MemoryFireHashing(value)
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ: FeagiIndexQuantization> TryFrom<NMNeurogenesisValidatedStorageOrGeneratorModeled<FIQ>> for NMMemoryFireHashingNeurogenesisValidatedStorageOrGeneratorQuanted<FIQ> {
+    type Error = NeuronModelEnumConversionError<NMKind>;
+
+    fn try_from(value: NMNeurogenesisValidatedStorageOrGeneratorModeled<FIQ>) -> Result<Self, Self::Error> {
+        match value {
+            NMNeurogenesisValidatedStorageOrGeneratorModeled::MemoryFireHashing(v) => Ok(v),
+            _ => Err(NeuronModelEnumConversionError::IncompatibleModel),
         }
     }
 }

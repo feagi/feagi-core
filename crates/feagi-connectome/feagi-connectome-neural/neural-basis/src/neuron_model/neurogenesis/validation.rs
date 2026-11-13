@@ -3,8 +3,11 @@ use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutEr
 use crate::neuron_model::NeuronModel;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 
+/// Calls `$f` on whichever validated method the enum holds
+#[cfg(feature = "alloc")]
 macro_rules! either {
     ($self:ident.$f:ident()) => {
         match $self {
@@ -94,14 +97,18 @@ where
     }
 }
 
+#[cfg(feature = "alloc")]
 pub type ValidatedNeurogenesisStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel> = ValidatedNeurogenesisMethod<FIQ, NM, NeurogenesisByStorage<FIQ, NM>>;
 pub type ValidatedNeurogenesisGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> = ValidatedNeurogenesisMethod<FIQ, NM, NM::NeurogenesisByGenerator<FIQ>>;
 
+#[cfg(feature = "alloc")]
+#[derive(Clone, Debug)]
 pub enum ValidatedNeurogenesisStorageOrGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
     Storage(ValidatedNeurogenesisStorage<FIQ, NM>),
     Generator(ValidatedNeurogenesisGenerator<FIQ, NM>)
 }
 
+#[cfg(feature = "alloc")]
 impl<FIQ, NM> ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,

@@ -1,5 +1,6 @@
 use crate::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-use crate::neuron_model::neurogenesis::{NeurogenesisMethod, NeurogenesisStorageOrGenerator};
+#[cfg(feature = "alloc")]
+use crate::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
 use crate::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::quantization_levels::MembranePotentialQuantization;
@@ -10,7 +11,9 @@ use model_data::{
 };
 use neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
 use neurogenesis::validation::{NeurogenesisValidationError, NeurogenesisValidator, ValidatedNeurogenesisMethod};
+#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
+#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::validation::ValidatedNeurogenesisStorageOrGenerator;
 
 //pub mod interfacing;
@@ -142,6 +145,7 @@ pub trait NeuronModel: MembranePotentialQuantization
         ValidatedNeurogenesisMethod::validate_and_wrap::<V, Res>(generator)
     }
 
+    #[cfg(feature = "alloc")]
     fn verify_and_wrap_storage<
         FIQ: FeagiIndexQuantization,
         Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>,
@@ -152,6 +156,7 @@ pub trait NeuronModel: MembranePotentialQuantization
         ValidatedNeurogenesisMethod::validate_and_wrap::<V, Res>(storage)
     }
 
+    #[cfg(feature = "alloc")]
     fn verify_and_wrap_storage_or_generator<
         FIQ: FeagiIndexQuantization,
         Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>,
