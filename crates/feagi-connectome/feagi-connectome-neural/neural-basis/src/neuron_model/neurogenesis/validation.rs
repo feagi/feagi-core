@@ -6,6 +6,16 @@ use serde::{Deserialize, Serialize};
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 
+macro_rules! either {
+    ($self:ident.$f:ident()) => {
+        match $self {
+            ValidatedNeurogenesisStorageOrGenerator::Storage(s) => s.$f(),
+            ValidatedNeurogenesisStorageOrGenerator::Generator(g) => g.$f(),
+        }
+    };
+}
+
+
 /// Checks a precursor before it can be spawned. Implemented on zero sized structs, typically one per
 /// cortical type
 pub trait NeurogenesisValidator<FIQ, NM>
@@ -18,35 +28,6 @@ where
         // default impl
         Ok(())
     }
-}
-
-
-pub trait ValidatedNeurogenesisPeeking<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
-
-    fn peek_neurogenesis_impl(&self) -> &impl NeurogenesisMethod<FIQ, NM>;
-
-    fn peek_layout(&self) -> &NeuronLayoutOf<FIQ, NM>;
-    
-    
-    //region Default Impls
-    
-    fn get_cortical_context(&self) -> &CorticalLayoutContextOf<FIQ, NM> {
-        self.peek_neurogenesis_impl().get_cortical_layout_context()
-    }
-    
-    fn get_universal_properties(&self) -> &NeuronModelUniversalCorticalProperties<NM> {
-        self.peek_neurogenesis_impl().get_universal_cortical_properties()
-    }
-
-    fn get_model_cortical_properties(&self) -> &NM::CorticalDataProperties {
-        self.peek_neurogenesis_impl().get_model_cortical_properties()
-    }
-
-    fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
-        self.peek_neurogenesis_impl().get_model_cortical_variance()
-    }
-    //endregion
-    
 }
 
 
@@ -84,53 +65,67 @@ where
         )
     }
 
+    pub fn peek_neurogenesis_impl(&self) -> &NGM {
+        &self.method
+    }
+
+    pub fn peek_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
+        &self.calculated_neuron_layout
+    }
+
+    pub fn get_cortical_context(&self) -> &CorticalLayoutContextOf<FIQ, NM> {
+        self.method.get_cortical_layout_context()
+    }
+
+    pub fn get_universal_properties(&self) -> &NeuronModelUniversalCorticalProperties<NM> {
+        self.method.get_universal_cortical_properties()
+    }
+
+    pub fn get_model_cortical_properties(&self) -> &NM::CorticalDataProperties {
+        self.method.get_model_cortical_properties()
+    }
+
+    pub fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
+        self.method.get_model_cortical_variance()
+    }
+
     /// Unwrap the verified method to get back the original struct and layout
     pub fn unwrap(self) -> (NGM, NeuronLayoutOf<FIQ, NM>) {
         (self.method, self.calculated_neuron_layout)
     }
 }
 
-impl<FIQ, NM, NGM> ValidatedNeurogenesisPeeking<FIQ, NM> for ValidatedNeurogenesisMethod<FIQ, NM, NGM>
-where
-    FIQ: FeagiIndexQuantization,
-    NM: NeuronModel,
-    NGM: NeurogenesisMethod<FIQ, NM>
-{
-    fn peek_neurogenesis_impl(&self) -> &impl NeurogenesisMethod<FIQ, NM> {
-        &self.method
-    }
-
-    fn peek_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
-        &self.calculated_neuron_layout
-    }
-}
-
-
 pub type ValidatedNeurogenesisStorage<FIQ: FeagiIndexQuantization, NM: NeuronModel> = ValidatedNeurogenesisMethod<FIQ, NM, NeurogenesisByStorage<FIQ, NM>>;
 pub type ValidatedNeurogenesisGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> = ValidatedNeurogenesisMethod<FIQ, NM, NM::NeurogenesisByGenerator<FIQ>>;
 
 pub enum ValidatedNeurogenesisStorageOrGenerator<FIQ: FeagiIndexQuantization, NM: NeuronModel> {
-    Storage(ValidatedNeurogenesisGenerator<FIQ, NM>),
+    Storage(ValidatedNeurogenesisStorage<FIQ, NM>),
     Generator(ValidatedNeurogenesisGenerator<FIQ, NM>)
 }
 
-impl<FIQ, NM> ValidatedNeurogenesisPeeking<FIQ, NM> for ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>
+impl<FIQ, NM> ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    fn peek_neurogenesis_impl(&self) -> &impl NeurogenesisMethod<FIQ, NM> {
-        match &self {
-            ValidatedNeurogenesisStorageOrGenerator::Storage(s) => {s.peek_neurogenesis_impl()}
-            ValidatedNeurogenesisStorageOrGenerator::Generator(g) => {g.peek_neurogenesis_impl()}
-        }
+    pub fn peek_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
+        either!(self.peek_layout())
     }
 
-    fn peek_layout(&self) -> &NeuronLayoutOf<FIQ, NM> {
-        match &self {
-            ValidatedNeurogenesisStorageOrGenerator::Storage(s) => {s.peek_layout()}
-            ValidatedNeurogenesisStorageOrGenerator::Generator(g) => {g.peek_layout()}
-        }
+    pub fn get_cortical_context(&self) -> &CorticalLayoutContextOf<FIQ, NM> {
+        either!(self.get_cortical_context())
+    }
+
+    pub fn get_universal_properties(&self) -> &NeuronModelUniversalCorticalProperties<NM> {
+        either!(self.get_universal_properties())
+    }
+
+    pub fn get_model_cortical_properties(&self) -> &NM::CorticalDataProperties {
+        either!(self.get_model_cortical_properties())
+    }
+
+    pub fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
+        either!(self.get_model_cortical_variance())
     }
 }
 

@@ -10,8 +10,9 @@ use ::rayon::prelude::*;
 use core::marker::PhantomData;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
-use neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGeneratorOf;
 use neural_basis::neuron_model::neurogenesis::NeurogenesisMethod;
+use neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisStorageOrGenerator;
+use neural_basis::neuron_model::neuron_layout::NeuronLayout;
 use neural_basis::neuron_model::wrapped_indexing::NeuronModelNeuronQuantIndex;
 use neural_basis::neuron_model::NeuronModel;
 use neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -74,12 +75,12 @@ where
     /// with nothing leading to or from it
     pub fn add_cortical_area(
         &mut self,
-        neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM>,
+        neurogenesis: ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>,
         engine: &mut CpuEngineNeuronData<FIQ>,
     ) -> Result<CpuAddedCorticalArea<FIQ>, CpuAddCorticalAreaError> {
-        let layout = *neurogenesis.get_layout();
-        let universal_properties = neurogenesis.get_universal_cortical_properties();
-        let neuron_count = neurogenesis.get_total_number_neurons_needed().quant_to_usize();
+        let layout = *neurogenesis.peek_layout();
+        let universal_properties = neurogenesis.get_universal_properties();
+        let neuron_count = neurogenesis.peek_layout().get_number_neurons_to_allocate_for().quant_to_usize();
 
         let mut cortical_flags = CorticalAreaUbiquitousFlags::default();
         cortical_flags.set_is_psp_uniform(universal_properties.is_psp_uniform);

@@ -161,10 +161,10 @@ pub trait NeuronModel: MembranePotentialQuantization
         
         match storage_or_generator {
             NeurogenesisStorageOrGenerator::Storage(s) => {
-                Ok(ValidatedNeurogenesisStorageOrGenerator::Storage(Self::verify_and_wrap_storage(s)?))
+                Ok(ValidatedNeurogenesisStorageOrGenerator::Storage(Self::verify_and_wrap_storage::<FIQ, Res, V>(s)?))
             }
             NeurogenesisStorageOrGenerator::Generator(g) => {
-                Ok(ValidatedNeurogenesisStorageOrGenerator::Generator(Self::verify_and_wrap_generator(g)?))
+                Ok(ValidatedNeurogenesisStorageOrGenerator::Generator(Self::verify_and_wrap_generator::<FIQ, Res, V>(g)?))
             }
         }
 

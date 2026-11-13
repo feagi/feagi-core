@@ -1,5 +1,5 @@
+use neural_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisStorageOrGenerator;
 use crate::parallel_burst_engines::neural_cpu_parallel_dynamics::NeuronCPUParallelDynamics;
-use neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGeneratorOf;
 use neural_basis::neuron_model::NeuronModel;
 use neural_basis::quantization_levels::FeagiIndexQuantization;
 
@@ -7,7 +7,7 @@ use neural_basis::quantization_levels::FeagiIndexQuantization;
 /// the CPU dynamics of that model
 pub trait CpuCorticalAreaNeurogenesisVisitor<FIQ: FeagiIndexQuantization> {
     type Output;
-    fn visit<NM, D>(self, neurogenesis: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NM>) -> Self::Output
+    fn visit<NM, D>(self, neurogenesis: ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>) -> Self::Output
     where
         NM: NeuronModel,
         D: NeuronCPUParallelDynamics<FIQ, NM>;
