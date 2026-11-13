@@ -153,7 +153,7 @@ impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat16 {
 impl NeuronModel for NMExclusiveDeathQuantFloat16 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -212,7 +212,7 @@ impl NMExclusiveDeathTrait for NMExclusiveDeathQuantBFloat16 {
 impl NeuronModel for NMExclusiveDeathQuantBFloat16 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -271,7 +271,7 @@ impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat32 {
 impl NeuronModel for NMExclusiveDeathQuantFloat32 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -330,7 +330,7 @@ impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat64 {
 impl NeuronModel for NMExclusiveDeathQuantFloat64 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =

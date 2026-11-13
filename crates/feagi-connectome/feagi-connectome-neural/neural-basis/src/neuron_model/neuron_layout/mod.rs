@@ -24,7 +24,7 @@ pub trait NeuronLayout<FIQ: FeagiIndexQuantization, >: Clone + Copy + Debug + Pa
     const SPARSITY: NeuronLayoutSparsity;
 
     /// What data describes the cortical context that summerizes the state of the whole area
-    type CorticalLevelContext: Clone + Debug + PartialEq + serde::Serialize + serde::de::DeserializeOwned;
+    type CorticalLevelContext: Clone + Debug + PartialEq + Send + Sync + serde::Serialize + serde::de::DeserializeOwned;
 
     /// The per neuron context, helps identify a neurons "location" relative to others within a
     /// cortical area

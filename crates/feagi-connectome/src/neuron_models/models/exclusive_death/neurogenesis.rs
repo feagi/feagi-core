@@ -3,14 +3,14 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
 use crate::neuron_models::models::exclusive_death::quantizations::{NMExclusiveDeathNeurogenesisGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageQuanted, NMExclusiveDeathQuantBFloat16, NMExclusiveDeathQuantFloat16, NMExclusiveDeathQuantFloat32, NMExclusiveDeathQuantFloat64, NMExclusiveDeathQuantKind};
 use crate::neuron_models::models::exclusive_death::NMExclusiveDeathTrait;
 use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronVariance};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf, NeuronModelEnumConversionError};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -154,7 +154,7 @@ where
 #[derive(Clone, Debug)]
 pub struct ExclusiveDeathNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceGenerator<FIQ, NM> for ExclusiveDeathNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for ExclusiveDeathNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMExclusiveDeathTrait,

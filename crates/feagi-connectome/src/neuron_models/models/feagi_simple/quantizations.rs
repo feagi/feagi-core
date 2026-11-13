@@ -131,7 +131,7 @@ impl NMFeagiSimpleTrait for NMFeagiSimpleQuantStandard32Bit {
 impl NeuronModel for NMFeagiSimpleQuantStandard32Bit {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::NMFeagiSimpleScratchVarianceGenerator<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =

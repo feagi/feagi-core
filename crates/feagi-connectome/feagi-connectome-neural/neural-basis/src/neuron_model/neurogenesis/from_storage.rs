@@ -1,22 +1,24 @@
-use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neurogenesis::{NeurogenesisScratchVarianceGenerator, NeurogenesisMethod};
-use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutError, NeuronLayoutTag};
-use crate::neuron_model::NeuronModel;
-use crate::quantization_levels::FeagiIndexQuantization;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
+use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+use crate::neuron_model::neurogenesis::NeurogenesisMethod;
+use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf};
+use crate::neuron_model::NeuronModel;
+use crate::quantization_levels::FeagiIndexQuantization;
 
-/// TODO deserialization needs to verify if layout is sensible!
 
+
+/// The saved neuron data of a cortical area, spawning it as it was. Taken from a running area or a
+/// file, never from defaults. The size is checked during validation
 #[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
 // Every field is serializable through the traits of FIQ and NM, not the bounds serde infers
 #[serde(bound = "")]
-pub struct NeurogenesisStorage<FIQ, NM>
+pub struct NeurogenesisByStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    layout: <NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
+    cortical_layout_context: CorticalLayoutContextOf<FIQ, NM>,
     cortical_universal_properties: NeuronModelUniversalCorticalProperties<NM>,
     cortical_properties: NM::CorticalDataProperties,
     cortical_internal: NM::CorticalDataInternal,
@@ -24,73 +26,68 @@ where
     neuron_internal: Vec<NM::NeuronDataInternal>, // TODO dont use vec!
 }
 
-impl<FIQ, NM> NeurogenesisStorage<FIQ, NM>
+impl<FIQ, NM> NeurogenesisByStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    pub(crate) fn try_new(
-        layout: <NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
+    pub fn new(
+        cortical_layout_context: CorticalLayoutContextOf<FIQ, NM>,
         cortical_universal_properties: NeuronModelUniversalCorticalProperties<NM>,
         cortical_properties: NM::CorticalDataProperties,
         cortical_internal: NM::CorticalDataInternal,
         cortical_variance: NM::CorticalDataVariance,
         neuron_internal: Vec<NM::NeuronDataInternal>,
-    ) -> Result<Self, NeurogenesisStorageError> {
-
-        if layout.get_number_neurons_to_allocate_for().quant_to_usize() != neuron_internal.len() {
-            return Err(NeurogenesisStorageError::InvalidSize)
+    ) -> Self {
+        Self {
+            cortical_layout_context,
+            cortical_universal_properties,
+            cortical_properties,
+            cortical_internal,
+            cortical_variance,
+            neuron_internal,
         }
-        Ok(
-            Self {
-                layout,
-                cortical_universal_properties,
-                cortical_properties,
-                cortical_internal,
-                cortical_variance,
-                neuron_internal,
-            }
-        )
     }
 }
 
-impl<FIQ, NM> NeurogenesisMethod<FIQ, NM> for NeurogenesisStorage<FIQ, NM>
+impl<FIQ, NM> NeurogenesisMethod<FIQ, NM> for NeurogenesisByStorage<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
 {
-    fn get_layout(&self) -> &<NM::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ> {
-        &self.layout
+    fn get_cortical_layout_context(&self) -> &CorticalLayoutContextOf<FIQ, NM> {
+        &self.cortical_layout_context
     }
 
     fn get_universal_cortical_properties(&self) -> NeuronModelUniversalCorticalProperties<NM> {
         self.cortical_universal_properties
     }
 
-    fn into_model_cortical_data(self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
-        (self.cortical_properties, self.cortical_internal)
+    fn get_model_cortical_properties(&self) -> &NM::CorticalDataProperties {
+        &self.cortical_properties
     }
-    
-    fn clone_model_cortical_data(&self)-> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
-        (self.cortical_properties.clone(), self.cortical_internal.clone())
+
+    fn get_model_cortical_internal(&self) -> &NM::CorticalDataInternal {
+        &self.cortical_internal
     }
 
     fn get_model_cortical_variance(&self) -> &NM::CorticalDataVariance {
         &self.cortical_variance
     }
 
-    fn spawn_neuron_data_at(&self, index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
-        let index_u = index.quant_to_usize();
-        let internal = self.neuron_internal[index_u].clone();
-        let scratch = NM::generate_neuron_scratch(index, &self.layout, &internal);
+    fn into_model_cortical_data(self) -> (NM::CorticalDataProperties, NM::CorticalDataInternal) {
+        (self.cortical_properties, self.cortical_internal)
+    }
+
+    fn spawn_neuron_data_at(
+        &self,
+        layout: &NeuronLayoutOf<FIQ, NM>,
+        index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> (NM::NeuronDataInternal, NM::NeuronDataScratch) {
+        let internal = self.neuron_internal[index.quant_to_usize()].clone();
+        let scratch = NM::generate_neuron_scratch(index, layout, &internal);
         (internal, scratch)
     }
 }
 
-#[derive(Clone, Copy, Hash, Debug, thiserror::Error)]
-pub enum NeurogenesisStorageError {
-    #[error("Given collection size of NeurogenesisFromStorage does not meet size defined by layout!")]
-    InvalidSize,
-    #[error("Given Layout it invalid given restriction!")]
-    LayoutRestrictorError(#[from] NeuronLayoutError)
-}
+

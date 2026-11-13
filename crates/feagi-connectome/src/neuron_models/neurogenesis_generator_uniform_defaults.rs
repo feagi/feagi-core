@@ -2,17 +2,17 @@
 //! neuron model may use it as its `NeuronModel::NeurogenesisGenerator`. Users of a model, such as
 //! cortical types, wrap it to fill in their own defaults. This is a very common generator
 
-use serde::{Deserialize, Serialize};
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutError, NeuronLayoutRestrictor};
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage::NeurogenesisStorage;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::{NeurogenesisMethod, NeurogenesisScratchVarianceGenerator};
+use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisMethod;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGeneratorPrecursor;
-use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
+use serde::{Deserialize, Serialize};
 
 /// Probably the most common shared cortical area generator.
 /// Generates a cortical area from fixed starting values: every neuron starts with the same
@@ -82,7 +82,7 @@ pub struct NeurogenesisGeneratorPrecursorUniformDefault<FIQ: FeagiIndexQuantizat
     pub neuron_internal: NM::NeuronDataInternal,
 }
 
-impl<FIQ, NM> NeurogenesisGeneratorPrecursor<FIQ, NM> for NeurogenesisGeneratorPrecursorUniformDefault<FIQ, NM>
+impl<FIQ, NM> NeurogenesisByGenerator<FIQ, NM> for NeurogenesisGeneratorPrecursorUniformDefault<FIQ, NM>
 where 
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel<NeurogenesisGenerator<FIQ> = NeurogenesisGeneratorUniformDefault<FIQ, NM>>

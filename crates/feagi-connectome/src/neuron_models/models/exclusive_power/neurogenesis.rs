@@ -3,14 +3,14 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
 use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantBFloat16, NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantFloat64, NMExclusivePowerQuantKind};
 use crate::neuron_models::models::exclusive_power::NMExclusivePowerTrait;
 use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronVariance};
-use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
+use crate::neuron_models::models::{NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf, NeuronModelEnumConversionError};
 use core::marker::PhantomData;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDataVarianceSpecification;
-use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
@@ -154,7 +154,7 @@ where
 #[derive(Clone, Debug)]
 pub struct ExclusivePowerNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceGenerator<FIQ, NM> for ExclusivePowerNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for ExclusivePowerNeurogenesisDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMExclusivePowerTrait,

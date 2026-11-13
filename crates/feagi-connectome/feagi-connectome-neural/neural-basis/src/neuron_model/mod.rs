@@ -1,16 +1,13 @@
-use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
-use crate::neuron_model::neurogenesis::NeurogenesisScratchVarianceGenerator;
-use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutError, NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
-use crate::quantization_levels::MembranePotentialQuantization;
+use crate::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::quantization_levels::FeagiIndexQuantization;
+use crate::quantization_levels::MembranePotentialQuantization;
+use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use model_data::{
     CorticalDataInternalSpecification, CorticalDataPropertiesSpecification, CorticalDataScratchSpecification, CorticalDataVarianceSpecification,
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification,
 };
-use neurogenesis::by_generator::NeurogenesisGenerator;
-use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use crate::neuron_model::neurogenesis::by_generator::NeurogenesisGeneratorPrecursor;
-use crate::neuron_model::neurogenesis::from_storage::{NeurogenesisStorage, NeurogenesisStorageError};
+use neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
 
 //pub mod interfacing;
 pub mod model_data;
@@ -30,15 +27,13 @@ pub trait NeuronModel: MembranePotentialQuantization
     type NeuronLayoutTag: NeuronLayoutTag;
 
 
-    /// Generator trait for producing default variance and scratch values during NeuroGenesis
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceGenerator<FIQ, Self>;
+    /// Trait for producing default variance and scratch values during NeuroGenesis
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization>: NeurogenesisScratchVarianceDefaults<FIQ, Self>;
 
-    /// The cortical area builder that does not load from storage for this neuron model
-    type NeurogenesisGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisGenerator<FIQ, Self>;
+    /// The genome saveable data a cortical area of this model is generated from
+    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization>: NeurogenesisByGenerator<FIQ, Self>;
 
-    /// The precursor to the NeuroGenesisGenerator, effectively the data needed to make it
-    type NeurogenesisGeneratorPrecursor<FIQ: FeagiIndexQuantization>: NeurogenesisGeneratorPrecursor<FIQ, Self>;
-
+    // NOTE: NeurogenesisStoragePrecursor is a struct! 
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
@@ -86,33 +81,6 @@ pub trait NeuronModel: MembranePotentialQuantization
 
     // NOTE: Many of these are defined here due to uses in the enums
 
-    fn spawn_neurogenesis_storage<
-        FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
-    >
-    (
-        cortical_layout_context: CorticalLayoutContextOf<FIQ, Self>,
-        cortical_universal_properties: NeuronModelUniversalCorticalProperties<Self>,
-        cortical_properties: Self::CorticalDataProperties,
-        cortical_internal: Self::CorticalDataInternal,
-        cortical_variance: Self::CorticalDataVariance,
-        neuron_internal: Vec<Self::NeuronDataInternal>, // TODO dont use vec!
-    ) -> Result<NeurogenesisStorage<FIQ, Self>, NeurogenesisStorageError> {
-        let layout = Res::validate_and_create_neuron_layout(cortical_layout_context)?;
-        NeurogenesisStorage::try_new(
-            layout, cortical_universal_properties, cortical_properties, cortical_internal, cortical_variance, neuron_internal
-        )
-    }
-
-    fn spawn_neurogenesis_generator_from_precursor<
-        FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
-    > (
-        precursor: Self::NeurogenesisGeneratorPrecursor<FIQ>
-    ) -> Result<Self::NeurogenesisGenerator<FIQ>, NeuronLayoutError> {
-        precursor.into_generator::<Res>()
-    }
-
     // NOTE: Explicitly No spawning function for `NeurogenesisGeneratorPrecursor` as
     // different cortical types may wish to have some differing implementations (though the
     // NM does specify the generator and precursor type) IE different defaults
@@ -125,7 +93,7 @@ pub trait NeuronModel: MembranePotentialQuantization
         cortical_properties: &Self::CorticalDataProperties,
         cortical_internal: &Self::CorticalDataInternal,
     ) -> Self::CorticalDataScratch {
-        Self::NeurogenesisScratchVarianceGeneratorType::static_get_cortical_scratch(
+        Self::NeurogenesisScratchVarianceDefaults::static_get_cortical_scratch(
             layout,
             cortical_properties,
             cortical_internal
@@ -139,7 +107,7 @@ pub trait NeuronModel: MembranePotentialQuantization
         layout: &<Self::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
         internal_neuron_data: &Self::NeuronDataInternal
     ) -> Self::NeuronDataScratch {
-        Self::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_scratch(
+        Self::NeurogenesisScratchVarianceDefaults::static_get_neuron_scratch(
             index,
             layout,
             internal_neuron_data
@@ -153,7 +121,7 @@ pub trait NeuronModel: MembranePotentialQuantization
         layout: &<Self::NeuronLayoutTag as NeuronLayoutTag>::Layout<FIQ>,
         variance: &Self::CorticalDataVariance
     ) -> Self::NeuronDataVariance {
-        Self::NeurogenesisScratchVarianceGeneratorType::static_get_neuron_variance(
+        Self::NeurogenesisScratchVarianceDefaults::static_get_neuron_variance(
             index,
             layout,
             variance

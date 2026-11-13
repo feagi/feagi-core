@@ -135,7 +135,7 @@ impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantStandard32Bit {
 impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::FeagiAdvancedScratchVarianceGenerator<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =

@@ -154,7 +154,7 @@ impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat16 {
 impl NeuronModel for NMExclusivePowerQuantFloat16 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -213,7 +213,7 @@ impl NMExclusivePowerTrait for NMExclusivePowerQuantBFloat16 {
 impl NeuronModel for NMExclusivePowerQuantBFloat16 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -272,7 +272,7 @@ impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat32 {
 impl NeuronModel for NMExclusivePowerQuantFloat32 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
@@ -331,7 +331,7 @@ impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat64 {
 impl NeuronModel for NMExclusivePowerQuantFloat64 {
     type NeuronLayoutTag = NeuronLayoutTagVoxel;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =

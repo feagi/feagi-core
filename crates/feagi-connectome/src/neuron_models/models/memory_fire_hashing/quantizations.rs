@@ -117,7 +117,7 @@ impl NMMemoryFireHashingTrait for NMMemoryFireHashingQuantStandard32Bit {
 impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
     type NeuronLayoutTag = NeuronLayoutTagSingleSteppedDynamic;
 
-    type NeurogenesisScratchVarianceGeneratorType<FIQ: FeagiIndexQuantization> =
+    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> =
         super::neurogenesis::MemoryFireHashingNeurogenesisDefaults<FIQ, Self>;
 
     type NeurogenesisGenerator<FIQ: FeagiIndexQuantization> =
