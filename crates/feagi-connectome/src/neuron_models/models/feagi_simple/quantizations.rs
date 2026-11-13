@@ -12,7 +12,7 @@ pub mod quant_standard_32_bit {
     use crate::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMFeagiSimpleQuantStandard32Bit;
 
     impl NMFeagiSimpleTrait for NMFeagiSimpleQuantStandard32Bit {
@@ -36,7 +36,7 @@ pub mod quant_standard_32_bit {
 
         type QuantKind = NMFeagiSimpleQuantKind;
 
-        const QUANT_KIND: Self::QuantKind = NMFeagiSimpleQuantKind::Standard32Bit;
+        const QUANT_KIND: Self::QuantKind = NMFeagiSimpleQuantKind::Standard32Bit(Self);
     }
 
     impl MembranePotentialQuantization for NMFeagiSimpleQuantStandard32Bit {
@@ -62,7 +62,7 @@ impl<C: NMContainer> NMFeagiSimpleQuanted<C> {
     /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMFeagiSimpleQuantKind {
         match self {
-            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit,
+            Self::Standard32Bit(_) => NMFeagiSimpleQuantKind::Standard32Bit(NMFeagiSimpleQuantStandard32Bit),
         }
     }
 }
@@ -108,7 +108,7 @@ impl NMMember for NMFeagiSimpleQuantStandard32Bit {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
 /// Describes the quantization of the Feagi Simple Neuron Model
 pub enum NMFeagiSimpleQuantKind {
-    Standard32Bit,
+    Standard32Bit(NMFeagiSimpleQuantStandard32Bit),
 }
 
 

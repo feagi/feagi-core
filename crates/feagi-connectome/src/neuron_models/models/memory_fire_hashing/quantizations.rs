@@ -12,7 +12,7 @@ pub mod quant_standard_32_bit {
     use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMMemoryFireHashingQuantStandard32Bit;
 
     impl NMMemoryFireHashingTrait for NMMemoryFireHashingQuantStandard32Bit {
@@ -35,7 +35,7 @@ pub mod quant_standard_32_bit {
         type NeuronDataVariance = NMMemoryFireHashingDataNeuronVariance<Self>;
 
         type QuantKind = NMMemoryFireHashingQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMMemoryFireHashingQuantKind::Standard32Bit;
+        const QUANT_KIND: Self::QuantKind = NMMemoryFireHashingQuantKind::Standard32Bit(Self);
     }
 
     impl MembranePotentialQuantization for NMMemoryFireHashingQuantStandard32Bit {
@@ -61,7 +61,7 @@ impl<C: NMContainer> NMMemoryFireHashingQuanted<C> {
     /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMMemoryFireHashingQuantKind {
         match self {
-            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit,
+            Self::Standard32Bit(_) => NMMemoryFireHashingQuantKind::Standard32Bit(NMMemoryFireHashingQuantStandard32Bit),
         }
     }
 }
@@ -109,7 +109,7 @@ impl NMMember for NMMemoryFireHashingQuantStandard32Bit {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
 /// Describes the quantization of the Memory Fire Hashing Neuron Model
 pub enum NMMemoryFireHashingQuantKind {
-    Standard32Bit,
+    Standard32Bit(NMMemoryFireHashingQuantStandard32Bit),
 }
 
 

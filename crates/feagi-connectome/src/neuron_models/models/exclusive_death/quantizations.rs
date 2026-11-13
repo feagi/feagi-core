@@ -17,7 +17,7 @@ pub mod quant_float_16 {
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
     use half::f16;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusiveDeathQuantFloat16;
 
     impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat16 {}
@@ -38,7 +38,7 @@ pub mod quant_float_16 {
         type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusiveDeathQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float16;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float16(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat16 {
@@ -56,7 +56,7 @@ pub mod quant_bfloat_16 {
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
     use half::bf16;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusiveDeathQuantBFloat16;
 
     impl NMExclusiveDeathTrait for NMExclusiveDeathQuantBFloat16 {}
@@ -77,7 +77,7 @@ pub mod quant_bfloat_16 {
         type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusiveDeathQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::BFloat16;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::BFloat16(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusiveDeathQuantBFloat16 {
@@ -94,7 +94,7 @@ pub mod quant_float_32 {
     use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusiveDeathQuantFloat32;
 
     impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat32 {}
@@ -115,7 +115,7 @@ pub mod quant_float_32 {
         type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusiveDeathQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float32;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float32(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat32 {
@@ -132,7 +132,7 @@ pub mod quant_float_64 {
     use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusiveDeathQuantFloat64;
 
     impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat64 {}
@@ -153,7 +153,7 @@ pub mod quant_float_64 {
         type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusiveDeathQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float64;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float64(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat64 {
@@ -182,10 +182,10 @@ impl<C: NMContainer> NMExclusiveDeathQuanted<C> {
     /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMExclusiveDeathQuantKind {
         match self {
-            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32,
-            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64,
+            Self::Float16(_) => NMExclusiveDeathQuantKind::Float16(NMExclusiveDeathQuantFloat16),
+            Self::BFloat16(_) => NMExclusiveDeathQuantKind::BFloat16(NMExclusiveDeathQuantBFloat16),
+            Self::Float32(_) => NMExclusiveDeathQuantKind::Float32(NMExclusiveDeathQuantFloat32),
+            Self::Float64(_) => NMExclusiveDeathQuantKind::Float64(NMExclusiveDeathQuantFloat64),
         }
     }
 }
@@ -301,10 +301,10 @@ impl NMMember for NMExclusiveDeathQuantFloat64 {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
 /// Describes the quantization of the Exclusive Death Neuron Model
 pub enum NMExclusiveDeathQuantKind {
-    Float16,
-    BFloat16,
-    Float32,
-    Float64,
+    Float16(NMExclusiveDeathQuantFloat16),
+    BFloat16(NMExclusiveDeathQuantBFloat16),
+    Float32(NMExclusiveDeathQuantFloat32),
+    Float64(NMExclusiveDeathQuantFloat64),
 }
 
 

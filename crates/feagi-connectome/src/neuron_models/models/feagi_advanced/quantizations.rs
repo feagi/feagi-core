@@ -12,7 +12,7 @@ pub mod quant_standard_32_bit {
     use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMFeagiAdvancedQuantStandard32Bit;
 
     impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantStandard32Bit {
@@ -35,7 +35,7 @@ pub mod quant_standard_32_bit {
         type NeuronDataVariance = NMFeagiAdvancedDataNeuronVariance<Self>;
 
         type QuantKind = NMFeagiAdvancedQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMFeagiAdvancedQuantKind::Standard32Bit;
+        const QUANT_KIND: Self::QuantKind = NMFeagiAdvancedQuantKind::Standard32Bit(Self);
     }
 
     impl MembranePotentialQuantization for NMFeagiAdvancedQuantStandard32Bit {
@@ -61,7 +61,7 @@ impl<C: NMContainer> NMFeagiAdvancedQuanted<C> {
     /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMFeagiAdvancedQuantKind {
         match self {
-            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit,
+            Self::Standard32Bit(_) => NMFeagiAdvancedQuantKind::Standard32Bit(NMFeagiAdvancedQuantStandard32Bit),
         }
     }
 }
@@ -107,7 +107,7 @@ impl NMMember for NMFeagiAdvancedQuantStandard32Bit {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
 /// Describes the quantization of the Feagi Advanced Neuron Model
 pub enum NMFeagiAdvancedQuantKind {
-    Standard32Bit,
+    Standard32Bit(NMFeagiAdvancedQuantStandard32Bit),
 }
 
 

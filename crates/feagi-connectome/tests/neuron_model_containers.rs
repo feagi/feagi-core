@@ -18,9 +18,9 @@ impl NMContainer for Marker {
 #[test]
 fn wraps_up_to_modeled_and_back() {
     let quanted = NMExclusivePowerQuantFloat16::wrap::<Marker>(NMExclusivePowerQuantFloat16);
-    assert_eq!(quanted.quant_kind(), NMExclusivePowerQuantKind::Float16);
+    assert_eq!(quanted.quant_kind(), NMExclusivePowerQuantKind::Float16(NMExclusivePowerQuantFloat16));
     let modeled: NMModeled<Marker> = quanted.into();
-    assert_eq!(modeled.kind(), NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float16));
+    assert_eq!(modeled.kind(), NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float16(NMExclusivePowerQuantFloat16)));
     let quanted = NMExclusivePowerQuanted::try_from(modeled).unwrap();
     assert_eq!(NMExclusivePowerQuantFloat16::unwrap::<Marker>(quanted).unwrap(), NMExclusivePowerQuantFloat16);
 }
@@ -30,7 +30,7 @@ fn unwrapping_another_quant_errors() {
     let quanted = NMExclusivePowerQuantFloat16::wrap::<Marker>(NMExclusivePowerQuantFloat16);
     assert!(matches!(
         NMExclusivePowerQuantFloat32::unwrap::<Marker>(quanted),
-        Err(NeuronModelEnumConversionError::IncompatibleUnwrap { expected: NMExclusivePowerQuantKind::Float32, actual: NMExclusivePowerQuantKind::Float16 })
+        Err(NeuronModelEnumConversionError::IncompatibleUnwrap { expected: NMExclusivePowerQuantKind::Float32(NMExclusivePowerQuantFloat32), actual: NMExclusivePowerQuantKind::Float16(NMExclusivePowerQuantFloat16) })
     ));
 }
 
@@ -45,7 +45,7 @@ fn quanted_serde_round_trip() {
     let quanted = NMExclusivePowerQuantFloat32::wrap::<Marker>(NMExclusivePowerQuantFloat32);
     let json = serde_json::to_string(&quanted).unwrap();
     let back: NMExclusivePowerQuanted<Marker> = serde_json::from_str(&json).unwrap();
-    assert_eq!(back.quant_kind(), NMExclusivePowerQuantKind::Float32);
+    assert_eq!(back.quant_kind(), NMExclusivePowerQuantKind::Float32(NMExclusivePowerQuantFloat32));
 }
 
 /// The neurogenesis containers resolve, and their enums get the traits their data has
@@ -72,5 +72,5 @@ fn modeled_serde_round_trip() {
     let json = serde_json::to_string(&modeled).unwrap();
     assert_eq!(json, r#"{"ExclusivePower":{"Float32":null}}"#);
     let back: NMModeled<Marker> = serde_json::from_str(&json).unwrap();
-    assert_eq!(back.kind(), NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float32));
+    assert_eq!(back.kind(), NMKind::ExclusivePower(NMExclusivePowerQuantKind::Float32(NMExclusivePowerQuantFloat32)));
 }

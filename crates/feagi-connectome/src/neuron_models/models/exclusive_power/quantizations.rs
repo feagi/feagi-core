@@ -17,7 +17,7 @@ pub mod quant_float_16 {
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
     use half::f16;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusivePowerQuantFloat16;
 
     impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat16 {}
@@ -38,7 +38,7 @@ pub mod quant_float_16 {
         type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusivePowerQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float16;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float16(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusivePowerQuantFloat16 {
@@ -56,7 +56,7 @@ pub mod quant_bfloat_16 {
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
     use half::bf16;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusivePowerQuantBFloat16;
 
     impl NMExclusivePowerTrait for NMExclusivePowerQuantBFloat16 {}
@@ -77,7 +77,7 @@ pub mod quant_bfloat_16 {
         type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusivePowerQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::BFloat16;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::BFloat16(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusivePowerQuantBFloat16 {
@@ -94,7 +94,7 @@ pub mod quant_float_32 {
     use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusivePowerQuantFloat32;
 
     impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat32 {}
@@ -115,7 +115,7 @@ pub mod quant_float_32 {
         type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusivePowerQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float32;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float32(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusivePowerQuantFloat32 {
@@ -132,7 +132,7 @@ pub mod quant_float_64 {
     use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
     use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
 
-    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    #[derive(Clone, Copy, PartialEq, Debug, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
     pub struct NMExclusivePowerQuantFloat64;
 
     impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat64 {}
@@ -153,7 +153,7 @@ pub mod quant_float_64 {
         type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
 
         type QuantKind = NMExclusivePowerQuantKind;
-        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float64;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float64(Self);
     }
 
     impl MembranePotentialQuantization for NMExclusivePowerQuantFloat64 {
@@ -182,10 +182,10 @@ impl<C: NMContainer> NMExclusivePowerQuanted<C> {
     /// The quantization of the data held
     pub const fn quant_kind(&self) -> NMExclusivePowerQuantKind {
         match self {
-            Self::Float16(_) => NMExclusivePowerQuantKind::Float16,
-            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16,
-            Self::Float32(_) => NMExclusivePowerQuantKind::Float32,
-            Self::Float64(_) => NMExclusivePowerQuantKind::Float64,
+            Self::Float16(_) => NMExclusivePowerQuantKind::Float16(NMExclusivePowerQuantFloat16),
+            Self::BFloat16(_) => NMExclusivePowerQuantKind::BFloat16(NMExclusivePowerQuantBFloat16),
+            Self::Float32(_) => NMExclusivePowerQuantKind::Float32(NMExclusivePowerQuantFloat32),
+            Self::Float64(_) => NMExclusivePowerQuantKind::Float64(NMExclusivePowerQuantFloat64),
         }
     }
 }
@@ -301,12 +301,11 @@ impl NMMember for NMExclusivePowerQuantFloat64 {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
 /// Describes the quantization of the Exclusive Power Neuron Model
 pub enum NMExclusivePowerQuantKind {
-    Float16,
-    BFloat16,
-    Float32,
-    Float64,
+    Float16(NMExclusivePowerQuantFloat16),
+    BFloat16(NMExclusivePowerQuantBFloat16),
+    Float32(NMExclusivePowerQuantFloat32),
+    Float64(NMExclusivePowerQuantFloat64),
 }
-
 
 impl From<NMExclusivePowerQuantKind> for NMKind {
     fn from(value: NMExclusivePowerQuantKind) -> Self {
