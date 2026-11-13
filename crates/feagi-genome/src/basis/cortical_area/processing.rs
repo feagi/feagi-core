@@ -3,14 +3,15 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use crate::basis::cortical_area::{CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierParseError;
+use crate::basis::cortical_area::cortical_identifiers::{CorticalAreaInnerID, CorticalAreaInnerIDRandomBytes, CorticalIdentifierParseError};
+use crate::basis::cortical_area::foundation::CorticalIdentifierFoundation;
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledGeneratorPrecursor, CTProcessingInterconnectNMModeledKind, CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor};
 
 
 //region Cortical Subtype
 
 /// This cortical type is for
-pub trait CorticalTypeProcessing<NM>: CorticalType<NM, IdentifierInner=[u8; 6]> // uses 6 bytes as cortical ID inner
+pub trait CorticalTypeProcessing<NM>: CorticalType<NM, CorticalIdentifierInner=[u8; 6]> // uses 6 bytes as cortical ID inner
 where
     NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>
 {}
@@ -52,7 +53,7 @@ pub mod interconnect {
         use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
         use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
         use feagi_connectome::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal};
-        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind, NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor};
+        use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedQuantStandard32Bit, NMFeagiAdvancedQuantedKind, NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted};
         use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiAdvancedQuantStandard32Bit {
@@ -111,7 +112,7 @@ pub mod interconnect {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         #[serde(bound = "")]
         pub enum CTProcessingInterconnectNMFeagiAdvancedQuantedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
-            Standard32Bit(NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+            Standard32Bit(NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>),
         }
         
 
@@ -284,7 +285,7 @@ pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuanti
 #[repr(C, u8)]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CorticalIdentifierProcessing {
-    Interconnect([u8; 6])
+    Interconnect(CorticalAreaInnerIDRandomBytes)
 }
 
 impl CorticalIdentifierProcessing {
@@ -297,7 +298,8 @@ impl CorticalIdentifierProcessing {
             match bytes[1] {
                 0 => {
                     let [_, _, last_six @ ..] = bytes;
-                    CorticalIdentifierProcessing::Interconnect(last_six)
+                    let inner = CorticalAreaInnerIDRandomBytes::try_encode_from_bytes(last_six).unwrap(); // TODO error checking
+                    CorticalIdentifierProcessing::Interconnect(inner)
                 },
                 err => {
                     return Err(CorticalIdentifierParseError::InvalidCorticalSubtype(err))

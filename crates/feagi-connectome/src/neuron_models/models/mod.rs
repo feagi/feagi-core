@@ -2,7 +2,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_stor
 use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_storage_or_by_generator::NeurogenesisFromStorageOrByGenerator;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor, NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind};
+use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted, NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind};
 use crate::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor, NMFeagiSimpleNeurogenesisGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted, NMFeagiSimpleNeurogenesisStorageQuanted, NMFeagiSimpleQuantKind};
 use crate::neuron_models::models::exclusive_death::quantizations::{NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor, NMExclusiveDeathNeurogenesisGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted, NMExclusiveDeathNeurogenesisStorageQuanted, NMExclusiveDeathQuantKind};
 use crate::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor, NMExclusivePowerNeurogenesisGeneratorQuanted, NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted, NMExclusivePowerNeurogenesisStorageQuanted, NMExclusivePowerQuantKind};
@@ -21,7 +21,7 @@ pub mod neurogenesis;
 
 #[derive(Clone, Debug)]
 pub enum NMNeurogenesisGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
-    FeagiAdvanced(NMFeagiAdvancedQuantedNeurogenesisGeneratorPrecursor<FIQ>),
+    FeagiAdvanced(NMFeagiAdvancedNeurogenesisGeneratorPrecursorQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleQuantedNeurogenesisGeneratorPrecursor<FIQ>),
     ExclusiveDeath(NMExclusiveDeathQuantedNeurogenesisGeneratorPrecursor<FIQ>),
     ExclusivePower(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
@@ -56,14 +56,23 @@ pub enum NMNeurogenesisStorageModeled<FIQ: FeagiIndexQuantization> {
 /// specifying the storage or generator enum of that quant
 #[derive(Clone, Debug)]
 pub enum NMNeurogenesisStorageOrGeneratorModeled<FIQ: FeagiIndexQuantization> {
-    FeagiAdvanced(NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>),
+    FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     ExclusiveDeath(NMExclusiveDeathNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorQuanted<FIQ>),
     MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageOrGeneratorQuanted<FIQ>)
 }
 
-
+/// Narrows the StorageOrGenerator enum of a neuron model, down to the neuron model, with a nested enum
+/// specifying the storage or GeneratorPrecursor enum of that quant
+#[derive(Clone, Debug)]
+pub enum NMNeurogenesisStorageOrGeneratorPrecursorModeled<FIQ: FeagiIndexQuantization> {
+    FeagiAdvanced(NMFeagiAdvancedNeurogenesisStorageOrGeneratorPrecursorQuanted<FIQ>),
+    FeagiSimple(NMFeagiSimpleNeurogenesisStorageOrGeneratorPrecursorQuanted<FIQ>),
+    ExclusiveDeath(NMExclusiveDeathNeurogenesisStorageOrGeneratorPrecursorQuanted<FIQ>),
+    ExclusivePower(NMExclusivePowerNeurogenesisStorageOrGeneratorPrecursorQuanted<FIQ>),
+    MemoryFireHashing(NMMemoryFireHashingNeurogenesisStorageOrGeneratorPrecursorQuanted<FIQ>)
+}
 
 //endregion
 
@@ -90,6 +99,8 @@ pub type NeurogenesisFromStorageOf<FIQ: FeagiIndexQuantization, NM: NeuronModel>
 /// to optionally allow the use of storage, or not, to control export sizes
 pub type NeurogenesisFromStorageOrByGeneratorOf<FIQ: FeagiIndexQuantization, NM: NeuronModel>
     = NeurogenesisFromStorageOrByGenerator<FIQ, NM, NM::NeurogenesisGenerator<FIQ>>;
+
+pub type NeuronGenesisFromStorageOrByGeneratorPrecursorOf<FIQ: FeagiIndexQuantization, NM: NeuronModel> = NeurogenesisFrom
 
 //endregion
 

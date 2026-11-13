@@ -76,7 +76,7 @@ impl<CachingContext: BrainRegionCachingContext> BrainRegionSet<CachingContext> {
 //region Contexts
 
 pub trait BrainRegionCachingContext: Default {
-    
+
     fn add_new_now_region(
         brain_region_set: &mut BrainRegionSet<Self>,
         metadata: GenomeObjectMetadata,
@@ -84,7 +84,7 @@ pub trait BrainRegionCachingContext: Default {
     ) {
         let region_id = BrainRegionID::new_now();
         let ancestor_id = region_id.clone().into();
-        
+
         let region = BrainRegionContainer::new_inner(
             ancestor_id,
             metadata,
@@ -93,7 +93,7 @@ pub trait BrainRegionCachingContext: Default {
 
         brain_region_set.add_new_brain_region(region_id, region);
     }
-    
+
 }
 
 /// In the case of dense storage, we dont want to store additional data

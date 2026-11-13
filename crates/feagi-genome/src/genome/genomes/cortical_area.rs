@@ -21,8 +21,16 @@ where
     CachingContext: CorticalAreaCachingContext,
     NeuronDataContext: StoredNeuronDataContext <FIQ>
 {
+    
+    pub fn get_cortical_area(&self, cortical_id: &CorticalIdentifier)
+        -> Option<&CorticalAreaContainer<FIQ, CachingContext, NeuronDataContext>> {
+        self.areas.get(cortical_id)
+    }
 
-
+    pub fn get_cortical_area_mut(&mut self, cortical_id: &CorticalIdentifier)
+                             -> Option<&mut CorticalAreaContainer<FIQ, CachingContext, NeuronDataContext>> {
+        self.areas.get_mut(cortical_id)
+    }
 
     // NOTE: Should only be called by `CorticalAreaCachingContext`
     pub fn add_new_cortical_area(&mut self)

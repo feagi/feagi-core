@@ -11,6 +11,9 @@ use crate::basis::cortical_area::processing::CorticalIdentifierProcessing;
 // TODO manual byte serialization / deserialization to enforce 8 byte limits, note that serde
 // ignores #[repr(C, u8)] overrides! So when bringing this down to 8 bytes we must do so manually
 
+
+pub trait CorticalIDEnum {}
+
 //region (Genuine) Cortical Identifier
 
 /// The real counterpart to the `FauxCorticalIdentifier`
@@ -24,6 +27,8 @@ pub enum CorticalIdentifier { // Due Faux, the max is 127
     Foundation(CorticalIdentifierFoundation) = 0,
     Processing(CorticalIdentifierProcessing) = 1,
 }
+
+impl CorticalIDEnum for CorticalIdentifier {}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CorticalIdentifierBytes(pub(crate) [u8; 8]);
@@ -200,6 +205,8 @@ pub enum FauxCorticalIdentifier { // Note: Offset of 128 to maintain difference 
     Processing(CorticalIdentifierProcessing) = 128 + 1,
 }
 
+impl CorticalIDEnum for FauxCorticalIdentifier {}
+
 //endregion
 
 //region Maybe Cortical Identifier
@@ -209,6 +216,8 @@ pub enum MaybeCorticalIdentifier {
     Genuine(CorticalIdentifier),
     Faux(FauxCorticalIdentifier)
 }
+
+impl CorticalIDEnum for MaybeCorticalIdentifier {}
 
 //endregion
 
@@ -223,54 +232,90 @@ pub enum CorticalIdentifierParseError {
 /// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
 /// bytes and back must return the exact same bytes, or two different byte patterns could mean the
 /// same cortical area
-pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + TryFrom<[u8; 6]> + Sized {
-    
+pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + Sized {
+    /// What type of data can be read within these 6 bytes
+    type DecodableData;
+
+    fn decode_internal_data(self) -> Self::DecodableData;
+
+    fn try_encode_from_bytes(bytes: [u8; 6]) -> Result<Self, ()>;
+
+    fn write_into_bytes(&self, target: &mut [u8; 6]);
+}
+
+
+
+//region Cortical ID Generator
+
+
+pub trait CorticalIdentifierGenerator
+{
+    /// What type of Inner ID to encode for
+    type InnerID: CorticalAreaInnerID;
+
     /// Any additional data / systems needed to do the encoding. Is passed in as a mut reference to allow
     /// variety when retrying
-    type AdditionalEncoderContext;
-    
-    /// What type of data is represented by the 6 bytes
-    type RepresentingData;
-    
-    /// If the generation results in different IDs each time, we can retry up to this many times to
-    /// try for different IDs in cases of collision.
-    const NUMBER_RETRIES_ALLOWED: u8 = 0;
-    
-    fn encode_to_inner_id(data: Self::RepresentingData, additional_context: &mut Self::AdditionalEncoderContext) -> Self;
-    
-    fn from_inner_id_to_original_data(self) -> Self::RepresentingData;
-    
-    fn decode_from_bytes(bytes: &[u8; 6]) -> Result<Self, ()>;
+    type ContextRequiredToEncode;
+
+    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy;
+
+    /// Given the context, encode the Inner ID
+    fn encode_to_inner_id(
+        context: &mut Self::ContextRequiredToEncode
+    ) -> Self::InnerID;
 }
+
+/// If there is a collision with an ID in the genome, what should we do?
+pub enum CorticalIdentifierGeneratorCollisionPolicy {
+    /// Fail Immediately
+    Reject,
+    /// Retry up to this many times. Errors if we fail this many times
+    RetryNumberTimes(u8)
+}
+
+
+//endregion
+
+
+//region generator defaults //TODO move
 
 /// An inner cortical id of 6 bytes that are randomly generated
-#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CorticalAreaInnerIDRandomBytes([u8; 6]);
 
-impl TryFrom<[u8; 6]> for CorticalAreaInnerIDRandomBytes {
-    type Error = ();
-
-    fn try_from(value: [u8; 6]) -> Result<Self, Self::Error> {
-        Ok(Self(value))
-    }
-}
-
 impl CorticalAreaInnerID for CorticalAreaInnerIDRandomBytes {
-    type AdditionalEncoderContext = (); // none needed
-    type RepresentingData = (); // None, we just generate random
+    type DecodableData = [u8; 6]; // None, we just generate random
 
-    fn encode_to_inner_id(data: Self::RepresentingData, additional_context: &mut Self::AdditionalEncoderContext) -> Self {
-        todo!()
+    fn decode_internal_data(self) -> Self::DecodableData {
+        self.0
     }
 
-    fn from_inner_id_to_original_data(self) -> Self::RepresentingData {
-        () // nothing
+    fn try_encode_from_bytes(bytes: [u8; 6]) -> Result<Self, ()> {
+        Ok(Self(bytes))
     }
 
-    fn decode_from_bytes(bytes: &[u8; 6]) -> Result<Self, ()> {
-        Ok(Self(bytes.clone()))
+    fn write_into_bytes(&self, target: &mut [u8; 6]) {
+        *target = self.0.clone()
+    }
+}
+
+/// Generates `CorticalAreaInnerIDRandomBytes` randomly
+#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CorticalIdentifierGeneratorRandomBytes;
+
+impl CorticalIdentifierGenerator for CorticalIdentifierGeneratorRandomBytes {
+    type InnerID = CorticalAreaInnerIDRandomBytes;
+    type ContextRequiredToEncode = (); // needs no context
+    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
+        CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8);
+
+    fn encode_to_inner_id(context: &mut Self::ContextRequiredToEncode) -> Self::InnerID {
+        let arr: [u8; 6] = rand::random();
+        CorticalAreaInnerIDRandomBytes(arr)
     }
 }
 
 
 
+
+//endregion

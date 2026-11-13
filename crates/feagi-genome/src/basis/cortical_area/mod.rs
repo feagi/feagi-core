@@ -7,8 +7,10 @@ use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGeneratorPrecu
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutTag};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::neuron_models::models::kind::NMQuantedKind;
+use feagi_connectome::neuron_models::models::{NMNeurogenesisGeneratorModeled, NMNeurogenesisGeneratorPrecursorModeled, NMNeurogenesisStorageModeled, NMNeurogenesisStorageOrGeneratorModeled};
 use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault};
-use crate::basis::cortical_area::cortical_identifiers::CorticalAreaInnerID;
+use crate::basis::cortical_area::cortical_identifiers::{CorticalAreaInnerID, CorticalIdentifier, CorticalIdentifierGenerator};
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedGeneratorPrecursor, CTProcessingSubtypedKind, CTProcessingSubtypedStorage, CTProcessingSubtypedStorageOrGeneratorPrecursor};
 
 //region Cortical Type
@@ -16,7 +18,14 @@ use crate::basis::cortical_area::processing::{CTProcessingSubtypedGeneratorPrecu
 /// A cortical type is a higher level description of a cortical area. It has a set layout, but
 /// could be a variety of neuron layouts (of that given layout). This is first extended by another
 /// trait for the specific cortical type, then implemented bya  struct for the cortical subtype
-pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
+pub trait CorticalType {
+
+    /// The enums that represents the kinds of neuron models data that this cortical type can hold
+    type PossibleNeuronModelKindsEnum: Into<NMQuantedKind>;
+    type PossibleNeuronModelGeneratorEnum<FIQ: FeagiIndexQuantization>: Into<NMNeurogenesisGeneratorModeled<FIQ>>;
+    type PossibleNeuronModelGeneratorPrecursorEnum<FIQ: FeagiIndexQuantization>: Into<NMNeurogenesisGeneratorPrecursorModeled<FIQ>>;
+    type PossibleNeuronModelStorageEnum<FIQ: FeagiIndexQuantization>: Into<NMNeurogenesisStorageModeled<FIQ>>;
+    type PossibleNeuronModelStorageOrGeneratorEnum<FIQ: FeagiIndexQuantization>: Into<NMNeurogenesisStorageOr<FIQ>>;
 
     /// What neuron layout is this cortical type restricted to?
     type NeuronLayout: NeuronLayoutTag;
@@ -28,32 +37,32 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
     >;
 
     /// What method of inner ID is used for this cortical type
-    type IdentifierInner: CorticalAreaInnerID;
+    type CorticalIdentifierInner: CorticalAreaInnerID;
 
-    /// Any additional parameters the generator needs to do
-    type CorticalAreaGeneratorParameters<FIQ: FeagiIndexQuantization>;
-
-    /// The repr(u8) enum that represents the subtype under a given type
-    type CorticalSubTypeKindEnum;
-
-    /// Each cortical subtype has a unique byte identifier (amongst that type). This is used for 
-    /// cortical Identification
-    const CORTICAL_AREA_SUBTYPE_KIND: Self::CorticalSubTypeKindEnum;
+    /// How is the Inner Cortical Identifier Generated?
+    type CorticalIdentifierGenerator: CorticalIdentifierGenerator<InnerID=Self::CorticalIdentifierInner>;
 
     /// What regions is this cortical type allowed within the genome?
     const ALLOWED_REGIONS: CorticalAllowedRegions;
 
-    /// Get the precursor to the neurogenesis generator for this cortical type / model. This
-    /// effectively is the default values for cortical generation for the given neuron model.
-    /// some precursors allow changing of the parameters before submitting it for generation
-    fn get_neurogenesis_generator_precursor<FIQ: FeagiIndexQuantization>()
-        -> NM::NeurogenesisGeneratorPrecursor<FIQ>;
+    /// Get what neuron model / quant is being used here
+    fn get_neuron_model_enum(&self) ->Self::PossibleNeuronModelKindsEnum;
+
+    /// Generates the precursor structure for the generator. Note that the NM will be more restricted
+    /// in the implementation
+    fn get_neurogenesis_generator_precursor<FIQ>() -> NM::NeurogenesisGeneratorPrecursor<FIQ>
+    where
+        FIQ: FeagiIndexQuantization,
+
+    /// Generates a cortical identifier with the inbuilt rules
+    fn generate_cortical_identifier(
+        context: &mut <Self::CorticalIdentifierGenerator as CorticalIdentifierGenerator>::ContextRequiredToEncode
+    ) -> CorticalIdentifier;
 
     //region Default impls
 
 
 
-    // TODO Cortical Identifier Conversions
 
     //endregion
 }
@@ -67,6 +76,10 @@ pub trait CorticalType<NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>> {
 pub enum CorticalTypedKind{
     Foundation(CTFoundationSubtypedKind) = 0,
     Processing(CTProcessingSubtypedKind) = 1,
+}
+
+impl CorticalTypedKind {
+
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,34 +107,6 @@ pub enum CorticalTypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization>
 }
 
 //endregion
-
-//endregion
-
-
-
-//region Subtype Common Traits
-
-// TODO think of how we can specify requantization!
-
-/// Extend any subtype with this trait to automatically add functions for using the Uniform Default
-/// neuron generator with it for its neurogenesis. Only makes sense for implementations that
-/// use this generator
-pub trait CorticalSubTypeUsesDefaultCorticalGenerator<NM>: CorticalType<NM>
-where
-    NM: NeuronModel<
-        NeuronLayoutTag=Self::NeuronLayout,
-    >
-{
-    /// Gets the default values to be used in the generator. Fields can be overridden. TODO Requantization?
-    fn uniform_default_generator_defaults<
-        FIQ: FeagiIndexQuantization,
-    >
-    () -> NeurogenesisGeneratorUniformDefault<FIQ, NM>
-    where
-        NM: NeuronModel<NeurogenesisGenerator<FIQ>=NeurogenesisGeneratorUniformDefault<FIQ, NM>>
-    ;
-}
-
 
 //endregion
 

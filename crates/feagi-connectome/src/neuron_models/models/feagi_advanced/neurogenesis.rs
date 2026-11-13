@@ -3,7 +3,7 @@
 //! `NeuronModel::NeurogenesisGenerator` is the shared `NeurogenesisDefaultsGenerator`
 // TODO these are stubs, fill them in
 
-use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit};
+use crate::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedNeurogenesisGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted, NMFeagiAdvancedNeurogenesisStorageQuanted, NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuantStandard32Bit};
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronVariance};
 use crate::neuron_models::models::{NeuronModelEnumConversionError, NeurogenesisByGeneratorTypeOf, NeurogenesisFromStorageOf, NeurogenesisFromStorageOrByGeneratorOf};
@@ -150,25 +150,25 @@ where
 
 //region Storage Or Generator
 
-impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>
+impl<FIQ> From<NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>> for NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>
 where
     FIQ: FeagiIndexQuantization,
 {
     fn from(value: NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>) -> Self {
-        NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator::Standard32Bit(value)
+        NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(value)
     }
 }
 
-impl<FIQ> TryFrom<NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>
+impl<FIQ> TryFrom<NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>> for NeurogenesisFromStorageOrByGeneratorOf<FIQ, NMFeagiAdvancedQuantStandard32Bit>
 where
     FIQ: FeagiIndexQuantization,
 {
     type Error = NeuronModelEnumConversionError<NMFeagiAdvancedQuantKind>;
 
-    fn try_from(value: NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator<FIQ>) -> Result<Self, Self::Error> {
+    fn try_from(value: NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted<FIQ>) -> Result<Self, Self::Error> {
         let actual = value.quant_kind();
         match value {
-            NMFeagiAdvancedQuantedNeurogenesisStorageOrGenerator::Standard32Bit(v) => {
+            NMFeagiAdvancedNeurogenesisStorageOrGeneratorQuanted::Standard32Bit(v) => {
                 Ok(v)
             },
             _ => {
