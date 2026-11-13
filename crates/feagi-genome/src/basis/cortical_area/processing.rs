@@ -1,17 +1,16 @@
 use serde::{Deserialize, Serialize};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutRestrictor, NeuronLayoutTag};
-use crate::basis::cortical_area::{CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType};
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutRestrictor, NeuronLayoutTag};
+use crate::basis::cortical_area::{CorticalType};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::{CorticalAreaInnerID, CorticalAreaInnerIDRandomBytes, CorticalIdentifierParseError};
-use crate::basis::cortical_area::foundation::CorticalIdentifierFoundation;
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledGeneratorPrecursor, CTProcessingInterconnectNMModeledKind, CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor};
 
 
 //region Cortical Subtype
 
 /// This cortical type is for
-pub trait CorticalTypeProcessing<NM>: CorticalType<NM, CorticalIdentifierInner=[u8; 6]> // uses 6 bytes as cortical ID inner
+pub trait CorticalTypeProcessing<NM>: CorticalType<NM, InnerCorticalIDGenerator=[u8; 6]> // uses 6 bytes as cortical ID inner
 where
     NM: NeuronModel<NeuronLayoutTag=Self::NeuronLayout>
 {}

@@ -221,48 +221,82 @@ impl CorticalIDEnum for MaybeCorticalIdentifier {}
 
 //endregion
 
-#[derive(Debug, thiserror::Error)]
-pub enum CorticalIdentifierParseError {
-    #[error("Decoded byte {0} corresponds to no known cortical type!")]
-    InvalidCorticalType(u8),
-    #[error("Decoded byte {0} corresponds to no known cortical subtype!")]
-    InvalidCorticalSubtype(u8),
-}
+//region Cortical Identifier Inner
 
-/// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
-/// bytes and back must return the exact same bytes, or two different byte patterns could mean the
-/// same cortical area
-pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + Sized {
-    /// What type of data can be read within these 6 bytes
-    type DecodableData;
-
-    fn decode_internal_data(self) -> Self::DecodableData;
-
-    fn try_encode_from_bytes(bytes: [u8; 6]) -> Result<Self, ()>;
-
-    fn write_into_bytes(&self, target: &mut [u8; 6]);
-}
-
-
-
-//region Cortical ID Generator
-
-
-pub trait CorticalIdentifierGenerator
-{
-    /// What type of Inner ID to encode for
-    type InnerID: CorticalAreaInnerID;
-
+pub trait CorticalIdentifierInnerEncoder: Sized {
     /// Any additional data / systems needed to do the encoding. Is passed in as a mut reference to allow
     /// variety when retrying
     type ContextRequiredToEncode;
+    
+    /// What data can be decoded
+    type DecodableContext;
 
     const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy;
 
     /// Given the context, encode the Inner ID
-    fn encode_to_inner_id(
-        context: &mut Self::ContextRequiredToEncode
-    ) -> Self::InnerID;
+    fn encode_to_bytes(bytes: &mut [u8; 6], context: &mut Self::ContextRequiredToEncode)
+        -> Result<(), CorticalIdentifierParseError>;
+    
+    fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError>;
+    
+    /// Extract the decodable context
+    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableContext;
+    
+    fn encode_to_bytes_new(context: &mut Self::ContextRequiredToEncode)
+        -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
+        let mut bytes = [0,0,0,0,0,0];
+        Self::encode_to_bytes(&mut bytes, context)?;
+        Ok(CorticalIdentifierInner{bytes, _p: Default::default()})
+    }
+    
+}
+
+#[derive(Clone, Copy, PartialEq, Hash, Debug, Eq)]
+pub struct CorticalIdentifierInner<Encoder: CorticalIdentifierInnerEncoder>{
+    bytes: [u8; 6],
+    _p: core::marker::PhantomData<Encoder>
+}
+
+impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
+    
+    pub fn try_new_from_bytes(bytes: [u8; 6]) -> Result<Self, CorticalIdentifierParseError> {
+        Encoder::try_decode_from_bytes(bytes)
+    }
+    
+    pub fn try_new_from_context(context: &mut Encoder::ContextRequiredToEncode)
+                                -> Result<Self, CorticalIdentifierParseError> {
+        Encoder::encode_to_bytes_new(context)
+    }
+}
+
+
+
+//endregion
+
+//region Random Cortical ID encoder
+/// Encodes to the 6 bytes at random. Retries up to eight times on collision. Used by many areas
+#[derive(Clone, Copy, PartialEq, Hash, Debug, Eq)]
+pub struct CorticalIdentifierInnerEncoderRandom;
+
+impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
+    type ContextRequiredToEncode = ();
+    type DecodableContext = ();
+    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
+        CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8); // Did you get the broom closet ending? The broom closet ending was my favorite!
+
+    fn encode_to_bytes(bytes: &mut [u8; 6], context: &mut Self::ContextRequiredToEncode) -> Result<(), CorticalIdentifierParseError> {
+        *bytes = rand::random();
+        Ok(())
+    }
+
+    fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
+        // Nothing to verify
+        Ok(CorticalIdentifierInner{ bytes, _p: Default::default() })
+    }
+
+    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableContext {
+        &() // nothing to get
+    }
 }
 
 /// If there is a collision with an ID in the genome, what should we do?
@@ -276,46 +310,14 @@ pub enum CorticalIdentifierGeneratorCollisionPolicy {
 
 //endregion
 
-
-//region generator defaults //TODO move
-
-/// An inner cortical id of 6 bytes that are randomly generated
-#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CorticalAreaInnerIDRandomBytes([u8; 6]);
-
-impl CorticalAreaInnerID for CorticalAreaInnerIDRandomBytes {
-    type DecodableData = [u8; 6]; // None, we just generate random
-
-    fn decode_internal_data(self) -> Self::DecodableData {
-        self.0
-    }
-
-    fn try_encode_from_bytes(bytes: [u8; 6]) -> Result<Self, ()> {
-        Ok(Self(bytes))
-    }
-
-    fn write_into_bytes(&self, target: &mut [u8; 6]) {
-        *target = self.0.clone()
-    }
-}
-
-/// Generates `CorticalAreaInnerIDRandomBytes` randomly
-#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CorticalIdentifierGeneratorRandomBytes;
-
-impl CorticalIdentifierGenerator for CorticalIdentifierGeneratorRandomBytes {
-    type InnerID = CorticalAreaInnerIDRandomBytes;
-    type ContextRequiredToEncode = (); // needs no context
-    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
-        CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8);
-
-    fn encode_to_inner_id(context: &mut Self::ContextRequiredToEncode) -> Self::InnerID {
-        let arr: [u8; 6] = rand::random();
-        CorticalAreaInnerIDRandomBytes(arr)
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum CorticalIdentifierParseError {
+    #[error("Decoded byte {0} corresponds to no known cortical type!")]
+    InvalidCorticalType(u8),
+    #[error("Decoded byte {0} corresponds to no known cortical subtype!")]
+    InvalidCorticalSubtype(u8),
+    #[error("Invalid Inner Bytes! {0}")]
+    InvalidInnerByteDecoding(&'static str),
 }
 
 
-
-
-//endregion

@@ -44,7 +44,7 @@ pub trait NMMember: NeuronModel<QuantKind: core::fmt::Debug> {
     fn unwrap<C: NMContainer>(quanted: Self::Quanted<C>) -> Result<C::Of<Self>, NeuronModelEnumConversionError<Self::QuantKind>>;
 }
 
-/// The generator of a cortical area
+/// The generator of a neuron model's cortical area
 pub struct NMNeurogenesisGenerator<FIQ>(PhantomData<FIQ>);
 
 impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisGenerator<FIQ> {
