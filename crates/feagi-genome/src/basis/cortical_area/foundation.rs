@@ -176,6 +176,7 @@ pub mod power {
             Float32(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
             Float64(NMExclusivePowerQuantedNeurogenesisGeneratorPrecursor<FIQ>),
         }
+        
 
     }
 

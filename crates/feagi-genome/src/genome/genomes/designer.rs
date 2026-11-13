@@ -1,5 +1,7 @@
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::CorticalTypedGeneratorPrecursor;
+use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genomes::brain_region::BrainRegionSet;
 use crate::genome::genomes::{CachingContext, CachingContextCaching, GenomeReadingInterface};
 use crate::genome::genomes::cortical_area::CorticalAreaSet;
@@ -16,8 +18,22 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
 
-    pub fn new_barebones_genome() -> Self { // TODO move to storage
-        todo!()
+    /// Called on init, and can be called to have everything wiped
+    pub fn reset_to_new_barebones_genome(genome_metadata: GenomeObjectMetadata, root_id: BrainRegionID) -> Self {
+        
+        let ancestor_id = root_id.clone().into();
+        
+        let mut brain_region_set = BrainRegionSet::new_brain_region_set(
+            genome_metadata,
+            root_id,
+            ancestor_id
+        );
+        
+        let mut cortical_area_set = CorticalAreaSet::default();
+        cortical_area_set/
+        
+        
+        
     }
 }
 

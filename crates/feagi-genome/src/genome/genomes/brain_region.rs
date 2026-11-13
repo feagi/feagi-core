@@ -62,6 +62,12 @@ impl<CachingContext: BrainRegionCachingContext> BrainRegionSet<CachingContext> {
         None
 
     }
+
+    // NOTE: Should only be called by `BrainRegionCachingContext`
+    pub fn add_new_brain_region(&mut self, new_container_id: BrainRegionID, new_container: BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>) {
+        // TODO maybe add collision checks, but is that really that likely with uuidv7?
+        self.inner_brain_regions.insert(new_container_id, new_container);
+    }
 }
 
 // TODO Iter
@@ -69,7 +75,26 @@ impl<CachingContext: BrainRegionCachingContext> BrainRegionSet<CachingContext> {
 
 //region Contexts
 
-pub trait BrainRegionCachingContext: Default {}
+pub trait BrainRegionCachingContext: Default {
+    
+    fn add_new_now_region(
+        brain_region_set: &mut BrainRegionSet<Self>,
+        metadata: GenomeObjectMetadata,
+        positioning: GenomeObjectPositioning,
+    ) {
+        let region_id = BrainRegionID::new_now();
+        let ancestor_id = region_id.clone().into();
+        
+        let region = BrainRegionContainer::new_inner(
+            ancestor_id,
+            metadata,
+            positioning
+        );
+
+        brain_region_set.add_new_brain_region(region_id, region);
+    }
+    
+}
 
 /// In the case of dense storage, we dont want to store additional data
 #[derive(Default, Clone)]
@@ -193,7 +218,6 @@ BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>
 }
 
 //endregion
-
 
 //region ContainerRef / Mut
 

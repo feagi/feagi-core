@@ -15,6 +15,33 @@ where
     areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ, CachingContext, NeuronDataContext>>
 }
 
+impl<FIQ, CachingContext, NeuronDataContext> CorticalAreaSet<FIQ, CachingContext, NeuronDataContext>
+where
+    FIQ: FeagiIndexQuantization,
+    CachingContext: CorticalAreaCachingContext,
+    NeuronDataContext: StoredNeuronDataContext <FIQ>
+{
+
+
+
+    // NOTE: Should only be called by `CorticalAreaCachingContext`
+    pub fn add_new_cortical_area(&mut self)
+}
+
+
+impl<FIQ, CachingContext, NeuronDataContext> Default
+for CorticalAreaSet<FIQ, CachingContext, NeuronDataContext>
+where
+    FIQ: FeagiIndexQuantization,
+    CachingContext: CorticalAreaCachingContext,
+    NeuronDataContext: StoredNeuronDataContext <FIQ>
+{
+    fn default() -> Self {
+        Self {
+            areas: Default::default()
+        }
+    }
+}
 
 
 //region Contexts
@@ -49,9 +76,6 @@ impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTyped
 impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorageOrGeneratorPrecursor<FIQ> {}
 
 //endregion
-
-
-
 
 
 #[derive(Debug)]

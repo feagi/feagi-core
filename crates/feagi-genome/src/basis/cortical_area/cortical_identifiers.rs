@@ -223,10 +223,54 @@ pub enum CorticalIdentifierParseError {
 /// The last 6 bytes of a cortical ID, which each cortical type gives its own meaning. Converting to
 /// bytes and back must return the exact same bytes, or two different byte patterns could mean the
 /// same cortical area
-pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + Into<[u8; 6]> + TryFrom<[u8; 6]> {}
+pub trait CorticalAreaInnerID: Copy + Eq + core::hash::Hash + core::fmt::Debug + TryFrom<[u8; 6]> + Sized {
+    
+    /// Any additional data / systems needed to do the encoding. Is passed in as a mut reference to allow
+    /// variety when retrying
+    type AdditionalEncoderContext;
+    
+    /// What type of data is represented by the 6 bytes
+    type RepresentingData;
+    
+    /// If the generation results in different IDs each time, we can retry up to this many times to
+    /// try for different IDs in cases of collision.
+    const NUMBER_RETRIES_ALLOWED: u8 = 0;
+    
+    fn encode_to_inner_id(data: Self::RepresentingData, additional_context: &mut Self::AdditionalEncoderContext) -> Self;
+    
+    fn from_inner_id_to_original_data(self) -> Self::RepresentingData;
+    
+    fn decode_from_bytes(bytes: &[u8; 6]) -> Result<Self, ()>;
+}
 
-/// just 6 bytes counts as well
-impl CorticalAreaInnerID for [u8; 6] {}
+/// An inner cortical id of 6 bytes that are randomly generated
+#[derive(Clone, Copy, Hash, Debug, Eq, PartialEq)]
+pub struct CorticalAreaInnerIDRandomBytes([u8; 6]);
+
+impl TryFrom<[u8; 6]> for CorticalAreaInnerIDRandomBytes {
+    type Error = ();
+
+    fn try_from(value: [u8; 6]) -> Result<Self, Self::Error> {
+        Ok(Self(value))
+    }
+}
+
+impl CorticalAreaInnerID for CorticalAreaInnerIDRandomBytes {
+    type AdditionalEncoderContext = (); // none needed
+    type RepresentingData = (); // None, we just generate random
+
+    fn encode_to_inner_id(data: Self::RepresentingData, additional_context: &mut Self::AdditionalEncoderContext) -> Self {
+        todo!()
+    }
+
+    fn from_inner_id_to_original_data(self) -> Self::RepresentingData {
+        () // nothing
+    }
+
+    fn decode_from_bytes(bytes: &[u8; 6]) -> Result<Self, ()> {
+        Ok(Self(bytes.clone()))
+    }
+}
 
 
 

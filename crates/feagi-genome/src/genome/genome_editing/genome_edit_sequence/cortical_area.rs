@@ -15,7 +15,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepCorticalAreaBuilder<'a, FIQ>
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
         faux_cortical_identifier: FauxCorticalIdentifier,
-        neurogenesis: CorticalTypedStorageOrGeneratorPrecursor<FIQ>
+        neurogenesis: CorticalTypedStorageOrGeneratorPrecursor<FIQ>, // TODO change with struct that contains cortical ID gen
     ) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
         // true if not contained, false if did
         if self.0.contained_faux_cortical_ids.insert(faux_cortical_identifier) {
