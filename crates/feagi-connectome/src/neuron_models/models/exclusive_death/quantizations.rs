@@ -1,26 +1,168 @@
-use crate::neuron_models::models::exclusive_death::{
-    NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch,
-    NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance,
-    NMExclusiveDeathTrait,
-};
 use crate::neuron_models::models::kind::NMKind;
 use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use half::{bf16, f16};
+use quant_float_16::NMExclusiveDeathQuantFloat16;
+use quant_bfloat_16::NMExclusiveDeathQuantBFloat16;
+use quant_float_32::NMExclusiveDeathQuantFloat32;
+use quant_float_64::NMExclusiveDeathQuantFloat64;
 
-//region enums
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
-/// Describes the quantization of the Exclusive Death Neuron Model
-pub enum NMExclusiveDeathQuantKind {
-    Float16,
-    BFloat16,
-    Float32,
-    Float64,
+pub mod quant_float_16 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch, NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance, NMExclusiveDeathTrait};
+    use crate::neuron_models::models::exclusive_death::neurogenesis::ExclusiveDeathScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+    use half::f16;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusiveDeathQuantFloat16;
+
+    impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat16 {}
+
+    impl NeuronModel for NMExclusiveDeathQuantFloat16 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusiveDeathScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusiveDeathQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float16;
+    }
+
+    impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat16 {
+        type MembranePotentialQuant = f16;
+    }
 }
+
+pub mod quant_bfloat_16 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch, NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance, NMExclusiveDeathTrait};
+    use crate::neuron_models::models::exclusive_death::neurogenesis::ExclusiveDeathScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+    use half::bf16;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusiveDeathQuantBFloat16;
+
+    impl NMExclusiveDeathTrait for NMExclusiveDeathQuantBFloat16 {}
+
+    impl NeuronModel for NMExclusiveDeathQuantBFloat16 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusiveDeathScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusiveDeathQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::BFloat16;
+    }
+
+    impl MembranePotentialQuantization for NMExclusiveDeathQuantBFloat16 {
+        type MembranePotentialQuant = bf16;
+    }
+}
+
+pub mod quant_float_32 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch, NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance, NMExclusiveDeathTrait};
+    use crate::neuron_models::models::exclusive_death::neurogenesis::ExclusiveDeathScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusiveDeathQuantFloat32;
+
+    impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat32 {}
+
+    impl NeuronModel for NMExclusiveDeathQuantFloat32 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusiveDeathScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusiveDeathQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float32;
+    }
+
+    impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat32 {
+        type MembranePotentialQuant = f32;
+    }
+}
+
+pub mod quant_float_64 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_death::{NMExclusiveDeathDataCorticalInternal, NMExclusiveDeathDataCorticalProperties, NMExclusiveDeathDataCorticalScratch, NMExclusiveDeathDataCorticalVariance, NMExclusiveDeathDataNeuronInternal, NMExclusiveDeathDataNeuronScratch, NMExclusiveDeathDataNeuronVariance, NMExclusiveDeathTrait};
+    use crate::neuron_models::models::exclusive_death::neurogenesis::ExclusiveDeathScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_death::quantizations::NMExclusiveDeathQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusiveDeathQuantFloat64;
+
+    impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat64 {}
+
+    impl NeuronModel for NMExclusiveDeathQuantFloat64 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusiveDeathScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusiveDeathQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float64;
+    }
+
+    impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat64 {
+        type MembranePotentialQuant = f64;
+    }
+}
+
+//region Shared
+
 //region Quanted
 
 /// Data of container `C` for a given quantization of the Exclusive Death Neuron Model
@@ -156,121 +298,15 @@ impl NMMember for NMExclusiveDeathQuantFloat64 {
 
 //endregion
 
-//endregion
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusiveDeathQuantFloat16;
-
-impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat16 {}
-
-impl NeuronModel for NMExclusiveDeathQuantFloat16 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusiveDeathQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float16;
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
+/// Describes the quantization of the Exclusive Death Neuron Model
+pub enum NMExclusiveDeathQuantKind {
+    Float16,
+    BFloat16,
+    Float32,
+    Float64,
 }
 
-impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat16 {
-    type MembranePotentialQuant = f16;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusiveDeathQuantBFloat16;
-
-impl NMExclusiveDeathTrait for NMExclusiveDeathQuantBFloat16 {}
-
-impl NeuronModel for NMExclusiveDeathQuantBFloat16 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusiveDeathQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::BFloat16;
-}
-
-impl MembranePotentialQuantization for NMExclusiveDeathQuantBFloat16 {
-    type MembranePotentialQuant = bf16;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusiveDeathQuantFloat32;
-
-impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat32 {}
-
-impl NeuronModel for NMExclusiveDeathQuantFloat32 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusiveDeathQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float32;
-}
-
-impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat32 {
-    type MembranePotentialQuant = f32;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusiveDeathQuantFloat64;
-
-impl NMExclusiveDeathTrait for NMExclusiveDeathQuantFloat64 {}
-
-impl NeuronModel for NMExclusiveDeathQuantFloat64 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusiveDeathNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusiveDeathDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusiveDeathDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusiveDeathDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusiveDeathDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusiveDeathDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusiveDeathDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusiveDeathDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusiveDeathQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusiveDeathQuantKind::Float64;
-}
-
-impl MembranePotentialQuantization for NMExclusiveDeathQuantFloat64 {
-    type MembranePotentialQuant = f64;
-}
-
-//region Model Level Conversions
 
 impl From<NMExclusiveDeathQuantKind> for NMKind {
     fn from(value: NMExclusiveDeathQuantKind) -> Self {

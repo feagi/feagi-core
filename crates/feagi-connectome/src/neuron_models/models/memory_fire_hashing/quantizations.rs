@@ -1,22 +1,49 @@
 use crate::neuron_models::models::kind::NMKind;
-use crate::neuron_models::models::memory_fire_hashing::{
-    NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch,
-    NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch,
-    NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait,
-};
 use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
-use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use quant_standard_32_bit::NMMemoryFireHashingQuantStandard32Bit;
 
-//region enums
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
-/// Describes the quantization of the Memory Fire Hashing Neuron Model
-pub enum NMMemoryFireHashingQuantKind {
-    Standard32Bit,
+pub mod quant_standard_32_bit {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::single_stepped_dynamic::NeuronLayoutTagSingleSteppedDynamic;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::memory_fire_hashing::{NMMemoryFireHashingDataCorticalInternal, NMMemoryFireHashingDataCorticalProperties, NMMemoryFireHashingDataCorticalScratch, NMMemoryFireHashingDataCorticalVariance, NMMemoryFireHashingDataNeuronInternal, NMMemoryFireHashingDataNeuronScratch, NMMemoryFireHashingDataNeuronVariance, NMMemoryFireHashingTrait};
+    use crate::neuron_models::models::memory_fire_hashing::neurogenesis::MemoryFireHashingScratchVarianceDefaults;
+    use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFireHashingQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMMemoryFireHashingQuantStandard32Bit;
+
+    impl NMMemoryFireHashingTrait for NMMemoryFireHashingQuantStandard32Bit {
+        type Period = f32;
+    }
+
+    impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
+        type NeuronLayoutTag = NeuronLayoutTagSingleSteppedDynamic;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = MemoryFireHashingScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMMemoryFireHashingDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMMemoryFireHashingDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMMemoryFireHashingDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMMemoryFireHashingDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMMemoryFireHashingDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMMemoryFireHashingDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMMemoryFireHashingDataNeuronVariance<Self>;
+
+        type QuantKind = NMMemoryFireHashingQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMMemoryFireHashingQuantKind::Standard32Bit;
+    }
+
+    impl MembranePotentialQuantization for NMMemoryFireHashingQuantStandard32Bit {
+        type MembranePotentialQuant = f32;
+    }
 }
+
+//region Shared
 
 //region Quanted
 
@@ -79,39 +106,12 @@ impl NMMember for NMMemoryFireHashingQuantStandard32Bit {
 
 //endregion
 
-//endregion
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMMemoryFireHashingQuantStandard32Bit;
-
-impl NMMemoryFireHashingTrait for NMMemoryFireHashingQuantStandard32Bit {
-    type Period = f32;
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
+/// Describes the quantization of the Memory Fire Hashing Neuron Model
+pub enum NMMemoryFireHashingQuantKind {
+    Standard32Bit,
 }
 
-impl NeuronModel for NMMemoryFireHashingQuantStandard32Bit {
-    type NeuronLayoutTag = NeuronLayoutTagSingleSteppedDynamic;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::MemoryFireHashingNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMMemoryFireHashingDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMMemoryFireHashingDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMMemoryFireHashingDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMMemoryFireHashingDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMMemoryFireHashingDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMMemoryFireHashingDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMMemoryFireHashingDataNeuronVariance<Self>;
-
-    type QuantKind = NMMemoryFireHashingQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMMemoryFireHashingQuantKind::Standard32Bit;
-}
-
-impl MembranePotentialQuantization for NMMemoryFireHashingQuantStandard32Bit {
-    type MembranePotentialQuant = f32;
-}
-
-//region Model Level Conversions
 
 impl From<NMMemoryFireHashingQuantKind> for NMKind {
     fn from(value: NMMemoryFireHashingQuantKind) -> Self {

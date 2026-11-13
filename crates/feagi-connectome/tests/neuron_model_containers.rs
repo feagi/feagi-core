@@ -1,6 +1,8 @@
 //! Data of any container wraps into and unwraps out of the `NM*Quanted` and `NMModeled` enums
 
-use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantFloat16, NMExclusivePowerQuantFloat32, NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_float_16::NMExclusivePowerQuantFloat16;
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_float_32::NMExclusivePowerQuantFloat32;
+use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
 use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuanted;
 use feagi_connectome::neuron_models::models::kind::NMKind;
 use feagi_connectome::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};

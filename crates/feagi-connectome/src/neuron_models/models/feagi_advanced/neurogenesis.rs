@@ -17,9 +17,9 @@ use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuanti
 
 /// Generates the scratch and variance data of `FeagiAdvanced` neurons
 #[derive(Clone, Debug)]
-pub struct FeagiAdvancedNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
+pub struct FeagiAdvancedScratchVarianceDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiAdvancedNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiAdvancedScratchVarianceDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiAdvancedTrait,

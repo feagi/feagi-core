@@ -12,13 +12,13 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-//region Defaults
+//region Scratch Variance Defaults
 
 /// Generates the scratch and variance data of `MemoryFireHashing` neurons
 #[derive(Clone, Debug)]
-pub struct MemoryFireHashingNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
+pub struct MemoryFireHashingScratchVarianceDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for MemoryFireHashingNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for MemoryFireHashingScratchVarianceDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMMemoryFireHashingTrait,

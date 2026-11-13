@@ -12,13 +12,13 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-//region Defaults
+//region Scratch Variance Defaults
 
 /// Generates the scratch and variance data of `FeagiSimple` neurons
 #[derive(Clone, Debug)]
-pub struct FeagiSimpleNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
+pub struct FeagiSimpleScratchVarianceDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiSimpleNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for FeagiSimpleScratchVarianceDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMFeagiSimpleTrait,

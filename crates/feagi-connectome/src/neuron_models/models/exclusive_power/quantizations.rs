@@ -1,26 +1,167 @@
-use crate::neuron_models::models::exclusive_power::{
-    NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch,
-    NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance,
-    NMExclusivePowerTrait,
-};
 use crate::neuron_models::models::kind::NMKind;
 use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
-use half::{bf16, f16};
+use quant_float_16::NMExclusivePowerQuantFloat16;
+use quant_bfloat_16::NMExclusivePowerQuantBFloat16;
+use quant_float_32::NMExclusivePowerQuantFloat32;
+use quant_float_64::NMExclusivePowerQuantFloat64;
 
-//region enums
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
-/// Describes the quantization of the Exclusive Power Neuron Model
-pub enum NMExclusivePowerQuantKind {
-    Float16,
-    BFloat16,
-    Float32,
-    Float64,
+pub mod quant_float_16 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
+    use crate::neuron_models::models::exclusive_power::neurogenesis::ExclusivePowerScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+    use half::f16;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusivePowerQuantFloat16;
+
+    impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat16 {}
+
+    impl NeuronModel for NMExclusivePowerQuantFloat16 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusivePowerScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusivePowerQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float16;
+    }
+
+    impl MembranePotentialQuantization for NMExclusivePowerQuantFloat16 {
+        type MembranePotentialQuant = f16;
+    }
 }
+
+pub mod quant_bfloat_16 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
+    use crate::neuron_models::models::exclusive_power::neurogenesis::ExclusivePowerScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+    use half::bf16;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusivePowerQuantBFloat16;
+
+    impl NMExclusivePowerTrait for NMExclusivePowerQuantBFloat16 {}
+
+    impl NeuronModel for NMExclusivePowerQuantBFloat16 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusivePowerScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusivePowerQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::BFloat16;
+    }
+
+    impl MembranePotentialQuantization for NMExclusivePowerQuantBFloat16 {
+        type MembranePotentialQuant = bf16;
+    }
+}
+
+pub mod quant_float_32 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
+    use crate::neuron_models::models::exclusive_power::neurogenesis::ExclusivePowerScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusivePowerQuantFloat32;
+
+    impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat32 {}
+
+    impl NeuronModel for NMExclusivePowerQuantFloat32 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusivePowerScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusivePowerQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float32;
+    }
+
+    impl MembranePotentialQuantization for NMExclusivePowerQuantFloat32 {
+        type MembranePotentialQuant = f32;
+    }
+}
+
+pub mod quant_float_64 {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalScratch, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal, NMExclusivePowerDataNeuronScratch, NMExclusivePowerDataNeuronVariance, NMExclusivePowerTrait};
+    use crate::neuron_models::models::exclusive_power::neurogenesis::ExclusivePowerScratchVarianceDefaults;
+    use crate::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMExclusivePowerQuantFloat64;
+
+    impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat64 {}
+
+    impl NeuronModel for NMExclusivePowerQuantFloat64 {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = ExclusivePowerScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
+
+        type QuantKind = NMExclusivePowerQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float64;
+    }
+
+    impl MembranePotentialQuantization for NMExclusivePowerQuantFloat64 {
+        type MembranePotentialQuant = f64;
+    }
+}
+
+//region Shared
 
 //region Quanted
 
@@ -157,120 +298,15 @@ impl NMMember for NMExclusivePowerQuantFloat64 {
 
 //endregion
 
-//endregion
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusivePowerQuantFloat16;
-
-impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat16 {}
-
-impl NeuronModel for NMExclusivePowerQuantFloat16 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusivePowerQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float16;
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
+/// Describes the quantization of the Exclusive Power Neuron Model
+pub enum NMExclusivePowerQuantKind {
+    Float16,
+    BFloat16,
+    Float32,
+    Float64,
 }
 
-impl MembranePotentialQuantization for NMExclusivePowerQuantFloat16 {
-    type MembranePotentialQuant = f16;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusivePowerQuantBFloat16;
-
-impl NMExclusivePowerTrait for NMExclusivePowerQuantBFloat16 {}
-
-impl NeuronModel for NMExclusivePowerQuantBFloat16 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusivePowerQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::BFloat16;
-}
-
-impl MembranePotentialQuantization for NMExclusivePowerQuantBFloat16 {
-    type MembranePotentialQuant = bf16;
-}
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusivePowerQuantFloat32;
-
-impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat32 {}
-
-impl NeuronModel for NMExclusivePowerQuantFloat32 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusivePowerQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float32;
-}
-
-impl MembranePotentialQuantization for NMExclusivePowerQuantFloat32 {
-    type MembranePotentialQuant = f32;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMExclusivePowerQuantFloat64;
-
-impl NMExclusivePowerTrait for NMExclusivePowerQuantFloat64 {}
-
-impl NeuronModel for NMExclusivePowerQuantFloat64 {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::ExclusivePowerNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMExclusivePowerDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMExclusivePowerDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMExclusivePowerDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMExclusivePowerDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMExclusivePowerDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMExclusivePowerDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMExclusivePowerDataNeuronVariance<Self>;
-
-    type QuantKind = NMExclusivePowerQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMExclusivePowerQuantKind::Float64;
-}
-
-impl MembranePotentialQuantization for NMExclusivePowerQuantFloat64 {
-    type MembranePotentialQuant = f64;
-}
-
-//region Model Level Conversions
 
 impl From<NMExclusivePowerQuantKind> for NMKind {
     fn from(value: NMExclusivePowerQuantKind) -> Self {

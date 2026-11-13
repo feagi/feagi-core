@@ -1,22 +1,49 @@
-use crate::neuron_models::models::feagi_advanced::{
-    NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch,
-    NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance,
-    NMFeagiAdvancedTrait,
-};
 use crate::neuron_models::models::kind::NMKind;
 use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};
-use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
-use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
-use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+use quant_standard_32_bit::NMFeagiAdvancedQuantStandard32Bit;
 
-//region enums
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
-/// Describes the quantization of the Feagi Advanced Neuron Model
-pub enum NMFeagiAdvancedQuantKind {
-    Standard32Bit,
+pub mod quant_standard_32_bit {
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutTagVoxel;
+    use crate::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
+    use crate::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, MembranePotentialQuantization};
+    use crate::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalScratch, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedDataNeuronScratch, NMFeagiAdvancedDataNeuronVariance, NMFeagiAdvancedTrait};
+    use crate::neuron_models::models::feagi_advanced::neurogenesis::FeagiAdvancedScratchVarianceDefaults;
+    use crate::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantKind;
+    use crate::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
+
+    #[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
+    pub struct NMFeagiAdvancedQuantStandard32Bit;
+
+    impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantStandard32Bit {
+        type Period = f32;
+    }
+
+    impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
+        type NeuronLayoutTag = NeuronLayoutTagVoxel;
+
+        type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = FeagiAdvancedScratchVarianceDefaults<FIQ, Self>;
+
+        type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
+
+        type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
+        type CorticalDataInternal = NMFeagiAdvancedDataCorticalInternal<Self>;
+        type CorticalDataScratch = NMFeagiAdvancedDataCorticalScratch<Self>;
+        type CorticalDataVariance = NMFeagiAdvancedDataCorticalVariance<Self>;
+        type NeuronDataInternal = NMFeagiAdvancedDataNeuronInternal<Self>;
+        type NeuronDataScratch = NMFeagiAdvancedDataNeuronScratch<Self>;
+        type NeuronDataVariance = NMFeagiAdvancedDataNeuronVariance<Self>;
+
+        type QuantKind = NMFeagiAdvancedQuantKind;
+        const QUANT_KIND: Self::QuantKind = NMFeagiAdvancedQuantKind::Standard32Bit;
+    }
+
+    impl MembranePotentialQuantization for NMFeagiAdvancedQuantStandard32Bit {
+        type MembranePotentialQuant = f32;
+    }
 }
+
+//region Shared
 
 //region Quanted
 
@@ -77,39 +104,12 @@ impl NMMember for NMFeagiAdvancedQuantStandard32Bit {
 
 //endregion
 
-//endregion
-
-#[derive(Clone, Copy, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NMFeagiAdvancedQuantStandard32Bit;
-
-impl NMFeagiAdvancedTrait for NMFeagiAdvancedQuantStandard32Bit {
-    type Period = f32;
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, ::serde::Serialize, ::serde::Deserialize)]
+/// Describes the quantization of the Feagi Advanced Neuron Model
+pub enum NMFeagiAdvancedQuantKind {
+    Standard32Bit,
 }
 
-impl NeuronModel for NMFeagiAdvancedQuantStandard32Bit {
-    type NeuronLayoutTag = NeuronLayoutTagVoxel;
-
-    type NeurogenesisScratchVarianceDefaults<FIQ: FeagiIndexQuantization> = super::neurogenesis::FeagiAdvancedNeurogenesisDefaults<FIQ, Self>;
-
-    type NeurogenesisByGenerator<FIQ: FeagiIndexQuantization> = NeurogenesisGeneratorUniformDefault<FIQ, Self>;
-
-    type CorticalDataProperties = NMFeagiAdvancedDataCorticalProperties<Self>;
-    type CorticalDataInternal = NMFeagiAdvancedDataCorticalInternal<Self>;
-    type CorticalDataScratch = NMFeagiAdvancedDataCorticalScratch<Self>;
-    type CorticalDataVariance = NMFeagiAdvancedDataCorticalVariance<Self>;
-    type NeuronDataInternal = NMFeagiAdvancedDataNeuronInternal<Self>;
-    type NeuronDataScratch = NMFeagiAdvancedDataNeuronScratch<Self>;
-    type NeuronDataVariance = NMFeagiAdvancedDataNeuronVariance<Self>;
-
-    type QuantKind = NMFeagiAdvancedQuantKind;
-    const QUANT_KIND: Self::QuantKind = NMFeagiAdvancedQuantKind::Standard32Bit;
-}
-
-impl MembranePotentialQuantization for NMFeagiAdvancedQuantStandard32Bit {
-    type MembranePotentialQuant = f32;
-}
-
-//region Model Level Conversions
 
 impl From<NMFeagiAdvancedQuantKind> for NMKind {
     fn from(value: NMFeagiAdvancedQuantKind) -> Self {

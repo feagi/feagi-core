@@ -12,13 +12,13 @@ use feagi_connectome_neural::neural_basis::neuron_model::model_data::CorticalDat
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 
-//region Defaults
+//region Scratch Variance Defaults
 
 /// Generates the scratch and variance data of `ExclusivePower` neurons
 #[derive(Clone, Debug)]
-pub struct ExclusivePowerNeurogenesisDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
+pub struct ExclusivePowerScratchVarianceDefaults<FIQ, NM>(PhantomData<fn() -> (FIQ, NM)>);
 
-impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for ExclusivePowerNeurogenesisDefaults<FIQ, NM>
+impl<FIQ, NM> NeurogenesisScratchVarianceDefaults<FIQ, NM> for ExclusivePowerScratchVarianceDefaults<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NMExclusivePowerTrait,
