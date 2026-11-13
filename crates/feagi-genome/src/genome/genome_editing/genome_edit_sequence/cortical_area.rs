@@ -1,9 +1,9 @@
 use crate::basis::brain_region::BrainRegionID;
-use crate::basis::cortical_area::CTStorageOrGeneratorTyped;
 use crate::genome::genome_editing::genome_edit_sequence::{GenomeEditSequence, GenomeEditSequenceIntensity, GenomeEditSequenceStep, GenomeEditSequenceStepEnum};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::FauxCorticalIdentifier;
+use crate::basis::cortical_area::CorticalTypedStorageOrGeneratorPrecursor;
 
 pub struct GenomeEditStepCorticalAreaBuilder<'a, FIQ: FeagiIndexQuantization>(pub(super) &'a mut GenomeEditSequence<FIQ>);
 
@@ -15,7 +15,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepCorticalAreaBuilder<'a, FIQ>
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
         faux_cortical_identifier: FauxCorticalIdentifier,
-        generator: CTStorageOrGeneratorTyped<FIQ>
+        neurogenesis: CorticalTypedStorageOrGeneratorPrecursor<FIQ>
     ) -> Result<&'a mut GenomeEditSequence<FIQ>, ()> {
         // true if not contained, false if did
         if self.0.contained_faux_cortical_ids.insert(faux_cortical_identifier) {
@@ -24,7 +24,7 @@ impl<'a, FIQ: FeagiIndexQuantization> GenomeEditStepCorticalAreaBuilder<'a, FIQ>
                 metadata,
                 positioning,
                 faux_cortical_identifier: faux_cortical_identifier.clone(),
-                generator,
+                neurogenesis_method: neurogenesis,
             };
             
             self.0.inject_step(step.into());
@@ -66,7 +66,7 @@ pub(crate) struct GenomeEditStepCorticalAreaAddArea<FIQ: FeagiIndexQuantization>
     pub(crate) metadata: GenomeObjectMetadata,
     pub(crate) positioning: GenomeObjectPositioning,
     pub(crate) faux_cortical_identifier: FauxCorticalIdentifier,
-    pub(crate) generator: CTStorageOrGeneratorTyped<FIQ>
+    pub(crate) neurogenesis_method: CorticalTypedStorageOrGeneratorPrecursor<FIQ>
 }
 
 impl<FIQ: FeagiIndexQuantization> Into<GenomeEditSequenceStepEnum<FIQ>> for GenomeEditStepCorticalAreaAddArea<FIQ> {
