@@ -1264,6 +1264,41 @@ async fn test_health_endpoint() {
 }
 
 #[tokio::test]
+async fn test_manual_stimulation_rejects_invalid_potential() {
+    // JSON cannot carry NaN or infinity; those are covered by the resolver unit test.
+    for bad in [0.0, -1.0] {
+        let app = create_test_server().await;
+        let (status, body) = request_json(
+            app,
+            "POST",
+            "/v1/agent/manual_stimulation",
+            Some(json!({ "stimulation_payload": {}, "potential": bad })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "potential {bad}: {body}");
+        assert!(body.to_string().contains("potential"), "{body}");
+    }
+}
+
+#[tokio::test]
+async fn test_stimulus_schedule_rejects_invalid_potential() {
+    for bad in [0.0, -1.0] {
+        let app = create_test_server().await;
+        let (status, body) = request_json(
+            app,
+            "POST",
+            "/v1/simulation/stimulus_schedule",
+            Some(json!({ "entries": [
+                { "burst_offset": 0, "stimulation": {}, "potential": bad }
+            ] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "potential {bad}: {body}");
+        assert!(body.to_string().contains("potential"), "{body}");
+    }
+}
+
+#[tokio::test]
 async fn test_modulator_by_id_routes_resolve() {
     // axum 0.7 path parameters are `:name`; a `{name}` segment is matched literally, so these
     // routes used to 404 with an empty body for every real id.

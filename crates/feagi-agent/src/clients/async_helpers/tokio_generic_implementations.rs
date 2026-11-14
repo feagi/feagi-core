@@ -164,6 +164,7 @@ pub struct TokioEmbodimentAgent {
     last_sensor_payload_sent_at: Option<Instant>,
     capped_sensory_frame_count: u64,
     busy_drop_streak: BusyDropStreak,
+    last_motor_burst_id: Option<u16>,
 }
 
 impl TokioEmbodimentAgent {
@@ -197,6 +198,7 @@ impl TokioEmbodimentAgent {
             last_sensor_payload_sent_at: None,
             capped_sensory_frame_count: 0,
             busy_drop_streak: BusyDropStreak::default(),
+            last_motor_burst_id: None,
         }
     }
 
@@ -455,6 +457,25 @@ impl TokioEmbodimentAgent {
         self.poll_and_decode_motor_once()
     }
 
+    /// Like [`Self::poll_and_decode_motor_data`], but returns the 16-bit burst id of the decoded
+    /// frame (`Some(id)`), or `None` when no frame was decoded. Consumes exactly one frame per
+    /// call, so draining in a loop sees every frame in order; feed ids to
+    /// [`crate::clients::FrameSequenceTracker`] to detect frames lost in transport.
+    pub fn poll_and_decode_motor_data_with_burst_id(
+        &mut self,
+    ) -> Result<Option<u16>, FeagiAgentError> {
+        if self.poll_and_decode_motor_once()? {
+            Ok(self.last_motor_burst_id)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Burst id of the most recently consumed motor frame, if any.
+    pub fn last_motor_burst_id(&self) -> Option<u16> {
+        self.last_motor_burst_id
+    }
+
     /// Await and decode the next available motor frame (using driver poll interval).
     pub async fn await_motor_data(&mut self) -> Result<(), FeagiAgentError> {
         loop {
@@ -616,6 +637,9 @@ impl TokioEmbodimentAgent {
                 motor_cache
                     .get_feagi_byte_container_mut()
                     .try_write_data_by_copy_and_verify(&payload)?;
+                self.last_motor_burst_id = Some(crate::clients::burst_id_of_frame(
+                    motor_cache.get_feagi_byte_container(),
+                )?);
                 let had_neural_data = motor_cache.try_decode_bytes_to_neural_data()?;
                 if had_neural_data {
                     motor_cache.try_decode_neural_data_into_cache(Instant::now())?;

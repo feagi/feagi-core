@@ -75,6 +75,10 @@ pub fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String>
                         _ => "Subunit",
                     };
                     format!("{} ({}) Unit {}", unit_name, subunit_name, unit_index)
+                } else if let Some(area_title) =
+                    unit.build_sub_unit_area_name(None, subunit_index as usize, unit_index)
+                {
+                    area_title
                 } else if has_subunits {
                     format!(
                         "{} Subunit {} Unit {}",

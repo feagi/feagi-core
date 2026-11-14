@@ -11,6 +11,23 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Membrane potential forced neurons fire with when a stimulation request gives none.
+pub const DEFAULT_STIMULATION_POTENTIAL: f32 = 100.0;
+
+/// Resolve the optional `potential` of a stimulation request or schedule entry.
+///
+/// `None` yields [`DEFAULT_STIMULATION_POTENTIAL`]; a present value must be finite and greater
+/// than zero. `field` names the request field in the error message.
+pub fn resolve_stimulation_potential(potential: Option<f32>, field: &str) -> Result<f32, String> {
+    match potential {
+        None => Ok(DEFAULT_STIMULATION_POTENTIAL),
+        Some(p) if p.is_finite() && p > 0.0 => Ok(p),
+        Some(p) => Err(format!(
+            "'{field}' must be a finite number greater than 0, got {p}"
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ManualStimulationMode {
@@ -137,10 +154,15 @@ pub trait AgentService: Send + Sync {
     /// Implementations should treat stimulation as authoritative: every resolved voxel neuron must
     /// appear in the burst fire queue regardless of membrane dynamics. The `mode` parameter exists
     /// for API compatibility; callers may ignore it.
+    ///
+    /// `potential` is the membrane potential every forced neuron fires with. Callers resolve it
+    /// with [`resolve_stimulation_potential`] (default [`DEFAULT_STIMULATION_POTENTIAL`]). The
+    /// returned map carries `applied_potential` (the value used).
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
         mode: ManualStimulationMode,
+        potential: f32,
     ) -> AgentResult<HashMap<String, serde_json::Value>>;
 
     /// Set runtime service for sensory injection (optional, implementations can ignore if not needed)
@@ -150,5 +172,34 @@ pub trait AgentService: Send + Sync {
         _runtime_service: std::sync::Arc<dyn crate::traits::RuntimeService + Send + Sync>,
     ) {
         // Default implementation: no-op (for implementations that don't need runtime service)
+    }
+}
+
+#[cfg(test)]
+mod stimulation_potential_tests {
+    use super::*;
+
+    #[test]
+    fn absent_potential_uses_default() {
+        assert_eq!(
+            resolve_stimulation_potential(None, "potential"),
+            Ok(DEFAULT_STIMULATION_POTENTIAL)
+        );
+    }
+
+    #[test]
+    fn present_potential_passes_through_unchanged() {
+        assert_eq!(
+            resolve_stimulation_potential(Some(0.25), "potential"),
+            Ok(0.25)
+        );
+    }
+
+    #[test]
+    fn invalid_potentials_are_rejected_naming_the_field() {
+        for bad in [0.0, -0.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let err = resolve_stimulation_potential(Some(bad), "entries[2].potential").unwrap_err();
+            assert!(err.contains("entries[2].potential"), "{err}");
+        }
     }
 }

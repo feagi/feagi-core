@@ -51,6 +51,15 @@ pub struct StimulusScheduleEntryRequest {
     /// cortical area id (base64) -> list of `[x, y, z]` voxel coordinates. Every area of one
     /// entry fires on the same burst.
     pub stimulation: HashMap<String, Vec<Vec<i32>>>,
+    /// Membrane potential the entry's forced neurons fire with, one value for the whole entry.
+    /// Optional; 100.0 when absent. Must be finite and greater than 0 (400 otherwise).
+    ///
+    /// This is a probe: it bypasses threshold and refractory period. A neuron that already
+    /// fired naturally in that burst keeps its own potential. Mechanisms that read firing
+    /// potential (for example MP-driven PSP or graded modulator drivers) see this value.
+    /// A server that predates this field ignores it; check `applied_potential` in the response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub potential: Option<f32>,
 }
 
 /// Stimulus schedule request (`POST /v1/simulation/stimulus_schedule`)
@@ -77,6 +86,9 @@ pub struct StimulusScheduleResponse {
     pub start_burst: u64,
     /// Absolute burst of the last entry; `null` for a repeating schedule.
     pub end_burst: Option<u64>,
+    /// Potential applied by the first entry (100.0 when it gave none); every entry's own
+    /// value is validated the same way.
+    pub applied_potential: f32,
 }
 
 /// One active stimulus schedule
@@ -100,4 +112,31 @@ pub struct StimulusScheduleInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StimulusScheduleListResponse {
     pub schedules: Vec<StimulusScheduleInfo>,
+}
+
+#[cfg(test)]
+mod stimulus_potential_tests {
+    use super::*;
+
+    #[test]
+    fn entry_potential_defaults_to_none_and_round_trips() {
+        let e: StimulusScheduleEntryRequest =
+            serde_json::from_str(r#"{"burst_offset":0,"stimulation":{}}"#).unwrap();
+        assert_eq!(e.potential, None);
+        let e: StimulusScheduleEntryRequest =
+            serde_json::from_str(r#"{"burst_offset":0,"stimulation":{},"potential":0.25}"#)
+                .unwrap();
+        assert_eq!(e.potential, Some(0.25));
+    }
+
+    #[test]
+    fn schedule_response_carries_applied_potential() {
+        let r = StimulusScheduleResponse {
+            schedule_id: 1,
+            start_burst: 2,
+            end_burst: Some(3),
+            applied_potential: 0.25,
+        };
+        assert_eq!(serde_json::to_value(&r).unwrap()["applied_potential"], 0.25);
+    }
 }

@@ -208,6 +208,25 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "MIDI output for one instrument, two areas. One unit is one instrument; several instruments are several units of this type (unit index 0, 1, 2, ...). Area 0 \"Notes\": X is one column per note (low to high), Y and Z are 1; a voxel that fires this frame is a sounding note and its strength is its membrane potential at fire on the 0..=255 scale divided by 255 (potentials above 255 saturate). Area 1 \"Expression\": X is one column per control (0 pitch bend up, 1 pitch bend down, 2 modulation, 3 sustain, 4 volume), Y is 1, Z is the level as an unsigned percentage. An ordinary connection delivers its strength as the target's potential; a default forced stimulation (potential 100) reads as 100/255. A silent column means not sounding (Notes) or not driven (Expression). Both areas are sized from the registered MIDI output properties."]
+                MidiOutput => {
+                    friendly_name: "MIDI Output",
+                    accepted_wrapped_io_data_type: MidiOutputFrame,
+                    cortical_id_unit_reference: *b"mid",
+                    number_cortical_areas: 2,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // Notes: 128 notes x 1 x 1.
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-280, -60, -20], channel_dimensions_default: [128, 1, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [128, 1, 1]),
+                        // Expression: 5 controls x 1 x 10 level steps.
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-300, -60, -20], channel_dimensions_default: [5, 1, 10], channel_dimensions_min: [5, 1, 1], channel_dimensions_max: [5, 1, 1024])
+                    }
+                },
+
             }
         }
     };

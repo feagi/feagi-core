@@ -224,6 +224,40 @@ macro_rules! define_motor_cortical_units_enum {
 motor_cortical_units!(define_motor_cortical_units_enum);
 
 impl MotorCorticalUnit {
+    /// Display names of the areas of a unit whose areas have distinct roles, in
+    /// sub-unit order. `None` for units that do not name their areas.
+    pub const fn get_sub_unit_display_names(&self) -> Option<&'static [&'static str]> {
+        match self {
+            MotorCorticalUnit::MidiOutput => Some(&["Notes", "Expression"]),
+            _ => None,
+        }
+    }
+
+    /// Title for one area of a unit whose areas have distinct roles (see
+    /// [`Self::get_sub_unit_display_names`]). `None` for units without area display names,
+    /// whose naming is unchanged.
+    ///
+    /// With a unit label the title is `"<label> (<area display name>)"`; without one it is
+    /// `"<type display name> (<area display name>) Unit <unit_index>"`. The label is used
+    /// as given (not trimmed, escaped or length-limited here).
+    pub fn build_sub_unit_area_name(
+        &self,
+        unit_label: Option<&str>,
+        sub_unit_index: usize,
+        unit_index: u16,
+    ) -> Option<String> {
+        let area_name = self.get_sub_unit_display_names()?.get(sub_unit_index)?;
+        Some(match unit_label {
+            Some(label) => format!("{label} ({area_name})"),
+            None => format!(
+                "{} ({}) Unit {}",
+                self.get_friendly_name(),
+                area_name,
+                unit_index
+            ),
+        })
+    }
+
     /// Check if a legacy 3-char subtype matches a supported OPU type and return its default CorticalID.
     /// Used by genome migrator to avoid converting unsupported legacy OPU areas to MiscData.
     pub fn try_from_legacy_subtype(subtype: &str) -> Option<CorticalID> {
@@ -317,6 +351,10 @@ impl MotorCorticalUnit {
             }
             MotorCorticalUnit::AudioOutput => {
                 Self::get_cortical_ids_array_for_audio_output_with_parameters(fh, group_index)[0]
+            }
+            MotorCorticalUnit::MidiOutput => {
+                Self::get_cortical_ids_array_for_midi_output_with_parameters(fh, pos, group_index)
+                    [0]
             }
         }
     }

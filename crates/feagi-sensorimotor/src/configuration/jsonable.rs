@@ -6,16 +6,17 @@ use crate::data_types::descriptors::{
 };
 use crate::data_types::{
     AudioSpectrumFrame, AudioSpectrumProperties, GazeProperties, ImageFilteringSettings,
-    ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
-    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
-    SignedPercentage4D,
+    ImageFrame, MidiOutputFrame, MidiOutputProperties, MiscData, Percentage, Percentage2D,
+    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
+    SignedPercentage3D, SignedPercentage4D,
 };
 use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
     AngularPointerNeuronVoxelXYZPDecoder, AudioSpectrumNeuronVoxelXYZPDecoder,
     GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
-    MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
-    PoseEstimationNeuronVoxelXYZPDecoder, SpatialPointerNeuronVoxelXYZPDecoder,
+    MidiOutputNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder,
+    PercentageNeuronVoxelXYZPDecoder, PoseEstimationNeuronVoxelXYZPDecoder,
+    SpatialPointerNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
     AudioSpectrumNeuronVoxelXYZPEncoder, BooleanNeuronVoxelXYZPEncoder,
@@ -490,6 +491,9 @@ pub enum JSONDecoderProperties {
     AngularPointer(AngularPointerProperties),
     PoseEstimation(PoseEstimationProperties),
     AudioSpectrum(AudioSpectrumProperties),
+    /// MIDI Output: Notes and Expression areas sized by the properties; the
+    /// positioning is the Expression area's unsigned percentage coding.
+    MidiOutput(MidiOutputProperties, PercentageNeuronPositioning),
 }
 
 impl JSONDecoderProperties {
@@ -667,6 +671,20 @@ impl JSONDecoderProperties {
                     number_channels,
                 )
             }
+            JSONDecoderProperties::MidiOutput(midi_properties, positioning) => {
+                if cortical_ids.len() != 2 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected two cortical ids (Notes, Expression) for MidiOutput!".to_string(),
+                    ));
+                }
+                MidiOutputNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(), // Notes
+                    *cortical_ids.get(1).unwrap(),  // Expression
+                    *midi_properties,
+                    *positioning,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -787,6 +805,9 @@ impl JSONDecoderProperties {
             ),
             JSONDecoderProperties::AudioSpectrum(audio_properties) => Ok(
                 WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
+            ),
+            JSONDecoderProperties::MidiOutput(midi_properties, _positioning) => Ok(
+                WrappedIOData::MidiOutputFrame(MidiOutputFrame::new(midi_properties)?),
             ),
         }
     }

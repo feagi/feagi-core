@@ -4,9 +4,9 @@ use crate::data_types::descriptors::{
 };
 use crate::data_types::{
     AudioSpectrumFrame, AudioSpectrumProperties, GazeProperties, ImageFilteringSettings,
-    ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, PoseEstimationData,
-    RawIMU, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
-    SignedPercentage4D,
+    ImageFrame, MidiOutputFrame, MidiOutputProperties, MiscData, Percentage, Percentage2D,
+    Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
+    SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::FeagiDataError;
@@ -51,6 +51,7 @@ pub enum WrappedIOType {
     ImageFilteringSettings,
     PoseEstimationData(Option<PoseEstimationProperties>),
     AudioSpectrumFrame(Option<AudioSpectrumProperties>),
+    MidiOutputFrame(Option<MidiOutputProperties>),
 }
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
@@ -175,6 +176,16 @@ impl WrappedIOType {
                     audio_properties,
                 )?))
             }
+            WrappedIOType::MidiOutputFrame(midi_properties) => {
+                let Some(midi_properties) = midi_properties else {
+                    return Err(FeagiDataError::BadParameters(
+                        "MidiOutput properties is None! Cannot create default Wrapped Data!".into(),
+                    ));
+                };
+                Ok(WrappedIOData::MidiOutputFrame(MidiOutputFrame::new(
+                    midi_properties,
+                )?))
+            }
         }
     }
 }
@@ -231,6 +242,13 @@ impl std::fmt::Display for WrappedIOType {
                 };
                 write!(f, "AudioSpectrumFrame({})", s)
             }
+            WrappedIOType::MidiOutputFrame(properties) => {
+                let s: String = match properties {
+                    Some(p) => p.to_string(),
+                    None => "No Requirements".to_string(),
+                };
+                write!(f, "MidiOutputFrame({})", s)
+            }
         }
     }
 }
@@ -265,6 +283,9 @@ impl From<WrappedIOData> for WrappedIOType {
             WrappedIOData::AudioSpectrumFrame(ref frame) => {
                 WrappedIOType::AudioSpectrumFrame(Some(*frame.get_properties()))
             }
+            WrappedIOData::MidiOutputFrame(ref frame) => {
+                WrappedIOType::MidiOutputFrame(Some(*frame.get_properties()))
+            }
         }
     }
 }
@@ -298,6 +319,9 @@ impl From<&WrappedIOData> for WrappedIOType {
             }
             WrappedIOData::AudioSpectrumFrame(frame) => {
                 WrappedIOType::AudioSpectrumFrame(Some(*frame.get_properties()))
+            }
+            WrappedIOData::MidiOutputFrame(frame) => {
+                WrappedIOType::MidiOutputFrame(Some(*frame.get_properties()))
             }
         }
     }

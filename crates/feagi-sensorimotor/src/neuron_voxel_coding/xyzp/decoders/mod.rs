@@ -1,6 +1,7 @@
 #![allow(unused_imports)] // These are used, but by macros that some IDEs cannot see
 
 mod gaze_properties_decoder;
+mod midi_output;
 mod misc_data;
 mod percentage_decoder;
 mod pose_estimation;
@@ -17,6 +18,7 @@ pub(crate) use audio_spectrum::AudioSpectrumNeuronVoxelXYZPDecoder;
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPDecoder;
 pub(crate) use gaze_properties_decoder::GazePropertiesNeuronVoxelXYZPDecoder;
 pub(crate) use image_filtering_settings::ImageFilteringSettingsNeuronVoxelXYZPDecoder;
+pub(crate) use midi_output::MidiOutputNeuronVoxelXYZPDecoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPDecoder;
 pub(crate) use percentage_decoder::PercentageNeuronVoxelXYZPDecoder;
 pub(crate) use pose_estimation::PoseEstimationNeuronVoxelXYZPDecoder;

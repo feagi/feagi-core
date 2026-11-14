@@ -16,6 +16,7 @@ pub mod descriptors;
 mod gaze_properties;
 mod image_filtering_settings;
 mod image_frame;
+mod midi_output;
 mod misc_data;
 mod percentages;
 mod pose_estimation;
@@ -32,6 +33,11 @@ pub use audio_spectrum::{
 pub use gaze_properties::GazeProperties;
 pub use image_filtering_settings::ImageFilteringSettings;
 pub use image_frame::ImageFrame;
+pub use midi_output::{
+    MidiControl, MidiExpressionFrame, MidiNotesFrame, MidiOutputFrame, MidiOutputProperties,
+    MIDI_OUTPUT_DEFAULT_EXPRESSION_DEPTH, MIDI_OUTPUT_MAX_EXPRESSION_DEPTH,
+    MIDI_OUTPUT_MAX_NOTE_COLUMNS,
+};
 pub use misc_data::MiscData;
 pub use percentages::*;
 pub use pose_estimation::{JointPosition, PoseEstimationData};

@@ -2405,6 +2405,76 @@ mod test_sensory_cortical_unit {
         }
     }
 
+    /// Tests for the `MidiOutput` motor unit: Notes and Expression areas.
+    mod test_midi_output_unit {
+        use super::*;
+
+        fn ids() -> [CorticalID; 2] {
+            MotorCorticalUnit::get_cortical_ids_array_for_midi_output_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u16),
+            )
+        }
+
+        #[test]
+        fn test_midi_output_subtype_code_round_trips() {
+            for (i, id) in ids().iter().enumerate() {
+                let bytes = id.as_bytes();
+                assert_eq!(bytes[0], b'o', "MidiOutput must be an OPU");
+                assert_eq!(&bytes[1..4], b"mid", "MidiOutput subtype must be 'mid'");
+                assert_eq!(*id.io_cortical_sub_unit_index(), i as u8);
+                let from_b64 = CorticalID::try_from_base_64(&id.as_base_64()).unwrap();
+                assert_eq!(&from_b64, id);
+                let from_bytes = CorticalID::try_from_bytes(bytes).unwrap();
+                assert_eq!(&from_bytes, id);
+            }
+            assert_ne!(ids()[0], ids()[1]);
+            assert_eq!(
+                MotorCorticalUnit::MidiOutput.get_cortical_id_unit_reference(),
+                *b"mid"
+            );
+            assert_eq!(
+                MotorCorticalUnit::try_from_legacy_subtype("mid"),
+                Some(
+                    MotorCorticalUnit::MidiOutput
+                        .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16))
+                )
+            );
+        }
+
+        #[test]
+        fn test_midi_output_declares_two_named_areas() {
+            assert_eq!(MotorCorticalUnit::MidiOutput.get_number_cortical_areas(), 2);
+            assert_eq!(
+                MotorCorticalUnit::MidiOutput.get_sub_unit_display_names(),
+                Some(&["Notes", "Expression"][..])
+            );
+            assert_eq!(
+                MotorCorticalUnit::MidiOutput.get_friendly_name(),
+                "MIDI Output"
+            );
+            assert_eq!(
+                MotorCorticalUnit::MidiOutput.get_snake_case_name(),
+                "midi_output"
+            );
+        }
+
+        #[test]
+        fn test_midi_output_default_and_maximum_dims() {
+            let topology = MotorCorticalUnit::MidiOutput.get_unit_default_topology();
+            assert_eq!(topology.len(), 2);
+            let notes = topology.get(&0.into()).expect("Missing Notes topology");
+            assert_eq!(notes.channel_dimensions_default, [128, 1, 1]);
+            assert_eq!(notes.channel_dimensions_max, [128, 1, 1]);
+            let expression = topology
+                .get(&1.into())
+                .expect("Missing Expression topology");
+            assert_eq!(expression.channel_dimensions_default, [5, 1, 10]);
+            assert_eq!(expression.channel_dimensions_max, [5, 1, 1024]);
+        }
+    }
+
     /// Tests for the `AngularPointer` motor unit: yaw/pitch/roll counterpart
     /// of `SpatialPointer` translation.
     mod test_angular_pointer_unit {

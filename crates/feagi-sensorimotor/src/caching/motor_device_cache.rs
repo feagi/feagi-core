@@ -675,6 +675,43 @@ macro_rules! motor_unit_functions {
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, AudioSpectrumFrame);
     };
+
+    // Arm for MidiOutputFrame: two areas (Notes, Expression) decoded by one decoder.
+    (@generate_functions
+        $motor_unit:ident,
+        MidiOutputFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                midi_properties: MidiOutputProperties,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_ids = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit);
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MidiOutputNeuronVoxelXYZPDecoder::new_box(
+                    cortical_ids[0],
+                    cortical_ids[1],
+                    midi_properties,
+                    percentage_neuron_positioning,
+                    number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::MidiOutputFrame(Some(midi_properties)).create_blank_data_of_type()?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, MidiOutputFrame);
+    };
 }
 
 /// A single decoded motor value, flattened to one scalar per axis/channel.
@@ -814,6 +851,30 @@ impl MotorDeviceCache {
     }
 
     motor_cortical_units!(motor_unit_functions);
+
+    /// Friendly name (label) of a registered motor unit, if one was set.
+    pub fn get_unit_friendly_name(
+        &self,
+        motor_cortical_unit: MotorCorticalUnit,
+        unit_index: CorticalUnitIndex,
+    ) -> Result<&Option<String>, FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches(motor_cortical_unit, unit_index)?;
+        Ok(motor_stream_caches.get_friendly_name())
+    }
+
+    /// Sets the friendly name (label) of a registered motor unit, any type. It is exported
+    /// as the unit's `friendly_name` in the registration JSON; `None` clears it.
+    pub fn set_unit_friendly_name(
+        &mut self,
+        motor_cortical_unit: MotorCorticalUnit,
+        unit_index: CorticalUnitIndex,
+        friendly_name: Option<String>,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_cortical_unit, unit_index)?;
+        motor_stream_caches.set_friendly_name(friendly_name)
+    }
 
     /// Registers a positional-servo group that emits target-and-speed pairs.
     ///
@@ -1295,5 +1356,97 @@ impl Default for MotorDeviceCache {
 impl Display for MotorDeviceCache {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(writeln!(f, "Motor Device Cache:")?)
+    }
+}
+
+#[cfg(test)]
+mod midi_output_cache_tests {
+    use super::*;
+    use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+
+    /// Several instruments are several units: a frame that fires only unit 1's
+    /// Notes column reaches unit 1 and leaves unit 0 silent.
+    #[test]
+    fn midi_output_units_decode_independently() {
+        let handling = FrameChangeHandling::Absolute;
+        let positioning = PercentageNeuronPositioning::Linear;
+        let properties = MidiOutputProperties::new(128, 10).unwrap();
+        let channels = CorticalChannelCount::new(1).unwrap();
+        let unit0 = CorticalUnitIndex::from(0u16);
+        let unit1 = CorticalUnitIndex::from(1u16);
+
+        let mut cache = MotorDeviceCache::new();
+        for unit in [unit0, unit1] {
+            cache
+                .midi_output_register(unit, channels, handling, properties, positioning)
+                .unwrap();
+        }
+
+        let unit1_notes_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_midi_output_with_parameters(
+                handling,
+                positioning,
+                unit1,
+            )[0];
+        let mut arrays = NeuronVoxelXYZPArrays::new();
+        arrays.push_raw(5, 0, 0, 192.0);
+        let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
+        neurons.insert(unit1_notes_id, arrays);
+        cache
+            .ingest_neuron_data_and_run_callbacks(neurons, Instant::now())
+            .unwrap();
+
+        let channel = CorticalChannelIndex::from(0u32);
+        let frame0 = cache
+            .midi_output_read_postprocessed_cache_value(unit0, channel)
+            .unwrap();
+        let frame1 = cache
+            .midi_output_read_postprocessed_cache_value(unit1, channel)
+            .unwrap();
+        assert_eq!(frame1.notes.strength(5), 192.0 / 255.0);
+        assert_eq!(frame1.notes.sounding_count(), 1);
+        assert!(frame0.notes.strengths().iter().all(|s| *s == 0.0));
+        assert_eq!(frame0.expression.driven_count(), 0);
+    }
+
+    /// A unit label set on the cache is exported as the unit's `friendly_name`.
+    #[test]
+    fn midi_output_unit_label_round_trips_into_registration_json() {
+        let handling = FrameChangeHandling::Absolute;
+        let positioning = PercentageNeuronPositioning::Linear;
+        let properties = MidiOutputProperties::new(128, 10).unwrap();
+        let channels = CorticalChannelCount::new(1).unwrap();
+        let unit0 = CorticalUnitIndex::from(0u16);
+
+        let mut cache = MotorDeviceCache::new();
+        cache
+            .midi_output_register(unit0, channels, handling, properties, positioning)
+            .unwrap();
+        assert_eq!(
+            cache
+                .get_unit_friendly_name(MotorCorticalUnit::MidiOutput, unit0)
+                .unwrap(),
+            &None
+        );
+        cache
+            .set_unit_friendly_name(
+                MotorCorticalUnit::MidiOutput,
+                unit0,
+                Some("Lead (1)".to_string()),
+            )
+            .unwrap();
+        assert!(cache
+            .set_unit_friendly_name(
+                MotorCorticalUnit::MidiOutput,
+                CorticalUnitIndex::from(9u16),
+                None
+            )
+            .is_err());
+
+        let mut definition = JSONInputOutputDefinition::new();
+        cache.export_to_output_definition(&mut definition).unwrap();
+        let exported = definition.get_output_units_and_decoder_properties();
+        let units = exported.get(&MotorCorticalUnit::MidiOutput).unwrap();
+        assert_eq!(units[0].0.friendly_name.as_deref(), Some("Lead (1)"));
     }
 }

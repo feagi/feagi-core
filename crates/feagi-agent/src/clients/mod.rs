@@ -8,10 +8,12 @@
 
 pub mod async_helpers;
 mod blocking;
+pub mod frame_sequence;
 pub mod recovery;
 mod session_state_machine;
 
 pub use blocking::command_control_agent::{AgentRegistrationStatus, CommandControlAgent};
+pub use frame_sequence::{burst_id_of_frame, FrameSequenceStep, FrameSequenceTracker};
 pub use session_state_machine::{
     NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
     SessionTimingConfig,

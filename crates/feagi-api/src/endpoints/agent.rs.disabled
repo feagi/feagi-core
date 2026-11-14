@@ -659,6 +659,7 @@ pub async fn deregister_agent(
     request_body = ManualStimulationRequest,
     responses(
         (status = 200, description = "Manual stimulation result", body = ManualStimulationResponse),
+        (status = 400, description = "Invalid stimulation mode or potential"),
         (status = 500, description = "Stimulation failed")
     ),
     tag = "agent"
@@ -667,6 +668,12 @@ pub async fn manual_stimulation(
     State(state): State<ApiState>,
     Json(request): Json<ManualStimulationRequest>,
 ) -> ApiResult<Json<ManualStimulationResponse>> {
+    let potential = feagi_services::traits::agent_service::resolve_stimulation_potential(
+        request.potential,
+        "potential",
+    )
+    .map_err(ApiError::invalid_input)?;
+
     let agent_service = state
         .agent_service
         .as_ref()
@@ -688,7 +695,7 @@ pub async fn manual_stimulation(
     };
 
     match agent_service
-        .manual_stimulation(request.stimulation_payload, mode)
+        .manual_stimulation(request.stimulation_payload, mode, potential)
         .await
     {
         Ok(result) => {
@@ -730,6 +737,11 @@ pub async fn manual_stimulation(
                         .collect()
                 })
                 .unwrap_or_default();
+            let applied_potential = result
+                .get("applied_potential")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32)
+                .unwrap_or(potential);
             let error = result
                 .get("error")
                 .and_then(|v| v.as_str())
@@ -744,6 +756,7 @@ pub async fn manual_stimulation(
                 mode,
                 successful_areas,
                 failed_areas,
+                applied_potential,
                 error,
             }))
         }

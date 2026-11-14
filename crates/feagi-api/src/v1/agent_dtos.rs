@@ -163,6 +163,15 @@ pub struct ManualStimulationRequest {
     /// stimulation (resolved neurons are always placed in the fire queue); this field may be ignored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
+    /// Membrane potential the forced neurons fire with, one value for the whole request.
+    /// Optional; 100.0 when absent. Must be finite and greater than 0 (400 otherwise).
+    ///
+    /// This is a probe: it bypasses threshold and refractory period. A neuron that already
+    /// fired naturally in the same burst keeps its own potential. Mechanisms that read firing
+    /// potential (for example MP-driven PSP or graded modulator drivers) see this value.
+    /// A server that predates this field ignores it; check `applied_potential` in the response.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub potential: Option<f32>,
 }
 
 /// Manual stimulation response
@@ -176,6 +185,8 @@ pub struct ManualStimulationResponse {
     pub mode: String,
     pub successful_areas: usize,
     pub failed_areas: Vec<String>,
+    /// Potential the forced neurons actually fired with (100.0 when the request gave none).
+    pub applied_potential: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -256,4 +267,41 @@ pub struct RegistrationDiffQuery {
     /// Restrict the diff to this base64 agent ID; all agents when absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
+}
+
+#[cfg(test)]
+mod manual_stimulation_potential_tests {
+    use super::*;
+
+    #[test]
+    fn request_without_potential_deserialises_to_none() {
+        let r: ManualStimulationRequest =
+            serde_json::from_str(r#"{"stimulation_payload":{}}"#).unwrap();
+        assert_eq!(r.potential, None);
+    }
+
+    #[test]
+    fn request_with_potential_keeps_value() {
+        let r: ManualStimulationRequest =
+            serde_json::from_str(r#"{"stimulation_payload":{},"potential":0.25}"#).unwrap();
+        assert_eq!(r.potential, Some(0.25));
+    }
+
+    #[test]
+    fn response_carries_applied_potential() {
+        let r = ManualStimulationResponse {
+            success: true,
+            total_coordinates: 1,
+            requested_coordinates: 1,
+            matched_coordinates: 1,
+            unique_neuron_ids: 1,
+            mode: "force_fire".into(),
+            successful_areas: 1,
+            failed_areas: vec![],
+            applied_potential: 0.25,
+            error: None,
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["applied_potential"], 0.25);
+    }
 }

@@ -445,7 +445,7 @@ fn legacy_io_table(id: &str) -> Option<LegacyIoTarget> {
     match id {
         "o_spos" => Some(LegacyIoTarget::ServoAbsolute),
         "o__ser" => Some(LegacyIoTarget::ServoIncremental),
-        "o_misc" => Some(LegacyIoTarget::MiscData),
+        "o_misc" | "o_stop" => Some(LegacyIoTarget::MiscData),
         _ => None,
     }
 }
@@ -586,7 +586,7 @@ fn apply_explicit_legacy_table(
         }
     }
 
-    for old_id in ["o_spos", "o__ser", "o_misc"] {
+    for old_id in ["o_spos", "o__ser", "o_misc", "o_stop"] {
         if handled.contains(old_id) || !legacy_ids.iter().any(|x| x == old_id) {
             continue;
         }
@@ -1619,6 +1619,15 @@ mod tests {
     fn test_legacy_misc_opu_maps_to_misc_data() {
         let r = migrate_genome(&legacy_genome(&[("o_misc", 43, 1)])).unwrap();
         assert_eq!(r.id_mapping.get("o_misc").unwrap(), &misc_data_opu_id(0));
+    }
+
+    #[test]
+    fn test_legacy_stop_and_misc_take_separate_misc_data_groups() {
+        let r = migrate_genome(&legacy_genome(&[("o_misc", 43, 1), ("o_stop", 1, 1)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_misc").unwrap(), &misc_data_opu_id(0));
+        assert_eq!(r.id_mapping.get("o_stop").unwrap(), &misc_data_opu_id(1));
+        let r = migrate_genome(&legacy_genome(&[("o_stop", 1, 1)])).unwrap();
+        assert_eq!(r.id_mapping.get("o_stop").unwrap(), &misc_data_opu_id(0));
     }
 
     #[test]

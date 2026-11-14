@@ -342,6 +342,7 @@ impl AgentService for AgentServiceImpl {
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
         mode: ManualStimulationMode,
+        potential: f32,
     ) -> AgentResult<HashMap<String, serde_json::Value>> {
         // Manual stimulation is authoritative: always use force-fire injection so every resolved
         // voxel neuron is merged into the fire queue after dynamics, regardless of MP/refractory/
@@ -366,9 +367,6 @@ impl AgentService for AgentServiceImpl {
         let mut successful_areas = 0;
         let mut failed_areas = Vec::new();
         let mut coordinates_not_found = 0;
-
-        // Default potential for manual stimulation (high enough to trigger firing)
-        const DEFAULT_POTENTIAL: f32 = 100.0;
 
         // First pass: validate all cortical areas and build injection data
         let mut injection_requests: Vec<(String, Vec<(u32, u32, u32, f32)>)> = Vec::new();
@@ -406,8 +404,7 @@ impl AgentService for AgentServiceImpl {
                             let y = coord[1] as u32;
                             let z = coord[2] as u32;
 
-                            // Add coordinate with default potential
-                            xyzp_data.push((x, y, z, DEFAULT_POTENTIAL));
+                            xyzp_data.push((x, y, z, potential));
                         }
 
                         if !xyzp_data.is_empty() {
@@ -469,6 +466,10 @@ impl AgentService for AgentServiceImpl {
             serde_json::json!(total_stimulated),
         );
         result.insert("mode".to_string(), serde_json::json!("force_fire"));
+        result.insert(
+            "applied_potential".to_string(),
+            serde_json::json!(potential),
+        );
         result.insert(
             "successful_areas".to_string(),
             serde_json::json!(successful_areas),

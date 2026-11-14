@@ -276,6 +276,53 @@ fn spatial_pointer_dims_from_decoder_properties(
     Some((w, h, d.clamp(d_min, d_max) as usize))
 }
 
+/// Reads the registered `{"MidiOutput": [{note_columns, expression_depth}, positioning]}`
+/// decoder block (the properties are the first tuple element).
+fn midi_output_properties_from_decoder(
+    decoder_properties: Option<&Value>,
+) -> Option<(usize, usize)> {
+    let payload = decoder_properties?.get("MidiOutput")?;
+    let properties = payload.as_array().and_then(|items| items.first())?;
+    let columns = as_nonzero_usize(properties.get("note_columns"))?;
+    let depth = as_nonzero_usize(properties.get("expression_depth"))?;
+    Some((columns, depth))
+}
+
+/// Per-channel dims of one area of a registered motor unit. MIDI Output (one unit is one
+/// instrument) sizes its two areas from the registered properties: Notes is
+/// `note_columns x 1 x 1`, Expression is `5 x 1 x expression_depth` (5 = number
+/// of controls). Every other unit sizes the same for all its areas.
+fn registered_motor_area_dimensions(
+    motor_unit: MotorCorticalUnit,
+    sub_unit_index: usize,
+    unit_topology: &UnitTopology,
+    decoder_properties: Option<&Value>,
+    frame_handling: Option<&str>,
+) -> (usize, usize, usize) {
+    if motor_unit == MotorCorticalUnit::MidiOutput {
+        let default = (
+            unit_topology.channel_dimensions_default[0] as usize,
+            unit_topology.channel_dimensions_default[1] as usize,
+            unit_topology.channel_dimensions_default[2] as usize,
+        );
+        let Some((columns, depth)) = midi_output_properties_from_decoder(decoder_properties) else {
+            return default;
+        };
+        let dims = if sub_unit_index == 0 {
+            (columns, 1, 1)
+        } else {
+            (default.0, 1, depth)
+        };
+        return clamp_to_unit_topology(dims, unit_topology);
+    }
+    registered_motor_channel_dimensions(
+        motor_unit,
+        unit_topology,
+        decoder_properties,
+        frame_handling,
+    )
+}
+
 /// Image Enhancements is one area. Absolute is three slider columns (diff,
 /// brightness, contrast). Incremental is six columns (increase, decrease per slider).
 /// Z depth follows the decoder when the registration carries one.
@@ -380,6 +427,9 @@ fn build_motor_registration_default_name(
 ) -> String {
     if motor_unit == MotorCorticalUnit::PositionalServo && sub_unit_index == 2 {
         return "Positional Servo Speed".to_string();
+    }
+    if let Some(name) = motor_unit.build_sub_unit_area_name(None, sub_unit_index, group) {
+        return name;
     }
     let legacy_name =
         build_friendly_unit_name(motor_unit.get_friendly_name(), group, sub_unit_index);
@@ -510,7 +560,8 @@ fn servo_motor_subunit_index_for_servo_tag(tag: &str) -> Option<u8> {
     }
 }
 
-fn resolve_registration_name(unit_def: &Value, default_name: &str) -> String {
+/// Label a client gave the unit (unit name, bundle id, or first channel name), if any.
+fn registration_unit_label(unit_def: &Value) -> Option<String> {
     non_empty_string(unit_def.get("friendly_name"))
         .or_else(|| first_grouping_property(unit_def, "bundle_id"))
         .or_else(|| {
@@ -520,7 +571,10 @@ fn resolve_registration_name(unit_def: &Value, default_name: &str) -> String {
                     .get("friendly_name"),
             )
         })
-        .unwrap_or_else(|| default_name.to_string())
+}
+
+fn resolve_registration_name(unit_def: &Value, default_name: &str) -> String {
+    registration_unit_label(unit_def).unwrap_or_else(|| default_name.to_string())
 }
 
 /// Like [`resolve_registration_name`], but SDK `{UnitType}_{group}` placeholders
@@ -1219,8 +1273,9 @@ async fn reconcile_device_registrations(
                         continue;
                     };
                     let (per_channel_width, per_channel_height, per_channel_depth) =
-                        registered_motor_channel_dimensions(
+                        registered_motor_area_dimensions(
                             motor_unit,
+                            i,
                             unit_topology,
                             decoder_properties,
                             frame_handling.as_deref(),
@@ -1304,6 +1359,15 @@ async fn reconcile_device_registrations(
                         } else {
                             format!("{}-{}", resolved_base_name, i)
                         };
+                    // Types with per-area display names: "<label> (<area>)" or
+                    // "<type> (<area>) Unit <n>" so units are told apart.
+                    let resolved_name = motor_unit
+                        .build_sub_unit_area_name(
+                            registration_unit_label(unit_def).as_deref(),
+                            i,
+                            group_u16,
+                        )
+                        .unwrap_or(resolved_name);
                     let exists = match connectome_service
                         .cortical_area_exists(&cortical_id_b64)
                         .await
@@ -1454,8 +1518,9 @@ async fn reconcile_device_registrations(
 
                     let friendly_name = resolved_name;
                     let (per_channel_width, per_channel_height, per_channel_depth) =
-                        registered_motor_channel_dimensions(
+                        registered_motor_area_dimensions(
                             motor_unit,
+                            i,
                             unit_topology,
                             decoder_properties,
                             frame_handling.as_deref(),
@@ -2267,8 +2332,9 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 #[cfg(test)]
 mod count_output_registration_tests {
     use super::{
-        motor_registration_device_count, per_channel_motor_dimensions_for_registration,
-        registered_motor_channel_dimensions,
+        build_motor_registration_default_name, motor_registration_device_count,
+        per_channel_motor_dimensions_for_registration, registered_motor_area_dimensions,
+        registered_motor_channel_dimensions, registration_unit_label, should_auto_rename_motor,
     };
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
     use feagi_structures::genomic::MotorCorticalUnit;
@@ -2451,6 +2517,121 @@ mod count_output_registration_tests {
         let dec = audio_spectrum_block(1025, 32);
         let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
         assert_eq!(dims, (1025, 32, 1));
+    }
+
+    fn midi_output_block(columns: u32, depth: u32) -> serde_json::Value {
+        json!({"MidiOutput": [
+            {"note_columns": columns, "expression_depth": depth},
+            "Linear"
+        ]})
+    }
+
+    fn midi_area_dims(sub: usize, dec: Option<&serde_json::Value>) -> (usize, usize, usize) {
+        let motor = MotorCorticalUnit::MidiOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(sub as u8)).unwrap();
+        registered_motor_area_dimensions(motor, sub, ut, dec, Some("Absolute"))
+    }
+
+    #[test]
+    fn midi_output_areas_are_sized_from_registration() {
+        let dec = midi_output_block(88, 20);
+        assert_eq!(midi_area_dims(0, Some(&dec)), (88, 1, 1));
+        assert_eq!(midi_area_dims(1, Some(&dec)), (5, 1, 20));
+    }
+
+    #[test]
+    fn midi_output_without_block_uses_template_defaults() {
+        assert_eq!(midi_area_dims(0, None), (128, 1, 1));
+        assert_eq!(midi_area_dims(1, None), (5, 1, 10));
+    }
+
+    #[test]
+    fn midi_output_clamps_to_template_bounds() {
+        let dec = midi_output_block(9999, 99999);
+        assert_eq!(midi_area_dims(0, Some(&dec)), (128, 1, 1));
+        assert_eq!(midi_area_dims(1, Some(&dec)), (5, 1, 1024));
+    }
+
+    #[test]
+    fn midi_output_extra_row_key_is_not_read_as_rows() {
+        let dec = json!({"MidiOutput": [
+            {"note_columns": 88, "rows": 4, "expression_depth": 20},
+            "Linear"
+        ]});
+        assert_eq!(midi_area_dims(0, Some(&dec)), (88, 1, 1));
+        assert_eq!(midi_area_dims(1, Some(&dec)), (5, 1, 20));
+    }
+
+    #[test]
+    fn midi_output_unlabelled_areas_are_named_by_type_area_and_unit() {
+        let type_name = MotorCorticalUnit::MidiOutput.get_friendly_name();
+        assert_eq!(
+            build_motor_registration_default_name(MotorCorticalUnit::MidiOutput, 2, 0, None, None),
+            format!("{type_name} (Notes) Unit 2")
+        );
+        assert_eq!(
+            build_motor_registration_default_name(MotorCorticalUnit::MidiOutput, 2, 1, None, None),
+            format!("{type_name} (Expression) Unit 2")
+        );
+    }
+
+    #[test]
+    fn midi_output_labelled_areas_are_named_label_and_area() {
+        let unit = MotorCorticalUnit::MidiOutput;
+        assert_eq!(
+            unit.build_sub_unit_area_name(Some("L"), 0, 0).as_deref(),
+            Some("L (Notes)")
+        );
+        assert_eq!(
+            unit.build_sub_unit_area_name(Some("L"), 1, 0).as_deref(),
+            Some("L (Expression)")
+        );
+        // Label passes through unchanged: parentheses, long text.
+        let long = format!("A (b) {}", "x".repeat(300));
+        assert_eq!(
+            unit.build_sub_unit_area_name(Some(&long), 0, 0),
+            Some(format!("{long} (Notes)"))
+        );
+    }
+
+    #[test]
+    fn midi_output_label_is_read_from_unit_friendly_name() {
+        let unit_def = json!({"friendly_name": "  Lead  "});
+        assert_eq!(registration_unit_label(&unit_def).as_deref(), Some("Lead"));
+        assert_eq!(registration_unit_label(&json!({})), None);
+    }
+
+    #[test]
+    fn unit_without_area_display_names_keeps_its_names() {
+        let unit = MotorCorticalUnit::PositionalServo;
+        assert_eq!(unit.build_sub_unit_area_name(Some("L"), 0, 0), None);
+        assert_eq!(unit.build_sub_unit_area_name(None, 1, 3), None);
+        assert_eq!(
+            build_motor_registration_default_name(unit, 3, 1, None, None),
+            format!("{}-3-1", unit.get_friendly_name())
+        );
+    }
+
+    #[test]
+    fn midi_output_existing_area_name_is_not_renamed_for_a_new_label() {
+        let desired = MotorCorticalUnit::MidiOutput
+            .build_sub_unit_area_name(Some("Other"), 0, 0)
+            .unwrap();
+        let legacy = format!("{}-0-0", MotorCorticalUnit::MidiOutput.get_friendly_name());
+        assert!(!should_auto_rename_motor(
+            "Mine (Notes)",
+            "cortical_id_b64",
+            &legacy,
+            &desired
+        ));
+        // A placeholder name (the raw cortical id) is still renamed.
+        assert!(should_auto_rename_motor(
+            "cortical_id_b64",
+            "cortical_id_b64",
+            &legacy,
+            &desired
+        ));
     }
 
     #[test]

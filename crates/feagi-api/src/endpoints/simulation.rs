@@ -131,9 +131,6 @@ pub async fn post_config(
 // BURST-INDEXED STIMULUS SCHEDULE
 // ============================================================================
 
-/// Default potential of a scheduled voxel (same as manual stimulation).
-const SCHEDULED_STIMULUS_POTENTIAL: f32 = 100.0;
-
 /// Schedule multi-area force-fire stimulation at burst offsets.
 ///
 /// Contract:
@@ -149,7 +146,11 @@ const SCHEDULED_STIMULUS_POTENTIAL: f32 = 100.0;
 ///   cancelled with DELETE. `period_bursts` must be greater than the largest `burst_offset`
 ///   (400 otherwise, and for 0). A replay that is already late fires on the next burst and
 ///   missed slots are skipped, never queued up.
-/// - Response 200: `{ "schedule_id": u64, "start_burst": u64, "end_burst": u64 | null }`
+/// - Each entry may carry `"potential": f32` (finite, > 0; default 100.0; 400 otherwise): the
+///   membrane potential its forced neurons fire with. A probe that bypasses threshold and
+///   refractory; a neuron that already fired naturally in that burst keeps its own potential.
+/// - Response 200: `{ "schedule_id": u64, "start_burst": u64, "end_burst": u64 | null,
+///   "applied_potential": f32 }` (`applied_potential` = the first entry's potential)
 ///   (absolute indexes of the first and last entry; `end_burst` is null for a repeating
 ///   schedule). 400 on empty `entries`, unknown cortical area, invalid coordinate, an entry
 ///   without voxels or an invalid `repeat`.
@@ -183,7 +184,14 @@ pub async fn post_stimulus_schedule(
         return Err(ApiError::invalid_input("'entries' must not be empty"));
     }
     let mut entries = Vec::with_capacity(request.entries.len());
+    let mut applied_potential = None;
     for (index, entry) in request.entries.into_iter().enumerate() {
+        let potential = feagi_services::traits::agent_service::resolve_stimulation_potential(
+            entry.potential,
+            &format!("entries[{index}].potential"),
+        )
+        .map_err(ApiError::invalid_input)?;
+        applied_potential.get_or_insert(potential);
         let mut areas = Vec::with_capacity(entry.stimulation.len());
         for (cortical_id, coordinates) in entry.stimulation {
             if !state
@@ -198,12 +206,9 @@ pub async fn post_stimulus_schedule(
             let mut voxels = Vec::with_capacity(coordinates.len());
             for coord in coordinates {
                 match coord.as_slice() {
-                    [x, y, z] if *x >= 0 && *y >= 0 && *z >= 0 => voxels.push((
-                        *x as u32,
-                        *y as u32,
-                        *z as u32,
-                        SCHEDULED_STIMULUS_POTENTIAL,
-                    )),
+                    [x, y, z] if *x >= 0 && *y >= 0 && *z >= 0 => {
+                        voxels.push((*x as u32, *y as u32, *z as u32, potential))
+                    }
                     _ => {
                         return Err(ApiError::invalid_input(format!(
                             "entries[{index}]: area '{cortical_id}': coordinate {coord:?} must be \
@@ -245,6 +250,8 @@ pub async fn post_stimulus_schedule(
         schedule_id: receipt.schedule_id,
         start_burst: receipt.start_burst,
         end_burst: receipt.end_burst,
+        applied_potential: applied_potential
+            .unwrap_or(feagi_services::traits::agent_service::DEFAULT_STIMULATION_POTENTIAL),
     }))
 }
 
