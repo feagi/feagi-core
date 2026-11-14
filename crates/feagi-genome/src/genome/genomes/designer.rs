@@ -30,7 +30,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
         );
         
         let mut cortical_area_set = CorticalAreaSet::default();
-        cortical_area_set::
+
         
         
         

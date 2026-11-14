@@ -32,8 +32,7 @@ where
         self.areas.get_mut(cortical_id)
     }
 
-    // NOTE: Should only be called by `CorticalAreaCachingContext`
-    pub fn add_new_cortical_area(&mut self)
+
 }
 
 
