@@ -27,9 +27,8 @@ pub mod power {
     use serde::{Deserialize, Serialize};
     use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
     use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
-    use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
     use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-    use feagi_connectome::neuron_models::models::exclusive_power::quantizations::NMExclusivePowerQuantKind;
+    use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
     use feagi_connectome::neuron_models::models::kind::NMKind;
     use feagi_connectome::neuron_models::models::{NMMember, NMModeled, NMNeurogenesisGenerator, NMNeurogenesisValidatedGenerator};
     #[cfg(feature = "alloc")]
@@ -74,10 +73,6 @@ pub mod power {
         type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTFoundationPowerNMModeledGenerator<FIQ>;
 
         fn into_neuron_model_enum(self) -> Self::PossibleNeuronModelKindEnum { self.0 }
-
-        fn get_default_neurogenesis_generator<FIQ: FeagiIndexQuantization, NM: NeuronModel>() -> Self::PossibleNeuronModelNeurogenesisGenerator<FIQ> {
-            todo!()
-        }
     }
 
     impl CorticalTypeFoundation for CTFoundationPower {}
@@ -99,9 +94,11 @@ pub mod power {
         fn spawn_neurogenesis_generator_wrapped<
             FIQ: FeagiIndexQuantization,
             Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
-        >() -> CTFoundationPowerNMModeledGenerator<FIQ> {
+        >() -> CTFoundationPowerNMModeledGenerator<FIQ>
+        where Self: NMMember<Quanted<NMNeurogenesisGenerator<FIQ>> = NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>>
+        {
             let generator = Self::spawn_neurogenesis_generator::<FIQ, Res>();
-            CTFoundationPowerNMModeledGenerator::ExclusivePower(Self::wrap::<NMNeurogenesisGenerator<FIQ>>(generator).into())
+            CTFoundationPowerNMModeledGenerator::ExclusivePower(Self::wrap::<NMNeurogenesisGenerator<FIQ>>(generator))
         }
     }
 
@@ -200,50 +197,52 @@ pub mod power {
     //region CT Power Other Enums
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(bound(serialize = "NMModeled<NMNeurogenesisGenerator<FIQ>>: Serialize", deserialize = "NMModeled<NMNeurogenesisGenerator<FIQ>>: Deserialize<'de>"))]
+    #[serde(bound(serialize = "NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>: Serialize", deserialize = "NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>: Deserialize<'de>"))]
     pub enum CTFoundationPowerNMModeledGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisGenerator<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>),
     }
 
-    impl<FIQ: FeagiIndexQuantization> Into<NMNeurogenesisGenerator<FIQ>> for CTFoundationPowerNMModeledGenerator<FIQ> {
-        fn into(self) -> NMNeurogenesisGenerator<FIQ> {
-            todo!()
+    impl<FIQ: FeagiIndexQuantization> From<CTFoundationPowerNMModeledGenerator<FIQ>> for NMModeled<NMNeurogenesisGenerator<FIQ>> {
+        fn from(value: CTFoundationPowerNMModeledGenerator<FIQ>) -> Self {
+            match value {
+                CTFoundationPowerNMModeledGenerator::ExclusivePower(v) => NMModeled::ExclusivePower(v),
+            }
         }
     }
 
     #[derive(Debug, Clone)]
     pub enum CTFoundationPowerNMModeledValidatedGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisValidatedGenerator<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedGenerator<FIQ>>),
     }
 
 
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(bound(serialize = "NMModeled<NMNeurogenesisStorage<FIQ>>: Serialize", deserialize = "NMModeled<NMNeurogenesisStorage<FIQ>>: Deserialize<'de>"))]
+    #[serde(bound(serialize = "NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>: Serialize", deserialize = "NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>: Deserialize<'de>"))]
     pub enum CTFoundationPowerNMModeledStorage<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisStorage<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>),
     }
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone)]
     pub enum CTFoundationPowerNMModeledValidatedStorage<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisValidatedStorage<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedStorage<FIQ>>),
     }
 
 
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(bound(serialize = "NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>: Serialize", deserialize = "NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>: Deserialize<'de>"))]
+    #[serde(bound(serialize = "NMExclusivePowerQuanted<NMNeurogenesisStorageOrGenerator<FIQ>>: Serialize", deserialize = "NMExclusivePowerQuanted<NMNeurogenesisStorageOrGenerator<FIQ>>: Deserialize<'de>"))]
     pub enum CTFoundationPowerNMModeledStorageOrGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisStorageOrGenerator<FIQ>>),
     }
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone)]
     pub enum CTFoundationPowerNMModeledValidatedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMModeled<NMNeurogenesisValidatedStorageOrGenerator<FIQ>>),
+        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedStorageOrGenerator<FIQ>>),
     }
 
     //endregion

@@ -8,7 +8,7 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::neuron_models::models::kind::{NMKind};
-use feagi_connectome::neuron_models::models::{NMNeurogenesisGenerator};
+use feagi_connectome::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
 use crate::basis::cortical_area::cortical_identifiers::{ CorticalIdentifierInnerEncoder};
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedGeneratorPrecursor, CTProcessingSubtypedKind, CTProcessingSubtypedStorage, CTProcessingSubtypedStorageOrGeneratorPrecursor};
 
@@ -39,17 +39,12 @@ pub trait CorticalType: Sized {
     type PossibleNeuronModelKindEnum: Into<NMKind>;
 
     /// The default generator for this given cortical model, enumed for the neuron model and quant
-    type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization>: Into<NMNeurogenesisGenerator<FIQ>>;
+    type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization>: Into<NMModeled<NMNeurogenesisGenerator<FIQ>>>;
 
 
 
     /// Get what neuron model / quant is being used here, using the enum specific to this cortical type
     fn into_neuron_model_enum(self) ->Self::PossibleNeuronModelKindEnum;
-
-    /// Get the default neurogenesis generator parameters for the current neuron model of this cortical type
-    fn get_default_neurogenesis_generator<FIQ, NM>() -> Self::PossibleNeuronModelNeurogenesisGenerator<FIQ>
-    where FIQ: FeagiIndexQuantization, NM: NeuronModel
-    ;
 
     //region Default impls
 

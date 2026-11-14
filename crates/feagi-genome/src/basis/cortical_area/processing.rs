@@ -3,7 +3,8 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuro
 use crate::basis::cortical_area::{CorticalType};
 use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_identifiers::{CorticalAreaInnerID, CorticalAreaInnerIDRandomBytes, CorticalIdentifierParseError};
+use crate::basis::cortical_area::cortical_identifiers::{CorticalAreaInnerID, CorticalAreaInnerIDRandomBytes, CorticalIdentifierInner, CorticalIdentifierParseError};
+use crate::basis::cortical_area::foundation::power::CTFoundationPower;
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledGeneratorPrecursor, CTProcessingInterconnectNMModeledKind, CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGeneratorPrecursor};
 
 
@@ -284,7 +285,7 @@ pub enum CTStorageOrGeneratorProcessingInterconnectModeled<FIQ: FeagiIndexQuanti
 #[repr(C, u8)]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CorticalIdentifierProcessing {
-    Interconnect(CorticalAreaInnerIDRandomBytes)
+    Interconnect(CorticalIdentifierInner<<CTFoundationPower as CorticalType>::InnerCorticalIDGenerator>)
 }
 
 impl CorticalIdentifierProcessing {
@@ -297,7 +298,7 @@ impl CorticalIdentifierProcessing {
             match bytes[1] {
                 0 => {
                     let [_, _, last_six @ ..] = bytes;
-                    let inner = CorticalAreaInnerIDRandomBytes::try_encode_from_bytes(last_six).unwrap(); // TODO error checking
+                    let inner = CorticalIdentifierInner::try_new_from_bytes(last_six)?;
                     CorticalIdentifierProcessing::Interconnect(inner)
                 },
                 err => {

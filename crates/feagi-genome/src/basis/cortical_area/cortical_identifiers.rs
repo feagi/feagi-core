@@ -269,6 +269,20 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
     }
 }
 
+impl<Encoder: CorticalIdentifierInnerEncoder> Serialize for CorticalIdentifierInner<Encoder> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.bytes.serialize(serializer)
+    }
+}
+
+/// Deserializes through the encoder so the bytes are verified
+impl<'de, Encoder: CorticalIdentifierInnerEncoder> Deserialize<'de> for CorticalIdentifierInner<Encoder> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let bytes = <[u8; 6]>::deserialize(deserializer)?;
+        Encoder::try_decode_from_bytes(bytes).map_err(serde::de::Error::custom)
+    }
+}
+
 
 
 //endregion
