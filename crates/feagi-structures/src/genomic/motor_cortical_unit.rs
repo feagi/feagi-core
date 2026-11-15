@@ -6,7 +6,7 @@ use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
 use crate::genomic::cortical_area::{
     CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
 };
-use crate::genomic::sensory_cortical_unit::UnitTopology;
+use crate::genomic::sensory_cortical_unit::{format_sub_unit_area_name, UnitTopology};
 use crate::motor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
@@ -247,15 +247,12 @@ impl MotorCorticalUnit {
         unit_index: u16,
     ) -> Option<String> {
         let area_name = self.get_sub_unit_display_names()?.get(sub_unit_index)?;
-        Some(match unit_label {
-            Some(label) => format!("{label} ({area_name})"),
-            None => format!(
-                "{} ({}) Unit {}",
-                self.get_friendly_name(),
-                area_name,
-                unit_index
-            ),
-        })
+        Some(format_sub_unit_area_name(
+            self.get_friendly_name(),
+            area_name,
+            unit_label,
+            unit_index,
+        ))
     }
 
     /// Check if a legacy 3-char subtype matches a supported OPU type and return its default CorticalID.

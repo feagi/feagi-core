@@ -6,7 +6,10 @@
 //! Two kinds of trigger feed the policy. Health transitions and
 //! [`RecoveryTrigger::TransportSendFailed`] are edge-triggered: the call that
 //! observes one consumes it, so a later call with no new trigger returns
-//! [`ReconnectDecision::Skip`]. [`RecoveryTrigger::NotRegistered`] is
+//! [`ReconnectDecision::Skip`], except that a trigger which arrived during the
+//! cooldown is kept as one pending retry (further triggers coalesce into it)
+//! and fires on the first `decide` call after the cooldown ends.
+//! [`RecoveryTrigger::NotRegistered`] is
 //! level-triggered: the driver raises it on every tick while the client is not
 //! registered, so a failed or deferred attempt is asked about again on the next
 //! tick and the cooldown and max-failure rules below decide when it runs.
@@ -95,6 +98,8 @@ pub struct ReconnectPolicy {
     config: ReconnectPolicyConfig,
     last_attempt_at_ms: Option<u64>,
     consecutive_failures: u32,
+    /// Reason of a trigger that arrived during the cooldown and has not fired yet.
+    pending_reason: Option<String>,
 }
 
 impl ReconnectPolicy {
@@ -103,6 +108,7 @@ impl ReconnectPolicy {
             config,
             last_attempt_at_ms: None,
             consecutive_failures: 0,
+            pending_reason: None,
         }
     }
 
@@ -168,13 +174,18 @@ impl ReconnectPolicy {
             };
         }
 
-        let Some(reason) = self.first_matching_trigger(triggers) else {
+        // A new trigger replaces the kept one (they coalesce into one retry).
+        let Some(reason) = self
+            .first_matching_trigger(triggers)
+            .or_else(|| self.pending_reason.clone())
+        else {
             return ReconnectDecision::Skip;
         };
 
         if let Some(last) = self.last_attempt_at_ms {
             let elapsed = now_ms.saturating_sub(last);
             if elapsed < self.config.cooldown_ms {
+                self.pending_reason = Some(reason.clone());
                 return ReconnectDecision::RetryAfter {
                     wait_ms: self.config.cooldown_ms - elapsed,
                     reason,
@@ -182,6 +193,7 @@ impl ReconnectPolicy {
             }
         }
 
+        self.pending_reason = None;
         self.last_attempt_at_ms = Some(now_ms);
         ReconnectDecision::AttemptNow { reason }
     }
@@ -201,6 +213,7 @@ impl ReconnectPolicy {
     pub fn reset(&mut self) {
         self.last_attempt_at_ms = None;
         self.consecutive_failures = 0;
+        self.pending_reason = None;
     }
 }
 
@@ -444,5 +457,70 @@ mod tests {
         let mut p = ReconnectPolicy::new(config);
         let decision = p.decide(&[RecoveryTrigger::TransportSendFailed], 0);
         assert_eq!(decision, ReconnectDecision::Skip);
+    }
+    #[test]
+    fn edge_trigger_during_cooldown_is_kept_and_fires_when_cooldown_ends() {
+        let mut p = ReconnectPolicy::new(cfg());
+        assert!(matches!(
+            p.decide(&[RecoveryTrigger::TransportSendFailed], 0),
+            ReconnectDecision::AttemptNow { .. }
+        ));
+        // The edge trigger arrives inside the cooldown and is reported once.
+        assert!(matches!(
+            p.decide(&[RecoveryTrigger::TransportSendFailed], 400),
+            ReconnectDecision::RetryAfter { wait_ms: 600, .. }
+        ));
+        // Still inside the cooldown, nothing new: the kept retry is not lost.
+        assert!(matches!(
+            p.decide(&[], 700),
+            ReconnectDecision::RetryAfter { wait_ms: 300, .. }
+        ));
+        // Cooldown over, still no new trigger: the kept retry fires.
+        assert_eq!(
+            p.decide(&[], 1_000),
+            ReconnectDecision::AttemptNow {
+                reason: "transport send failed".to_string()
+            }
+        );
+        // Consumed: one retry only, however many triggers were coalesced.
+        assert_eq!(p.decide(&[], 3_000), ReconnectDecision::Skip);
+    }
+
+    #[test]
+    fn several_triggers_during_cooldown_coalesce_into_one_retry() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 0);
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 100);
+        let _ = p.decide(
+            &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
+            200,
+        );
+        assert!(matches!(p.decide(&[], 1_000), ReconnectDecision::AttemptNow { .. }));
+        assert_eq!(p.decide(&[], 2_500), ReconnectDecision::Skip);
+    }
+
+    #[test]
+    fn pending_retry_still_obeys_give_up() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 0);
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 100);
+        for _ in 0..5 {
+            p.record_attempt_failed();
+        }
+        assert_eq!(
+            p.decide(&[], 5_000),
+            ReconnectDecision::GiveUp {
+                consecutive_failures: 5
+            }
+        );
+    }
+
+    #[test]
+    fn reset_clears_the_pending_retry() {
+        let mut p = ReconnectPolicy::new(cfg());
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 0);
+        let _ = p.decide(&[RecoveryTrigger::TransportSendFailed], 100);
+        p.reset();
+        assert_eq!(p.decide(&[], 5_000), ReconnectDecision::Skip);
     }
 }

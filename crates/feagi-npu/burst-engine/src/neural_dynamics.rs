@@ -194,6 +194,9 @@ pub struct DynamicsResult {
 ///   dynamics).
 /// - When countdown reaches zero after decrement, extended-refractory consecutive-fire reset runs
 ///   (same rules as the former inline path in [`process_single_neuron`]).
+/// - A limited neuron's consecutive-fire count is cleared by any burst in which it does not fire
+///   and has no countdown running, so an idle neuron never carries a stale count into its next
+///   trigger. A continuously driven neuron still fires N times, then misses one burst.
 pub fn finish_burst_refractory_period<T: NeuralValue>(
     neuron_array: &mut impl NeuronStorage<Value = T>,
     fired_neuron_ids: &AHashSet<u32>,
@@ -209,6 +212,13 @@ pub fn finish_burst_refractory_period<T: NeuralValue>(
         }
         let cd = neuron_array.refractory_countdowns()[idx];
         if cd == 0 {
+            // No countdown running and no fire this burst: a limited neuron's run is over.
+            if neuron_array.consecutive_fire_counts()[idx] > 0 {
+                let limit = neuron_array.consecutive_fire_limits()[idx];
+                if limit != 0 && limit != u16::MAX {
+                    neuron_array.consecutive_fire_counts_mut()[idx] = 0;
+                }
+            }
             continue;
         }
         let new_cd = cd - 1;

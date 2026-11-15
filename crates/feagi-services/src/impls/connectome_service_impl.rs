@@ -52,7 +52,11 @@ pub fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String>
             if unit.get_cortical_id_unit_reference() == unit_ref {
                 let unit_name = unit.get_friendly_name();
                 let has_subunits = unit.get_number_cortical_areas() > 1;
-                let name = if has_subunits {
+                let name = if let Some(area_title) =
+                    unit.build_sub_unit_area_name(None, subunit_index as usize, unit_index)
+                {
+                    area_title
+                } else if has_subunits {
                     format!(
                         "{} Subunit {} Unit {}",
                         unit_name, subunit_index, unit_index
@@ -13330,7 +13334,9 @@ mod tests {
 mod raw_io_unit_name_tests {
     use super::{derive_friendly_cortical_name, is_raw_io_unit_placeholder};
     use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, PercentageNeuronPositioning,
+    };
     use feagi_structures::genomic::SensoryCorticalUnit;
 
     #[test]
@@ -13360,6 +13366,23 @@ mod raw_io_unit_name_tests {
         assert_eq!(
             derive_friendly_cortical_name(misc_id).as_deref(),
             Some("Miscellaneous Input Unit 0")
+        );
+    }
+
+    #[test]
+    fn midi_input_areas_are_titled_like_midi_output() {
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_midi_input_with_parameters(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalUnitIndex::from(0u16),
+        );
+        assert_eq!(
+            derive_friendly_cortical_name(&ids[0]).as_deref(),
+            Some("MIDI Input (Notes) Unit 0")
+        );
+        assert_eq!(
+            derive_friendly_cortical_name(&ids[1]).as_deref(),
+            Some("MIDI Input (Expression) Unit 0")
         );
     }
 }

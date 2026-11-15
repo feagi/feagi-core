@@ -853,6 +853,22 @@ impl FeagiAgentHandler {
                     }
                 }
             }
+            FeagiMessage::HeartBeat => {
+                // A heartbeat from a session FEAGI does not know (for example after a genome
+                // upload force-deregistered every agent) is answered with NotRegistered, so
+                // the client learns it must register again instead of waiting forever.
+                self.send_message_via_command_server(
+                    command_control_index,
+                    agent_id,
+                    FeagiMessage::AgentRegistration(
+                        AgentRegistrationMessage::ServerRespondsDeregistration(
+                            DeregistrationResponse::NotRegistered,
+                        ),
+                    ),
+                    0,
+                )?;
+                Ok(None)
+            }
             _ => {
                 // If the new agent is not registering, we don't want to hear it
                 Ok(None)

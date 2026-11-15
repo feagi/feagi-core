@@ -2,7 +2,7 @@
 
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
-use crate::data_types::{MidiControl, MidiOutputFrame, MidiOutputProperties, Percentage};
+use crate::data_types::{MidiControl, MidiFrame, MidiProperties, Percentage};
 use crate::neuron_voxel_coding::xyzp::percentage_variant::PercentageCodingVariant;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
@@ -13,7 +13,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
-/// Reads both MIDI Output areas into one [`MidiOutputFrame`] per channel.
+/// Reads both MIDI Output areas into one [`MidiFrame`] per channel.
 ///
 /// Notes: x = channel * note_columns + note column, y = 0, z = 0;
 /// a firing voxel is a sounding note and its potential (0..=255 scale, divided by 255 and
@@ -28,7 +28,7 @@ use std::time::Instant;
 pub struct MidiOutputNeuronVoxelXYZPDecoder {
     notes_cortical_id: CorticalID,
     expression_cortical_id: CorticalID,
-    properties: MidiOutputProperties,
+    properties: MidiProperties,
     interpolation: PercentageNeuronPositioning,
     /// Active z indexes per (channel, control), reused between decodes.
     z_scratch: Vec<Vec<u32>>,
@@ -36,7 +36,7 @@ pub struct MidiOutputNeuronVoxelXYZPDecoder {
 
 impl NeuronVoxelXYZPDecoder for MidiOutputNeuronVoxelXYZPDecoder {
     fn get_decodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::MidiOutputFrame(Some(self.properties))
+        WrappedIOType::MidiFrame(Some(self.properties))
     }
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
@@ -50,7 +50,7 @@ impl NeuronVoxelXYZPDecoder for MidiOutputNeuronVoxelXYZPDecoder {
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {
-        let mut frames: Vec<&mut MidiOutputFrame> =
+        let mut frames: Vec<&mut MidiFrame> =
             Vec::with_capacity(pipelines_with_data_to_update.len());
         for pipeline in pipelines_with_data_to_update.iter_mut() {
             frames.push(pipeline.get_preprocessed_cached_value_mut().try_into()?);
@@ -67,7 +67,7 @@ impl MidiOutputNeuronVoxelXYZPDecoder {
     pub fn new_box(
         notes_cortical_id: CorticalID,
         expression_cortical_id: CorticalID,
-        properties: MidiOutputProperties,
+        properties: MidiProperties,
         interpolation: PercentageNeuronPositioning,
         number_of_channels: CorticalChannelCount,
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
@@ -87,7 +87,7 @@ impl MidiOutputNeuronVoxelXYZPDecoder {
     fn decode_into_frames(
         &mut self,
         neurons: &CorticalMappedXYZPNeuronVoxels,
-        frames: &mut [&mut MidiOutputFrame],
+        frames: &mut [&mut MidiFrame],
     ) {
         for frame in frames.iter_mut() {
             frame.silence();
@@ -197,8 +197,8 @@ mod tests {
         )
     }
 
-    fn properties() -> MidiOutputProperties {
-        MidiOutputProperties::new(COLUMNS, DEPTH).unwrap()
+    fn properties() -> MidiProperties {
+        MidiProperties::new(COLUMNS, DEPTH).unwrap()
     }
 
     fn decoder() -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
@@ -213,12 +213,10 @@ mod tests {
     }
 
     fn pipelines() -> Vec<MotorPipelineStageRunner> {
-        vec![
-            MotorPipelineStageRunner::new(WrappedIOData::MidiOutputFrame(
-                MidiOutputFrame::new(&properties()).unwrap(),
-            ))
-            .unwrap(),
-        ]
+        vec![MotorPipelineStageRunner::new(WrappedIOData::MidiFrame(
+            MidiFrame::new(&properties()).unwrap(),
+        ))
+        .unwrap()]
     }
 
     /// `notes` and `expression` are (x, y, z, potential) voxels.
@@ -244,7 +242,7 @@ mod tests {
         decoder: &mut Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>,
         neurons: &CorticalMappedXYZPNeuronVoxels,
         pipelines: &mut Vec<MotorPipelineStageRunner>,
-    ) -> MidiOutputFrame {
+    ) -> MidiFrame {
         let mut changed = vec![false; pipelines.len()];
         decoder
             .read_neuron_data_multi_channel_into_pipeline_input_cache(
@@ -259,8 +257,8 @@ mod tests {
             "every decode marks channels changed"
         );
         match pipelines[0].get_postprocessed_motor_value() {
-            WrappedIOData::MidiOutputFrame(frame) => frame.clone(),
-            other => panic!("expected MidiOutputFrame, got {:?}", other),
+            WrappedIOData::MidiFrame(frame) => frame.clone(),
+            other => panic!("expected MidiFrame, got {:?}", other),
         }
     }
 
@@ -281,7 +279,10 @@ mod tests {
         let mut p = pipelines();
         let frame = decode(
             &mut d,
-            &frame_of(&[(48, 0, 0, 64.0), (60, 0, 0, 128.0), (72, 0, 0, 192.0)], &[]),
+            &frame_of(
+                &[(48, 0, 0, 64.0), (60, 0, 0, 128.0), (72, 0, 0, 192.0)],
+                &[],
+            ),
             &mut p,
         );
         assert_eq!(frame.notes.sounding_count(), 3);
@@ -324,7 +325,10 @@ mod tests {
         let mut p = pipelines();
         let frame = decode(
             &mut d,
-            &frame_of(&[(COLUMNS, 0, 0, 230.0), (3, 1, 0, 230.0), (4, 0, 1, 230.0)], &[]),
+            &frame_of(
+                &[(COLUMNS, 0, 0, 230.0), (3, 1, 0, 230.0), (4, 0, 1, 230.0)],
+                &[],
+            ),
             &mut p,
         );
         assert_eq!(frame.notes.sounding_count(), 0);

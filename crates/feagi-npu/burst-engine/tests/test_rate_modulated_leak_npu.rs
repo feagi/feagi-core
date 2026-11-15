@@ -548,3 +548,177 @@ fn set_leak_same_value_rewrites_per_neuron_leaks_when_homeostat_active() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Edits to a modulated parameter become the new baseline (modulator engine cache refresh).
+// ---------------------------------------------------------------------------------------
+
+const DRIVER_AREA: u32 = 11;
+const PULSE: f32 = 0.1;
+
+use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
+use feagi_npu_neural::types::NeuralValue;
+use feagi_structures::genomic::ModulatorKind;
+
+/// NPU with `n` neurons in `AREA` (threshold `threshold`, leak `BASE_LEAK`) and a driver
+/// neuron whose firing scales `kind` on `AREA` by `1 + PULSE`.
+fn modulated_npu<T: NeuralValue>(
+    n: u32,
+    threshold: f32,
+    kind: ModulatorKind,
+) -> (RustNPU<StdRuntime, T, CPUBackend>, Vec<NeuronId>, NeuronId) {
+    let mut npu = RustNPU::new(StdRuntime, CPUBackend::new(), 100, 1000, 10).unwrap();
+    npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+    npu.register_cortical_area(
+        AREA,
+        CorticalID::try_from_bytes(b"chom0001")
+            .unwrap()
+            .as_base_64(),
+    );
+    npu.register_cortical_area(
+        DRIVER_AREA,
+        CorticalID::try_from_bytes(b"chom0002")
+            .unwrap()
+            .as_base_64(),
+    );
+    let add = |npu: &mut RustNPU<StdRuntime, T, CPUBackend>, area: u32, x: u32| {
+        npu.add_neuron(
+            T::from_f32(threshold),
+            T::from_f32(f32::MAX),
+            BASE_LEAK,
+            T::from_f32(0.0),
+            0,
+            0,
+            1.0,
+            0,
+            0,
+            true,
+            area,
+            x,
+            0,
+            0,
+        )
+        .unwrap()
+    };
+    let ids: Vec<NeuronId> = (0..n).map(|i| add(&mut npu, AREA, i)).collect();
+    let driver = add(&mut npu, DRIVER_AREA, 0);
+    npu.set_modulator_bindings(vec![ModulatorBinding {
+        instance_id: "m".to_string(),
+        kind,
+        magnitude_percent: PULSE * 100.0,
+        graded: false,
+        full_scale_potential: 1.0,
+        driver_cortical_idx: DRIVER_AREA,
+    }]);
+    let mut subs = ahash::AHashMap::new();
+    subs.insert(AREA, vec!["m".to_string()]);
+    npu.set_modulator_area_subscriptions(subs);
+    (npu, ids, driver)
+}
+
+fn prop<T: NeuralValue>(npu: &RustNPU<StdRuntime, T, CPUBackend>, id: NeuronId, name: &str) -> f32 {
+    npu.get_neuron_property_by_index(id.0 as usize, name)
+        .unwrap()
+}
+
+/// One burst in which the driver fires (a modulator pulse), then one burst without it.
+/// Returns the property while the pulse is active and after it ends.
+fn pulse<T: NeuralValue>(
+    npu: &mut RustNPU<StdRuntime, T, CPUBackend>,
+    driver: NeuronId,
+    probe: NeuronId,
+    name: &str,
+) -> (f32, f32) {
+    npu.inject_sensory_with_potentials(&[(driver, 128.0)]);
+    npu.process_burst().unwrap();
+    let during = prop(npu, probe, name);
+    npu.process_burst().unwrap();
+    npu.process_burst().unwrap();
+    (during, prop(npu, probe, name))
+}
+
+/// Disabling a stepped homeostat and then editing the leak: the modulator must scale the
+/// edited leak, not the value the homeostat had stepped to.
+#[test]
+fn leak_edit_after_homeostat_disable_becomes_modulator_baseline() {
+    let (mut npu, ids, driver) = modulated_npu::<f32>(3, 1.0, ModulatorKind::Leak);
+    register(&mut npu, &ids, 0.0);
+    npu.configure_fire_ledger_window(AREA, 1).unwrap();
+    for _ in 0..20 {
+        let pots: Vec<(NeuronId, f32)> = ids.iter().map(|&i| (i, 128.0)).collect();
+        npu.inject_sensory_with_potentials(&pots);
+        npu.process_burst().unwrap();
+    }
+    let stepped = prop(&npu, ids[0], "leak_coefficient");
+    assert!(
+        stepped > BASE_LEAK + 1e-4,
+        "pre-condition: stepped {stepped}"
+    );
+
+    npu.remove_rate_modulated_leak(AREA);
+    let edited = 0.082;
+    npu.update_cortical_area_leak(AREA, edited);
+
+    let (during, after) = pulse(&mut npu, driver, ids[0], "leak_coefficient");
+    assert!(
+        (during - edited * (1.0 + PULSE)).abs() < 1e-5,
+        "pulse should scale the edit: expected {}, got {during}",
+        edited * (1.0 + PULSE)
+    );
+    assert!(
+        (after - edited).abs() < 1e-6,
+        "leak must return to the edit, got {after}"
+    );
+}
+
+/// Threshold edit (integer value) then a pulse: baseline is the edit.
+#[test]
+fn threshold_edit_becomes_modulator_baseline() {
+    let (mut npu, ids, driver) = modulated_npu::<f32>(2, 1.0, ModulatorKind::FiringThreshold);
+    // One quiet burst captures the original threshold as the baseline.
+    npu.process_burst().unwrap();
+    npu.update_cortical_area_threshold(AREA, 5.0);
+    let (during, after) = pulse(&mut npu, driver, ids[0], "threshold");
+    assert!((during - 5.5).abs() < 1e-5, "expected 5.5, got {during}");
+    assert!((after - 5.0).abs() < 1e-6, "expected 5.0, got {after}");
+}
+
+/// Same with a fractional threshold on f32 storage (fraction is always zero there).
+#[test]
+fn threshold_edit_with_fraction_f32() {
+    let (mut npu, ids, driver) = modulated_npu::<f32>(2, 1.0, ModulatorKind::FiringThreshold);
+    npu.process_burst().unwrap();
+    npu.update_cortical_area_threshold(AREA, 5.5);
+    let (during, after) = pulse(&mut npu, driver, ids[0], "threshold");
+    assert!((during - 6.05).abs() < 1e-4, "expected 6.05, got {during}");
+    assert!((after - 5.5).abs() < 1e-6, "expected 5.5, got {after}");
+}
+
+/// Probe: fractional threshold on INT8 storage, where level and fraction are stored apart.
+/// Prints the measured values; asserts only that the pulse ends back on the edit.
+#[test]
+fn threshold_edit_with_fraction_int8_probe() {
+    use feagi_npu_neural::types::INT8Value;
+    let (mut npu, ids, driver) = modulated_npu::<INT8Value>(2, 1.0, ModulatorKind::FiringThreshold);
+    npu.process_burst().unwrap();
+    npu.update_cortical_area_threshold(AREA, 5.5);
+    let edited = prop(&npu, ids[0], "threshold");
+    let (during, after) = pulse(&mut npu, driver, ids[0], "threshold");
+    println!("INT8 fractional threshold: edited {edited}, during pulse {during}, after {after}");
+    assert!(
+        (after - edited).abs() < 1e-5,
+        "after {after} vs edit {edited}"
+    );
+}
+
+/// Excitability edit then a pulse: baseline is the edit.
+#[test]
+fn excitability_edit_becomes_modulator_baseline() {
+    let (mut npu, ids, driver) = modulated_npu::<f32>(2, 1.0, ModulatorKind::FiringProbability);
+    npu.process_burst().unwrap();
+    npu.update_cortical_area_excitability(AREA, 0.5);
+    let (during, after) = pulse(&mut npu, driver, ids[0], "excitability");
+    assert!((during - 0.55).abs() < 1e-5, "expected 0.55, got {during}");
+    assert!((after - 0.5).abs() < 1e-6, "expected 0.5, got {after}");
+}

@@ -1,7 +1,8 @@
-//! MIDI output frames and their registration properties.
+//! MIDI frames and their registration properties, shared by the MIDI Output
+//! motor unit (decoded) and the MIDI Input sensor unit (encoded).
 //!
-//! A MIDI Output unit is one instrument, made of two cortical areas. Several
-//! instruments are several units of this type (unit index 0, 1, 2, ...); the
+//! A MIDI unit is one instrument, made of two cortical areas. Several
+//! instruments are several units of the same type (unit index 0, 1, 2, ...); the
 //! number of units is not capped here.
 //!
 //! - **Notes**: X is one column per note (low to high), Y and Z are 1. A voxel
@@ -15,17 +16,17 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 /// Largest number of note columns (template X maximum of the Notes area).
-pub const MIDI_OUTPUT_MAX_NOTE_COLUMNS: u32 = 128;
+pub const MIDI_MAX_NOTE_COLUMNS: u32 = 128;
 /// Default Z depth of the Expression area, the same as other percentage outputs.
-pub const MIDI_OUTPUT_DEFAULT_EXPRESSION_DEPTH: u32 = 10;
+pub const MIDI_DEFAULT_EXPRESSION_DEPTH: u32 = 10;
 /// Largest Z depth of the Expression area (template Z maximum).
-pub const MIDI_OUTPUT_MAX_EXPRESSION_DEPTH: u32 = 1024;
+pub const MIDI_MAX_EXPRESSION_DEPTH: u32 = 1024;
 /// Full-scale membrane potential for a Notes strength of 1.0. This is FEAGI's
 /// native membrane level scale (levels `0..=255`, `MEMBRANE_MAX` in
 /// `feagi-npu/neural/src/types/numeric.rs`); potentials above it saturate at
 /// strength 1.0. Defined here because this crate does not depend on the neural
 /// crate.
-pub const MIDI_OUTPUT_NOTE_FULL_SCALE_POTENTIAL: f32 = 255.0;
+pub const MIDI_NOTE_FULL_SCALE_POTENTIAL: f32 = 255.0;
 
 /// One column of the Expression area. The discriminant is the X column, in
 /// this fixed order.
@@ -75,7 +76,8 @@ impl MidiControl {
     }
 }
 
-/// Registration properties of a MIDI Output unit (one instrument).
+/// Registration properties of a MIDI unit (one instrument), the same for the
+/// MIDI Output and MIDI Input units.
 ///
 /// Dims contract: Notes is `note_columns x 1 x 1` per channel and Expression is
 /// `5 x 1 x expression_depth` per channel (`5` is [`MidiControl::COUNT`]).
@@ -83,16 +85,16 @@ impl MidiControl {
 /// it, the same way other sized outputs are sized. Several instruments are
 /// several units, each with its own properties.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct MidiOutputProperties {
+pub struct MidiProperties {
     /// Note columns per channel (Notes area X width), 1 to 128.
     pub note_columns: u32,
     /// Z depth of the Expression area; the resolution of each control level.
     pub expression_depth: u32,
 }
 
-impl MidiOutputProperties {
+impl MidiProperties {
     pub fn new(note_columns: u32, expression_depth: u32) -> Result<Self, FeagiDataError> {
-        let properties = MidiOutputProperties {
+        let properties = MidiProperties {
             note_columns,
             expression_depth,
         };
@@ -102,27 +104,27 @@ impl MidiOutputProperties {
 
     pub fn validate(&self) -> Result<(), FeagiDataError> {
         let bad = |message: String| Err(FeagiDataError::BadParameters(message));
-        if self.note_columns == 0 || self.note_columns > MIDI_OUTPUT_MAX_NOTE_COLUMNS {
+        if self.note_columns == 0 || self.note_columns > MIDI_MAX_NOTE_COLUMNS {
             return bad(format!(
                 "MIDI note columns {} must be between 1 and {}",
-                self.note_columns, MIDI_OUTPUT_MAX_NOTE_COLUMNS
+                self.note_columns, MIDI_MAX_NOTE_COLUMNS
             ));
         }
-        if self.expression_depth == 0 || self.expression_depth > MIDI_OUTPUT_MAX_EXPRESSION_DEPTH {
+        if self.expression_depth == 0 || self.expression_depth > MIDI_MAX_EXPRESSION_DEPTH {
             return bad(format!(
                 "MIDI expression depth {} must be between 1 and {}",
-                self.expression_depth, MIDI_OUTPUT_MAX_EXPRESSION_DEPTH
+                self.expression_depth, MIDI_MAX_EXPRESSION_DEPTH
             ));
         }
         Ok(())
     }
 }
 
-impl Display for MidiOutputProperties {
+impl Display for MidiProperties {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "MidiOutput({} notes, expression depth {})",
+            "Midi({} notes, expression depth {})",
             self.note_columns, self.expression_depth
         )
     }
@@ -132,7 +134,7 @@ impl Display for MidiOutputProperties {
 ///
 /// Strength 0.0 means "not firing this frame", that is, not sounding. A firing
 /// voxel's strength is its membrane potential at fire on FEAGI's native
-/// `0..=255` level scale, divided by [`MIDI_OUTPUT_NOTE_FULL_SCALE_POTENTIAL`]
+/// `0..=255` level scale, divided by [`MIDI_NOTE_FULL_SCALE_POTENTIAL`]
 /// and clamped to `0..=1` (potentials above 255 saturate). An ordinary
 /// connection delivers its strength as the target's potential, and a default
 /// forced stimulation (potential 100) reads as 100/255. Potential at an output
@@ -146,7 +148,7 @@ pub struct MidiNotesFrame {
 
 impl MidiNotesFrame {
     /// A silent frame (all zeros).
-    pub fn new(properties: &MidiOutputProperties) -> Result<Self, FeagiDataError> {
+    pub fn new(properties: &MidiProperties) -> Result<Self, FeagiDataError> {
         properties.validate()?;
         let note_columns = properties.note_columns as usize;
         Ok(MidiNotesFrame {
@@ -177,11 +179,11 @@ impl MidiNotesFrame {
     /// Keep the larger of the stored strength and the given potential (0..=255
     /// scale) converted to a strength in 0..=1. A potential at or below 0, or
     /// not finite, is not sounding. Out of range columns are ignored.
-    pub(crate) fn raise_strength(&mut self, column: usize, potential: f32) {
+    pub fn raise_strength(&mut self, column: usize, potential: f32) {
         if !potential.is_finite() {
             return;
         }
-        let strength = (potential / MIDI_OUTPUT_NOTE_FULL_SCALE_POTENTIAL).clamp(0.0, 1.0);
+        let strength = (potential / MIDI_NOTE_FULL_SCALE_POTENTIAL).clamp(0.0, 1.0);
         if let Some(cell) = self.strengths.get_mut(column) {
             if strength > *cell {
                 *cell = strength;
@@ -220,7 +222,7 @@ pub struct MidiExpressionFrame {
 
 impl MidiExpressionFrame {
     /// A frame with every control silent (`None`).
-    pub fn new(properties: &MidiOutputProperties) -> Result<Self, FeagiDataError> {
+    pub fn new(properties: &MidiProperties) -> Result<Self, FeagiDataError> {
         properties.validate()?;
         Ok(MidiExpressionFrame {
             levels: [None; MidiControl::COUNT],
@@ -242,7 +244,8 @@ impl MidiExpressionFrame {
         self.levels = [None; MidiControl::COUNT];
     }
 
-    pub(crate) fn set_level(&mut self, control: MidiControl, level: f32) {
+    /// Set the level (0..1) of a control, marking it driven.
+    pub fn set_level(&mut self, control: MidiControl, level: f32) {
         self.levels[control.column()] = Some(level);
     }
 
@@ -263,27 +266,28 @@ impl Display for MidiExpressionFrame {
     }
 }
 
-/// One decoded MIDI Output frame: both areas of the unit for one channel.
+/// One MIDI frame: both areas of the unit for one channel (decoded from a MIDI
+/// Output unit, or encoded into a MIDI Input unit).
 ///
 /// Silence means "not sounding" (Notes) and "not driven" (Expression).
 #[derive(Clone, Debug, PartialEq)]
-pub struct MidiOutputFrame {
-    properties: MidiOutputProperties,
+pub struct MidiFrame {
+    properties: MidiProperties,
     pub notes: MidiNotesFrame,
     pub expression: MidiExpressionFrame,
 }
 
-impl MidiOutputFrame {
+impl MidiFrame {
     /// A fully silent frame.
-    pub fn new(properties: &MidiOutputProperties) -> Result<Self, FeagiDataError> {
-        Ok(MidiOutputFrame {
+    pub fn new(properties: &MidiProperties) -> Result<Self, FeagiDataError> {
+        Ok(MidiFrame {
             properties: *properties,
             notes: MidiNotesFrame::new(properties)?,
             expression: MidiExpressionFrame::new(properties)?,
         })
     }
 
-    pub fn get_properties(&self) -> &MidiOutputProperties {
+    pub fn get_properties(&self) -> &MidiProperties {
         &self.properties
     }
 
@@ -294,8 +298,8 @@ impl MidiOutputFrame {
     }
 }
 
-impl Display for MidiOutputFrame {
+impl Display for MidiFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MidiOutputFrame({}, {})", self.notes, self.expression)
+        write!(f, "MidiFrame({}, {})", self.notes, self.expression)
     }
 }

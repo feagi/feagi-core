@@ -2475,6 +2475,126 @@ mod test_sensory_cortical_unit {
         }
     }
 
+    /// Tests for the `MidiInput` sensor unit: Notes and Expression areas, the
+    /// sensor-side mirror of `MidiOutput`.
+    mod test_midi_input_unit {
+        use super::*;
+
+        fn ids() -> [CorticalID; 2] {
+            SensoryCorticalUnit::get_cortical_ids_array_for_midi_input_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u16),
+            )
+        }
+
+        #[test]
+        fn test_midi_input_is_an_ipu_with_mid_subtype() {
+            for (i, id) in ids().iter().enumerate() {
+                let bytes = id.as_bytes();
+                assert_eq!(bytes[0], b'i', "MidiInput must be an IPU");
+                assert_eq!(&bytes[1..4], b"mid", "MidiInput subtype must be 'mid'");
+                assert_eq!(*id.io_cortical_sub_unit_index(), i as u8);
+                let from_b64 = CorticalID::try_from_base_64(&id.as_base_64()).unwrap();
+                assert_eq!(&from_b64, id);
+                assert_eq!(
+                    SensoryCorticalUnit::try_from_cortical_id(id),
+                    Some(SensoryCorticalUnit::MidiInput)
+                );
+            }
+            assert_ne!(ids()[0], ids()[1]);
+        }
+
+        #[test]
+        fn test_midi_input_declares_two_areas_and_names() {
+            assert_eq!(
+                SensoryCorticalUnit::MidiInput.get_number_cortical_areas(),
+                2
+            );
+            assert_eq!(
+                SensoryCorticalUnit::MidiInput.get_friendly_name(),
+                "MIDI Input"
+            );
+            assert_eq!(
+                SensoryCorticalUnit::MidiInput.get_snake_case_name(),
+                "midi_input"
+            );
+        }
+
+        #[test]
+        fn test_midi_input_area_titles_match_midi_output_format() {
+            let input = SensoryCorticalUnit::MidiInput;
+            assert_eq!(
+                input.get_sub_unit_display_names(),
+                Some(&["Notes", "Expression"][..])
+            );
+            assert_eq!(
+                input.get_sub_unit_display_names(),
+                MotorCorticalUnit::MidiOutput.get_sub_unit_display_names()
+            );
+            assert_eq!(
+                input.build_sub_unit_area_name(None, 0, 2).as_deref(),
+                Some("MIDI Input (Notes) Unit 2")
+            );
+            assert_eq!(
+                input.build_sub_unit_area_name(None, 1, 2).as_deref(),
+                Some("MIDI Input (Expression) Unit 2")
+            );
+            assert_eq!(
+                input.build_sub_unit_area_name(Some("L"), 1, 0).as_deref(),
+                Some("L (Expression)")
+            );
+            assert_eq!(input.build_sub_unit_area_name(None, 2, 0), None);
+            assert_eq!(
+                MotorCorticalUnit::MidiOutput
+                    .build_sub_unit_area_name(None, 0, 2)
+                    .as_deref(),
+                Some("MIDI Output (Notes) Unit 2")
+            );
+        }
+
+        #[test]
+        fn test_other_sensor_units_keep_their_titles() {
+            for unit in [
+                SensoryCorticalUnit::Vision,
+                SensoryCorticalUnit::AudioInput,
+                SensoryCorticalUnit::SegmentedVision,
+            ] {
+                assert_eq!(unit.get_sub_unit_display_names(), None);
+                assert_eq!(unit.build_sub_unit_area_name(None, 0, 0), None);
+                assert_eq!(unit.build_sub_unit_area_name(Some("L"), 1, 0), None);
+            }
+        }
+
+        #[test]
+        fn test_midi_input_default_and_maximum_dims_match_midi_output() {
+            let input = SensoryCorticalUnit::MidiInput.get_unit_default_topology();
+            let output = MotorCorticalUnit::MidiOutput.get_unit_default_topology();
+            for sub in [0u8, 1u8] {
+                let i = input.get(&sub.into()).expect("Missing input topology");
+                let o = output.get(&sub.into()).expect("Missing output topology");
+                assert_eq!(i.channel_dimensions_default, o.channel_dimensions_default);
+                assert_eq!(i.channel_dimensions_min, o.channel_dimensions_min);
+                assert_eq!(i.channel_dimensions_max, o.channel_dimensions_max);
+            }
+        }
+
+        #[test]
+        fn test_midi_input_fires_below_the_quietest_velocity_and_does_not_accumulate() {
+            // Quietest velocity (1 of 127) is a potential of about 2 on the 0..=255 scale.
+            let quietest = 255.0_f64 / 127.0;
+            let threshold = SensoryCorticalUnit::MidiInput
+                .get_default_firing_threshold()
+                .expect("MidiInput declares a firing threshold");
+            assert!(threshold <= 1.0 && threshold < quietest);
+            assert_eq!(
+                SensoryCorticalUnit::MidiInput.get_default_mp_charge_accumulation(),
+                Some(false)
+            );
+            assert!(!SensoryCorticalUnit::MidiInput.get_default_sensory_hold_last_frame());
+        }
+    }
+
     /// Tests for the `AngularPointer` motor unit: yaw/pitch/roll counterpart
     /// of `SpatialPointer` translation.
     mod test_angular_pointer_unit {

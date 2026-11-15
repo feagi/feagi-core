@@ -301,6 +301,27 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "MIDI input for one instrument, two areas. One unit is one instrument; several instruments are several units of this type (unit index 0, 1, 2, ...). Area 0 \"Notes\": X is one column per note (low to high), Y and Z are 1; a voxel is written for a note that sounds this frame, with membrane potential = strength x 255 (FEAGI's 0..=255 scale; strength 0 writes nothing). Area 1 \"Expression\": X is one column per control (0 pitch bend up, 1 pitch bend down, 2 modulation, 3 sustain, 4 volume), Y is 1, Z is the level as an unsigned percentage written as active z bins; a control that is not driven writes nothing. The encoding is the exact inverse of MIDI Output. One frame is written per burst and nothing is latched in core: holding or releasing a note across bursts is the application's job. Velocity reaches downstream areas only when the receiving mapping has mp_driven_psp on; without it a note is a spike of fixed size. The firing threshold is below the quietest velocity (1/127 x 255 is about 2) and charge accumulation is off, so every written voxel fires once and does not carry over. Both areas are sized from the registered MIDI properties."]
+                MidiInput => {
+                    friendly_name: "MIDI Input",
+                    accepted_wrapped_io_data_type: MidiFrame,
+                    cortical_id_unit_reference: *b"mid",
+                    number_cortical_areas: 2,
+                    default_firing_threshold: 0.01,
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // Notes: 128 notes x 1 x 1.
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-120, -60, 0], channel_dimensions_default: [128, 1, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [128, 1, 1]),
+                        // Expression: 5 controls x 1 x 10 level steps.
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-140, -60, 0], channel_dimensions_default: [5, 1, 10], channel_dimensions_min: [5, 1, 1], channel_dimensions_max: [5, 1, 1024])
+                    }
+                },
+
             }
         }
     };

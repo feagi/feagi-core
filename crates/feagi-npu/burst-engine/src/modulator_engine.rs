@@ -428,6 +428,15 @@ impl ModulatorEngine {
         let Some(param) = NeuronParam::from_kind(kind) else {
             return;
         };
+        // An edit never creates a baseline: only a subscribed area and parameter has one.
+        let has_baseline = self
+            .baselines
+            .get(&cortical_idx)
+            .and_then(|baseline| param_slot(baseline, param))
+            .is_some();
+        if !has_baseline {
+            return;
+        }
         self.capture_baseline(storage, cortical_idx, param, true);
         let factor = self
             .active
@@ -437,6 +446,14 @@ impl ModulatorEngine {
             .unwrap_or(1.0);
         self.write_param(storage, cortical_idx, param, factor);
         self.last_area_factor.insert((cortical_idx, param), factor);
+    }
+
+    /// Forget every cached baseline and last-written factor without touching storage.
+    /// For a storage rebuild (genome reload, snapshot restore), where the cached values
+    /// describe neurons that no longer exist and restoring them would corrupt the new ones.
+    pub fn clear_baselines(&mut self) {
+        self.baselines.clear();
+        self.last_area_factor.clear();
     }
 
     /// Restore baselines and drop them when an area no longer subscribes to a parameter.
@@ -940,6 +957,141 @@ mod tests {
         let factors = engine.factors_from(&signals);
         assert!((factors.reward_by_group[&group]).abs() < 1e-6);
         assert!((factors.learning_by_group[&group] - 1.5).abs() < 1e-6);
+    }
+
+    const AREA: u32 = 5;
+
+    fn storage_with_leak(leak: f32, threshold: f32) -> feagi_npu_runtime::StdNeuronArray<f32> {
+        let mut neurons = feagi_npu_runtime::StdNeuronArray::<f32>::new(4);
+        for i in 0..2u32 {
+            neurons
+                .add_neuron(
+                    threshold,
+                    f32::MAX,
+                    leak,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    true,
+                    AREA,
+                    i,
+                    0,
+                    0,
+                )
+                .unwrap();
+        }
+        neurons
+    }
+
+    fn leak_binding() -> ModulatorBinding {
+        ModulatorBinding {
+            instance_id: "m".into(),
+            kind: ModulatorKind::Leak,
+            magnitude_percent: 10.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: 1,
+        }
+    }
+
+    fn subscribe_leak(engine: &mut ModulatorEngine) {
+        engine.set_bindings(vec![leak_binding()]);
+        let mut subs = AHashMap::new();
+        subs.insert(AREA, vec!["m".to_string()]);
+        engine.set_area_subscriptions(subs);
+    }
+
+    #[test]
+    fn rebase_replaces_stale_baseline_and_reapplies_factor() {
+        let mut engine = ModulatorEngine::default();
+        subscribe_leak(&mut engine);
+        let mut storage = storage_with_leak(0.088, 1.0);
+        engine.capture_baseline(&storage, AREA, NeuronParam::Leak, false);
+        // An external edit writes the raw property; the cache is now stale.
+        for leak in storage.leak_coefficients_mut().iter_mut().take(2) {
+            *leak = 0.082;
+        }
+        engine
+            .active
+            .area_factor
+            .insert((AREA, NeuronParam::Leak), 1.1);
+        engine.rebase_area_param(&mut storage, AREA, ModulatorKind::Leak);
+        for idx in 0..2 {
+            assert!((storage.leak_coefficients()[idx] - 0.0902).abs() < 1e-6);
+        }
+        assert_eq!(
+            engine.last_area_factor.get(&(AREA, NeuronParam::Leak)),
+            Some(&1.1)
+        );
+        // Factor released: the edit, not the old 0.088, is what comes back.
+        engine.active.area_factor.clear();
+        engine.write_param(&mut storage, AREA, NeuronParam::Leak, 1.0);
+        assert!((storage.leak_coefficients()[0] - 0.082).abs() < 1e-6);
+    }
+
+    #[test]
+    fn rebase_without_baseline_is_noop() {
+        let mut engine = ModulatorEngine::default();
+        let mut storage = storage_with_leak(0.088, 1.0);
+        engine.rebase_area_param(&mut storage, AREA, ModulatorKind::Leak);
+        assert!(engine.baselines.is_empty());
+        assert!(engine.last_area_factor.is_empty());
+
+        // A leak baseline exists; a threshold rebase must not create a threshold baseline.
+        engine.capture_baseline(&storage, AREA, NeuronParam::Leak, false);
+        engine.rebase_area_param(&mut storage, AREA, ModulatorKind::FiringThreshold);
+        let baseline = engine.baselines.get(&AREA).unwrap();
+        assert!(baseline.leak.is_some());
+        assert!(baseline.threshold.is_none());
+        assert!(engine
+            .last_area_factor
+            .get(&(AREA, NeuronParam::Threshold))
+            .is_none());
+    }
+
+    #[test]
+    fn release_unused_restores_and_drops_baseline() {
+        let mut engine = ModulatorEngine::default();
+        subscribe_leak(&mut engine);
+        let mut storage = storage_with_leak(0.088, 1.0);
+        engine.capture_baseline(&storage, AREA, NeuronParam::Leak, false);
+        engine.write_param(&mut storage, AREA, NeuronParam::Leak, 2.0);
+        engine
+            .last_area_factor
+            .insert((AREA, NeuronParam::Leak), 2.0);
+        assert!((storage.leak_coefficients()[0] - 0.176).abs() < 1e-6);
+
+        // Still subscribed: nothing changes.
+        engine.release_unused_baselines(&mut storage);
+        assert!((storage.leak_coefficients()[0] - 0.176).abs() < 1e-6);
+        assert!(engine.baselines.contains_key(&AREA));
+
+        // Unsubscribe: the parameter is restored and the entry is dropped.
+        engine.set_area_subscriptions(AHashMap::new());
+        engine.release_unused_baselines(&mut storage);
+        assert!((storage.leak_coefficients()[0] - 0.088).abs() < 1e-6);
+        assert!(engine.baselines.is_empty());
+        assert!(engine.last_area_factor.is_empty());
+    }
+
+    #[test]
+    fn clear_baselines_drops_cache_without_restoring() {
+        let mut engine = ModulatorEngine::default();
+        subscribe_leak(&mut engine);
+        let mut storage = storage_with_leak(0.088, 1.0);
+        engine.capture_baseline(&storage, AREA, NeuronParam::Leak, false);
+        engine.write_param(&mut storage, AREA, NeuronParam::Leak, 2.0);
+        engine
+            .last_area_factor
+            .insert((AREA, NeuronParam::Leak), 2.0);
+        engine.clear_baselines();
+        assert!(engine.baselines.is_empty());
+        assert!(engine.last_area_factor.is_empty());
+        // Storage is left as it was: no restore.
+        assert!((storage.leak_coefficients()[0] - 0.176).abs() < 1e-6);
     }
 
     fn gate_binding(id: &str, idx: u32, graded: bool) -> ModulatorBinding {

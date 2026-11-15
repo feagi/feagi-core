@@ -42,10 +42,107 @@ pub enum ScheduledAction {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         hold: bool,
     },
+    /// A timed push on the body, sized as a fraction of its weight. Only the balance-on-feet
+    /// runner applies it (it measures the body); every other applier rejects it. The N or N*m
+    /// used is computed at run time from the model and written to the run's event log.
+    BodyPush {
+        /// Push as a force or as a torque about the body's horizontal axes.
+        kind: BodyPushKind,
+        /// Direction the TOP of the body tips toward, in the body's heading frame.
+        axis: BodyPushAxis,
+        /// Force: fraction of the body weight (m g). Torque: fraction of weight times the torso's
+        /// reset height (m g h). Finite and > 0.
+        #[serde(alias = "magnitudeFraction")]
+        magnitude_fraction: f64,
+        /// Seconds the push lasts. Finite and > 0.
+        #[serde(alias = "durationS")]
+        duration_s: f64,
+    },
+    /// A sinusoidal push on the body for `cycles` whole cycles at `frequency_hz`, with a one-cycle
+    /// ramp in and out, sized like [`ScheduledAction::BodyPush`]. Only the balance-on-feet runner
+    /// applies it (the controller computes the wave per physics step); every other applier rejects
+    /// it. Each segment writes a row to the `vibration` table.
+    BodyVibration {
+        /// Drive as a force or as a torque about the body's horizontal axes.
+        kind: BodyPushKind,
+        /// Direction the TOP of the body tips toward on the positive half-wave, in the body's
+        /// heading frame.
+        axis: BodyPushAxis,
+        /// Amplitude. Force: fraction of the body weight (m g). Torque: fraction of weight times
+        /// the torso's reset height (m g h). Finite and > 0.
+        #[serde(alias = "magnitudeFraction")]
+        magnitude_fraction: f64,
+        /// Drive frequency in hertz. Finite and > 0, and at most a tenth of the sample rate.
+        #[serde(alias = "frequencyHz")]
+        frequency_hz: f64,
+        /// Whole drive cycles, ramps included. At least 4.
+        cycles: u32,
+    },
     /// Sent by the runner (never part of a schedule) when an attempt begins, so the applier can
     /// end anything the previous attempt left running. Not serializable.
     #[serde(skip)]
     AttemptStart,
+}
+
+/// Whether a [`ScheduledAction::BodyPush`] is a force or a torque.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BodyPushKind {
+    Force,
+    Torque,
+}
+
+/// Direction a [`ScheduledAction::BodyPush`] tips (or pushes) the body, in its heading frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BodyPushAxis {
+    Forward,
+    Back,
+    Left,
+    Right,
+}
+
+impl BodyPushAxis {
+    /// Unit horizontal vector (x, y) in the world frame for a body heading `yaw_rad` (from +X
+    /// toward +Y, z up).
+    pub fn world_xy(self, yaw_rad: f64) -> [f64; 2] {
+        let (sin, cos) = yaw_rad.sin_cos();
+        let forward = [cos, sin];
+        let left = [-sin, cos];
+        match self {
+            Self::Forward => forward,
+            Self::Back => [-forward[0], -forward[1]],
+            Self::Left => left,
+            Self::Right => [-left[0], -left[1]],
+        }
+    }
+}
+
+/// World-frame `(torque, force)` of a [`ScheduledAction::BodyPush`] and the magnitude in N or
+/// N*m. `mass_kg` is the whole-body mass, `gravity` the gravity magnitude, `height_m` the
+/// torso's reset height. A force pushes toward the axis; a torque tips the top toward it
+/// (`up x direction`, z up).
+pub fn body_push_wrench(
+    kind: BodyPushKind,
+    axis: BodyPushAxis,
+    magnitude_fraction: f64,
+    yaw_rad: f64,
+    mass_kg: f64,
+    gravity: f64,
+    height_m: f64,
+) -> ([f64; 3], [f64; 3], f64) {
+    let weight = mass_kg * gravity;
+    let [dx, dy] = axis.world_xy(yaw_rad);
+    match kind {
+        BodyPushKind::Force => {
+            let n = magnitude_fraction * weight;
+            ([0.0; 3], [dx * n, dy * n, 0.0], n)
+        }
+        BodyPushKind::Torque => {
+            let nm = magnitude_fraction * weight * height_m;
+            ([-dy * nm, dx * nm, 0.0], [0.0; 3], nm)
+        }
+    }
 }
 
 /// An action applied `at_s` seconds after the runner's reference point (for example the end of
@@ -130,6 +227,40 @@ impl ScheduledEvent {
                     }
                 }
             }
+            ScheduledAction::BodyPush {
+                magnitude_fraction,
+                duration_s,
+                ..
+            } => {
+                if !magnitude_fraction.is_finite() || *magnitude_fraction <= 0.0 {
+                    return Err(TrainerError::Config(format!(
+                        "scheduled event {:?}: magnitude_fraction must be finite and > 0",
+                        self.label
+                    )));
+                }
+                if !duration_s.is_finite() || *duration_s <= 0.0 {
+                    return Err(TrainerError::Config(format!(
+                        "scheduled event {:?}: duration_s must be finite and > 0",
+                        self.label
+                    )));
+                }
+            }
+            ScheduledAction::BodyVibration {
+                magnitude_fraction,
+                frequency_hz,
+                cycles,
+                ..
+            } => {
+                if !magnitude_fraction.is_finite() || *magnitude_fraction <= 0.0 {
+                    return Err(TrainerError::Config(format!(
+                        "scheduled event {:?}: magnitude_fraction must be finite and > 0",
+                        self.label
+                    )));
+                }
+                // The sample rate is known when the phase starts, which checks the upper limit.
+                crate::vibration_tracker::check_segment(&self.label, *frequency_hz, *cycles, 0.0)
+                    .map_err(TrainerError::Config)?;
+            }
             ScheduledAction::AttemptStart => {
                 return Err(TrainerError::Config(format!(
                     "scheduled event {:?}: attempt_start is sent by the runner, not scheduled",
@@ -177,6 +308,74 @@ mod tests {
             serde_json::to_value(&area).unwrap(),
             json!({"type": "set_area_parameter", "area": "x", "key": "k", "value": 2})
         );
+    }
+
+    #[test]
+    fn body_vibration_serializes_and_validates() {
+        let action: ScheduledAction = serde_json::from_value(json!({
+            "type": "body_vibration", "kind": "torque", "axis": "forward",
+            "magnitude_fraction": 0.01, "frequency_hz": 1.0, "cycles": 10
+        }))
+        .unwrap();
+        let mut event = ScheduledEvent {
+            at_s: 5.0,
+            label: "shake".to_string(),
+            action,
+        };
+        assert!(event.validate().is_ok());
+        assert_eq!(
+            serde_json::to_value(&event.action).unwrap(),
+            json!({"type": "body_vibration", "kind": "torque", "axis": "forward", "magnitude_fraction": 0.01, "frequency_hz": 1.0, "cycles": 10})
+        );
+        if let ScheduledAction::BodyVibration { cycles, .. } = &mut event.action {
+            *cycles = 3;
+        }
+        assert!(event.validate().is_err());
+    }
+
+    #[test]
+    fn body_push_serializes_validates_and_sizes_from_weight() {
+        let push = ScheduledAction::BodyPush {
+            kind: BodyPushKind::Torque,
+            axis: BodyPushAxis::Forward,
+            magnitude_fraction: 0.05,
+            duration_s: 0.1,
+        };
+        assert_eq!(
+            serde_json::to_value(&push).unwrap(),
+            json!({"type": "body_push", "kind": "torque", "axis": "forward", "magnitude_fraction": 0.05, "duration_s": 0.1})
+        );
+        let mut event = ScheduledEvent {
+            at_s: 1.0,
+            label: "p".to_string(),
+            action: push,
+        };
+        assert!(event.validate().is_ok());
+        if let ScheduledAction::BodyPush { magnitude_fraction, .. } = &mut event.action {
+            *magnitude_fraction = 0.0;
+        }
+        assert!(event.validate().is_err());
+        // m = 2 kg, g = 10, h = 0.5 m, heading along +X.
+        let (torque, force, nm) =
+            body_push_wrench(BodyPushKind::Torque, BodyPushAxis::Forward, 0.1, 0.0, 2.0, 10.0, 0.5);
+        assert!((nm - 0.1 * 2.0 * 10.0 * 0.5).abs() < 1e-12);
+        assert_eq!(force, [0.0; 3]);
+        // Forward = +X: the top tips toward +X, so the torque is about +Y (up x forward).
+        assert!(torque[0].abs() < 1e-12 && (torque[1] - nm).abs() < 1e-12 && torque[2] == 0.0);
+        // Heading +Y: forward is +Y, torque about -X.
+        let (torque, _, _) = body_push_wrench(
+            BodyPushKind::Torque,
+            BodyPushAxis::Forward,
+            0.1,
+            std::f64::consts::FRAC_PI_2,
+            2.0,
+            10.0,
+            0.5,
+        );
+        assert!((torque[0] + nm).abs() < 1e-12 && torque[1].abs() < 1e-12);
+        let (_, force, n) =
+            body_push_wrench(BodyPushKind::Force, BodyPushAxis::Left, 0.25, 0.0, 2.0, 10.0, 0.5);
+        assert!((n - 5.0).abs() < 1e-12 && (force[1] - 5.0).abs() < 1e-12);
     }
 
     #[test]

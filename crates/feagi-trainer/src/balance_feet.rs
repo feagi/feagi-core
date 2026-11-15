@@ -29,10 +29,17 @@ use crate::error::TrainerError;
 use crate::memory_counters::{MemoryAreasRecorder, MemoryCounterSource};
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::plasticity_freeze::PlasticityControl;
+use crate::push_tracker::{
+    pushes_table_spec, Lean, PushDir, PushSpec, PushTracker, PushTrackingConfig, PUSHES_TABLE,
+};
 use crate::reach_hold::trainer_package_version;
 use crate::resume::{ResumeExport, ResumeFrom};
 use crate::run_actions::{ApplyEvent, ScheduledEvent};
 use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
+use crate::vibration_tracker::{
+    check_segment, summarize, vibration_summary_table_spec, vibration_table_spec, VibrationRecord,
+    VibrationSpec, VibrationTracker, VIBRATION_SUMMARY_TABLE, VIBRATION_TABLE,
+};
 use std::ops::Not;
 
 fn default_support_deadband_deg() -> f64 {
@@ -436,6 +443,9 @@ pub struct BalanceFeetCriterion {
     /// Perturbation pulse length in seconds. Default 0.1.
     #[serde(default = "default_perturb_duration_s")]
     pub perturb_duration_s: f64,
+    /// Windows and settle band of the `pushes` table (one row per applied pulse).
+    #[serde(default)]
+    pub push_tracking: PushTrackingConfig,
     /// Graduation by time balanced: when `Some`, a support level passes when the MEDIAN
     /// `balanced_s` over that level's attempts is >= this value (seconds), instead of the
     /// success rate. `None` keeps the `graduate_success_rate` rule.
@@ -604,6 +614,7 @@ impl BalanceFeetCriterion {
             perturb_interval_s: 0.0,
             perturb_torque_nm: default_perturb_torque_nm(),
             perturb_duration_s: default_perturb_duration_s(),
+            push_tracking: PushTrackingConfig::default(),
             graduate_balanced_s: None,
             support_com_height_m: None,
             support_rot_stiffness_nm_per_rad: None,
@@ -906,6 +917,9 @@ impl BalanceFeetCriterion {
                 "perturb_torque_nm must be finite and >= 0".to_string(),
             ));
         }
+        self.push_tracking
+            .validate()
+            .map_err(TrainerError::Config)?;
         if !positive(self.perturb_duration_s) {
             return Err(TrainerError::Config(
                 "perturb_duration_s must be finite and > 0".to_string(),
@@ -1757,6 +1771,13 @@ pub struct SpringApplied {
     pub level: f64,
     /// Dead band of the rotational spring, rad.
     pub deadband_rad: f64,
+    /// Seconds the body was held at the reset pose before the attempt, until the brain's motor
+    /// output was quiet or the limit (a separate reset-and-hold ahead of the attempt's reset).
+    #[serde(default)]
+    pub held_s: f64,
+    /// That hold ended at its limit because the motor output was still not quiet.
+    #[serde(default)]
+    pub hold_limit_reached: bool,
 }
 
 /// Body measures of one observed attempt, in units that carry across bodies: angles are
@@ -1788,6 +1809,22 @@ pub struct ObserveBodyMeasures {
     /// Direction of that lean, degrees: 0 forward, 90 left, 180 back, -90 right.
     #[serde(default)]
     pub fall_direction_deg: Option<f64>,
+}
+
+/// Which way and how far an attempt leaned at its last scored sample, against the allowed angle.
+/// Present only when that sample was past the allowed angle. One computation, shared by the
+/// observe table and the attempts table.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct FallLean {
+    /// Lean toward the torso's forward as a fraction of the allowed angle (negative leans back).
+    #[serde(default)]
+    pub forward_fraction: Option<f64>,
+    /// Lean toward the torso's left as a fraction of the allowed angle (negative leans right).
+    #[serde(default)]
+    pub left_fraction: Option<f64>,
+    /// Direction of that lean, degrees: 0 forward, 90 left, 180 back, -90 right.
+    #[serde(default)]
+    pub direction_deg: Option<f64>,
 }
 
 /// What an observed attempt tracks while it runs, to build [`ObserveBodyMeasures`].
@@ -1829,13 +1866,7 @@ impl ObserveTrack {
         allowed_angle_deg: f64,
     ) -> ObserveBodyMeasures {
         let finite = |v: f64| v.is_finite().then_some(v);
-        let fall = self.last_tilt_deg > allowed_angle_deg;
-        let lean = |deg: Option<f64>| {
-            deg.filter(|_| fall)
-                .and_then(|deg| finite(deg / allowed_angle_deg))
-        };
-        let forward = lean(self.last_lean.forward);
-        let left = lean(self.last_lean.left);
+        let lean = self.fall_lean(allowed_angle_deg);
         ObserveBodyMeasures {
             allowed_angle_deg,
             time_to_limit_s: self.time_to_limit_s,
@@ -1846,9 +1877,26 @@ impl ObserveTrack {
             wobble_fraction_per_s: record
                 .wobble_rad_s
                 .and_then(|rad_s| finite(rad_s / allowed_angle_deg.to_radians())),
-            fall_forward_fraction: forward,
-            fall_left_fraction: left,
-            fall_direction_deg: match (forward, left) {
+            fall_forward_fraction: lean.forward_fraction,
+            fall_left_fraction: lean.left_fraction,
+            fall_direction_deg: lean.direction_deg,
+        }
+    }
+
+    /// The signed lean of the last scored sample against `allowed_angle_deg` (must be > 0); empty
+    /// unless that sample was past the allowed angle.
+    pub fn fall_lean(&self, allowed_angle_deg: f64) -> FallLean {
+        let fall = self.last_tilt_deg > allowed_angle_deg;
+        let lean = |deg: Option<f64>| {
+            deg.filter(|_| fall)
+                .and_then(|deg| (deg / allowed_angle_deg).is_finite().then(|| deg / allowed_angle_deg))
+        };
+        let forward = lean(self.last_lean.forward);
+        let left = lean(self.last_lean.left);
+        FallLean {
+            forward_fraction: forward,
+            left_fraction: left,
+            direction_deg: match (forward, left) {
                 (Some(f), Some(l)) => Some(l.atan2(f).to_degrees()),
                 _ => None,
             },
@@ -1878,7 +1926,7 @@ pub struct BalanceAttemptRecord {
     /// Fraction of non-settling bursts with tilt inside the limit and every contact body down.
     #[serde(default)]
     pub upright_fraction: f64,
-    /// Distinct perturbation pulses seen (rising edges of `perturbing`).
+    /// Disturbances applied: random pushes, scheduled pushes and body vibration segments.
     #[serde(default)]
     pub perturbations: u32,
     /// Balance metric: the longest continuous run of upright bursts (tilt inside the limit and
@@ -1954,6 +2002,9 @@ pub struct BalanceAttemptRecord {
     /// Body measures of an observe attempt. Absent in every other phase.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observe: Option<ObserveBodyMeasures>,
+    /// Lean at the last scored sample when it was past the allowed angle, for the attempts table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fall: Option<FallLean>,
 }
 
 /// Counted support-use samples of one attempt (support > 0, non-settling only).
@@ -2106,6 +2157,41 @@ pub struct ModelInfo {
     /// Keyframe names (a bare entry is an unnamed keyframe).
     #[serde(default)]
     pub keyframes: Vec<serde_json::Value>,
+    /// Every actuator of the loaded model, with its command limits.
+    #[serde(default)]
+    pub actuators: Vec<ModelActuator>,
+    /// Every joint of the loaded model, with its limits.
+    #[serde(default)]
+    pub joints: Vec<ModelJoint>,
+}
+
+/// One actuator of [`ModelInfo`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ModelActuator {
+    /// Actuator name (the key of its command in a `measure` reply).
+    pub name: String,
+    /// Name of the joint it drives; empty when it drives none.
+    #[serde(default)]
+    pub joint: String,
+    /// Command range `[low, high]`.
+    #[serde(default)]
+    pub ctrlrange: [f64; 2],
+    /// The command range is enforced by the model.
+    #[serde(default)]
+    pub ctrl_limited: bool,
+}
+
+/// One joint of [`ModelInfo`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ModelJoint {
+    /// Joint name.
+    pub name: String,
+    /// Joint range `[low, high]`.
+    #[serde(default)]
+    pub range: [f64; 2],
+    /// The joint range is enforced by the model.
+    #[serde(default)]
+    pub limited: bool,
 }
 
 /// One body of [`ModelInfo`].
@@ -3596,6 +3682,7 @@ pub fn observe_balance_sample(
             walk: terminal_walk,
             spring_applied: None,
             observe: None,
+            fall: None,
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
@@ -3735,6 +3822,7 @@ pub fn observe_balance_sample(
             walk: walk_record,
             spring_applied: None,
             observe: None,
+            fall: None,
             ..balance_time_fields(
                 longest_balanced_bursts,
                 first_violation_burst,
@@ -3866,6 +3954,7 @@ fn balance_time_fields(
         walk: None,
         spring_applied: None,
         observe: None,
+            fall: None,
     }
 }
 
@@ -4425,6 +4514,10 @@ pub struct BrainOnlyTest {
     /// scored from its reset sample, so the body cannot fall unscored during a settle.
     #[serde(default)]
     pub settle_s_applied: f64,
+    /// Mean seconds the body was held at the reset pose before each attempt, until the brain's
+    /// motor output was quiet or the limit.
+    #[serde(default)]
+    pub quiet_hold_s: f64,
     /// Reward delivered to the brain: `none`.
     pub reward: String,
     /// Perturbation pulses were applied. Always false.
@@ -5003,6 +5096,17 @@ pub trait BalanceController {
         duration_s: f64,
     ) -> Result<(), TrainerError>;
 
+    /// `apply_body_oscillation`: a sinusoidal wrench on `body`, computed by the controller per
+    /// physics step. Returns the simulation time of the first applied step.
+    fn apply_body_oscillation(
+        &mut self,
+        _request: &OscillationRequest,
+    ) -> Result<f64, TrainerError> {
+        Err(TrainerError::Runtime(
+            "this controller does not support body oscillation".to_string(),
+        ))
+    }
+
     /// `measure`: one reading of bodies, contact sets and springs.
     fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError>;
 
@@ -5176,7 +5280,27 @@ pub fn run_balance_phase_from(
             run.phase
         )));
     }
-    if !run.criterion.scheduled_events.is_empty() && run.apply_event.is_none() {
+    // A body push or vibration runs through the controller here, so it needs no applier callback.
+    let needs_applier = run.criterion.scheduled_events.iter().any(|event| {
+        !matches!(
+            event.action,
+            crate::run_actions::ScheduledAction::BodyPush { .. }
+                | crate::run_actions::ScheduledAction::BodyVibration { .. }
+        )
+    });
+    // The Trainer reads one sample per burst: a drive faster than a tenth of that rate aliases.
+    for event in &run.criterion.scheduled_events {
+        if let crate::run_actions::ScheduledAction::BodyVibration {
+            frequency_hz,
+            cycles,
+            ..
+        } = &event.action
+        {
+            check_segment(&event.label, *frequency_hz, *cycles, run.criterion.burst_period_s)
+                .map_err(TrainerError::Config)?;
+        }
+    }
+    if needs_applier && run.apply_event.is_none() {
         return Err(TrainerError::Config(
             "the criterion has scheduled events but no way to apply them (no apply_event callback)"
                 .to_string(),
@@ -5233,6 +5357,7 @@ pub fn run_balance_phase_from(
         support: 0.0,
         settle_support: 0.0,
         settle_s_applied: 0.0,
+        quiet_hold_s: 0.0,
         reward: "none".to_string(),
         perturbation: false,
         plasticity_frozen: false,
@@ -5380,6 +5505,16 @@ fn run_phase_attempts(
     };
     if let Some(sink) = run.data.as_deref_mut() {
         sink.declare_table(&attempts_table_spec(criterion.walk.is_some()));
+        sink.declare_table(&pushes_table_spec());
+        if criterion.scheduled_events.iter().any(|event| {
+            matches!(
+                event.action,
+                crate::run_actions::ScheduledAction::BodyVibration { .. }
+            )
+        }) {
+            sink.declare_table(&vibration_table_spec());
+            sink.declare_table(&vibration_summary_table_spec());
+        }
         if run.phase == "observe" {
             sink.declare_table(&observe_table_spec());
         }
@@ -5495,7 +5630,7 @@ fn run_phase_attempts(
         train_done += 1;
         events.emit(progress_event(
             run,
-            (offset + offset + attempts.len()) as u64,
+            (offset + attempts.len()) as u64,
             samples_total,
             format!("{} seed {seed} support {level:.2}", run.phase),
             stand,
@@ -5595,7 +5730,7 @@ fn run_phase_attempts(
         probes_run += 1;
         events.emit(progress_event(
             run,
-            (offset + offset + attempts.len()) as u64,
+            (offset + attempts.len()) as u64,
             samples_total,
             format!("probe after {train_done} training attempts"),
             stand,
@@ -5604,7 +5739,7 @@ fn run_phase_attempts(
     if let Some(sink) = run.data.as_deref_mut() {
         sink.event(
             EventTime {
-                episode: Some((offset + offset + attempts.len()) as u64),
+                episode: Some((offset + attempts.len()) as u64),
                 ..EventTime::default()
             },
             "phase_end",
@@ -5643,7 +5778,17 @@ fn run_phase_attempts(
         report.support_level_next = Some(schedule.current_level());
     }
     report.deviation_assist = dev_assist.and_then(DeviationAssistRun::finish);
-    report.brain_only = conditions;
+    report.brain_only = conditions.map(|mut test| {
+        let holds: Vec<f64> = report
+            .attempts
+            .iter()
+            .filter_map(|a| a.spring_applied.map(|s| s.held_s))
+            .collect();
+        if !holds.is_empty() {
+            test.quiet_hold_s = holds.iter().sum::<f64>() / holds.len() as f64;
+        }
+        test
+    });
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
@@ -5895,6 +6040,128 @@ fn applied_settle_s(criterion: &BalanceFeetCriterion, brain_only: bool) -> f64 {
         0.0
     } else {
         criterion.settle_s
+    }
+}
+
+/// Seconds of a reset hold's quiet window.
+const HOLD_QUIET_WINDOW_S: f64 = 0.1;
+/// Seconds after which a reset hold ends even if the motor output is not quiet.
+const HOLD_LIMIT_S: f64 = 1.0;
+/// A channel is quiet while its target moves less than this fraction of its range.
+const HOLD_QUIET_TOLERANCE: f64 = 0.01;
+/// Fewest refresh cycles a quiet window spans, so a slow refresh rate cannot pass trivially.
+const HOLD_MIN_WINDOW_CYCLES: u32 = 3;
+
+/// Refresh cycles of the quiet window (at least [`HOLD_MIN_WINDOW_CYCLES`]).
+fn hold_window_cycles(burst_period_s: f64) -> u32 {
+    bursts_for_seconds(HOLD_QUIET_WINDOW_S, burst_period_s).max(HOLD_MIN_WINDOW_CYCLES)
+}
+
+/// Refresh cycles after which the hold is released anyway: about [`HOLD_LIMIT_S`], and at least
+/// two quiet windows so the quiet rule has room to act.
+fn hold_limit_cycles(burst_period_s: f64) -> u32 {
+    bursts_for_seconds(HOLD_LIMIT_S, burst_period_s).max(2 * hold_window_cycles(burst_period_s))
+}
+
+/// Range of every actuator channel the quiet check can use: its command range when the model
+/// limits it, else the range of the joint it drives when that is limited. A channel with
+/// neither is left out.
+fn actuator_ranges(info: &ModelInfo) -> BTreeMap<String, f64> {
+    let width = |range: [f64; 2]| {
+        let w = range[1] - range[0];
+        (w.is_finite() && w > 0.0).then_some(w)
+    };
+    info.actuators
+        .iter()
+        .filter_map(|actuator| {
+            let own = actuator
+                .ctrl_limited
+                .then(|| width(actuator.ctrlrange))
+                .flatten();
+            let joint = || {
+                info.joints
+                    .iter()
+                    .find(|joint| !actuator.joint.is_empty() && joint.name == actuator.joint)
+                    .filter(|joint| joint.limited)
+                    .and_then(|joint| width(joint.range))
+            };
+            own.or_else(joint).map(|w| (actuator.name.clone(), w))
+        })
+        .collect()
+}
+
+/// The quiet hold before an attempt: the body is held at the reset pose until the brain's motor
+/// output is quiet, or until the limit.
+struct ResetHold {
+    ranges: BTreeMap<String, f64>,
+    window: usize,
+    limit_s: f64,
+    recent: std::collections::VecDeque<BTreeMap<String, f64>>,
+    released: bool,
+    held_s: f64,
+    limit_reached: bool,
+}
+
+impl ResetHold {
+    fn new(ranges: BTreeMap<String, f64>, burst_period_s: f64) -> Self {
+        Self {
+            ranges,
+            window: hold_window_cycles(burst_period_s) as usize,
+            limit_s: f64::from(hold_limit_cycles(burst_period_s)) * burst_period_s,
+            recent: std::collections::VecDeque::new(),
+            released: false,
+            held_s: 0.0,
+            limit_reached: false,
+        }
+    }
+
+    /// Every channel with a known range moved less than the tolerance over the window. With no
+    /// channel to check, always quiet (the hold then lasts one refresh cycle).
+    fn quiet(&self, now: &BTreeMap<String, f64>) -> bool {
+        let checked: Vec<(&String, f64)> = self
+            .ranges
+            .iter()
+            .filter(|(name, _)| now.contains_key(*name))
+            .map(|(name, range)| (name, *range))
+            .collect();
+        if checked.is_empty() {
+            return true;
+        }
+        if self.recent.len() < self.window {
+            return false;
+        }
+        checked.iter().all(|(name, range)| {
+            let values: Vec<f64> = self
+                .recent
+                .iter()
+                .filter_map(|m| m.get(*name))
+                .copied()
+                .collect();
+            let low = values.iter().copied().fold(f64::INFINITY, f64::min);
+            let high = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            high - low <= HOLD_QUIET_TOLERANCE * range
+        })
+    }
+
+    /// One sample at `elapsed_s` after the hold's reset. Returns true while the body is still
+    /// held; false from the release sample on.
+    fn step(&mut self, elapsed_s: f64, actuators: &BTreeMap<String, f64>) -> bool {
+        if self.released {
+            return false;
+        }
+        self.recent.push_back(actuators.clone());
+        while self.recent.len() > self.window {
+            self.recent.pop_front();
+        }
+        let quiet = self.quiet(actuators);
+        let at_limit = elapsed_s + 1.0e-9 >= self.limit_s;
+        if quiet || at_limit {
+            self.released = true;
+            self.held_s = elapsed_s.max(0.0);
+            self.limit_reached = !quiet && at_limit;
+            return false;
+        }
+        true
     }
 }
 
@@ -6215,7 +6482,7 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
             ColumnSpec::with_unit("final_tilt", "deg", "Torso tilt at the terminal burst."),
             ColumnSpec::unitless("support_level", "Scheduled support level."),
             ColumnSpec::unitless("upright_fraction", "Share of bursts that were upright."),
-            ColumnSpec::unitless("perturbations", "Perturbation pulses seen."),
+            ColumnSpec::unitless("perturbations", "Disturbances applied in the attempt: random and scheduled pushes plus body vibration segments."),
             ColumnSpec::unitless("balanced_bursts", "Longest run of upright bursts."),
             ColumnSpec::with_unit("balanced_time", "s", "Longest upright run."),
             ColumnSpec::with_unit(
@@ -6261,6 +6528,15 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
                 "Dead band of the opening support spring's rotational term.",
             ),
             ColumnSpec::with_unit(
+                "hold_s",
+                "s",
+                "Seconds the body was held at the reset pose before the attempt, until the brain's motor output was quiet or the limit. The attempt then resets again and starts.",
+            ),
+            ColumnSpec::unitless(
+                "hold_limit_reached",
+                "The hold before the attempt ended at its limit because the brain's motor output was still not quiet.",
+            ),
+            ColumnSpec::with_unit(
                 "effective_max",
                 "deg",
                 "Adaptive: the cone's effective maximum at the start of the attempt, the smaller of the allowed angle and the learned stance-loss angle reduced by the margin. Empty for a non-adaptive attempt.",
@@ -6299,6 +6575,19 @@ fn attempts_table_spec(walking: bool) -> TableSpec {
             ColumnSpec::unitless(
                 "window_cover_fraction",
                 "Adaptive: share of the scored time the success windows cover (whole hold windows plus an unbroken trailing part). A capped standing attempt is a success only when this reaches the standing-fraction threshold. Empty for a non-adaptive attempt.",
+            ),
+            ColumnSpec::unitless(
+                "fall_forward_fraction",
+                "Lean toward the torso's forward at the last scored sample, as a fraction of the allowed angle (negative leans back). Empty unless that sample was past the allowed angle or the controller did not report the heading.",
+            ),
+            ColumnSpec::unitless(
+                "fall_left_fraction",
+                "Lean toward the torso's left at the last scored sample, as a fraction of the allowed angle (negative leans right). Empty under the same conditions.",
+            ),
+            ColumnSpec::with_unit(
+                "fall_direction",
+                "deg",
+                "Direction of that lean: 0 forward, 90 left, 180 back, -90 right. Empty under the same conditions.",
             ),
             ColumnSpec::unitless(
                 "demotion_reason",
@@ -6440,6 +6729,10 @@ fn attempt_row(
         RunDataValue::opt_float(record.com_sway_fraction),
         RunDataValue::opt_float(record.spring_applied.map(|s| s.level)),
         RunDataValue::opt_float(record.spring_applied.map(|s| s.deadband_rad)),
+        RunDataValue::opt_float(record.spring_applied.map(|s| s.held_s)),
+        record.spring_applied.map_or(RunDataValue::Null, |s| {
+            RunDataValue::Bool(s.hold_limit_reached)
+        }),
     ];
     let adaptive = record.adaptive.as_ref();
     row.extend([
@@ -6456,6 +6749,9 @@ fn attempt_row(
         }),
         RunDataValue::opt_float(record.reset_tilt_deg),
         RunDataValue::opt_float(adaptive.map(|a| a.window_cover_fraction)),
+        RunDataValue::opt_float(record.fall.and_then(|f| f.forward_fraction)),
+        RunDataValue::opt_float(record.fall.and_then(|f| f.left_fraction)),
+        RunDataValue::opt_float(record.fall.and_then(|f| f.direction_deg)),
         adaptive
             .and_then(|a| a.demotion_reason)
             .map_or(RunDataValue::Null, |reason| {
@@ -6501,6 +6797,26 @@ impl AttemptHooks<'_, '_> {
         };
         if let Some(sink) = self.data.as_deref_mut() {
             sink.event(at, kind, label);
+        }
+    }
+
+    fn push_row(&mut self, record: &crate::push_tracker::PushRecord) {
+        if let Some(sink) = self.data.as_deref_mut() {
+            sink.row(PUSHES_TABLE, &record.row(self.phase, self.attempt_index));
+        }
+    }
+
+    fn vibration_rows(&mut self, records: &[VibrationRecord]) {
+        if let Some(sink) = self.data.as_deref_mut() {
+            for record in records {
+                sink.row(VIBRATION_TABLE, &record.row(self.phase, self.attempt_index));
+            }
+            for row in summarize(records) {
+                sink.row(
+                    VIBRATION_SUMMARY_TABLE,
+                    &row.row(self.phase, self.attempt_index),
+                );
+            }
         }
     }
 
@@ -6650,36 +6966,18 @@ impl WalkRun {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_balance_attempt(
-    seed: u64,
-    criterion: &BalanceFeetCriterion,
-    support_level: f64,
-    brain_only: bool,
-    controller: &mut dyn BalanceController,
+/// The spring sizing of a session, from the first reading at the reset pose (kept after the
+/// first attempt).
+fn ensure_sizing(
     session: &mut BalanceSession,
-    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
-    deliver_reward: &mut Option<DeliverReward<'_>>,
-    reward_policy: BalanceRewardPolicy,
-    mut adaptive: Option<&mut AdaptiveRun>,
-    mut dev_assist: Option<&mut DeviationAssistRun>,
-    mut hooks: AttemptHooks<'_, '_>,
-    watch: &mut AttemptWatch<'_>,
-    cancel: &CancelToken,
-) -> Result<BalanceAttemptRecord, TrainerError> {
-    let torso = criterion.torso_body.trim().to_string();
-    let keyframe = Some(criterion.reset_keyframe.trim()).filter(|name| !name.is_empty());
-    // The link at the reset is the attempt's baseline; any later response that differs, or is
-    // not `linked`, ends the attempt with a transient error and the phase discards it.
-    let reset = controller.reset_episode(keyframe)?;
-    watch.observe(reset.link)?;
-    let request = measure_request(criterion);
-    let first = measure_checked(controller, &request, watch)?;
-    hooks.marker(first.sim_time_s, "attempt_start", &format!("seed {seed}"));
-    let (sizing, gains) = match session.sizing {
+    criterion: &BalanceFeetCriterion,
+    torso: &str,
+    first: &Measurement,
+) -> Result<(SizingInputs, SpringGains), TrainerError> {
+    Ok(match session.sizing {
         Some(sized) => sized,
         None => {
-            let torso_now = first.bodies.get(&torso).ok_or_else(|| {
+            let torso_now = first.bodies.get(torso).ok_or_else(|| {
                 TrainerError::Runtime(format!("measure reply has no body {torso}"))
             })?;
             let h0 = match criterion.support_com_height_m {
@@ -6703,12 +7001,122 @@ fn run_balance_attempt(
                     com[2] - floor
                 }
             };
-            let sizing = sizing_inputs(&session.info, &torso, h0)?;
+            let sizing = sizing_inputs(&session.info, torso, h0)?;
             let sized = (sizing, gains_for(&sizing, criterion));
             session.sizing = Some(sized);
             sized
         }
+    })
+}
+
+/// What the quiet hold before an attempt found.
+#[derive(Clone, Copy)]
+struct QuietHold {
+    held_s: f64,
+    limit_reached: bool,
+}
+
+/// Before an attempt: reset, hold the body at the reset pose with the full-level spring and let
+/// the brain's motor output settle (or reach the limit), so the previous attempt's last commands
+/// do not carry into this one. Its measures belong to no attempt: nothing is scored, recorded or
+/// latched, and a fall or death reading here is ignored because the body is held and the attempt
+/// resets again right after. Only link and transport errors matter.
+#[allow(clippy::too_many_arguments)]
+fn quiet_hold_before_attempt(
+    criterion: &BalanceFeetCriterion,
+    torso: &str,
+    keyframe: Option<&str>,
+    controller: &mut dyn BalanceController,
+    session: &mut BalanceSession,
+    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    hooks: &mut AttemptHooks<'_, '_>,
+    watch: &mut AttemptWatch<'_>,
+    cancel: &CancelToken,
+) -> Result<QuietHold, TrainerError> {
+    let reset = controller.reset_episode(keyframe)?;
+    watch.observe(reset.link)?;
+    let request = measure_request(criterion);
+    let first = measure_checked(controller, &request, watch)?;
+    let (_, gains) = ensure_sizing(session, criterion, torso, &first)?;
+    controller.set_body_spring(
+        torso,
+        &gains,
+        1.0,
+        criterion.support_deadband_deg.to_radians(),
+    )?;
+    // The hold reads the applied targets; no recorded sample ever carries them unasked.
+    let hold_request = MeasureRequest {
+        actuators: true,
+        ..request
     };
+    let features = upright_goal_features();
+    let mut hold = ResetHold::new(actuator_ranges(&session.info), criterion.burst_period_s);
+    let t0 = first.sim_time_s;
+    let end_s = loop {
+        if cancel.is_cancelled() {
+            let _ = controller.clear_body_spring(torso);
+            return Err(TrainerError::Cancelled(
+                "balance-on-feet run cancelled".to_string(),
+            ));
+        }
+        present_goal(features)?;
+        let reading = measure_checked(controller, &hold_request, watch)?;
+        if !hold.step(reading.sim_time_s - t0, &reading.actuators) {
+            break reading.sim_time_s;
+        }
+    };
+    hooks.marker(
+        end_s,
+        "quiet_hold_end",
+        &format!("held_s={:.3}", hold.held_s),
+    );
+    if hold.limit_reached {
+        hooks.marker(end_s, "hold_limit_reached", "motor output was not quiet");
+    }
+    Ok(QuietHold {
+        held_s: hold.held_s,
+        limit_reached: hold.limit_reached,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_balance_attempt(
+    seed: u64,
+    criterion: &BalanceFeetCriterion,
+    support_level: f64,
+    brain_only: bool,
+    controller: &mut dyn BalanceController,
+    session: &mut BalanceSession,
+    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    deliver_reward: &mut Option<DeliverReward<'_>>,
+    reward_policy: BalanceRewardPolicy,
+    mut adaptive: Option<&mut AdaptiveRun>,
+    mut dev_assist: Option<&mut DeviationAssistRun>,
+    mut hooks: AttemptHooks<'_, '_>,
+    watch: &mut AttemptWatch<'_>,
+    cancel: &CancelToken,
+) -> Result<BalanceAttemptRecord, TrainerError> {
+    let torso = criterion.torso_body.trim().to_string();
+    let keyframe = Some(criterion.reset_keyframe.trim()).filter(|name| !name.is_empty());
+    let quiet_hold = quiet_hold_before_attempt(
+        criterion,
+        &torso,
+        keyframe,
+        controller,
+        session,
+        present_goal,
+        &mut hooks,
+        watch,
+        cancel,
+    )?;
+    // The link at the reset is the attempt's baseline; any later response that differs, or is
+    // not `linked`, ends the attempt with a transient error and the phase discards it.
+    let reset = controller.reset_episode(keyframe)?;
+    watch.observe(reset.link)?;
+    let request = measure_request(criterion);
+    let first = measure_checked(controller, &request, watch)?;
+    hooks.marker(first.sim_time_s, "attempt_start", &format!("seed {seed}"));
+    let (sizing, gains) = ensure_sizing(session, criterion, &torso, &first)?;
     // A brain-only attempt never supports the body: the spring exists (so measure reports its
     // wrench) but has zero gains, no gravity compensation and level 0 from reset to the end.
     let settle_s = applied_settle_s(criterion, brain_only);
@@ -6774,6 +7182,8 @@ fn run_balance_attempt(
     let spring_applied = SpringApplied {
         level: settle_level,
         deadband_rad,
+        held_s: 0.0,
+        hold_limit_reached: false,
     };
     let mut spring_level = settle_level;
     let mut spring_cone_deg = criterion.support_deadband_deg;
@@ -6804,6 +7214,8 @@ fn run_balance_attempt(
         }
     }
     let mut was_perturbing = false;
+    let mut pushes = PushTracker::new(criterion.push_tracking.clone());
+    let mut vibrations = VibrationTracker::new(criterion.push_tracking.survive_window_s);
     let observing = hooks.phase == "observe";
     let mut observe_track = ObserveTrack::default();
     let mut last_sim_time_s: f64;
@@ -6905,20 +7317,204 @@ fn run_balance_attempt(
                         [0.0; 3],
                         criterion.perturb_duration_s,
                     )?;
-                    hooks.marker(reading.sim_time_s, "perturb_start", "");
+                    let magnitude = torque[0].hypot(torque[1]);
+                    let axis = if torque[0] != 0.0 {
+                        format!("{}x", if torque[0] > 0.0 { '+' } else { '-' })
+                    } else {
+                        format!("{}y", if torque[1] > 0.0 { '+' } else { '-' })
+                    };
+                    pushes.begin_push(
+                        reading.sim_time_s,
+                        PushSpec {
+                            source: "random",
+                            kind: "torque".to_string(),
+                            axis,
+                            magnitude_fraction: None,
+                            magnitude,
+                            duration_s: criterion.perturb_duration_s,
+                            dir: PushDir::from_world_torque([torque[0], torque[1]]),
+                        },
+                    );
+                    hooks.marker(
+                        reading.sim_time_s,
+                        "perturb_start",
+                        &format!("{magnitude:.4} N*m"),
+                    );
                 }
                 perturbing = perturb.active_at(post_settle_s);
                 while let Some(event) = due_events.get(next_event) {
                     if event.at_s > post_settle_s + 1.0e-9 {
                         break;
                     }
-                    let apply = hooks.apply_event.as_deref_mut().ok_or_else(|| {
-                        TrainerError::Config(
-                            "scheduled events need an apply_event callback".to_string(),
-                        )
-                    })?;
-                    apply(&event.action)?;
-                    hooks.marker(reading.sim_time_s, "scheduled_event", &event.label);
+                    if let crate::run_actions::ScheduledAction::BodyPush {
+                        kind,
+                        axis,
+                        magnitude_fraction,
+                        duration_s,
+                    } = &event.action
+                    {
+                        let yaw_rad = body
+                            .heading
+                            .as_ref()
+                            .and_then(|heading| heading.yaw_rad)
+                            .ok_or_else(|| {
+                                TrainerError::Runtime(format!(
+                                    "scheduled event {:?}: a body push needs the heading of {torso}, but the controller's measure reply has no defined heading for it (an older controller pack, or forward points along up)",
+                                    event.label
+                                ))
+                            })?;
+                        let height_m = open.reset_height_m.ok_or_else(|| {
+                            TrainerError::Runtime(format!(
+                                "scheduled event {:?}: a body push needs the torso's reset height, which was not read",
+                                event.label
+                            ))
+                        })?;
+                        let (torque, force, magnitude) = crate::run_actions::body_push_wrench(
+                            *kind,
+                            *axis,
+                            *magnitude_fraction,
+                            yaw_rad,
+                            sizing.mass_kg,
+                            sizing.gravity,
+                            height_m,
+                        );
+                        controller.apply_body_pulse(&torso, torque, force, *duration_s)?;
+                        let unit = match kind {
+                            crate::run_actions::BodyPushKind::Force => "N",
+                            crate::run_actions::BodyPushKind::Torque => "N*m",
+                        };
+                        pushes.begin_push(
+                            reading.sim_time_s,
+                            PushSpec {
+                                source: "scheduled",
+                                kind: format!("{kind:?}").to_lowercase(),
+                                axis: format!("{axis:?}").to_lowercase(),
+                                magnitude_fraction: Some(*magnitude_fraction),
+                                magnitude,
+                                duration_s: *duration_s,
+                                dir: match axis {
+                                    crate::run_actions::BodyPushAxis::Forward => {
+                                        PushDir::torso(1.0, 0.0)
+                                    }
+                                    crate::run_actions::BodyPushAxis::Back => {
+                                        PushDir::torso(-1.0, 0.0)
+                                    }
+                                    crate::run_actions::BodyPushAxis::Left => {
+                                        PushDir::torso(0.0, 1.0)
+                                    }
+                                    crate::run_actions::BodyPushAxis::Right => {
+                                        PushDir::torso(0.0, -1.0)
+                                    }
+                                },
+                            },
+                        );
+                        hooks.marker(reading.sim_time_s, "scheduled_event", &event.label);
+                        hooks.marker(
+                            reading.sim_time_s,
+                            "body_push",
+                            &format!(
+                                "{}: {kind:?} {axis:?} {magnitude:.4} {unit} for {duration_s} s",
+                                event.label
+                            ),
+                        );
+                    } else if let crate::run_actions::ScheduledAction::BodyVibration {
+                        kind,
+                        axis,
+                        magnitude_fraction,
+                        frequency_hz,
+                        cycles,
+                    } = &event.action
+                    {
+                        let yaw_rad = body
+                            .heading
+                            .as_ref()
+                            .and_then(|heading| heading.yaw_rad)
+                            .ok_or_else(|| {
+                                TrainerError::Runtime(format!(
+                                    "scheduled event {:?}: a body vibration needs the heading of {torso}, but the controller's measure reply has no defined heading for it (an older controller pack, or forward points along up)",
+                                    event.label
+                                ))
+                            })?;
+                        let height_m = open.reset_height_m.ok_or_else(|| {
+                            TrainerError::Runtime(format!(
+                                "scheduled event {:?}: a body vibration needs the torso's reset height, which was not read",
+                                event.label
+                            ))
+                        })?;
+                        let (torque, force, magnitude) = crate::run_actions::body_push_wrench(
+                            *kind,
+                            *axis,
+                            *magnitude_fraction,
+                            yaw_rad,
+                            sizing.mass_kg,
+                            sizing.gravity,
+                            height_m,
+                        );
+                        let wrench = match kind {
+                            crate::run_actions::BodyPushKind::Force => force,
+                            crate::run_actions::BodyPushKind::Torque => torque,
+                        };
+                        let axis_world = [
+                            wrench[0] / magnitude,
+                            wrench[1] / magnitude,
+                            wrench[2] / magnitude,
+                        ];
+                        let kind_name = format!("{kind:?}").to_lowercase();
+                        let start_s =
+                            controller.apply_body_oscillation(&OscillationRequest {
+                                body: torso.clone(),
+                                kind: kind_name.clone(),
+                                axis_world,
+                                amplitude: magnitude,
+                                frequency_hz: *frequency_hz,
+                                phase0: 0.0,
+                                duration_s: f64::from(*cycles) / *frequency_hz,
+                            })?;
+                        vibrations.begin(VibrationSpec {
+                            kind: kind_name,
+                            axis: format!("{axis:?}").to_lowercase(),
+                            magnitude_fraction: *magnitude_fraction,
+                            magnitude,
+                            frequency_hz: *frequency_hz,
+                            cycles: *cycles,
+                            dir: match axis {
+                                crate::run_actions::BodyPushAxis::Forward => {
+                                    PushDir::torso(1.0, 0.0)
+                                }
+                                crate::run_actions::BodyPushAxis::Back => {
+                                    PushDir::torso(-1.0, 0.0)
+                                }
+                                crate::run_actions::BodyPushAxis::Left => {
+                                    PushDir::torso(0.0, 1.0)
+                                }
+                                crate::run_actions::BodyPushAxis::Right => {
+                                    PushDir::torso(0.0, -1.0)
+                                }
+                            },
+                            start_s,
+                        });
+                        let unit = match kind {
+                            crate::run_actions::BodyPushKind::Force => "N",
+                            crate::run_actions::BodyPushKind::Torque => "N*m",
+                        };
+                        hooks.marker(reading.sim_time_s, "scheduled_event", &event.label);
+                        hooks.marker(
+                            start_s,
+                            "body_vibration",
+                            &format!(
+                                "{}: {kind:?} {axis:?} {magnitude:.4} {unit} at {frequency_hz} Hz for {cycles} cycles",
+                                event.label
+                            ),
+                        );
+                    } else {
+                        let apply = hooks.apply_event.as_deref_mut().ok_or_else(|| {
+                            TrainerError::Config(
+                                "scheduled events need an apply_event callback".to_string(),
+                            )
+                        })?;
+                        apply(&event.action)?;
+                        hooks.marker(reading.sim_time_s, "scheduled_event", &event.label);
+                    }
                     next_event += 1;
                 }
             }
@@ -7005,8 +7601,32 @@ fn run_balance_attempt(
                 });
             }
         }
+        let lean = sample
+            .stability
+            .as_ref()
+            .map(StabilitySample::tilt_components_deg)
+            .unwrap_or_default();
+        pushes.observe(
+            reading.sim_time_s,
+            Lean {
+                x: lean.x,
+                y: lean.y,
+                forward: lean.forward,
+                left: lean.left,
+            },
+        );
+        vibrations.observe(
+            reading.sim_time_s,
+            Lean {
+                x: lean.x,
+                y: lean.y,
+                forward: lean.forward,
+                left: lean.left,
+            },
+            settling,
+        );
         let posture_lean = sample.score_posture_from(open.reset_posture.as_ref());
-        if observing && !settling {
+        if !settling {
             observe_track.add(&sample, criterion.max_tilt_deg, elapsed_s - settle_s);
         }
         let mut step = observe_balance_sample(&open, &sample, criterion, seed)?;
@@ -7152,6 +7772,19 @@ fn run_balance_attempt(
             BalanceAttemptStep::Finished(record) => break record,
         }
     };
+    // Every applied pulse counts, scheduled or random, at the moment it was applied.
+    result.perturbations = pushes.applied().saturating_add(vibrations.applied());
+    for record in pushes.finish(
+        last_sim_time_s,
+        result.outcome == BalanceAttemptOutcome::Fell,
+    ) {
+        hooks.push_row(&record);
+    }
+    let vibration_records = vibrations.finish(
+        last_sim_time_s,
+        result.outcome == BalanceAttemptOutcome::Fell,
+    );
+    hooks.vibration_rows(&vibration_records);
     if let Some(run) = adaptive.as_deref() {
         result.adaptive = Some(tally.stats(
             run.assist.cone_deg(criterion),
@@ -7167,9 +7800,16 @@ fn run_balance_attempt(
     hooks.marker(last_sim_time_s, "attempt_end", outcome_name(result.outcome));
     // The next reset clears it anyway; a death may already have cleared it.
     let _ = controller.clear_body_spring(&torso);
-    result.spring_applied = Some(spring_applied);
-    if observing && criterion.max_tilt_deg > 0.0 {
-        result.observe = Some(observe_track.measures(&result, criterion.max_tilt_deg));
+    result.spring_applied = Some(SpringApplied {
+        held_s: quiet_hold.held_s,
+        hold_limit_reached: quiet_hold.limit_reached,
+        ..spring_applied
+    });
+    if criterion.max_tilt_deg > 0.0 {
+        result.fall = Some(observe_track.fall_lean(criterion.max_tilt_deg));
+        if observing {
+            result.observe = Some(observe_track.measures(&result, criterion.max_tilt_deg));
+        }
     }
     Ok(result)
 }
@@ -7250,6 +7890,33 @@ pub fn update_body_spring_request(
 /// JSON body of `clear_body_spring`.
 pub fn clear_body_spring_request(body: &str) -> serde_json::Value {
     serde_json::json!({"action": "clear_body_spring", "body": body})
+}
+
+/// What `apply_body_oscillation` needs: a sinusoidal wrench along a world axis.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OscillationRequest {
+    pub body: String,
+    /// `torque` or `force`.
+    pub kind: String,
+    pub axis_world: [f64; 3],
+    pub amplitude: f64,
+    pub frequency_hz: f64,
+    pub phase0: f64,
+    pub duration_s: f64,
+}
+
+/// JSON body of `apply_body_oscillation`.
+pub fn apply_body_oscillation_request(request: &OscillationRequest) -> serde_json::Value {
+    serde_json::json!({
+        "action": "apply_body_oscillation",
+        "body": request.body,
+        "kind": request.kind,
+        "axis_world": request.axis_world,
+        "amplitude": request.amplitude,
+        "frequency_hz": request.frequency_hz,
+        "phase0": request.phase0,
+        "duration_s": request.duration_s,
+    })
 }
 
 /// JSON body of `apply_body_pulse`.
@@ -7545,6 +8212,22 @@ impl BalanceController for HttpBalanceController {
     ) -> Result<(), TrainerError> {
         self.command(&apply_body_pulse_request(body, torque, force, duration_s))
             .map(|_| ())
+    }
+
+    fn apply_body_oscillation(
+        &mut self,
+        request: &OscillationRequest,
+    ) -> Result<f64, TrainerError> {
+        let reply = self.command(&apply_body_oscillation_request(request))?;
+        reply
+            .get("start_time_s")
+            .and_then(serde_json::Value::as_f64)
+            .ok_or_else(|| {
+                TrainerError::Runtime(
+                    "apply_body_oscillation reply has no start_time_s (an older controller pack?)"
+                        .to_string(),
+                )
+            })
     }
 
     fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
@@ -7944,6 +8627,7 @@ mod tests {
             walk: None,
             spring_applied: None,
             observe: None,
+            fall: None,
         }
     }
 
@@ -8775,6 +9459,7 @@ mod tests {
         posture_tilt_factor: f64,
         /// (torque, force, duration_s, seconds since reset)
         pulses: Vec<([f64; 3], [f64; 3], f64, f64)>,
+        oscillations: Vec<OscillationRequest>,
         measure_requests: Vec<MeasureRequest>,
         /// Non-contact bodies the extra contact set reports as touching.
         other_touching: Vec<String>,
@@ -8783,9 +9468,13 @@ mod tests {
         /// The controller predates `a_except` and rejects it.
         rejects_a_except: bool,
         spring_level: Option<f64>,
+        /// The command of the `joint_a` actuator by measure index; the index itself when unset.
+        actuator_script: Option<Box<dyn FnMut(u32) -> f64>>,
         k: u32,
         fresh: bool,
         steps: u64,
+        /// Physics steps before the last reset: the step counter never goes back.
+        step_base: u64,
         /// The torso CoM moves along +X at this speed, m/s, from the reset.
         torso_speed_x: f64,
         torso_yaw_rad: f64,
@@ -8891,6 +9580,8 @@ mod tests {
             ],
             free_roots: vec!["base".to_string()],
             keyframes: vec![serde_json::json!("home"), serde_json::json!("stand")],
+            actuators: Vec::new(),
+            joints: Vec::new(),
         }
     }
 
@@ -8911,14 +9602,17 @@ mod tests {
                 ref_up_updates: Vec::new(),
                 posture_tilt_factor: 1.0,
                 pulses: Vec::new(),
+                oscillations: Vec::new(),
                 measure_requests: Vec::new(),
                 other_touching: Vec::new(),
                 torso_z_drop: None,
                 rejects_a_except: false,
                 spring_level: None,
+                actuator_script: None,
                 k: 0,
                 fresh: false,
                 steps: 0,
+                step_base: 0,
                 torso_speed_x: 0.0,
                 torso_yaw_rad: 0.0,
                 link_feed: None,
@@ -8948,6 +9642,12 @@ mod tests {
             f64::from(self.k) * self.advance_s
         }
 
+        /// The springs set by the attempts themselves: every attempt first runs a quiet hold with
+        /// its own spring, so the attempt's spring is every second one.
+        fn attempt_springs(&self) -> Vec<&(SpringGains, f64, f64)> {
+            self.spring_sets.iter().skip(1).step_by(2).collect()
+        }
+
         fn count(&self, action: &str) -> usize {
             self.calls.iter().filter(|call| *call == action).count()
         }
@@ -8967,6 +9667,7 @@ mod tests {
             }
             self.resets.push(keyframe.map(str::to_string));
             self.k = 0;
+            self.step_base = self.steps;
             self.fresh = true;
             self.spring_level = None;
             Ok(ResetReply {
@@ -9037,6 +9738,15 @@ mod tests {
             Ok(())
         }
 
+        fn apply_body_oscillation(
+            &mut self,
+            request: &OscillationRequest,
+        ) -> Result<f64, TrainerError> {
+            self.calls.push("apply_body_oscillation".to_string());
+            self.oscillations.push(request.clone());
+            Ok(self.seconds())
+        }
+
         fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
             self.calls.push("measure".to_string());
             self.measure_requests.push(request.clone());
@@ -9053,7 +9763,8 @@ mod tests {
                 self.fresh = false;
             } else {
                 self.k += 1;
-                self.steps = (self.seconds() / self.info.timestep_s).round() as u64;
+                self.steps =
+                    self.step_base + (self.seconds() / self.info.timestep_s).round() as u64;
             }
             let (k, seconds) = (self.k, self.seconds());
             let scripted = (self.script)(k, seconds);
@@ -9130,7 +9841,11 @@ mod tests {
                 contacts,
                 springs,
                 actuators: if request.actuators {
-                    BTreeMap::from([("joint_a".to_string(), f64::from(k))])
+                    let command = match self.actuator_script.as_mut() {
+                        Some(script) => script(k),
+                        None => f64::from(k),
+                    };
+                    BTreeMap::from([("joint_a".to_string(), command)])
                 } else {
                     BTreeMap::new()
                 },
@@ -9491,7 +10206,8 @@ mod tests {
             "0.5 s hold at 20 Hz, scored from the first sample"
         );
         assert!((attempt.balanced_s - 0.5).abs() < 1e-9);
-        assert_eq!(mock.resets, vec![Some("stand".to_string())]);
+        // the quiet hold's reset, then the attempt's
+        assert_eq!(mock.resets, vec![Some("stand".to_string()); 2]);
         assert_eq!(
             &mock.calls[..4],
             [
@@ -9505,17 +10221,21 @@ mod tests {
             mock.calls.last().map(String::as_str),
             Some("clear_body_spring")
         );
-        // brain-only: the spring is set once with zero gains at level 0, settle included
-        assert_eq!(mock.spring_sets.len(), 1);
-        assert_eq!(mock.spring_sets[0].1, 0.0);
-        assert_eq!(mock.spring_sets[0].2, 0.0);
-        assert_eq!(mock.spring_sets[0].0, zero_gains());
+        // the quiet hold's spring (level 1), then brain-only: the attempt's spring is set once
+        // with zero gains at level 0, settle included
+        assert_eq!(mock.spring_sets.len(), 2);
+        assert_eq!(mock.spring_sets[0].1, 1.0, "quiet hold");
+        let own = mock.attempt_springs();
+        assert_eq!(own.len(), 1);
+        assert_eq!(own[0].1, 0.0);
+        assert_eq!(own[0].2, 0.0);
+        assert_eq!(own[0].0, zero_gains());
         assert!(mock.level_updates.is_empty(), "{:?}", mock.level_updates);
         assert!(mock.pulses.is_empty());
         assert_eq!(
             mock.count("measure"),
-            1 + 10,
-            "sizing read + 10 hold, no settle"
+            (1 + 1) + (1 + 10),
+            "quiet hold: sizing read + 1 hold read; attempt: first read + 10, no settle"
         );
         assert!(report.spring_gains.is_none(), "no spring was applied");
         let test = report.brain_only.as_ref().expect("brain-only record");
@@ -9580,6 +10300,67 @@ mod tests {
         assert_eq!(stand.outcome, "success");
         assert!((stand.balanced_s - attempt.balanced_s).abs() < 1e-9);
         assert!((stand.support_level - attempt.support_level).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_resumed_run_counts_its_saved_attempts_once_in_progress_events() {
+        let mut c = criterion_for(2, 0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        c.probe_every = 0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-resume-count".to_string());
+        let seeds = [1u64, 2, 3];
+        let mut run = BalancePhaseRun {
+            phase: "train",
+            seeds: &seeds,
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: None,
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+            data: None,
+            apply_event: None,
+            recovery: &TEST_RECOVERY,
+            burst: &RUNNING_CLOCK,
+            memory_counters: None,
+            reset_latch: None,
+        };
+        // Two attempts were saved at the pause; one seed is left to run.
+        let from = crate::resume::ResumeFrom {
+            first_index: 2,
+            engine_state: serde_json::to_value(BalanceResumeState {
+                attempts_done: 2,
+                ..BalanceResumeState::default()
+            })
+            .unwrap(),
+            boundary_stop: false,
+        };
+        let (report, _) = run_balance_phase_from(
+            &mut run,
+            &from,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("resumed phase");
+        assert_eq!(report.attempts.len(), 1, "one attempt runs after the resume");
+        let done: Vec<u64> = events
+            .events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                RunEventKind::Progress {
+                    stand: Some(_),
+                    samples_done,
+                    ..
+                } => Some(*samples_done),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(done, vec![3], "2 saved + 1 run is 3, not 5");
     }
 
     #[test]
@@ -9754,7 +10535,8 @@ mod tests {
             during.attempts[0].support_level
         );
         assert_eq!(
-            early.spring_sets[0].1, 0.0,
+            early.attempt_springs()[0].1,
+            0.0,
             "the test settle spring carries no support"
         );
     }
@@ -9776,7 +10558,11 @@ mod tests {
         let attempt = &report.attempts[0];
         assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
         assert_eq!(attempt.bursts, 10, "scored from the first sample");
-        assert_eq!(unsupported.count("measure"), 1 + 10, "no settle readings");
+        assert_eq!(
+            unsupported.count("measure"),
+            (1 + 1) + (1 + 10),
+            "quiet hold reads, then no settle readings"
+        );
         assert_eq!(report.brain_only.as_ref().unwrap().settle_s_applied, 0.0);
 
         let mut supported = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
@@ -9790,6 +10576,329 @@ mod tests {
         assert_eq!(supported.spring_sets[0].1, 1.0, "grip held during settle");
     }
 
+    fn limited_actuator(name: &str, range: f64) -> ModelActuator {
+        ModelActuator {
+            name: name.to_string(),
+            joint: String::new(),
+            ctrlrange: [0.0, range],
+            ctrl_limited: true,
+        }
+    }
+
+    #[test]
+    fn hold_counts_follow_the_refresh_rate_with_minimums() {
+        assert_eq!(hold_window_cycles(0.05), 3, "0.1 s is 2 cycles, minimum 3");
+        assert_eq!(hold_window_cycles(0.01), 10);
+        assert_eq!(
+            hold_window_cycles(0.5),
+            3,
+            "a slow rate cannot pass trivially"
+        );
+        assert_eq!(hold_limit_cycles(0.05), 20);
+        assert_eq!(hold_limit_cycles(0.01), 100);
+        assert_eq!(hold_limit_cycles(0.5), 6, "at least two windows");
+    }
+
+    #[test]
+    fn channel_ranges_fall_back_to_the_joint_and_skip_unlimited_channels() {
+        let mut info = generic_body_info();
+        info.actuators = vec![
+            limited_actuator("a", 4.0),
+            ModelActuator {
+                name: "b".to_string(),
+                joint: "j".to_string(),
+                ctrlrange: [0.0, 0.0],
+                ctrl_limited: false,
+            },
+            ModelActuator {
+                name: "c".to_string(),
+                joint: "k".to_string(),
+                ctrlrange: [0.0, 0.0],
+                ctrl_limited: false,
+            },
+        ];
+        info.joints = vec![
+            ModelJoint {
+                name: "j".to_string(),
+                range: [-1.0, 1.0],
+                limited: true,
+            },
+            ModelJoint {
+                name: "k".to_string(),
+                range: [-1.0, 1.0],
+                limited: false,
+            },
+        ];
+        let ranges = actuator_ranges(&info);
+        assert_eq!(ranges.get("a"), Some(&4.0));
+        assert_eq!(ranges.get("b"), Some(&2.0));
+        assert!(!ranges.contains_key("c"));
+    }
+
+    fn run_with_script(
+        script: impl FnMut(u32) -> f64 + 'static,
+        settle_s: f64,
+        seeds: &[u64],
+        phase: &str,
+        record_actuators: bool,
+    ) -> (BalancePhaseReport, MockController, RecordingRunDataSink) {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = settle_s;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 4.0;
+        c.perturb_interval_s = 0.0;
+        c.record_actuators = record_actuators;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.info.actuators = vec![limited_actuator("joint_a", 2.0)];
+        mock.actuator_script = Some(Box::new(script));
+        let mut tape = RecordingRunDataSink::default();
+        let report = run_with_hooks(&c, &mut mock, phase, seeds, &rid(), Some(&mut tape), None)
+            .expect("phase");
+        (report, mock, tape)
+    }
+
+    #[test]
+    fn the_quiet_hold_ends_when_the_output_is_quiet_before_the_attempt_starts() {
+        // The target moves until reading 6; quiet is 3 steady readings: reading 8, 0.4 s.
+        let (report, mock, tape) = run_with_script(
+            |k| if k < 6 { f64::from(k) } else { 6.0 },
+            0.0,
+            &[1],
+            "test",
+            false,
+        );
+        let spring = report.attempts[0].spring_applied.unwrap();
+        assert!((spring.held_s - 0.4).abs() < 1e-9, "{}", spring.held_s);
+        assert!(!spring.hold_limit_reached);
+        let kinds = tape.event_kinds();
+        let at = |kind: &str| kinds.iter().position(|k| *k == kind).expect(kind);
+        assert!(at("quiet_hold_end") < at("attempt_start"), "{kinds:?}");
+        assert!(!kinds.contains(&"hold_limit_reached"));
+        // Pre-attempt calls: reset, sizing read, spring, 8 hold reads; then the attempt's reset.
+        assert_eq!(
+            &mock.calls[1..4],
+            ["reset_episode", "measure", "set_body_spring"]
+        );
+        assert_eq!(
+            mock.calls[4..12].iter().filter(|c| *c == "measure").count(),
+            8
+        );
+        assert_eq!(mock.calls[12], "reset_episode");
+        // Its reads are no attempt samples: the steps table holds the scored rows only.
+        let steps = tape.rows_of("steps").len();
+        assert_eq!(steps as u32, report.attempts[0].bursts);
+        let attempt_time = tape.column_index("steps", "sim_time").unwrap();
+        let times: Vec<f64> = tape
+            .rows_of("steps")
+            .iter()
+            .map(|r| match r[attempt_time] {
+                RunDataValue::Float(t) => t,
+                ref other => panic!("{other:?}"),
+            })
+            .collect();
+        assert!(times.windows(2).all(|w| w[1] > w[0]), "{times:?}");
+    }
+
+    #[test]
+    fn a_target_that_never_settles_is_released_at_the_limit_and_marked() {
+        let (report, _, tape) = run_with_script(
+            |k| if k % 2 == 0 { 0.0 } else { 1.0 },
+            0.0,
+            &[1],
+            "test",
+            false,
+        );
+        let spring = report.attempts[0].spring_applied.unwrap();
+        assert!(
+            (spring.held_s - 1.0).abs() < 1e-9,
+            "limit 1.0 s: {}",
+            spring.held_s
+        );
+        assert!(spring.hold_limit_reached);
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        let kinds = tape.event_kinds();
+        assert!(kinds.contains(&"hold_limit_reached"), "{kinds:?}");
+        let row = &tape.rows_of("attempts")[0];
+        let hold = tape.column_index("attempts", "hold_s").expect("hold_s");
+        let limit = tape
+            .column_index("attempts", "hold_limit_reached")
+            .expect("limit");
+        assert_eq!(row[hold], RunDataValue::Float(1.0));
+        assert_eq!(row[limit], RunDataValue::Bool(true));
+    }
+
+    #[test]
+    fn quiet_means_within_one_percent_of_the_channel_range() {
+        let (quiet, _, _) = run_with_script(
+            |k| if k % 2 == 0 { 1.0 } else { 1.019 },
+            0.0,
+            &[1],
+            "test",
+            false,
+        );
+        let spring = quiet.attempts[0].spring_applied.unwrap();
+        assert!(!spring.hold_limit_reached && spring.held_s < 0.5);
+        let (loud, _, _) = run_with_script(
+            |k| if k % 2 == 0 { 1.0 } else { 1.021 },
+            0.0,
+            &[1],
+            "test",
+            false,
+        );
+        assert!(loud.attempts[0].spring_applied.unwrap().hold_limit_reached);
+    }
+
+    #[test]
+    fn actuators_are_requested_only_in_the_quiet_hold_and_recorded_only_when_asked() {
+        let (_, mock, tape) = run_with_script(|_| 0.5, 0.0, &[1], "train", false);
+        // read 0 sizes the spring, reads 1-3 are the hold (3 steady readings), none after
+        // it asks for actuators
+        assert!(!mock.measure_requests[0].actuators);
+        assert!(mock.measure_requests[1..4].iter().all(|r| r.actuators));
+        assert!(mock.measure_requests[4..].iter().all(|r| !r.actuators));
+        assert!(tape
+            .table("steps")
+            .expect("steps")
+            .columns
+            .iter()
+            .all(|spec| !spec.name.starts_with("actuator_")));
+        // Asked: the attempt's own rows carry them, the hold's reads add none.
+        let (report, _, tape) = run_with_script(|_| 0.5, 0.0, &[1], "train", true);
+        let col = tape
+            .column_index("steps", "actuator_joint_a")
+            .expect("column");
+        assert_eq!(
+            tape.rows_of("steps").len() as u32,
+            report.attempts[0].bursts
+        );
+        assert!(tape
+            .rows_of("steps")
+            .iter()
+            .all(|r| matches!(r[col], RunDataValue::Float(_))));
+    }
+
+    #[test]
+    fn the_first_scored_sample_does_not_depend_on_what_the_pose_did_in_the_hold() {
+        // The pose drifts while the body is held; the attempt's reset restores it, so what the
+        // attempt scores is the same whatever the drift (the mock's pose follows the script
+        // since the reset, and the script restarts at every reset).
+        let scored_tilts = |drift: f64| -> Vec<f64> {
+            let mut c = criterion_for(2, 0.05);
+            c.hold_s = 0.5;
+            c.attempt_cap_s = 4.0;
+            c.settle_s = 0.0;
+            c.perturb_interval_s = 0.0;
+            let resets = std::rc::Rc::new(std::cell::Cell::new(0u32));
+            let seen = resets.clone();
+            let mut mock = MockController::new(
+                0.05,
+                2,
+                Box::new(move |k, _| Scripted {
+                    // The first reset of an attempt is the hold: its pose drifts.
+                    tilt_deg: if seen.get() % 2 == 1 {
+                        2.0 + drift * f64::from(k)
+                    } else {
+                        2.0
+                    },
+                    ..upright_step()
+                }),
+            );
+            let counter = resets.clone();
+            mock.link_feed = Some(Box::new(move |kind, _| {
+                if kind == "reset" {
+                    counter.set(counter.get() + 1);
+                }
+                None
+            }));
+            mock.info.actuators = vec![limited_actuator("joint_a", 2.0)];
+            mock.actuator_script = Some(Box::new(|k| if k < 4 { f64::from(k) } else { 4.0 }));
+            let mut tape = RecordingRunDataSink::default();
+            run_with_hooks(&c, &mut mock, "test", &[1], &rid(), Some(&mut tape), None)
+                .expect("phase");
+            let tilt = tape.column_index("steps", "tilt").expect("tilt");
+            tape.rows_of("steps")
+                .iter()
+                .map(|r| match r[tilt] {
+                    RunDataValue::Float(t) => t,
+                    ref other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+        assert_eq!(scored_tilts(0.0), scored_tilts(0.3));
+    }
+
+    #[test]
+    fn a_supported_attempt_still_settles_after_the_attempts_own_reset() {
+        let (report, mock, tape) = run_with_script(|_| 0.5, 0.5, &[1], "train", false);
+        let kinds = tape.event_kinds();
+        let at = |kind: &str| kinds.iter().position(|k| *k == kind).expect(kind);
+        assert!(at("quiet_hold_end") < at("attempt_start"));
+        assert!(at("attempt_start") < at("settle_end"));
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        // Quiet hold spring, then the attempt's own full-grip settle spring.
+        assert_eq!(mock.spring_sets.len(), 2);
+        assert_eq!(mock.spring_sets[1].1, 1.0);
+        // The attempt's reads: first + 10 settle (0.5 s) + 10 scored.
+        let resets: Vec<usize> = mock
+            .calls
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| *c == "reset_episode")
+            .map(|(i, _)| i)
+            .collect();
+        let attempt_reads = mock.calls[resets[1]..]
+            .iter()
+            .filter(|c| *c == "measure")
+            .count();
+        assert_eq!(attempt_reads, 1 + 9 + 10);
+    }
+
+    #[test]
+    fn a_transient_error_in_the_quiet_hold_reruns_the_seed() {
+        let c = recovery_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        // The first read of the quiet hold fails once.
+        mock.failures = Some(Box::new(|kind, n| {
+            (kind == "measure" && n == 0)
+                .then(|| TrainerError::Transient("connection refused".to_string()))
+        }));
+        let mut tape = RecordingRunDataSink::default();
+        let report = recover_run(&c, &mut mock, &[1], &recovery(5.0, 3), &mut tape).expect("phase");
+        assert_eq!(report.attempts.len(), 1);
+        assert_eq!(report.attempts[0].seed, 1);
+        assert_eq!(report.discarded_attempts.len(), 1);
+        assert_eq!(report.discarded_attempts[0].attempt_index, 0);
+    }
+
+    #[test]
+    fn a_death_reading_in_the_quiet_hold_is_ignored() {
+        // Every reading of the first reset's episode reports a death; the attempt reset clears it.
+        let resets = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let seen = resets.clone();
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 4.0;
+        c.perturb_interval_s = 0.0;
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(move |k, _| Scripted {
+                terminal: (seen.get() == 1 && k >= 1).then_some(BalanceTerminal::Death),
+                ..upright_step()
+            }),
+        );
+        let counter = resets.clone();
+        mock.link_feed = Some(Box::new(move |kind, _| {
+            if kind == "reset" {
+                counter.set(counter.get() + 1);
+            }
+            None
+        }));
+        let report = run_phase(&c, &mut mock, "test", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+    }
+
     #[test]
     fn gains_are_sized_once_and_reused_every_attempt() {
         let c = criterion_for(2, 0.05);
@@ -9797,8 +10906,12 @@ mod tests {
         let report = run_phase(&c, &mut mock, "train", &[1, 2, 3]).expect("phase");
         assert_eq!(report.attempts.len(), 3);
         assert_eq!(mock.count("get_model_info"), 1);
-        assert_eq!(mock.count("reset_episode"), 3);
-        assert_eq!(mock.spring_sets.len(), 3);
+        assert_eq!(
+            mock.count("reset_episode"),
+            6,
+            "a quiet-hold reset and an attempt reset"
+        );
+        assert_eq!(mock.spring_sets.len(), 6);
         assert!(mock
             .spring_sets
             .iter()
@@ -9810,7 +10923,7 @@ mod tests {
         // The run data carries the sizing inputs and, per attempt, the spring applied.
         let sizing = report.spring_sizing.expect("sizing inputs recorded");
         assert!((sizing.h0_m - 0.140).abs() < 1e-9);
-        for (record, set) in report.attempts.iter().zip(&mock.spring_sets) {
+        for (record, set) in report.attempts.iter().zip(mock.attempt_springs()) {
             let applied = record.spring_applied.expect("spring recorded per attempt");
             assert_eq!(applied.level, set.1);
             assert_eq!(applied.deadband_rad, set.2);
@@ -10087,8 +11200,12 @@ mod tests {
         let report = run_test_phase(&c, &mut mock, &mut plasticity, &CancelToken::new(), &[1, 2])
             .expect("phase");
         assert_eq!(report.attempts.len(), 2);
-        assert_eq!(mock.spring_sets.len(), 2, "one zero spring per attempt");
-        for (gains, level, deadband) in &mock.spring_sets {
+        assert_eq!(
+            mock.attempt_springs().len(),
+            2,
+            "one zero spring per attempt"
+        );
+        for (gains, level, deadband) in mock.attempt_springs() {
             assert_eq!((*level, *deadband), (0.0, 0.0));
             assert_eq!(*gains, zero_gains(), "no gravity comp, no xy spring");
         }
@@ -10377,8 +11494,8 @@ mod tests {
         .expect("phase");
         assert_eq!(report.attempts.len(), 2, "N attempts, one per seed");
         // Test's brain-only path: zero spring at level 0, no pulses, no support, frozen.
-        assert_eq!(mock.spring_sets.len(), 2);
-        for (gains, level, deadband) in &mock.spring_sets {
+        assert_eq!(mock.attempt_springs().len(), 2);
+        for (gains, level, deadband) in mock.attempt_springs() {
             assert_eq!((*level, *deadband), (0.0, 0.0));
             assert_eq!(*gains, zero_gains());
         }
@@ -11185,8 +12302,9 @@ mod tests {
         assert_eq!(report.success_rate, 1.0);
         assert!(report.attempts.iter().all(|a| a.bursts == 10));
         assert_eq!(tape.rows_of(ATTEMPTS_TABLE).len(), 2);
-        // The seed ran three times in total: discarded, re-run, then the next seed.
-        assert_eq!(mock.resets.len(), 3);
+        // The seed ran three times in total: discarded, re-run, then the next seed (two resets
+        // each: the quiet hold's and the attempt's).
+        assert_eq!(mock.resets.len(), 6);
         // Recorded with seed, reason and the epochs before and after.
         assert_eq!(report.discarded_attempts.len(), 1);
         let discard = &report.discarded_attempts[0];
@@ -11282,7 +12400,7 @@ mod tests {
             "{message}"
         );
         // The third discard failed the phase before another attempt started.
-        assert_eq!(mock.resets.len(), 3);
+        assert_eq!(mock.resets.len(), 6);
     }
 
     #[test]
@@ -11303,7 +12421,7 @@ mod tests {
             0,
             "no wait for a link that will not return"
         );
-        assert_eq!(mock.resets.len(), 1);
+        assert_eq!(mock.resets.len(), 2);
         assert!(tape
             .event_kinds()
             .contains(&crate::balance_recovery::ATTEMPT_DISCARDED_EVENT));
@@ -11348,7 +12466,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(&error, TrainerError::Runtime(m) if m == "command rejected"));
-        assert_eq!((mock.resets.len(), mock.count("status")), (1, 0));
+        assert_eq!((mock.resets.len(), mock.count("status")), (2, 0));
     }
 
     #[test]
@@ -11357,7 +12475,8 @@ mod tests {
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
         // The controller restarts while the second seed begins.
         mock.failures = Some(Box::new(|kind, n| {
-            (kind == "reset" && n == 1)
+            // reset 0 and 1 are the first seed's quiet hold and attempt; 2 opens the second seed
+            (kind == "reset" && n == 2)
                 .then(|| TrainerError::Transient("connection refused".to_string()))
         }));
         let mut tape = RecordingRunDataSink::default();
@@ -11375,8 +12494,8 @@ mod tests {
         );
         assert_eq!(
             mock.resets.len(),
-            2,
-            "two resets succeeded; the refused one never started"
+            4,
+            "four resets succeeded (two per attempt); the refused one never started"
         );
     }
 
@@ -11385,9 +12504,10 @@ mod tests {
         let mut c = recovery_criterion();
         c.probe_every = 3;
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
-        // Resets 0..=2 are the three train attempts; reset 3 is the first probe.
+        // Resets 0..=5 are the three train attempts (a quiet hold and an attempt reset each);
+        // reset 6 is the first probe's quiet hold.
         mock.failures = Some(Box::new(|kind, n| {
-            (kind == "reset" && n == 3)
+            (kind == "reset" && n == 6)
                 .then(|| TrainerError::Transient("connection reset".to_string()))
         }));
         let mut plasticity = MockPlasticity::default();
@@ -11528,14 +12648,14 @@ mod tests {
         // Mid-attempt the pause parked nothing: the first attempt ran to its end (10 bursts).
         assert_eq!(
             at_boundary,
-            Some(1),
+            Some(2),
             "the first attempt finished before any park"
         );
         assert_eq!(report.attempts[0].bursts, 10);
         // At the boundary it parked: no second reset while paused; after resume it finished.
-        assert_eq!(while_paused, 1);
+        assert_eq!(while_paused, 2);
         assert_eq!(report.attempts.len(), 2);
-        assert_eq!(resets_seen.load(Ordering::SeqCst), 2);
+        assert_eq!(resets_seen.load(Ordering::SeqCst), 4);
         assert!(!cancel.is_paused());
     }
 
@@ -11661,7 +12781,7 @@ mod tests {
         assert_eq!((discard.seed, discard.attempt_index), (1, 0));
         assert!(discard.detail.contains("stuck at 3"), "{}", discard.detail);
         // Seed 1 ran twice, seed 2 once; the link was healthy throughout.
-        assert_eq!(mock.resets.len(), 3);
+        assert_eq!(mock.resets.len(), 6);
         assert_eq!(discard.link_epoch_before, discard.link_epoch_after);
         assert_eq!(tape.rows_of(ATTEMPTS_TABLE).len(), 2);
     }
@@ -11691,7 +12811,7 @@ mod tests {
         // 4 paused reads and 1 running read at the first boundary, 1 at the second; none inside
         // an attempt.
         assert_eq!(clock.paused_reads.get(), 6);
-        assert_eq!(mock.resets.len(), 2);
+        assert_eq!(mock.resets.len(), 4);
     }
 
     #[test]
@@ -11845,12 +12965,17 @@ mod tests {
         assert!(frozen_bursts.iter().any(|f| *f) && frozen_bursts.iter().any(|f| !*f));
         // probe attempts use a zero spring at level 0; training attempts keep the grip
         let zero_sets = mock
-            .spring_sets
-            .iter()
+            .attempt_springs()
+            .into_iter()
             .filter(|(g, level, _)| *level == 0.0 && *g == zero_gains())
             .count();
         assert_eq!(zero_sets, 2);
-        assert_eq!(mock.spring_sets.len(), 9);
+        assert_eq!(mock.attempt_springs().len(), 9);
+        assert_eq!(
+            mock.spring_sets.len(),
+            18,
+            "each attempt is preceded by a quiet hold"
+        );
         // aggregates cover the 7 training attempts only
         assert_eq!(report.balanced.attempts, 7);
     }
@@ -13849,7 +14974,7 @@ mod tests {
             .attempts
             .iter()
             .all(|a| a.outcome == BalanceAttemptOutcome::LostStance));
-        assert_eq!(mock.resets.len(), 2);
+        assert_eq!(mock.resets.len(), 4);
         assert!(mock.resets.iter().all(|r| r.as_deref() == Some("stand")));
         assert!(
             report.attempts[1].adaptive.is_some(),
@@ -14601,9 +15726,10 @@ mod tests {
                 .into_iter()
                 .map(|e| e.1)
                 .collect();
+            // The quiet hold ahead of the attempt ends first; the attempt starts right after.
             assert_eq!(
-                kinds.first().map(String::as_str),
-                Some("attempt_start"),
+                kinds.iter().take(2).map(String::as_str).collect::<Vec<_>>(),
+                ["quiet_hold_end", "attempt_start"],
                 "{kinds:?}"
             );
             assert_eq!(
@@ -14660,7 +15786,11 @@ mod tests {
         let b = run_with_hooks(&c, &mut without, "train", &[3], &rid(), None, None).expect("b");
         assert_eq!(a.attempts[0].bursts, b.attempts[0].bursts);
         assert_eq!(with.calls, without.calls);
-        assert!(without.measure_requests.iter().all(|r| !r.actuators));
+        // Actuators are requested for the quiet hold's reads only (the first read sizes the
+        // spring), never during the attempt itself.
+        assert!(!without.measure_requests[0].actuators);
+        assert!(without.measure_requests[1].actuators);
+        assert!(without.measure_requests[2..].iter().all(|r| !r.actuators));
         assert!(tape
             .table("steps")
             .expect("steps")
@@ -14720,6 +15850,95 @@ mod tests {
                 "{fired:?} {settle_end}"
             );
         }
+    }
+
+    #[test]
+    fn a_body_push_goes_through_the_controller_sized_from_weight_and_is_logged() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.2;
+        c.hold_s = 0.6;
+        c.attempt_cap_s = 2.0;
+        c.scheduled_events = vec![ScheduledEvent {
+            at_s: 0.1,
+            label: "push".to_string(),
+            action: ScheduledAction::BodyPush {
+                kind: crate::run_actions::BodyPushKind::Torque,
+                axis: crate::run_actions::BodyPushAxis::Forward,
+                magnitude_fraction: 0.05,
+                duration_s: 0.1,
+            },
+        }];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        // No apply callback: a push needs none.
+        run_with_hooks(&c, &mut mock, "train", &[1], &rid(), Some(&mut tape), None).expect("phase");
+        assert_eq!(mock.pulses.len(), 1, "{:?}", mock.pulses);
+        let (torque, force, duration, _) = mock.pulses[0];
+        assert_eq!(force, [0.0; 3]);
+        assert_eq!(duration, 0.1);
+        let norm = torque[0].hypot(torque[1]);
+        assert!(norm > 0.0 && torque[2] == 0.0);
+        let logged: Vec<String> = attempt_events(&tape, 0)
+            .iter()
+            .filter(|m| m.1 == "body_push")
+            .map(|m| m.2.clone())
+            .collect();
+        assert_eq!(logged.len(), 1);
+        assert!(logged[0].contains(&format!("{norm:.4} N*m")), "{logged:?}");
+    }
+
+    #[test]
+    fn a_body_vibration_goes_through_the_controller_and_writes_both_tables() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.2;
+        c.hold_s = 6.0;
+        c.attempt_cap_s = 8.0;
+        c.scheduled_events = vec![ScheduledEvent {
+            at_s: 0.5,
+            label: "shake".to_string(),
+            action: ScheduledAction::BodyVibration {
+                kind: crate::run_actions::BodyPushKind::Torque,
+                axis: crate::run_actions::BodyPushAxis::Forward,
+                magnitude_fraction: 0.02,
+                frequency_hz: 1.0,
+                cycles: 4,
+            },
+        }];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut tape = RecordingRunDataSink::default();
+        // No apply callback: a vibration needs none.
+        run_with_hooks(&c, &mut mock, "train", &[1], &rid(), Some(&mut tape), None).expect("phase");
+        assert_eq!(mock.oscillations.len(), 1, "{:?}", mock.oscillations);
+        let request = &mock.oscillations[0];
+        assert_eq!(request.kind, "torque");
+        assert_eq!(request.duration_s, 4.0);
+        assert_eq!(request.frequency_hz, 1.0);
+        let norm = request.axis_world.iter().map(|v| v * v).sum::<f64>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-9 && request.axis_world[2] == 0.0, "{request:?}");
+        assert!(request.amplitude > 0.0);
+        assert_eq!(tape.rows_of(VIBRATION_TABLE).len(), 1);
+        assert_eq!(tape.rows_of(VIBRATION_SUMMARY_TABLE).len(), 1);
+        assert!(tape.table(VIBRATION_TABLE).is_some());
+    }
+
+    #[test]
+    fn a_vibration_above_a_tenth_of_the_sample_rate_is_rejected_before_the_run() {
+        let mut c = criterion_for(2, 0.05); // 20 samples a second: the limit is 2 Hz
+        c.scheduled_events = vec![ScheduledEvent {
+            at_s: 0.5,
+            label: "shake".to_string(),
+            action: ScheduledAction::BodyVibration {
+                kind: crate::run_actions::BodyPushKind::Force,
+                axis: crate::run_actions::BodyPushAxis::Left,
+                magnitude_fraction: 0.02,
+                frequency_hz: 5.0,
+                cycles: 10,
+            },
+        }];
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let error = run_with_hooks(&c, &mut mock, "train", &[1], &rid(), None, None).unwrap_err();
+        assert!(error.to_string().contains("sample rate"), "{error}");
+        assert_eq!(mock.count("reset_episode"), 0);
     }
 
     #[test]

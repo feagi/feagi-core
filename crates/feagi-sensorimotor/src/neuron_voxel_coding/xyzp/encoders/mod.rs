@@ -2,6 +2,7 @@
 mod audio_spectrum;
 mod boolean;
 mod cartesian_plane;
+mod midi_input;
 mod misc_data;
 mod percentage_encoder;
 mod raw_imu;
@@ -13,6 +14,8 @@ pub(crate) use audio_spectrum::AudioSpectrumNeuronVoxelXYZPEncoder;
 pub(crate) use boolean::BooleanNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
+pub(crate) use midi_input::MidiInputNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]

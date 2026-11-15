@@ -27,7 +27,14 @@ use std::net::TcpListener;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use feagi_agent::clients::recovery::{
+    run_recovery_tick_with_snapshot, HealthSnapshot, HealthWatcher, ReconnectDecision,
+    ReconnectPolicy, ReconnectPolicyConfig, RebuildableSession,
+};
 use feagi_agent::clients::{AgentRegistrationStatus, CommandControlAgent};
+use feagi_agent::command_and_control::agent_registration_message::{
+    AgentRegistrationMessage, DeregistrationResponse,
+};
 use feagi_agent::command_and_control::FeagiMessage;
 use feagi_agent::server::auth::DummyAuth;
 use feagi_agent::server::{AgentLivenessConfig, FeagiAgentHandler};
@@ -454,6 +461,118 @@ fn pruner_keeps_a_client_that_streams_sensory_data_without_heartbeats() {
         !server.registered_ids().contains(&agent_id),
         "a silent client must be pruned once its sensory stream stops"
     );
+}
+
+//endregion
+
+//region Genome upload deregisters every agent: the client must be told and re-register
+
+/// A client session over the in-process server, rebuilt the way the SDK rebuilds it.
+struct ServerBackedSession {
+    server: TestServer,
+    client: CommandControlAgent,
+    agent: AgentDescriptor,
+    rebuilds: u32,
+}
+
+impl RebuildableSession for ServerBackedSession {
+    fn rebuild(&mut self, _reason: &str) -> Result<(), FeagiAgentError> {
+        self.rebuilds += 1;
+        let _ = self.client.request_disconnect();
+        self.client = self.server.new_client();
+        self.server
+            .register(&mut self.client, &self.agent, vec![VIZ])
+            .map(|_| ())
+    }
+}
+
+#[test]
+fn genome_upload_deregistration_is_answered_to_the_next_heartbeat_and_the_client_re_registers() {
+    let mut server = TestServer::new(registration_config(), false, true);
+    let agent = descriptor("genome-upload-recovery");
+    let mut client = server.new_client();
+    server
+        .register(&mut client, &agent, vec![VIZ])
+        .expect("first registration");
+    server.heartbeat(&mut client);
+
+    // Genome upload: FEAGI force-deregisters every agent and tells nobody.
+    let dropped = server
+        .handler
+        .force_deregister_all_agents("forced by genome transition");
+    assert_eq!(dropped.len(), 1);
+    assert!(server.registered_ids().is_empty());
+
+    // The client's next heartbeat reaches FEAGI as a message from an unknown agent. It must be
+    // answered with NotRegistered, not dropped.
+    client.send_heartbeat().expect("send heartbeat");
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let mut answer = None;
+    while Instant::now() < deadline && answer.is_none() {
+        server.step();
+        let (_, message) = client.poll_for_messages().expect("client poll");
+        answer = message;
+        sleep(STEP);
+    }
+    assert_eq!(
+        answer,
+        Some(FeagiMessage::AgentRegistration(
+            AgentRegistrationMessage::ServerRespondsDeregistration(
+                DeregistrationResponse::NotRegistered
+            )
+        )),
+        "a heartbeat from a deregistered agent was dropped without an answer"
+    );
+    assert!(
+        matches!(
+            client.registration_status(),
+            AgentRegistrationStatus::NotRegistered
+        ),
+        "the client must clear its registered state on NotRegistered"
+    );
+
+    // The recovery driver now sees the level trigger and re-registers.
+    let mut session = ServerBackedSession {
+        server,
+        client,
+        agent,
+        rebuilds: 0,
+    };
+    let not_registered = matches!(
+        session.client.registration_status(),
+        AgentRegistrationStatus::NotRegistered
+    );
+    let mut watcher = HealthWatcher::new();
+    let mut policy = ReconnectPolicy::new(ReconnectPolicyConfig {
+        cooldown_ms: 1_000,
+        max_consecutive_failures: 3,
+        trigger_on_session_changed: true,
+        trigger_on_genome_changed: true,
+        trigger_on_genome_load_completed: true,
+        trigger_on_back_online: true,
+        trigger_on_brain_ready: false,
+        trigger_on_transport_send_failed: true,
+    });
+    let report = run_recovery_tick_with_snapshot(
+        &mut session,
+        &mut watcher,
+        &mut policy,
+        Ok(HealthSnapshot {
+            feagi_session: Some(1),
+            genome_num: Some(1),
+            genome_timestamp: Some(1),
+            genome_loading: false,
+            genome_availability: true,
+            brain_readiness: true,
+        }),
+        false,
+        not_registered,
+        0,
+    );
+    assert!(matches!(report.decision, ReconnectDecision::AttemptNow { .. }));
+    assert!(report.rebuild_succeeded, "{:?}", report.rebuild_error);
+    assert_eq!(session.rebuilds, 1);
+    assert_eq!(session.server.registered_ids().len(), 1);
 }
 
 //endregion

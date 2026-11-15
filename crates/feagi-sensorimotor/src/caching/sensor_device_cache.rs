@@ -5,7 +5,7 @@ use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
-use crate::data_types::{AudioSpectrumFrame, AudioSpectrumProperties};
+use crate::data_types::{AudioSpectrumFrame, AudioSpectrumProperties, MidiFrame, MidiProperties};
 // Several of these symbols are referenced only from inside the
 // `sensor_unit_functions!` macro after `@generate_similar_functions`
 // expansion; the compiler sees them as required only when at least one
@@ -622,6 +622,43 @@ macro_rules! sensor_unit_functions {
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, AudioSpectrumFrame);
     };
+
+    // Arm for WrappedIOType::MidiFrame: two areas (Notes, Expression) written by one encoder.
+    (@generate_functions
+        $sensory_unit:ident,
+        MidiFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                midi_properties: MidiProperties,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_ids = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit);
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MidiInputNeuronVoxelXYZPEncoder::new_box(
+                    cortical_ids[0],
+                    cortical_ids[1],
+                    midi_properties,
+                    percentage_neuron_positioning,
+                    number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::MidiFrame(Some(midi_properties)).create_blank_data_of_type()?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, MidiFrame);
+    };
 }
 
 pub struct SensorDeviceCache {
@@ -921,8 +958,8 @@ impl SensorDeviceCache {
 
     //region Metadata
 
-    #[allow(dead_code)]
-    fn get_unit_friendly_name(
+    /// Friendly name (label) of a registered sensor unit, if one was set.
+    pub fn get_unit_friendly_name(
         &self,
         sensor_type: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
@@ -932,8 +969,9 @@ impl SensorDeviceCache {
         Ok(sensor_stream_caches.get_friendly_name())
     }
 
-    #[allow(dead_code)]
-    fn set_unit_friendly_name(
+    /// Sets the friendly name (label) of a registered sensor unit, any type. It is exported
+    /// as the unit's `friendly_name` in the registration JSON; `None` clears it.
+    pub fn set_unit_friendly_name(
         &mut self,
         sensor_type: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
@@ -941,8 +979,7 @@ impl SensorDeviceCache {
     ) -> Result<(), FeagiDataError> {
         let sensor_stream_caches =
             self.try_get_sensory_channel_stream_caches_mut(sensor_type, unit_index)?;
-        sensor_stream_caches.set_friendly_name(friendly_name);
-        Ok(())
+        sensor_stream_caches.set_friendly_name(friendly_name)
     }
 
     //endregion
@@ -1094,5 +1131,52 @@ impl SensorDeviceCache {
 impl fmt::Display for SensorDeviceCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(writeln!(f, "Motor Device Cache:")?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A unit label set on the cache is exported as the unit's `friendly_name`.
+    #[test]
+    fn midi_input_unit_label_round_trips_into_registration_json() {
+        let unit0 = CorticalUnitIndex::from(0u16);
+        let mut cache = SensorDeviceCache::new();
+        cache
+            .midi_input_register(
+                unit0,
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                MidiProperties::new(128, 10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .unwrap();
+        assert_eq!(
+            cache
+                .get_unit_friendly_name(SensoryCorticalUnit::MidiInput, unit0)
+                .unwrap(),
+            &None
+        );
+        cache
+            .set_unit_friendly_name(
+                SensoryCorticalUnit::MidiInput,
+                unit0,
+                Some("Lead".to_string()),
+            )
+            .unwrap();
+        assert!(cache
+            .set_unit_friendly_name(
+                SensoryCorticalUnit::MidiInput,
+                CorticalUnitIndex::from(9u16),
+                None
+            )
+            .is_err());
+
+        let mut definition = JSONInputOutputDefinition::new();
+        cache.export_to_input_definition(&mut definition).unwrap();
+        let exported = definition.get_input_units_and_encoder_properties();
+        let units = exported.get(&SensoryCorticalUnit::MidiInput).unwrap();
+        assert_eq!(units[0].0.friendly_name.as_deref(), Some("Lead"));
     }
 }

@@ -276,22 +276,47 @@ fn spatial_pointer_dims_from_decoder_properties(
     Some((w, h, d.clamp(d_min, d_max) as usize))
 }
 
-/// Reads the registered `{"MidiOutput": [{note_columns, expression_depth}, positioning]}`
-/// decoder block (the properties are the first tuple element).
-fn midi_output_properties_from_decoder(
-    decoder_properties: Option<&Value>,
+/// Reads the registered `{"<key>": [{note_columns, expression_depth}, positioning]}`
+/// coder block (the properties are the first tuple element). `key` is `"MidiOutput"` in a
+/// decoder block and `"MidiInput"` in an encoder block.
+fn midi_properties_from_coder(
+    coder_properties: Option<&Value>,
+    key: &str,
 ) -> Option<(usize, usize)> {
-    let payload = decoder_properties?.get("MidiOutput")?;
+    let payload = coder_properties?.get(key)?;
     let properties = payload.as_array().and_then(|items| items.first())?;
     let columns = as_nonzero_usize(properties.get("note_columns"))?;
     let depth = as_nonzero_usize(properties.get("expression_depth"))?;
     Some((columns, depth))
 }
 
+/// Per-channel dims of one MIDI area (0 Notes, 1 Expression) sized from the registered
+/// properties: Notes is `note_columns x 1 x 1`, Expression is `5 x 1 x expression_depth`
+/// (5 = number of controls). Without registered properties the template default applies.
+fn midi_area_dimensions(
+    sub_unit_index: usize,
+    unit_topology: &UnitTopology,
+    properties: Option<(usize, usize)>,
+) -> (usize, usize, usize) {
+    let default = (
+        unit_topology.channel_dimensions_default[0] as usize,
+        unit_topology.channel_dimensions_default[1] as usize,
+        unit_topology.channel_dimensions_default[2] as usize,
+    );
+    let Some((columns, depth)) = properties else {
+        return default;
+    };
+    let dims = if sub_unit_index == 0 {
+        (columns, 1, 1)
+    } else {
+        (default.0, 1, depth)
+    };
+    clamp_to_unit_topology(dims, unit_topology)
+}
+
 /// Per-channel dims of one area of a registered motor unit. MIDI Output (one unit is one
-/// instrument) sizes its two areas from the registered properties: Notes is
-/// `note_columns x 1 x 1`, Expression is `5 x 1 x expression_depth` (5 = number
-/// of controls). Every other unit sizes the same for all its areas.
+/// instrument) sizes its two areas from the registered properties (see
+/// [`midi_area_dimensions`]). Every other unit sizes the same for all its areas.
 fn registered_motor_area_dimensions(
     motor_unit: MotorCorticalUnit,
     sub_unit_index: usize,
@@ -300,20 +325,11 @@ fn registered_motor_area_dimensions(
     frame_handling: Option<&str>,
 ) -> (usize, usize, usize) {
     if motor_unit == MotorCorticalUnit::MidiOutput {
-        let default = (
-            unit_topology.channel_dimensions_default[0] as usize,
-            unit_topology.channel_dimensions_default[1] as usize,
-            unit_topology.channel_dimensions_default[2] as usize,
+        return midi_area_dimensions(
+            sub_unit_index,
+            unit_topology,
+            midi_properties_from_coder(decoder_properties, "MidiOutput"),
         );
-        let Some((columns, depth)) = midi_output_properties_from_decoder(decoder_properties) else {
-            return default;
-        };
-        let dims = if sub_unit_index == 0 {
-            (columns, 1, 1)
-        } else {
-            (default.0, 1, depth)
-        };
-        return clamp_to_unit_topology(dims, unit_topology);
     }
     registered_motor_channel_dimensions(
         motor_unit,
@@ -1770,6 +1786,14 @@ async fn reconcile_device_registrations(
                             i,
                             (template_w, template_h, template_d),
                         );
+                    // MIDI Input: both areas are sized from the registered MIDI properties.
+                    if sensory_unit == SensoryCorticalUnit::MidiInput {
+                        expected_dimensions = midi_area_dimensions(
+                            i,
+                            unit_topology,
+                            midi_properties_from_coder(encoder_properties, "MidiInput"),
+                        );
+                    }
                     // Grouped scalar strips: one X column per device. Percentage
                     // encoders only pin Z depth, so a non-template depth (e.g. 50)
                     // must not skip the width expand or the IPU collapses to 1
@@ -1849,6 +1873,15 @@ async fn reconcile_device_registrations(
                         } else {
                             format!("{}-{}", resolved_base_name, i)
                         };
+                    // Types with per-area display names: "<label> (<area>)" or
+                    // "<type> (<area>) Unit <n>" so units are told apart.
+                    let resolved_name = sensory_unit
+                        .build_sub_unit_area_name(
+                            registration_unit_label(unit_def).as_deref(),
+                            i,
+                            group_u16,
+                        )
+                        .unwrap_or(resolved_name);
                     let exists = match connectome_service
                         .cortical_area_exists(&cortical_id_b64)
                         .await
@@ -2332,12 +2365,13 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 #[cfg(test)]
 mod count_output_registration_tests {
     use super::{
-        build_motor_registration_default_name, motor_registration_device_count,
+        build_motor_registration_default_name, build_sensory_registration_default_name,
+        midi_area_dimensions, midi_properties_from_coder, motor_registration_device_count,
         per_channel_motor_dimensions_for_registration, registered_motor_area_dimensions,
         registered_motor_channel_dimensions, registration_unit_label, should_auto_rename_motor,
     };
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-    use feagi_structures::genomic::MotorCorticalUnit;
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
 
     #[test]
@@ -2533,6 +2567,34 @@ mod count_output_registration_tests {
         registered_motor_area_dimensions(motor, sub, ut, dec, Some("Absolute"))
     }
 
+    fn midi_input_area_dims(sub: usize, enc: Option<&serde_json::Value>) -> (usize, usize, usize) {
+        let sensor = SensoryCorticalUnit::MidiInput;
+        let topo = sensor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(sub as u8)).unwrap();
+        midi_area_dimensions(sub, ut, midi_properties_from_coder(enc, "MidiInput"))
+    }
+
+    #[test]
+    fn midi_input_areas_are_sized_from_registration_like_midi_output() {
+        let enc = json!({"MidiInput": [
+            {"note_columns": 88, "expression_depth": 20},
+            "Linear"
+        ]});
+        assert_eq!(midi_input_area_dims(0, Some(&enc)), (88, 1, 1));
+        assert_eq!(midi_input_area_dims(1, Some(&enc)), (5, 1, 20));
+        assert_eq!(midi_input_area_dims(0, None), (128, 1, 1));
+        assert_eq!(midi_input_area_dims(1, None), (5, 1, 10));
+        let huge = json!({"MidiInput": [
+            {"note_columns": 9999, "expression_depth": 99999},
+            "Linear"
+        ]});
+        assert_eq!(midi_input_area_dims(0, Some(&huge)), (128, 1, 1));
+        assert_eq!(midi_input_area_dims(1, Some(&huge)), (5, 1, 1024));
+        // A MidiOutput block is not read as a MidiInput block.
+        let output = midi_output_block(88, 20);
+        assert_eq!(midi_input_area_dims(0, Some(&output)), (128, 1, 1));
+    }
+
     #[test]
     fn midi_output_areas_are_sized_from_registration() {
         let dec = midi_output_block(88, 20);
@@ -2592,6 +2654,31 @@ mod count_output_registration_tests {
         assert_eq!(
             unit.build_sub_unit_area_name(Some(&long), 0, 0),
             Some(format!("{long} (Notes)"))
+        );
+    }
+
+    #[test]
+    fn midi_input_areas_are_named_like_midi_output() {
+        let unit = SensoryCorticalUnit::MidiInput;
+        assert_eq!(
+            unit.build_sub_unit_area_name(None, 0, 2).as_deref(),
+            Some("MIDI Input (Notes) Unit 2")
+        );
+        assert_eq!(
+            unit.build_sub_unit_area_name(Some("L"), 1, 0).as_deref(),
+            Some("L (Expression)")
+        );
+        // Other sensor units keep the legacy registration name.
+        assert_eq!(
+            SensoryCorticalUnit::AudioInput.build_sub_unit_area_name(None, 0, 0),
+            None
+        );
+        assert_eq!(
+            build_sensory_registration_default_name(SensoryCorticalUnit::AudioInput, 3, 0),
+            format!(
+                "{}-3-0",
+                SensoryCorticalUnit::AudioInput.get_friendly_name()
+            )
         );
     }
 

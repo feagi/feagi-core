@@ -1,5 +1,5 @@
 use crate::data_types::{
-    AudioSpectrumFrame, GazeProperties, ImageFilteringSettings, ImageFrame, MidiOutputFrame,
+    AudioSpectrumFrame, GazeProperties, ImageFilteringSettings, ImageFrame, MidiFrame,
     MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, PoseEstimationData, RawIMU,
     SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
     SignedPercentage4D,
@@ -118,5 +118,5 @@ define_wrapped_io_data_enum!(
     ImageFilteringSettings: ImageFilteringSettings => "{}",
     PoseEstimationData: PoseEstimationData => "{}",
     AudioSpectrumFrame: AudioSpectrumFrame => "{}",
-    MidiOutputFrame: MidiOutputFrame => "{}"
+    MidiFrame: MidiFrame => "{}"
 );

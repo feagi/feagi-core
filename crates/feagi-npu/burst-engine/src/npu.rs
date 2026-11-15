@@ -860,6 +860,11 @@ impl<
         *self.memory_neuron_longterm_predicate.write().unwrap() = None;
         // Registry holds neuron storage indices, which this reset invalidates.
         self.rate_modulated_leak.lock().unwrap().clear();
+        // Cached modulator baselines describe the old neurons: drop them without restoring.
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .clear_baselines();
 
         Ok(())
     }
@@ -4448,6 +4453,13 @@ impl<
                 updated_count += 1;
             }
         }
+        // Modulator path locks the engine before storage: release storage first.
+        drop(neuron_storage_write);
+        // The edit is the new baseline for any subscribed modulator.
+        self.rebase_modulated_area_param(
+            cortical_area,
+            feagi_structures::genomic::ModulatorKind::FiringProbability,
+        );
 
         updated_count
     }
@@ -4527,6 +4539,13 @@ impl<
                 updated_count += 1;
             }
         }
+        // Modulator path locks the engine before storage: release storage first.
+        drop(neuron_storage_write);
+        // The edit is the new baseline for any subscribed modulator.
+        self.rebase_modulated_area_param(
+            cortical_area,
+            feagi_structures::genomic::ModulatorKind::FiringThreshold,
+        );
 
         updated_count
     }
@@ -4655,6 +4674,11 @@ impl<
                 g.reseed_leak(cortical_area, leak);
             }
         }
+        // The edit is the new baseline for any subscribed modulator.
+        self.rebase_modulated_area_param(
+            cortical_area,
+            feagi_structures::genomic::ModulatorKind::Leak,
+        );
 
         updated_count
     }

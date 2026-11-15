@@ -819,6 +819,11 @@ where
         dispatch!(self, set_modulator_area_subscriptions(subscriptions))
     }
 
+    /// Restore and free modulator baselines that no longer have a subscription.
+    pub fn release_unused_modulator_baselines(&self) {
+        dispatch!(self, release_unused_modulator_baselines())
+    }
+
     pub fn set_spike_train_areas(&self, areas: ahash::AHashSet<u32>) {
         dispatch!(self, set_spike_train_areas(areas))
     }

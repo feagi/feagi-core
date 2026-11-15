@@ -12,6 +12,24 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
+/// Title of one area of a multi-area unit whose areas have distinct roles. Shared by sensor and
+/// motor units so both use one format.
+///
+/// With a unit label the title is `"<label> (<area display name>)"`; without one it is
+/// `"<type display name> (<area display name>) Unit <unit_index>"`. The label is used as given
+/// (not trimmed, escaped or length-limited here).
+pub(crate) fn format_sub_unit_area_name(
+    type_name: &str,
+    area_name: &str,
+    unit_label: Option<&str>,
+    unit_index: u16,
+) -> String {
+    match unit_label {
+        Some(label) => format!("{label} ({area_name})"),
+        None => format!("{type_name} ({area_name}) Unit {unit_index}"),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
     pub relative_position: [i32; 3],
@@ -332,6 +350,33 @@ pub fn resolve_sensory_hold_last_frame(
 }
 
 impl SensoryCorticalUnit {
+    /// Display names of the areas of a unit whose areas have distinct roles, in
+    /// sub-unit order. `None` for units that do not name their areas.
+    pub const fn get_sub_unit_display_names(&self) -> Option<&'static [&'static str]> {
+        match self {
+            SensoryCorticalUnit::MidiInput => Some(&["Notes", "Expression"]),
+            _ => None,
+        }
+    }
+
+    /// Title for one area of a unit whose areas have distinct roles; same format as
+    /// [`crate::genomic::MotorCorticalUnit::build_sub_unit_area_name`]. `None` for units
+    /// without area display names, whose naming is unchanged.
+    pub fn build_sub_unit_area_name(
+        &self,
+        unit_label: Option<&str>,
+        sub_unit_index: usize,
+        unit_index: u16,
+    ) -> Option<String> {
+        let area_name = self.get_sub_unit_display_names()?.get(sub_unit_index)?;
+        Some(format_sub_unit_area_name(
+            self.get_friendly_name(),
+            area_name,
+            unit_label,
+            unit_index,
+        ))
+    }
+
     /// Template default for the `sensory_hold_last_frame` cortical area property:
     /// `true` for scalar sensor units (IMU, encoder, proximity, battery, analog, ...) and for the
     /// miscellaneous scalar-array input (`MiscData`); `false` for frame-based (vision, audio),
@@ -457,6 +502,9 @@ impl SensoryCorticalUnit {
             SensoryCorticalUnit::AudioInput => {
                 Self::get_cortical_ids_array_for_audio_input_with_parameters(fh, group_index)[0]
             }
+            SensoryCorticalUnit::MidiInput => {
+                Self::get_cortical_ids_array_for_midi_input_with_parameters(fh, pos, group_index)[0]
+            }
         }
     }
 }
@@ -483,6 +531,7 @@ mod sensory_hold_default_tests {
             SensoryCorticalUnit::Vision,
             SensoryCorticalUnit::SegmentedVision,
             SensoryCorticalUnit::AudioInput,
+            SensoryCorticalUnit::MidiInput,
             SensoryCorticalUnit::DigitalGPIO,
             SensoryCorticalUnit::TextEnglishInput,
             SensoryCorticalUnit::DepthMap,

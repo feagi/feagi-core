@@ -676,10 +676,10 @@ macro_rules! motor_unit_functions {
         motor_unit_functions!(@generate_similar_functions $motor_unit, AudioSpectrumFrame);
     };
 
-    // Arm for MidiOutputFrame: two areas (Notes, Expression) decoded by one decoder.
+    // Arm for MidiFrame: two areas (Notes, Expression) decoded by one decoder.
     (@generate_functions
         $motor_unit:ident,
-        MidiOutputFrame
+        MidiFrame
     ) => {
         ::paste::paste! {
             pub fn [<$motor_unit:snake _register>](
@@ -687,7 +687,7 @@ macro_rules! motor_unit_functions {
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
-                midi_properties: MidiOutputProperties,
+                midi_properties: MidiProperties,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
@@ -704,13 +704,13 @@ macro_rules! motor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOType::MidiOutputFrame(Some(midi_properties)).create_blank_data_of_type()?;
+                let initial_val: WrappedIOData = WrappedIOType::MidiFrame(Some(midi_properties)).create_blank_data_of_type()?;
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, MidiOutputFrame);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, MidiFrame);
     };
 }
 
@@ -1370,7 +1370,7 @@ mod midi_output_cache_tests {
     fn midi_output_units_decode_independently() {
         let handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
-        let properties = MidiOutputProperties::new(128, 10).unwrap();
+        let properties = MidiProperties::new(128, 10).unwrap();
         let channels = CorticalChannelCount::new(1).unwrap();
         let unit0 = CorticalUnitIndex::from(0u16);
         let unit1 = CorticalUnitIndex::from(1u16);
@@ -1414,7 +1414,7 @@ mod midi_output_cache_tests {
     fn midi_output_unit_label_round_trips_into_registration_json() {
         let handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
-        let properties = MidiOutputProperties::new(128, 10).unwrap();
+        let properties = MidiProperties::new(128, 10).unwrap();
         let channels = CorticalChannelCount::new(1).unwrap();
         let unit0 = CorticalUnitIndex::from(0u16);
 

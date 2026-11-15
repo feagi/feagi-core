@@ -226,6 +226,11 @@ impl CommandControlAgent {
                                         Ok(Some(feagi_message))
                                     }
                                     DeregistrationResponse::NotRegistered => {
+                                        // FEAGI no longer knows this session (for example a
+                                        // genome upload force-deregistered it): drop the local
+                                        // registered state so the caller can register again.
+                                        self.registration_status =
+                                            AgentRegistrationStatus::NotRegistered;
                                         Ok(Some(feagi_message))
                                     }
                                 },

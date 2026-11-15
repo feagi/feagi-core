@@ -5372,6 +5372,9 @@ impl ConnectomeManager {
         })?;
         npu.set_modulator_bindings(bindings);
         npu.set_modulator_area_subscriptions(area_subscriptions);
+        // Both bindings and subscriptions are now current: restore and drop the baseline of
+        // any parameter an area no longer subscribes to.
+        npu.release_unused_modulator_baselines();
         npu.set_spike_train_areas(spike_train_areas);
         npu.set_homeostatic_leak_areas(homeostatic_leak_areas);
         Ok(())

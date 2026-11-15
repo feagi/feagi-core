@@ -147,6 +147,130 @@ fn test_consecutive_fire_limit_zero_means_unlimited() {
     }
 }
 
+fn count_of(npu: &RustNPU<StdRuntime, f32, CPUBackend>, n: NeuronId) -> u16 {
+    npu.get_neuron_state(n).unwrap().0
+}
+
+fn drive(npu: &mut RustNPU<StdRuntime, f32, CPUBackend>, n: NeuronId) -> bool {
+    npu.inject_sensory_with_potentials(&[(n, 10.0)]);
+    npu.process_burst().unwrap().fired_neurons.contains(&n)
+}
+
+fn idle(npu: &mut RustNPU<StdRuntime, f32, CPUBackend>, n: NeuronId) -> bool {
+    npu.process_burst().unwrap().fired_neurons.contains(&n)
+}
+
+#[test]
+fn idle_neuron_at_limit_fires_on_next_trigger() {
+    let mut npu = create_test_npu();
+    let neuron = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 10, 3);
+
+    // Fire the full run (3 consecutive bursts), then let the neuron idle.
+    for b in 1..=3 {
+        assert!(drive(&mut npu, neuron), "fire {b}");
+    }
+    for _ in 0..3 {
+        assert!(!idle(&mut npu, neuron));
+    }
+    assert_eq!(count_of(&npu, neuron), 0, "idle burst clears the count");
+    assert!(
+        drive(&mut npu, neuron),
+        "next trigger after idling must fire, not be blocked by a stale count"
+    );
+}
+
+#[test]
+fn continuous_drive_limit_pattern_unchanged() {
+    let mut npu = create_test_npu();
+    let neuron = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 10, 3);
+
+    let pattern: Vec<bool> = (0..16).map(|_| drive(&mut npu, neuron)).collect();
+    for (i, fired) in pattern.iter().enumerate() {
+        assert_eq!(*fired, i % 4 != 3, "burst {} pattern {:?}", i + 1, pattern);
+    }
+}
+
+#[test]
+fn refractory_gap_does_not_reset_midrun() {
+    let mut npu = create_test_npu();
+    // Refractory 1: the neuron fires every other burst while driven.
+    let neuron = add_test_neuron(&mut npu, 1.0, 0.0, false, 1, 10, 3);
+
+    assert!(drive(&mut npu, neuron), "fire 1");
+    assert_eq!(count_of(&npu, neuron), 1);
+    assert!(!drive(&mut npu, neuron), "refractory gap");
+    assert_eq!(count_of(&npu, neuron), 1, "count kept across the gap");
+    assert!(drive(&mut npu, neuron), "fire 2");
+    assert_eq!(count_of(&npu, neuron), 2);
+    assert!(!drive(&mut npu, neuron), "refractory gap");
+    assert_eq!(count_of(&npu, neuron), 2, "count kept across the gap");
+}
+
+#[test]
+fn missed_slot_resets_count() {
+    let mut npu = create_test_npu();
+    let neuron = add_test_neuron(&mut npu, 1.0, 0.0, false, 1, 10, 3);
+
+    assert!(drive(&mut npu, neuron), "fire 1");
+    assert!(!idle(&mut npu, neuron), "refractory burst, countdown ends");
+    assert_eq!(
+        count_of(&npu, neuron),
+        1,
+        "countdown just reached 0, count kept"
+    );
+    // Countdown is 0 and nothing arrives: the missed slot ends the run.
+    assert!(!idle(&mut npu, neuron));
+    assert_eq!(count_of(&npu, neuron), 0, "missed slot clears the count");
+}
+
+#[test]
+fn spike_train_second_trigger_after_idle_fires() {
+    use ahash::AHashSet;
+    const TRAIN: u16 = 3;
+    let mut npu = create_test_npu();
+    let neuron = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 10, TRAIN);
+    let mut areas = AHashSet::new();
+    areas.insert(10u32);
+    npu.set_spike_train_areas(areas);
+
+    // Runs one trigger and returns the number of fires over the next 12 bursts.
+    let run_train = |npu: &mut RustNPU<StdRuntime, f32, CPUBackend>| -> usize {
+        let mut fires = usize::from(drive(npu, neuron));
+        for _ in 0..12 {
+            fires += usize::from(idle(npu, neuron));
+        }
+        fires
+    };
+
+    let first = run_train(&mut npu);
+    assert_eq!(first, TRAIN as usize, "first train runs in full");
+    let second = run_train(&mut npu);
+    assert_eq!(
+        second, TRAIN as usize,
+        "second train after idling runs in full"
+    );
+
+    // A trigger on the burst right after a train ends is dropped once (documented behavior).
+    let mut fired = vec![drive(&mut npu, neuron)];
+    let mut guard = 0;
+    while fired.iter().filter(|f| **f).count() < TRAIN as usize && guard < 10 {
+        fired.push(idle(&mut npu, neuron));
+        guard += 1;
+    }
+    assert_eq!(fired.iter().filter(|f| **f).count(), TRAIN as usize);
+    assert!(
+        !drive(&mut npu, neuron),
+        "trigger on the burst right after the train is dropped once"
+    );
+    for _ in 0..3 {
+        idle(&mut npu, neuron);
+    }
+    assert!(
+        drive(&mut npu, neuron),
+        "a later trigger starts a new train"
+    );
+}
+
 // ============================================================================
 // SECTION 12: Threshold Dynamics (Max and Increment)
 // ============================================================================
