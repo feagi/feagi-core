@@ -183,7 +183,8 @@ impl PlasticityRuntime {
                     } => {
                         // The neuron may have expired or been evicted after this command was
                         // queued. Registering it now would leave a mapping for a dead id.
-                        let still_stored = self.executor
+                        let still_stored = self
+                            .executor
                             .lock()
                             .ok()
                             .is_some_and(|exec| exec.is_active_memory_neuron(neuron_id));
@@ -218,7 +219,8 @@ impl PlasticityRuntime {
                         area_idx,
                         pattern_hash: _,
                     } => {
-                        let still_stored = self.executor
+                        let still_stored = self
+                            .executor
                             .lock()
                             .ok()
                             .is_some_and(|exec| exec.is_active_memory_neuron(neuron_id));
@@ -246,8 +248,16 @@ impl PlasticityRuntime {
                             continue;
                         };
 
-                        let (threshold, threshold_limit, leak, refractory, excitability, fire_limit, snooze, mp_charge) =
-                        {
+                        let (
+                            threshold,
+                            threshold_limit,
+                            leak,
+                            refractory,
+                            excitability,
+                            fire_limit,
+                            snooze,
+                            mp_charge,
+                        ) = {
                             let cm = self.manager.read();
                             let Some(area) = cm.get_cortical_area(&cortical_id) else {
                                 warn!(
@@ -296,10 +306,7 @@ impl PlasticityRuntime {
                             continue;
                         };
                         let Ok(twin_id) = u32::try_from(twin_id_u64) else {
-                            warn!(
-                                "[PLASTICITY-LTM] Twin neuron id overflow: {}",
-                                twin_id_u64
-                            );
+                            warn!("[PLASTICITY-LTM] Twin neuron id overflow: {}", twin_id_u64);
                             continue;
                         };
 
@@ -316,7 +323,8 @@ impl PlasticityRuntime {
                         is_reactivation: _,
                         replay_frames,
                     } => {
-                        let still_stored = self.executor
+                        let still_stored = self
+                            .executor
                             .lock()
                             .ok()
                             .is_some_and(|exec| exec.is_active_memory_neuron(neuron_id));
@@ -420,8 +428,7 @@ impl PlasticityRuntime {
         if command_phase_ms > 5.0 {
             debug!(
                 "[PLASTICITY-CMD] Burst {} command phase took {:.2}ms",
-                timestep,
-                command_phase_ms
+                timestep, command_phase_ms
             );
         }
 
@@ -434,8 +441,7 @@ impl PlasticityRuntime {
         if fire_queue_phase_ms > 5.0 {
             debug!(
                 "[PLASTICITY-CMD] Burst {} fire-queue sampling phase took {:.2}ms",
-                timestep,
-                fire_queue_phase_ms
+                timestep, fire_queue_phase_ms
             );
         }
         if let Some(sample) = fire_queue_sample {
@@ -512,10 +518,7 @@ impl PlasticityRuntime {
                         continue;
                     }
                     let Some(area_idx) = ltm_memory_area.get(memory_id) else {
-                        warn!(
-                            "[PLASTICITY-LTM] Missing area for memory_id={}",
-                            memory_id
-                        );
+                        warn!("[PLASTICITY-LTM] Missing area for memory_id={}", memory_id);
                         continue;
                     };
                     memory_injections.push((*memory_id, *area_idx, *twin_potential));
@@ -538,8 +541,7 @@ impl PlasticityRuntime {
             if ltm_bridge_phase_ms > 5.0 {
                 debug!(
                     "[PLASTICITY-CMD] Burst {} LTM bridge phase took {:.2}ms",
-                    timestep,
-                    ltm_bridge_phase_ms
+                    timestep, ltm_bridge_phase_ms
                 );
             }
         }
@@ -622,10 +624,17 @@ mod tests {
         // The sweep sees memory neuron 50_000_001 gone: its twin must be queued for deletion.
         let twins = s.retire_twins(&[50_000_001]);
         assert_eq!(twins, vec![7u64]);
-        assert!(!s.ltm_twin_map.contains_key(&50_000_001) && s.ltm_twin_map.contains_key(&50_000_002));
+        assert!(
+            !s.ltm_twin_map.contains_key(&50_000_001) && s.ltm_twin_map.contains_key(&50_000_002)
+        );
         assert!(!s.ltm_twin_reverse.contains_key(&7) && s.ltm_twin_reverse.contains_key(&8));
-        assert!(!s.ltm_twin_fire_potential.contains_key(&7) && !s.bridge_injected_twin.contains_key(&7));
-        assert!(!s.ltm_memory_area.contains_key(&50_000_001) && !s.bridge_injected_memory.contains_key(&50_000_001));
+        assert!(
+            !s.ltm_twin_fire_potential.contains_key(&7) && !s.bridge_injected_twin.contains_key(&7)
+        );
+        assert!(
+            !s.ltm_memory_area.contains_key(&50_000_001)
+                && !s.bridge_injected_memory.contains_key(&50_000_001)
+        );
 
         // The removal notice arrives afterwards: no twin left, so no second delete.
         assert_eq!(s.forget_twin(50_000_001), None);

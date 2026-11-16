@@ -6,7 +6,6 @@
 use std::sync::{Arc, Mutex};
 use std::thread::yield_now;
 
-use feagi_services::plasticity_runtime::PlasticityRuntime;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
@@ -18,6 +17,7 @@ use feagi_npu_plasticity::{
     create_memory_stats_cache, AsyncPlasticityExecutor, PlasticityConfig, PlasticityExecutor,
 };
 use feagi_npu_runtime::StdRuntime;
+use feagi_services::plasticity_runtime::PlasticityRuntime;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag, MemoryCorticalType,

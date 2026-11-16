@@ -28,8 +28,8 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use feagi_agent::clients::recovery::{
-    run_recovery_tick_with_snapshot, HealthSnapshot, HealthWatcher, ReconnectDecision,
-    ReconnectPolicy, ReconnectPolicyConfig, RebuildableSession,
+    run_recovery_tick_with_snapshot, HealthSnapshot, HealthWatcher, RebuildableSession,
+    ReconnectDecision, ReconnectPolicy, ReconnectPolicyConfig,
 };
 use feagi_agent::clients::{AgentRegistrationStatus, CommandControlAgent};
 use feagi_agent::command_and_control::agent_registration_message::{
@@ -569,7 +569,10 @@ fn genome_upload_deregistration_is_answered_to_the_next_heartbeat_and_the_client
         not_registered,
         0,
     );
-    assert!(matches!(report.decision, ReconnectDecision::AttemptNow { .. }));
+    assert!(matches!(
+        report.decision,
+        ReconnectDecision::AttemptNow { .. }
+    ));
     assert!(report.rebuild_succeeded, "{:?}", report.rebuild_error);
     assert_eq!(session.rebuilds, 1);
     assert_eq!(session.server.registered_ids().len(), 1);

@@ -2011,7 +2011,11 @@ fn q1_a_cue_at_state_one_fires_e_once_at_the_last_state_and_starts_no_chain() {
     assert_eq!(e_fires.len(), 1, "E fires once: {e_fires:?}");
     assert_eq!(e_fires[0], (last_burst, FIRE_KIND_CHAIN_RECALL));
     // The E fire starts nothing: the states play once each, with their frames.
-    let states: Vec<u32> = fires.iter().map(|(_, id)| *id).filter(|id| *id != e).collect();
+    let states: Vec<u32> = fires
+        .iter()
+        .map(|(_, id)| *id)
+        .filter(|id| *id != e)
+        .collect();
     assert_eq!(states, members, "the states play once, in order");
     assert_eq!(twin, members.len(), "no extra replay frames after E");
     println!(
@@ -2029,9 +2033,16 @@ fn q1_a_cue_at_state_two_fires_e_zero_times() {
     let e = rig.episodes()[0];
     let members = members_of(&rig, e);
     let (cue_burst, fires, _) = cue_and_run(&mut rig, members[1], 20);
-    assert!(fires.iter().any(|(_, id)| *id == members[3]), "the tail played");
+    assert!(
+        fires.iter().any(|(_, id)| *id == members[3]),
+        "the tail played"
+    );
     let e_fires = e_fires_from(&rig, e, cue_burst);
-    assert_eq!(e_fires.len(), 0, "a partial run does not fire E: {e_fires:?}");
+    assert_eq!(
+        e_fires.len(),
+        0,
+        "a partial run does not fire E: {e_fires:?}"
+    );
     println!("q1c: cue at state 2 -> {} E fires", e_fires.len());
 }
 
@@ -2046,7 +2057,11 @@ fn q1_an_e_started_replay_fires_e_once_in_total() {
     let e_fires = e_fires_from(&rig, e, cue_burst);
     assert_eq!(e_fires.len(), 1, "once, at the start: {e_fires:?}");
     assert_eq!(e_fires[0].1, FIRE_KIND_CHAIN_RECALL);
-    println!("q1d: E-started replay -> {} E fire (burst {})", e_fires.len(), e_fires[0].0);
+    println!(
+        "q1d: E-started replay -> {} E fire (burst {})",
+        e_fires.len(),
+        e_fires[0].0
+    );
 }
 
 #[test]
@@ -2078,7 +2093,10 @@ fn q1_a_closed_loop_gate_fires_no_e_not_even_a_one_state_one() {
     let (cue_burst, _, _) = cue_and_run(&mut rig, one_state, 6);
     let open = e_fires_from(&rig, one, cue_burst);
     assert_eq!(open.len(), 1, "open gate: the one-state E fires: {open:?}");
-    println!("q1e: closed gate E fires {counts:?}; open-gate control {}", open.len());
+    println!(
+        "q1e: closed gate E fires {counts:?}; open-gate control {}",
+        open.len()
+    );
 }
 
 #[test]
@@ -2094,12 +2112,21 @@ fn q1_with_a_shared_first_state_only_the_chosen_path_fires_its_e() {
     };
     let (ex, ey) = (e_of(&rig, b), e_of(&rig, c));
     let (cue_burst, fires, _) = cue_and_run(&mut rig, a, 20);
-    let picked = fires.iter().map(|(_, id)| *id).find(|id| *id == b || *id == c).unwrap();
+    let picked = fires
+        .iter()
+        .map(|(_, id)| *id)
+        .find(|id| *id == b || *id == c)
+        .unwrap();
     let (winner, loser) = if picked == b { (ex, ey) } else { (ey, ex) };
     let w = e_fires_from(&rig, winner, cue_burst);
     let l = e_fires_from(&rig, loser, cue_burst);
     assert_eq!((w.len(), l.len()), (1, 0), "winner {w:?} loser {l:?}");
-    println!("q1f: D12 picked {}, winner E fired {}, other {}", if picked == b { "X" } else { "Y" }, w.len(), l.len());
+    println!(
+        "q1f: D12 picked {}, winner E fired {}, other {}",
+        if picked == b { "X" } else { "Y" },
+        w.len(),
+        l.len()
+    );
 }
 
 #[test]
@@ -2113,7 +2140,10 @@ fn q1_the_index_is_rebuilt_after_a_service_export_and_import() {
     let exported = rig.service.export_long_term_memory_neurons();
     assert!(exported.iter().any(|d| d.neuron_id == e), "E is long term");
     // Drop the NPU-side tables, then restore: the index must come back with the lists.
-    rig.npu.lock().unwrap().set_episode_members(Vec::new(), &[e]);
+    rig.npu
+        .lock()
+        .unwrap()
+        .set_episode_members(Vec::new(), &[e]);
     assert!(rig.npu.lock().unwrap().episode_members_known().is_empty());
     rig.service
         .restore_long_term_memory_neurons(&exported)
@@ -2124,5 +2154,9 @@ fn q1_the_index_is_rebuilt_after_a_service_export_and_import() {
     assert!(fires.iter().any(|(_, id)| *id == members[2]));
     let e_fires = e_fires_from(&rig, e, cue_burst);
     assert_eq!(e_fires.len(), 1, "after reload: {e_fires:?}");
-    println!("q1g: after export/import E fires {} (kind {})", e_fires.len(), e_fires[0].1);
+    println!(
+        "q1g: after export/import E fires {} (kind {})",
+        e_fires.len(),
+        e_fires[0].1
+    );
 }

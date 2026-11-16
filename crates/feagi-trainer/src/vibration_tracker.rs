@@ -223,7 +223,8 @@ pub fn summarize(records: &[VibrationRecord]) -> Vec<VibrationSummaryRow> {
                 );
             }
             Some(false) => {
-                row.first_fall_magnitude.get_or_insert(record.spec.magnitude);
+                row.first_fall_magnitude
+                    .get_or_insert(record.spec.magnitude);
             }
             None => {}
         }
@@ -280,7 +281,11 @@ impl VibrationTracker {
     /// The attempt ended at `end_s`; `fell` when it ended in a fall. Returns every row.
     pub fn finish(self, end_s: f64, fell: bool) -> Vec<VibrationRecord> {
         let mut order: Vec<usize> = (0..self.segments.len()).collect();
-        order.sort_by(|&a, &b| self.segments[a].start_s.total_cmp(&self.segments[b].start_s));
+        order.sort_by(|&a, &b| {
+            self.segments[a]
+                .start_s
+                .total_cmp(&self.segments[b].start_s)
+        });
         let mut out = Vec::with_capacity(order.len());
         for (rank, &i) in order.iter().enumerate() {
             let spec = &self.segments[i];
@@ -316,7 +321,13 @@ impl VibrationTracker {
                 j == i || other.start_s >= spec.start_s || other.end_s() <= floor_w0 + EPS_S
             });
             let floor = if floor_clear {
-                bin(&signals, spec.frequency_hz, floor_w0, floor_w0, spec.start_s)
+                bin(
+                    &signals,
+                    spec.frequency_hz,
+                    floor_w0,
+                    floor_w0,
+                    spec.start_s,
+                )
             } else {
                 None
             };
@@ -421,12 +432,17 @@ mod tests {
         let signals: Vec<(f64, f64)> = (0..3000)
             .map(|k| {
                 let t = k as f64 * DT;
-                let x = amp * (2.0 * std::f64::consts::PI * f * t - lag).sin() + 0.3 * noise(&mut state);
+                let x = amp * (2.0 * std::f64::consts::PI * f * t - lag).sin()
+                    + 0.3 * noise(&mut state);
                 (t, x)
             })
             .collect();
         let b = bin(&signals, f, 0.0, 2.0, 9.0).unwrap();
-        assert!((b.amplitude - amp).abs() < 0.05, "amplitude {}", b.amplitude);
+        assert!(
+            (b.amplitude - amp).abs() < 0.05,
+            "amplitude {}",
+            b.amplitude
+        );
         assert!((-b.phase_rad - lag).abs() < 0.05, "phase {}", b.phase_rad);
     }
 
@@ -448,7 +464,11 @@ mod tests {
         let rows = tracker.finish(20.0, false);
         let r = &rows[0];
         assert!((r.gain.unwrap() - 2.0).abs() < 0.02, "gain {:?}", r.gain);
-        assert!(r.phase_lag_deg.unwrap().abs() < 1.0, "lag {:?}", r.phase_lag_deg);
+        assert!(
+            r.phase_lag_deg.unwrap().abs() < 1.0,
+            "lag {:?}",
+            r.phase_lag_deg
+        );
         assert!((r.tilt_rms.unwrap() - (0.5_f64).sqrt()).abs() < 0.01);
         assert_eq!(r.survived, Some(true));
         // Quiet window [-2, 5) is not fully sampled: the attempt started at 0.
@@ -526,7 +546,9 @@ mod tests {
         assert!(check_segment("v", 20.0, 10, 0.005).is_ok());
         let high = check_segment("v", 20.5, 10, 0.005).unwrap_err();
         assert!(high.contains("sample rate"), "{high}");
-        assert!(check_segment("v", 1.0, 3, 0.005).unwrap_err().contains("cycles"));
+        assert!(check_segment("v", 1.0, 3, 0.005)
+            .unwrap_err()
+            .contains("cycles"));
         assert!(check_segment("v", 0.0, 10, 0.005).is_err());
     }
 }

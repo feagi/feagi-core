@@ -495,7 +495,10 @@ mod tests {
             &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
             200,
         );
-        assert!(matches!(p.decide(&[], 1_000), ReconnectDecision::AttemptNow { .. }));
+        assert!(matches!(
+            p.decide(&[], 1_000),
+            ReconnectDecision::AttemptNow { .. }
+        ));
         assert_eq!(p.decide(&[], 2_500), ReconnectDecision::Skip);
     }
 

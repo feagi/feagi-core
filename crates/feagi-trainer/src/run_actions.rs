@@ -351,13 +351,23 @@ mod tests {
             action: push,
         };
         assert!(event.validate().is_ok());
-        if let ScheduledAction::BodyPush { magnitude_fraction, .. } = &mut event.action {
+        if let ScheduledAction::BodyPush {
+            magnitude_fraction, ..
+        } = &mut event.action
+        {
             *magnitude_fraction = 0.0;
         }
         assert!(event.validate().is_err());
         // m = 2 kg, g = 10, h = 0.5 m, heading along +X.
-        let (torque, force, nm) =
-            body_push_wrench(BodyPushKind::Torque, BodyPushAxis::Forward, 0.1, 0.0, 2.0, 10.0, 0.5);
+        let (torque, force, nm) = body_push_wrench(
+            BodyPushKind::Torque,
+            BodyPushAxis::Forward,
+            0.1,
+            0.0,
+            2.0,
+            10.0,
+            0.5,
+        );
         assert!((nm - 0.1 * 2.0 * 10.0 * 0.5).abs() < 1e-12);
         assert_eq!(force, [0.0; 3]);
         // Forward = +X: the top tips toward +X, so the torque is about +Y (up x forward).
@@ -373,8 +383,15 @@ mod tests {
             0.5,
         );
         assert!((torque[0] + nm).abs() < 1e-12 && torque[1].abs() < 1e-12);
-        let (_, force, n) =
-            body_push_wrench(BodyPushKind::Force, BodyPushAxis::Left, 0.25, 0.0, 2.0, 10.0, 0.5);
+        let (_, force, n) = body_push_wrench(
+            BodyPushKind::Force,
+            BodyPushAxis::Left,
+            0.25,
+            0.0,
+            2.0,
+            10.0,
+            0.5,
+        );
         assert!((n - 5.0).abs() < 1e-12 && (force[1] - 5.0).abs() < 1e-12);
     }
 

@@ -87,6 +87,7 @@ effect of a magnitude is unambiguous.
 | Synaptic | Learning rate | STDP / R-STDP eta of the mapping | eta x (1 + m) |
 | Synaptic | Gate | Transmission of the mapping's synapses | 0 unless the driver signal is active, then the factor is the signal `m x strength` |
 | Memory | Memory freeze (`memory.freeze`) | Whole lifecycle of a subscribed memory area | frozen while the summed signal is above 0; magnitude must be above 0 |
+| Memory | Memory capture (`memory.capture`) | Recording of episodes in a subscribed memory area | recording while the summed signal is above 0; magnitude must be 1..100 |
 | Memory | Memory formation (`memory.formation`) | New-memory-neuron creation in a subscribed memory area | factor `clamp(1 + m x strength, 0, 1)`; at 0 the area forms no new memory neurons |
 
 ### Memory formation (`memory.formation`)
@@ -113,6 +114,31 @@ ageing or expiry, no lifespan growth or activation bookkeeping on reactivation, 
 conversion and no reward consolidation. Pattern detection still runs and existing memory
 neurons still fire on reactivation. The plasticity service reads the frozen set once per
 burst through `is_memory_area_learning_frozen`.
+
+### Memory capture (`memory.capture`)
+
+Subscribes on a memory cortical area only (any other area is rejected by the area update).
+Magnitude is 1..100 (0 or less is rejected at creation). Several instances on one area are
+combined by summing their signals, not by multiplying (unlike the `neuro.*` kinds); the area
+is **recording** while the sum is above 0. The engine commits one flag per subscribed area at
+the end of each burst, and the plasticity service reads it once per burst.
+
+While recording, the area stores the ordered states it encodes from live input as episode
+links and, at the end of each piece, creates one episode neuron for the ordered member list.
+Magnitude scales the one-time lifespan boost given to each state and to the episode neuron;
+100 makes a state long-term at once. Recall and replay fires are never recorded.
+
+Precedence when several memory modulators subscribe to the same area: `memory.freeze`
+(nothing is recorded) over `memory.formation` at -100 (only known states are recorded) over
+`memory.capture`.
+
+Episode links live on a `sequential_memory` mapping from the memory area to itself (at most
+one per area); without it the area still boosts and creates episode neurons but cannot replay
+them. A recording session is cut into pieces of at most `capture_max_bursts` bursts, a
+per-area key on the memory area (a burst count, so rescale it when the FEAGI refresh rate
+changes). When the key is unset, the cap defaults to 5 seconds converted to bursts from the
+current refresh rate. See the memory area properties and `sequential_memory` mapping docs for
+the full rules.
 
 ### Learning rate at 0
 

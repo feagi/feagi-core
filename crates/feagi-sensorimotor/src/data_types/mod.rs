@@ -34,9 +34,9 @@ pub use gaze_properties::GazeProperties;
 pub use image_filtering_settings::ImageFilteringSettings;
 pub use image_frame::ImageFrame;
 pub use midi::{
-    MidiControl, MidiExpressionFrame, MidiNotesFrame, MidiFrame, MidiProperties,
-    MIDI_DEFAULT_EXPRESSION_DEPTH, MIDI_MAX_EXPRESSION_DEPTH,
-    MIDI_MAX_NOTE_COLUMNS, MIDI_NOTE_FULL_SCALE_POTENTIAL,
+    MidiControl, MidiExpressionFrame, MidiFrame, MidiNotesFrame, MidiProperties,
+    MIDI_DEFAULT_EXPRESSION_DEPTH, MIDI_MAX_EXPRESSION_DEPTH, MIDI_MAX_NOTE_COLUMNS,
+    MIDI_NOTE_FULL_SCALE_POTENTIAL,
 };
 pub use misc_data::MiscData;
 pub use percentages::*;

@@ -1888,8 +1888,11 @@ impl ObserveTrack {
     pub fn fall_lean(&self, allowed_angle_deg: f64) -> FallLean {
         let fall = self.last_tilt_deg > allowed_angle_deg;
         let lean = |deg: Option<f64>| {
-            deg.filter(|_| fall)
-                .and_then(|deg| (deg / allowed_angle_deg).is_finite().then(|| deg / allowed_angle_deg))
+            deg.filter(|_| fall).and_then(|deg| {
+                (deg / allowed_angle_deg)
+                    .is_finite()
+                    .then(|| deg / allowed_angle_deg)
+            })
         };
         let forward = lean(self.last_lean.forward);
         let left = lean(self.last_lean.left);
@@ -3954,7 +3957,7 @@ fn balance_time_fields(
         walk: None,
         spring_applied: None,
         observe: None,
-            fall: None,
+        fall: None,
     }
 }
 
@@ -5296,8 +5299,13 @@ pub fn run_balance_phase_from(
             ..
         } = &event.action
         {
-            check_segment(&event.label, *frequency_hz, *cycles, run.criterion.burst_period_s)
-                .map_err(TrainerError::Config)?;
+            check_segment(
+                &event.label,
+                *frequency_hz,
+                *cycles,
+                run.criterion.burst_period_s,
+            )
+            .map_err(TrainerError::Config)?;
         }
     }
     if needs_applier && run.apply_event.is_none() {
@@ -7460,16 +7468,15 @@ fn run_balance_attempt(
                             wrench[2] / magnitude,
                         ];
                         let kind_name = format!("{kind:?}").to_lowercase();
-                        let start_s =
-                            controller.apply_body_oscillation(&OscillationRequest {
-                                body: torso.clone(),
-                                kind: kind_name.clone(),
-                                axis_world,
-                                amplitude: magnitude,
-                                frequency_hz: *frequency_hz,
-                                phase0: 0.0,
-                                duration_s: f64::from(*cycles) / *frequency_hz,
-                            })?;
+                        let start_s = controller.apply_body_oscillation(&OscillationRequest {
+                            body: torso.clone(),
+                            kind: kind_name.clone(),
+                            axis_world,
+                            amplitude: magnitude,
+                            frequency_hz: *frequency_hz,
+                            phase0: 0.0,
+                            duration_s: f64::from(*cycles) / *frequency_hz,
+                        })?;
                         vibrations.begin(VibrationSpec {
                             kind: kind_name,
                             axis: format!("{axis:?}").to_lowercase(),
@@ -7481,12 +7488,8 @@ fn run_balance_attempt(
                                 crate::run_actions::BodyPushAxis::Forward => {
                                     PushDir::torso(1.0, 0.0)
                                 }
-                                crate::run_actions::BodyPushAxis::Back => {
-                                    PushDir::torso(-1.0, 0.0)
-                                }
-                                crate::run_actions::BodyPushAxis::Left => {
-                                    PushDir::torso(0.0, 1.0)
-                                }
+                                crate::run_actions::BodyPushAxis::Back => PushDir::torso(-1.0, 0.0),
+                                crate::run_actions::BodyPushAxis::Left => PushDir::torso(0.0, 1.0),
                                 crate::run_actions::BodyPushAxis::Right => {
                                     PushDir::torso(0.0, -1.0)
                                 }
@@ -10347,7 +10350,11 @@ mod tests {
             &CancelToken::new(),
         )
         .expect("resumed phase");
-        assert_eq!(report.attempts.len(), 1, "one attempt runs after the resume");
+        assert_eq!(
+            report.attempts.len(),
+            1,
+            "one attempt runs after the resume"
+        );
         let done: Vec<u64> = events
             .events
             .iter()
@@ -15914,7 +15921,10 @@ mod tests {
         assert_eq!(request.duration_s, 4.0);
         assert_eq!(request.frequency_hz, 1.0);
         let norm = request.axis_world.iter().map(|v| v * v).sum::<f64>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-9 && request.axis_world[2] == 0.0, "{request:?}");
+        assert!(
+            (norm - 1.0).abs() < 1e-9 && request.axis_world[2] == 0.0,
+            "{request:?}"
+        );
         assert!(request.amplitude > 0.0);
         assert_eq!(tape.rows_of(VIBRATION_TABLE).len(), 1);
         assert_eq!(tape.rows_of(VIBRATION_SUMMARY_TABLE).len(), 1);

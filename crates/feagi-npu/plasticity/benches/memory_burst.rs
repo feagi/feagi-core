@@ -132,11 +132,7 @@ fn run_workload(rig: &Rig) -> usize {
 
 fn memory_burst(c: &mut Criterion) {
     c.bench_function("memory_depth3_200_bursts", |b| {
-        b.iter_batched(
-            build_rig,
-            |rig| run_workload(&rig),
-            BatchSize::LargeInput,
-        )
+        b.iter_batched(build_rig, |rig| run_workload(&rig), BatchSize::LargeInput)
     });
 }
 

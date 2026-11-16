@@ -6,16 +6,16 @@
 
 use std::collections::HashMap;
 
+use feagi_evolutionary::validate_genome;
 use feagi_evolutionary::{
     extract_memory_properties, load_genome_from_json, save_genome_to_json,
     validate_memory_mp_properties, ModulatorInstance, CAPTURE_MAX_BURSTS_KEY,
 };
-use feagi_evolutionary::validate_genome;
-use feagi_structures::genomic::ModulatorKind;
 use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
 };
+use feagi_structures::genomic::ModulatorKind;
 use feagi_structures::genomic::{BrainRegion, RegionType};
 use serde_json::{json, Value};
 
@@ -71,7 +71,6 @@ fn genome_with(areas: Vec<CorticalArea>) -> feagi_evolutionary::RuntimeGenome {
     }
 }
 
-
 const D10_WARNING: &str = "memory.capture on this area records episodes but cannot replay them: add a sequential_memory mapping from the area to itself.";
 
 fn capture_modulator() -> ModulatorInstance {
@@ -100,7 +99,9 @@ fn loop_rule() -> Value {
 fn capture_max_bursts_is_optional_validated_and_survives_a_save_and_load() {
     let props = HashMap::from([("is_mem_type".to_string(), json!(true))]);
     assert_eq!(
-        extract_memory_properties(&props).unwrap().capture_max_bursts,
+        extract_memory_properties(&props)
+            .unwrap()
+            .capture_max_bursts,
         None
     );
     let check = |v: Value| {
@@ -117,7 +118,12 @@ fn capture_max_bursts_is_optional_validated_and_survives_a_save_and_load() {
     let capped_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
     let plain_id = CorticalID::try_from_bytes(b"mmem0002").unwrap();
     let genome = genome_with(vec![
-        memory_area(capped_id, 8, "capped", &[(CAPTURE_MAX_BURSTS_KEY, json!(120))]),
+        memory_area(
+            capped_id,
+            8,
+            "capped",
+            &[(CAPTURE_MAX_BURSTS_KEY, json!(120))],
+        ),
         memory_area(plain_id, 9, "plain", &[]),
     ]);
     let saved = save_genome_to_json(&genome).expect("save");
@@ -184,9 +190,12 @@ fn capture_without_a_loop_warns_and_with_a_loop_does_not() {
     let b64 = id.as_base_64();
 
     let mut bare = memory_area(id, 8, "bare", &[("modulators", json!(["rec"]))]);
-    bare.properties.insert("is_mem_type".to_string(), json!(true));
+    bare.properties
+        .insert("is_mem_type".to_string(), json!(true));
     let mut genome = genome_with(vec![bare]);
-    genome.modulators.insert("rec".to_string(), capture_modulator());
+    genome
+        .modulators
+        .insert("rec".to_string(), capture_modulator());
     let result = validate_genome(&genome);
     assert!(
         result.warnings.iter().any(|w| w == D10_WARNING),
@@ -200,7 +209,9 @@ fn capture_without_a_loop_warns_and_with_a_loop_does_not() {
         json!({ b64: [loop_rule()] }),
     );
     let mut genome = genome_with(vec![looped]);
-    genome.modulators.insert("rec".to_string(), capture_modulator());
+    genome
+        .modulators
+        .insert("rec".to_string(), capture_modulator());
     let result = validate_genome(&genome);
     assert!(
         !result.warnings.iter().any(|w| w.contains("memory.capture")),

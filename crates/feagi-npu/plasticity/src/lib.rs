@@ -57,9 +57,9 @@ pub use episodic_scan::{
     spatial_signature_hash, window_relative_coords, ScanKernel, ScanWindow,
 };
 pub use memory_neuron_array::{
-    episode_pattern_hash, ChangeEntry, EpisodeCreate, LifespanBoost, LtmEviction, MemoryChangeRecord, MemoryNeuronArray,
-    MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, MemoryNeuronStats,
-    RemovedMemoryNeuron, SuccessorStrength,
+    episode_pattern_hash, ChangeEntry, EpisodeCreate, LifespanBoost, LtmEviction,
+    MemoryChangeRecord, MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
+    MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron, SuccessorStrength,
 };
 pub use memory_shape::{MemoryAreaShape, MemoryShapeMismatch, ReplayFrameShape};
 pub use memory_stats_cache::{

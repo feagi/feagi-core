@@ -226,10 +226,19 @@ mod tests {
     #[test]
     fn candidates_open_advance_complete_and_drop() {
         let mut chains = ReplayChains::default();
-        chains.stamp_episodes(vec![(100, vec![1, 2, 3]), (101, vec![1]), (102, vec![1, 5])], &[]);
+        chains.stamp_episodes(
+            vec![(100, vec![1, 2, 3]), (101, vec![1]), (102, vec![1, 5])],
+            &[],
+        );
         assert_eq!(chains.first_index[&1], vec![100, 101, 102]);
         let (mut cands, mut done) = (Vec::new(), Vec::new());
-        open_candidates(&chains.first_index, &chains.episodes, 1, &mut cands, &mut done);
+        open_candidates(
+            &chains.first_index,
+            &chains.episodes,
+            1,
+            &mut cands,
+            &mut done,
+        );
         assert_eq!(done, vec![101]);
         assert_eq!(cands, vec![(100, 0), (102, 0)]);
         advance_candidates(&chains.episodes, 2, &mut cands, &mut done);

@@ -1,6 +1,6 @@
 use crate::data_types::{
-    AudioSpectrumFrame, GazeProperties, ImageFilteringSettings, ImageFrame, MidiFrame,
-    MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, PoseEstimationData, RawIMU,
+    AudioSpectrumFrame, GazeProperties, ImageFilteringSettings, ImageFrame, MidiFrame, MiscData,
+    Percentage, Percentage2D, Percentage3D, Percentage4D, PoseEstimationData, RawIMU,
     SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
     SignedPercentage4D,
 };

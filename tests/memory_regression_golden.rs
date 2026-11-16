@@ -49,9 +49,6 @@
 
 use ahash::AHashMap;
 use feagi_brain_development::ConnectomeManager;
-use feagi_services::plasticity_runtime::PlasticityRuntime;
-use parking_lot::RwLock;
-use std::sync::Mutex;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
 use feagi_npu_burst_engine::{
@@ -59,19 +56,23 @@ use feagi_npu_burst_engine::{
 };
 use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
 use feagi_npu_plasticity::{
-    AsyncPlasticityExecutor, LtmEviction, MemoryAreaShape, MemoryMpMode, MemoryNeuronLifecycleConfig, MpChangeEncoding,
-    PlasticityCommand, PlasticityConfig, PlasticityService,
+    AsyncPlasticityExecutor, LtmEviction, MemoryAreaShape, MemoryMpMode,
+    MemoryNeuronLifecycleConfig, MpChangeEncoding, PlasticityCommand, PlasticityConfig,
+    PlasticityService,
 };
 use feagi_npu_runtime::StdRuntime;
+use feagi_services::plasticity_runtime::PlasticityRuntime;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag, MemoryCorticalType,
 };
 use feagi_structures::genomic::ModulatorKind;
+use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 const FILE_NAME: &str = "golden-traces.json";
 const KINDS_FILE_NAME: &str = "fire-kinds.json";
@@ -173,7 +174,9 @@ fn lifecycle_properties(
             props.push(("mp_change_mode", json!("mp_differential")));
             props.push(("mp_delta_quantization", json!(quantization)));
         }
-        MemoryMpMode::Change(MpChangeEncoding::Ratio { quantization_percent }) => {
+        MemoryMpMode::Change(MpChangeEncoding::Ratio {
+            quantization_percent,
+        }) => {
             props.push(("mp_change_mode", json!("mp_ratio")));
             props.push(("mp_ratio_quantization", json!(quantization_percent)));
         }
@@ -703,7 +706,11 @@ impl Rig {
                 .expect("memory area");
             area.properties.insert(
                 "replay_trigger".to_string(),
-                json!(if recall_only { "recall_only" } else { "any_fire" }),
+                json!(if recall_only {
+                    "recall_only"
+                } else {
+                    "any_fire"
+                }),
             );
             manager.sync_memory_associative_lif_params(&self.mem_id);
         }
@@ -1353,7 +1360,14 @@ fn memory_regression_fire_kinds_fixture_has_default_and_episodic_kinds() {
         for burst in trace["bursts"].as_array().unwrap() {
             for pairs in burst["kinds"].as_object().unwrap().values() {
                 for pair in pairs.as_array().unwrap() {
-                    kinds.insert(pair.as_str().unwrap().rsplit(':').next().unwrap().to_string());
+                    kinds.insert(
+                        pair.as_str()
+                            .unwrap()
+                            .rsplit(':')
+                            .next()
+                            .unwrap()
+                            .to_string(),
+                    );
                 }
             }
         }
