@@ -2,7 +2,6 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use std::collections::HashMap;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::genome::genomes::designer::DesignerGenome;
 use crate::workers::genome_manager::requests::categories::prelude::*;
 
 pub(crate) async fn cortical_area_response<FIQ: FeagiIndexQuantization>(

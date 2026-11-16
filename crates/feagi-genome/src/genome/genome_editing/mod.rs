@@ -25,6 +25,21 @@ impl<FIQ: FeagiIndexQuantization, GESC: GenomeEditSequenceContext> GenomeEditSeq
         self.steps.push(step)
     }
     
+    pub(crate) fn take_context(self) -> GESC {
+        self.context
+    }
+    
+    pub(crate) fn get_context(&self) -> &GESC {
+        &self.context
+    }
+
+    pub(crate) fn get_context_mut(&mut self) -> &mut GESC {
+        &mut self.context
+    }
+    
+    pub(crate) fn get_steps(&self) -> &[GenomeEditStepSequenceStep<FIQ, GESC>] {
+        &self.steps
+    }
 }
 
 

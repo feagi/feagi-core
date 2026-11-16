@@ -39,6 +39,8 @@ macro_rules! _impl_connectome_edit_step_requirements {
     };
 }
 
+/// Creates ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>>
+/// and ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization>
 macro_rules! create_step_and_result_enums {
     {
         $($StepSpecificName:ident, )+

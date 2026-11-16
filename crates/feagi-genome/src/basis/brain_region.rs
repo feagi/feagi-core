@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use feagi_basis::feagi_id::feagi_id;
 
 feagi_id! {
@@ -24,6 +25,7 @@ impl From<BrainRegionID> for BrainRegionAncestryID {
 }
 
 /// Allows definition of a pair of brain region and brain region ancestry IDs easily in constructors
+#[derive(Clone, Copy, Hash, Debug, Serialize, Deserialize)]
 pub enum BrainRegionIdAndAncestryConstructor {
     /// Self ID and Ancestry ID will be an identical uuidv7 based on current time
     IdenticalNow(),

@@ -58,11 +58,11 @@ pub(crate) trait GenomeInternalInterface<FIQ: FeagiIndexQuantization,>: GenomePu
     
     /// Gets brain regions in a mutable context. Cant be public since its possible to do things
     /// like drop cortical areas
-    fn get_brain_region_contexts_mut(&mut self) -> ();
+    fn get_brain_region_contexts_mut(&mut self) -> &mut Self::BrainRegionSet;
 
     /// Gets cortical areas in a mutable context. Cant be public since its possible to do things
     /// like resize the area
-    //fn get_cortical_area_contexts_mut(&mut self) -> ();
+    fn get_cortical_area_set_mut(&self) -> &mut Self::CorticalAreaSet;
 
     //fn get_connectivity_rule_contexts_mut(&mut self) -> ();
 
@@ -71,17 +71,7 @@ pub(crate) trait GenomeInternalInterface<FIQ: FeagiIndexQuantization,>: GenomePu
     //region default impls
 
 
-    fn get_brain_region_context_mut(&mut self, region_id: &BrainRegionID) -> Result<(), ()>;
-
-    //fn add_brain_region_context(&mut self) -> Result<(), ()>;
-
-
-    // /// Gets the cortical area in a mutable context. Cant be public since its possible to do things
-    // /// like resize the area
-    //fn get_cortical_area_context_mut(&mut self, cortical_id: &CorticalIdentifier) -> Result<(), ()>;
-
-    //fn add_cortical_area_context(&mut self) -> Result<(), ()>;
-
+    fn apply_confirmed_changes(&mut self, )
 
     //endregion
 }
