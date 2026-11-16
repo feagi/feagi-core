@@ -1,5 +1,6 @@
+use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::brain_region::BrainRegionID;
+use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID};
 use crate::basis::cortical_area::CorticalTypedGeneratorPrecursor;
 use crate::genome::genome_object::GenomeObjectMetadata;
 use crate::genome::genomes::brain_region::BrainRegionSet;
@@ -8,6 +9,7 @@ use crate::genome::genomes::cortical_area::CorticalAreaSet;
 
 
 pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
+    state: DesignerGenomeState,
     brain_regions: BrainRegionSet<<CachingContextCaching as CachingContext>::BrainRegion>,
     cortical_areas: CorticalAreaSet<
         FIQ,
@@ -16,24 +18,31 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
     >
 }
 
+
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
 
     /// Called on init, and can be called to have everything wiped
-    pub fn reset_to_new_barebones_genome(genome_metadata: GenomeObjectMetadata, root_id: BrainRegionID) -> Self {
-        
-        let ancestor_id = root_id.clone().into();
-        
-        let mut brain_region_set = BrainRegionSet::new_brain_region_set(
-            genome_metadata,
-            root_id,
-            ancestor_id
-        );
-        
-        let mut cortical_area_set = CorticalAreaSet::default();
+    pub fn reset_to_new_barebones_genome(
+        genome_metadata: GenomeObjectMetadata,
+        target_burst_rate: TargetFrequency,
+        new_root_genome_id: BrainRegionID,
+        new_root_genome_ancestry_id: BrainRegionAncestryID,
+    ) -> Self {
 
-        
-        
-        
+        let brain_region_set = BrainRegionSet::new_brain_region_set(
+            genome_metadata,
+            new_root_genome_id,
+            new_root_genome_ancestry_id,
+        );
+
+        let cortical_area_set = CorticalAreaSet::default();
+
+        Self {
+            state: DesignerGenomeState::WaitingOnNPU,
+            brain_regions: brain_region_set,
+            cortical_areas: cortical_area_set,
+        }
+
     }
 }
 
@@ -44,6 +53,12 @@ impl<FIQ: FeagiIndexQuantization> GenomeReadingInterface<FIQ, CachingContextCach
     }
 }
 
+/// Akin to NPU state, but we keep this local for rapid lookups and responses
+pub enum DesignerGenomeState {
+    Paused,
+    WaitingOnNPU,
+    Running(TargetFrequency)
+}
 
 
 
