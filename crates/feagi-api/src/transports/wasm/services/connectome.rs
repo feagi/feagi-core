@@ -208,9 +208,13 @@ impl WasmConnectomeService {
                 .unwrap_or(0.0),
             psp_uniform_distribution: area
                 .properties
-                .get("psp_uniform_distribution")
+                .get(feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY)
                 .and_then(|v| v.as_bool())
-                .unwrap_or(false),
+                .unwrap_or_else(|| {
+                    feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+                        &area.cortical_type,
+                    )
+                }),
             mp_driven_psp,
             firing_threshold,
             firing_threshold_increment,

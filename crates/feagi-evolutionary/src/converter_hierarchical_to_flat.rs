@@ -12,6 +12,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{EvoResult, RuntimeGenome};
+use feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -271,12 +272,11 @@ fn convert_area_to_flat(
 
     // Convert all properties from area.properties using reverse mapping
     // This includes cortical_group (_group-t) which should come from properties, not area_type
-    let default_psp_uniform = matches!(
-        area.cortical_type,
-        feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
-            feagi_structures::genomic::cortical_area::CoreCorticalType::Power
-        )
-    );
+    // The file holds the effective value: an absent property means the area type's default.
+    let default_psp_uniform =
+        feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+            &area.cortical_type,
+        );
     convert_properties_to_flat(
         &prefix,
         &properties_with_group,
@@ -316,7 +316,7 @@ fn convert_properties_to_flat(
         ("group_id", ("_group-t", "cx")),
         ("sub_group_id", ("subgrp-t", "cx")),
         ("degeneration", ("de_gen-f", "cx")),
-        ("psp_uniform_distribution", ("pspuni-b", "cx")),
+        (PSP_UNIFORM_DISTRIBUTION_KEY, ("pspuni-b", "cx")),
         ("mp_charge_accumulation", ("mp_acc-b", "nx")),
         ("mp_driven_psp", ("mp_psp-b", "nx")),
         ("is_mem_type", ("memory-b", "cx")),
@@ -366,7 +366,7 @@ fn convert_properties_to_flat(
         ("group_id", json!("CUSTOM")),
         ("sub_group_id", json!("")),
         ("degeneration", json!(0.0)),
-        ("psp_uniform_distribution", json!(default_psp_uniform)),
+        (PSP_UNIFORM_DISTRIBUTION_KEY, json!(default_psp_uniform)),
         ("mp_charge_accumulation", json!(false)),
         ("mp_driven_psp", json!(false)),
         ("is_mem_type", json!(false)),

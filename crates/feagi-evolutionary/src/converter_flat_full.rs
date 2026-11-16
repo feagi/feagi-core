@@ -16,7 +16,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{EvoError, EvoResult};
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_structures::genomic::cortical_area::{CoreCorticalType, PSP_UNIFORM_DISTRIBUTION_KEY};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
@@ -55,7 +55,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("dstmap-d", "cortical_mapping_dst"),
     ("hmlk-d", "rate_modulated_leak"),
     ("de_gen-f", "degeneration"),
-    ("pspuni-b", "psp_uniform_distribution"),
+    ("pspuni-b", PSP_UNIFORM_DISTRIBUTION_KEY),
     ("mp_acc-b", "mp_charge_accumulation"),
     ("mp_psp-b", "mp_driven_psp"),
     ("memory-b", "is_mem_type"),
@@ -110,7 +110,6 @@ fn create_area_template() -> serde_json::Map<String, Value> {
     template.insert("leak_coefficient".to_string(), json!(0.0));
     template.insert("neuron_excitability".to_string(), json!(1.0));
     template.insert("postsynaptic_current".to_string(), json!(1.0));
-    template.insert("psp_uniform_distribution".to_string(), json!(false));
 
     template
 }
@@ -272,7 +271,8 @@ fn area_has_flat_suffix(
         .any(|key| key.starts_with(&prefix) && key.ends_with(suffix))
 }
 
-/// Power defaults: no synapse degeneration, full PSP on every outgoing synapse.
+/// Power defaults: no synapse degeneration. (An absent `pspuni-b` leaves the property absent, and
+/// the area type's default applies: see `default_psp_uniform_distribution`.)
 fn apply_power_area_defaults(
     cortical_id: &str,
     flat_blueprint: &serde_json::Map<String, Value>,
@@ -283,9 +283,6 @@ fn apply_power_area_defaults(
     }
     if !area_has_flat_suffix(flat_blueprint, cortical_id, "de_gen-f") {
         area_data.insert("degeneration".to_string(), json!(0.0));
-    }
-    if !area_has_flat_suffix(flat_blueprint, cortical_id, "pspuni-b") {
-        area_data.insert("psp_uniform_distribution".to_string(), json!(true));
     }
 }
 
@@ -916,7 +913,46 @@ mod tests {
             .unwrap();
 
         assert_eq!(area.get("degeneration").unwrap(), &json!(0.0));
-        assert_eq!(area.get("psp_uniform_distribution").unwrap(), &json!(true));
+        // An absent `pspuni-b` leaves the property absent; the type default (true for Power)
+        // applies at runtime.
+        assert!(area.get(PSP_UNIFORM_DISTRIBUTION_KEY).is_none());
+        assert!(
+            feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+                &feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
+                    CoreCorticalType::Power
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn test_explicit_pspuni_values_load_for_power_and_custom_areas() {
+        for (id, value) in [
+            ("_power", false),
+            ("_power", true),
+            ("cpspexp1", false),
+            ("cpspexp1", true),
+        ] {
+            let flat = json!({
+                "version": "2.0",
+                "blueprint": {
+                    format!("_____10c-{id}-cx-__name-t"): "n",
+                    format!("_____10c-{id}-cx-___bbx-i"): 1,
+                    format!("_____10c-{id}-cx-___bby-i"): 1,
+                    format!("_____10c-{id}-cx-___bbz-i"): 1,
+                    format!("_____10c-{id}-cx-pspuni-b"): value
+                },
+                "neuron_morphologies": {},
+                "physiology": {}
+            });
+            let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
+            let area = hierarchical["blueprint"][id].as_object().unwrap();
+            assert_eq!(
+                area.get(PSP_UNIFORM_DISTRIBUTION_KEY).unwrap(),
+                &json!(value),
+                "{id}"
+            );
+        }
     }
 
     #[test]

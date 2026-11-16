@@ -125,8 +125,14 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::REPLAY_TRIGGER_KEY.to_string())
         .or_insert(Value::from(memory_defaults.replay_trigger.as_str()));
     defaults
-        .entry("psp_uniform_distribution".to_string())
-        .or_insert(Value::from(true));
+        .entry(feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY.to_string())
+        .or_insert(Value::from(
+            feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+                &feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(
+                    feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory,
+                ),
+            ),
+        ));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -1250,6 +1256,12 @@ impl GenomeService for GenomeServiceImpl {
                     serde_json::json!(leak_variability),
                 );
             }
+            if let Some(burst_engine_active) = param.burst_engine_active {
+                area.add_property_mut(
+                    "burst_engine_active".to_string(),
+                    serde_json::json!(burst_engine_active),
+                );
+            }
             if matches!(area_type, CorticalAreaType::Memory(_)) {
                 let merged = merge_memory_area_properties(
                     area.properties.clone(),
@@ -1257,15 +1269,9 @@ impl GenomeService for GenomeServiceImpl {
                 );
                 area.properties = merged;
             } else if let Some(properties) = &param.properties {
-                area.properties = properties.clone();
-            }
-            // Custom-area `properties` replace wipes earlier param keys. Burst must
-            // be written after that assign or classifier twins / custom fields stay off.
-            if let Some(burst_engine_active) = param.burst_engine_active {
-                area.add_property_mut(
-                    "burst_engine_active".to_string(),
-                    serde_json::json!(burst_engine_active),
-                );
+                // Entries in `properties` win over typed params on conflicting keys; typed
+                // params for keys it does not carry are kept.
+                area.properties.extend(properties.clone());
             }
 
             // IO areas (IPU/OPU) must always be in root region; default if missing
@@ -8213,6 +8219,202 @@ mod tests {
         assert_eq!(
             npu.get_neuron_property_by_index(first, "leak_coefficient"),
             Some(0.25)
+        );
+    }
+
+    /// Two areas on a real NPU: `edited` (a custom area that is resized) and `other` (built from
+    /// the given type and optional PSP uniformity property).
+    fn two_area_fixture(
+        other_bytes: &[u8; 8],
+        other_type: feagi_structures::genomic::cortical_area::CorticalAreaType,
+        other_psp: Option<bool>,
+    ) -> (
+        ResizeFixture,
+        feagi_structures::genomic::cortical_area::CorticalID,
+    ) {
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+
+        let edited_id = CorticalID::try_from_bytes(b"cst_pa01").unwrap();
+        let other_id = CorticalID::try_from_bytes(other_bytes).unwrap();
+        let edited = CorticalArea::new(
+            edited_id,
+            0,
+            "edited".to_string(),
+            CorticalAreaDimensions::new(4, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mut other = CorticalArea::new(
+            other_id,
+            0,
+            "other".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            other_type,
+        )
+        .unwrap();
+        if let Some(v) = other_psp {
+            other.properties.insert(
+                feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY.to_string(),
+                serde_json::json!(v),
+            );
+        }
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(
+                RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).expect("npu"),
+            ),
+            "TwoAreaFixtureNpu",
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.add_cortical_area(edited.clone()).unwrap();
+            manager.create_neurons_for_area(&edited_id).unwrap();
+            manager.add_cortical_area(other.clone()).unwrap();
+            manager.sync_cortical_area_flags_to_npu().unwrap();
+        }
+        // The stored areas carry the indices the manager assigned.
+        let stored: HashMap<_, _> = {
+            let manager = connectome.read();
+            [edited_id, other_id]
+                .into_iter()
+                .map(|id| (id, manager.get_cortical_area(&id).unwrap().clone()))
+                .collect()
+        };
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "two-area".to_string(),
+                genome_title: "two-area".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: stored,
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        (
+            ResizeFixture {
+                area_id: edited_id,
+                npu,
+                connectome,
+                genome_store: Arc::new(RwLock::new(Some(genome))),
+            },
+            other_id,
+        )
+    }
+
+    /// Save the genome to JSON and load it back into the genome store and the connectome's
+    /// areas, then push the flags to the NPU, as a save followed by a reload does.
+    fn reload_two_area_fixture(f: &ResizeFixture) {
+        let json = {
+            let guard = f.genome_store.read();
+            feagi_evolutionary::save_genome_to_json(guard.as_ref().unwrap()).unwrap()
+        };
+        let (loaded, _) = feagi_evolutionary::load_genome_with_report(&json).unwrap();
+        {
+            let mut manager = f.connectome.write();
+            for (id, area) in &loaded.cortical_areas {
+                if let Some(live) = manager.get_cortical_area_mut(id) {
+                    *live = area.clone();
+                }
+            }
+            manager.sync_cortical_area_flags_to_npu().unwrap();
+        }
+        *f.genome_store.write() = Some(loaded);
+    }
+
+    /// Editing area A leaves area B's PSP uniformity unchanged: stored property and NPU flag,
+    /// with and without a save and reload before the edit.
+    #[test]
+    fn editing_one_area_leaves_another_areas_psp_uniformity_unchanged() {
+        use feagi_brain_development::models::CorticalAreaExt;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+        let cases = [
+            (
+                b"cst_pb01",
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                Some(true),
+                true,
+            ),
+            (
+                b"mst_pb01",
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+                None,
+                true,
+            ),
+            (
+                b"mst_pb02",
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+                Some(true),
+                true,
+            ),
+        ];
+        let mut bad = Vec::new();
+        for reload in [false, true] {
+            for (bytes, ty, psp, want) in cases {
+                let (f, other_id) = two_area_fixture(bytes, ty, psp);
+                if reload {
+                    reload_two_area_fixture(&f);
+                }
+                let changes =
+                    HashMap::from([("dimensions".to_string(), serde_json::json!([6, 2, 1]))]);
+                resize(&f, changes);
+                let stored = f
+                    .connectome
+                    .read()
+                    .get_cortical_area(&other_id)
+                    .unwrap()
+                    .psp_uniform_distribution();
+                let in_genome = f
+                    .genome_store
+                    .read()
+                    .as_ref()
+                    .unwrap()
+                    .cortical_areas
+                    .get(&other_id)
+                    .unwrap()
+                    .psp_uniform_distribution();
+                let flag = f
+                    .npu
+                    .lock()
+                    .unwrap()
+                    .get_psp_uniform_distribution_for_cortical(&other_id);
+                if stored != want || in_genome != want || flag != want {
+                    bad.push(format!(
+                        "reload={reload} {ty:?} stored={psp:?}: want {want}, connectome {stored}, genome {in_genome}, npu {flag}"
+                    ));
+                }
+            }
+        }
+        assert!(
+            bad.is_empty(),
+            "area B changed after editing area A: {bad:#?}"
         );
     }
 

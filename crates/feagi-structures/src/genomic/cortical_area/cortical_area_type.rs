@@ -17,6 +17,19 @@ pub enum CorticalAreaType {
     Modulator,
 }
 
+/// Area property key for PSP uniform distribution (full PSP on every outgoing synapse when true,
+/// PSP divided across the outgoing synapses when false).
+pub const PSP_UNIFORM_DISTRIBUTION_KEY: &str = "psp_uniform_distribution";
+
+/// The PSP uniform distribution an area has when its property is absent: true for Memory and
+/// Core Power areas, false for every other type. An absent property means this default.
+pub fn default_psp_uniform_distribution(area_type: &CorticalAreaType) -> bool {
+    matches!(
+        area_type,
+        CorticalAreaType::Memory(_) | CorticalAreaType::Core(CoreCorticalType::Power)
+    )
+}
+
 impl fmt::Display for CorticalAreaType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -150,3 +163,33 @@ impl fmt::Display for MemoryCorticalType {
 }
 
 //endregion
+
+#[cfg(test)]
+mod psp_uniform_default_tests {
+    use super::*;
+
+    #[test]
+    fn default_psp_uniform_distribution_is_true_only_for_memory_and_power() {
+        assert!(default_psp_uniform_distribution(&CorticalAreaType::Memory(
+            MemoryCorticalType::Memory
+        )));
+        assert!(default_psp_uniform_distribution(&CorticalAreaType::Core(
+            CoreCorticalType::Power
+        )));
+        assert!(!default_psp_uniform_distribution(&CorticalAreaType::Core(
+            CoreCorticalType::Death
+        )));
+        assert!(!default_psp_uniform_distribution(
+            &CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire)
+        ));
+        assert!(!default_psp_uniform_distribution(
+            &CorticalAreaType::Modulator
+        ));
+        assert!(!default_psp_uniform_distribution(
+            &CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean)
+        ));
+        assert!(!default_psp_uniform_distribution(
+            &CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean)
+        ));
+    }
+}

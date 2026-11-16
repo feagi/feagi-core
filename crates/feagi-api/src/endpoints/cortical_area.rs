@@ -1379,10 +1379,9 @@ pub async fn post_cortical_area(
             ]),
         );
 
-        // Apply per-unit neural tunables. `CreateCorticalAreaParams.properties` fully replaces
-        // `area.properties` for non-Memory area types (see GenomeServiceImpl::create_cortical_areas),
-        // so these must be set here rather than via the (unused-for-IPU/OPU) typed
-        // firing_threshold_increment/limit fields below.
+        // Apply per-unit neural tunables. `CreateCorticalAreaParams.properties` entries win over the
+        // typed params for the same key (see GenomeServiceImpl::create_cortical_areas), so these
+        // are set here rather than via the typed firing_threshold_increment/limit fields below.
         if let Some(sensory_unit) = resolved_sensory_unit {
             if let Some(default_firing_threshold) = sensory_unit.get_default_firing_threshold() {
                 properties.insert(
@@ -1442,10 +1441,10 @@ pub async fn post_cortical_area(
             visible: Some(true),
             sub_group: None,
             neurons_per_voxel: Some(neurons_per_voxel),
-            postsynaptic_current: Some(0.0),
+            postsynaptic_current: None,
             plasticity_constant: Some(0.0),
             degeneration: Some(0.0),
-            psp_uniform_distribution: Some(false),
+            psp_uniform_distribution: requested_psp_uniform_distribution(&request),
             firing_threshold_increment: Some(0.0),
             firing_threshold_limit: Some(0.0),
             consecutive_fire_count: Some(0),
@@ -1671,6 +1670,17 @@ pub async fn delete_cortical_area(
     }
 }
 
+/// The PSP uniform distribution a create request asks for, if it has one. When the request has
+/// none, the value stays unset so the area type's default applies.
+fn requested_psp_uniform_distribution(
+    request: &HashMap<String, serde_json::Value>,
+) -> Option<bool> {
+    request
+        .get(feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY)
+        .or_else(|| request.get("neuron_psp_uniform_distribution"))
+        .and_then(|v| v.as_bool())
+}
+
 /// Create a custom cortical area for internal processing with specified dimensions and position.
 #[utoipa::path(
     post,
@@ -1836,7 +1846,7 @@ pub async fn post_custom_cortical_area(
         postsynaptic_current: None,
         plasticity_constant: Some(0.0),
         degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
+        psp_uniform_distribution: requested_psp_uniform_distribution(&request),
         firing_threshold_increment: Some(0.0),
         firing_threshold_limit: Some(0.0),
         consecutive_fire_count: Some(0),
@@ -1904,7 +1914,7 @@ fn classifier_memory_params(
         postsynaptic_current: None,
         plasticity_constant: Some(0.0),
         degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
+        psp_uniform_distribution: None,
         firing_threshold_increment: Some(0.0),
         firing_threshold_limit: Some(0.0),
         consecutive_fire_count: Some(0),
@@ -2039,13 +2049,13 @@ fn classifier_scan_twin_params(
         postsynaptic_current: None,
         plasticity_constant: Some(0.0),
         degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
+        psp_uniform_distribution: None,
         firing_threshold_increment: Some(0.0),
         firing_threshold_limit: Some(0.0),
         consecutive_fire_count: Some(0),
         snooze_period: Some(0),
         refractory_period: Some(0),
-        leak_coefficient: Some(1.0),
+        leak_coefficient: None,
         leak_variability: Some(0.0),
         burst_engine_active: Some(true),
         properties: Some(properties),
@@ -2609,13 +2619,13 @@ fn classifier_answer_area_params(
         postsynaptic_current: None,
         plasticity_constant: Some(0.0),
         degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
+        psp_uniform_distribution: None,
         firing_threshold_increment: Some(0.0),
         firing_threshold_limit: Some(0.0),
         consecutive_fire_count: Some(0),
         snooze_period: Some(0),
         refractory_period: Some(0),
-        leak_coefficient: Some(1.0),
+        leak_coefficient: None,
         leak_variability: Some(0.0),
         burst_engine_active: Some(true),
         properties: Some(props),
@@ -4615,6 +4625,29 @@ mod classifier_mapping_rule_tests {
     }
 
     #[test]
+    fn classifier_twin_and_answer_params_leave_leak_unset() {
+        use super::{classifier_answer_area_params, classifier_scan_twin_params};
+        let twin = classifier_scan_twin_params(
+            "twin0002".to_string(),
+            "twin".to_string(),
+            (1, 1, 1),
+            (0, 0, 0),
+            "region",
+            "field",
+            "kmem",
+        );
+        let answer = classifier_answer_area_params(
+            "answ0001".to_string(),
+            "answer".to_string(),
+            (0, 0, 0),
+            "region",
+            "error",
+        );
+        assert_eq!(twin.leak_coefficient, None);
+        assert_eq!(answer.leak_coefficient, None);
+    }
+
+    #[test]
     fn classifier_enable_burst_writes_burst_engine_active() {
         use super::classifier_enable_burst_changes;
         assert_eq!(
@@ -4673,7 +4706,7 @@ mod classifier_mapping_rule_tests {
             properties.get("mp_driven_psp"),
             Some(&serde_json::json!(false))
         );
-        assert_eq!(params.leak_coefficient, Some(1.0));
+        assert_eq!(params.leak_coefficient, None);
     }
 }
 

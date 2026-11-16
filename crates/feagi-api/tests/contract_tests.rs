@@ -4241,6 +4241,77 @@ async fn test_genome_changes_not_enabled_without_ledger() {
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
 }
 
+/// `POST /v1/cortical_area/custom_cortical_area` without a PSP value: a memory area is created
+/// with uniform PSP (the type default), a custom area with divided PSP.
+#[tokio::test]
+async fn test_create_area_without_psp_value_uses_type_default() {
+    let state = build_test_state();
+    let root_id = "550e8400-e29b-41d4-a716-446655440010";
+    let region_id = "550e8400-e29b-41d4-a716-446655440011";
+    for (id, name, parent) in [
+        (root_id, "root", None),
+        (region_id, "circuit", Some(root_id)),
+    ] {
+        state
+            .connectome_service
+            .create_brain_region(CreateBrainRegionParams {
+                region_id: id.to_string(),
+                name: name.to_string(),
+                region_type: "Custom".to_string(),
+                parent_id: parent.map(str::to_string),
+                properties: None,
+            })
+            .await
+            .expect("region");
+    }
+    let create = |name: &str, sub_group: Option<&str>| {
+        let state = state.clone();
+        let mut body = json!({
+            "cortical_name": name,
+            "cortical_dimensions": [1, 1, 1],
+            "coordinates_3d": [0, 0, 0],
+            "brain_region_id": region_id,
+        });
+        if let Some(group) = sub_group {
+            body["sub_group_id"] = json!(group);
+        }
+        async move {
+            let (status, body) = request_json(
+                create_http_server(state),
+                "POST",
+                "/v1/cortical_area/custom_cortical_area",
+                Some(body),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            body["cortical_id"]
+                .as_str()
+                .expect("cortical_id")
+                .to_string()
+        }
+    };
+    let memory_id = create("psp_default_mem", Some("MEMORY")).await;
+    let custom_id = create("psp_default_cus", None).await;
+    let memory = state
+        .connectome_service
+        .get_cortical_area(&memory_id)
+        .await
+        .expect("memory area");
+    let custom = state
+        .connectome_service
+        .get_cortical_area(&custom_id)
+        .await
+        .expect("custom area");
+    assert!(
+        memory.psp_uniform_distribution,
+        "memory area default is uniform PSP"
+    );
+    assert!(
+        !custom.psp_uniform_distribution,
+        "custom area default is divided PSP"
+    );
+}
+
 #[tokio::test]
 async fn test_clone_replicates_stored_neural_parameters() {
     let state = build_test_state();
@@ -5151,4 +5222,216 @@ async fn test_cortical_mapping_plasticity_frozen_routes() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["synapse_count"].as_u64(), Some(0));
+}
+
+// ============================================================================
+// CREATE: typed params and `properties` combine (properties win on conflicts)
+// ============================================================================
+
+fn typed_create_params(
+    id_bytes: &[u8; 8],
+    properties: Option<HashMap<String, Value>>,
+) -> CreateCorticalAreaParams {
+    CreateCorticalAreaParams {
+        cortical_id: general_purpose::STANDARD.encode(id_bytes),
+        name: "typed-merge".to_string(),
+        dimensions: (1, 1, 1),
+        position: (0, 0, 0),
+        area_type: "Custom".to_string(),
+        visible: None,
+        sub_group: None,
+        neurons_per_voxel: None,
+        postsynaptic_current: None,
+        plasticity_constant: None,
+        degeneration: None,
+        psp_uniform_distribution: None,
+        firing_threshold_increment: None,
+        firing_threshold_limit: None,
+        consecutive_fire_count: None,
+        snooze_period: None,
+        refractory_period: None,
+        leak_coefficient: None,
+        leak_variability: None,
+        burst_engine_active: None,
+        properties,
+    }
+}
+
+#[tokio::test]
+async fn test_create_custom_area_keeps_typed_params_beside_properties() {
+    let state = build_test_state();
+    let mut params = typed_create_params(
+        b"ctypmrg1",
+        Some(HashMap::from([("extra_key".to_string(), json!("kept"))])),
+    );
+    params.psp_uniform_distribution = Some(true);
+    let id = params.cortical_id.clone();
+    state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("create");
+    let stored = state
+        .connectome_service
+        .get_cortical_area_properties(&id)
+        .await
+        .expect("properties");
+    assert_eq!(stored.get("psp_uniform_distribution"), Some(&json!(true)));
+    assert_eq!(stored.get("extra_key"), Some(&json!("kept")));
+}
+
+#[tokio::test]
+async fn test_create_properties_win_over_typed_params_on_conflict() {
+    let state = build_test_state();
+    let mut params = typed_create_params(
+        b"ctypmrg2",
+        Some(HashMap::from([(
+            "postsynaptic_current".to_string(),
+            json!(2.0),
+        )])),
+    );
+    params.postsynaptic_current = Some(3.0);
+    let id = params.cortical_id.clone();
+    state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("create");
+    let stored = state
+        .connectome_service
+        .get_cortical_area_properties(&id)
+        .await
+        .expect("properties");
+    assert_eq!(stored.get("postsynaptic_current"), Some(&json!(2.0)));
+}
+
+#[tokio::test]
+async fn test_create_keeps_typed_burst_engine_active_beside_properties() {
+    let state = build_test_state();
+    let mut params = typed_create_params(
+        b"ctypmrg3",
+        Some(HashMap::from([("extra_key".to_string(), json!(1))])),
+    );
+    params.burst_engine_active = Some(true);
+    let id = params.cortical_id.clone();
+    state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("create");
+    let stored = state
+        .connectome_service
+        .get_cortical_area_properties(&id)
+        .await
+        .expect("properties");
+    assert_eq!(stored.get("burst_engine_active"), Some(&json!(true)));
+}
+
+/// Properties-carried firing-threshold increments survive a typed zero increment.
+#[tokio::test]
+async fn test_create_properties_increments_win_over_typed_zero_increment() {
+    let state = build_test_state();
+    let mut params = typed_create_params(
+        b"ctypmrg4",
+        Some(HashMap::from([
+            ("firing_threshold_increment_x".to_string(), json!(0.5)),
+            ("firing_threshold_increment_y".to_string(), json!(0.25)),
+            ("firing_threshold_increment_z".to_string(), json!(0.125)),
+        ])),
+    );
+    params.firing_threshold_increment = Some(0.0);
+    let id = params.cortical_id.clone();
+    state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("create");
+    let area = state
+        .connectome_service
+        .get_cortical_area(&id)
+        .await
+        .expect("area");
+    assert_eq!(area.firing_threshold_increment, [0.5, 0.25, 0.125]);
+}
+
+/// REST IPU create stores no postsynaptic current of 0: the effective value stays the default.
+#[tokio::test]
+async fn test_rest_io_area_create_keeps_default_postsynaptic_current() {
+    let state = build_test_state();
+    let (status, response) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(json!({
+            "cortical_id": "iinf",
+            "cortical_type": "IPU",
+            "device_count": 1,
+            "coordinates_3d": [0, 0, 0],
+            "data_type_configs_by_subunit": {"0": 0},
+            "neurons_per_voxel": 1
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    let id = response["cortical_id"].as_str().expect("cortical_id");
+    let area = state
+        .connectome_service
+        .get_cortical_area(id)
+        .await
+        .expect("area");
+    assert_eq!(area.postsynaptic_current, 1.0);
+}
+
+/// Classifier answer areas (created through REST) keep leak 0; no leak of 1 takes effect.
+#[tokio::test]
+async fn test_rest_classifier_answer_areas_keep_zero_leak() {
+    let state = build_test_state();
+    for morphology_id in ["associative_memory"] {
+        state
+            .connectome_service
+            .create_morphology(
+                morphology_id.to_string(),
+                feagi_evolutionary::Morphology {
+                    morphology_type: feagi_evolutionary::MorphologyType::Functions,
+                    parameters: feagi_evolutionary::MorphologyParameters::Functions {},
+                    class: "core".to_string(),
+                },
+            )
+            .await
+            .expect("register morphology");
+    }
+    let root = "550e8400-e29b-41d4-a716-446655440020".to_string();
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: root.clone(),
+            name: "root".to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: None,
+            properties: None,
+        })
+        .await
+        .expect("root region");
+    let (status, response) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/classifier",
+        Some(json!({
+            "name": "leakcheck",
+            "brain_region_id": root,
+            "coordinates_3d": [0, 0, 0]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    for key in ["error_area_id", "correct_area_id"] {
+        let id = response[key].as_str().expect(key);
+        let area = state
+            .connectome_service
+            .get_cortical_area(id)
+            .await
+            .expect("answer area");
+        assert_eq!(area.leak_coefficient, 0.0, "{key}");
+        assert_eq!(area.postsynaptic_current, 1.0, "{key}");
+    }
 }

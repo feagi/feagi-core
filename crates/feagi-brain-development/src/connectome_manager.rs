@@ -46,7 +46,8 @@ use crate::types::{BduError, BduResult};
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::{
-    CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
+    default_psp_uniform_distribution, CorticalAreaType, CorticalID, CustomCorticalType,
+    PSP_UNIFORM_DISTRIBUTION_KEY,
 };
 use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
@@ -9768,15 +9769,12 @@ impl ConnectomeManager {
                 let mut degeneration_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
-                    // When the property is absent: Power and Memory cortical areas default to uniform
-                    // PSP (full PSP per synapse); other areas default to divided PSP.
-                    let default_psp_uniform = *cortical_id
-                        == CoreCorticalType::Power.to_cortical_id()
-                        || matches!(area.cortical_type, CorticalAreaType::Memory(_));
+                    // An absent property means the area type's default (see
+                    // `default_psp_uniform_distribution`).
                     let psp_uniform = area
-                        .get_property("psp_uniform_distribution")
+                        .get_property(PSP_UNIFORM_DISTRIBUTION_KEY)
                         .and_then(|v| v.as_bool())
-                        .unwrap_or(default_psp_uniform);
+                        .unwrap_or_else(|| default_psp_uniform_distribution(&area.cortical_type));
                     psp_uniform_flags.insert(*cortical_id, psp_uniform);
 
                     // Get mp_driven_psp flag (default to false)

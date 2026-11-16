@@ -331,14 +331,12 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn psp_uniform_distribution(&self) -> bool {
-        let default = matches!(
-            self.cortical_type,
-            feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(_)
-                | feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
-                    CoreCorticalType::Power
-                )
-        );
-        self.get_bool_property("psp_uniform_distribution", default)
+        self.get_bool_property(
+            feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY,
+            feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+                &self.cortical_type,
+            ),
+        )
     }
 
     fn degeneration(&self) -> f32 {

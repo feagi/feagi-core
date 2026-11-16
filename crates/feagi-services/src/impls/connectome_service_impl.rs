@@ -166,8 +166,14 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::REPLAY_TRIGGER_KEY.to_string())
         .or_insert(Value::from(memory_defaults.replay_trigger.as_str()));
     defaults
-        .entry("psp_uniform_distribution".to_string())
-        .or_insert(Value::from(true));
+        .entry(feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY.to_string())
+        .or_insert(Value::from(
+            feagi_structures::genomic::cortical_area::default_psp_uniform_distribution(
+                &feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(
+                    feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory,
+                ),
+            ),
+        ));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -10440,6 +10446,189 @@ mod tests {
         );
         assert!(!npu.get_psp_uniform_distribution_for_cortical(&divided_id));
         Ok(())
+    }
+
+    /// One area per type, each with the PSP uniformity property absent, true or false.
+    #[cfg(feature = "connectome-io")]
+    fn psp_roundtrip_areas(
+        variant: Option<bool>,
+    ) -> Vec<feagi_structures::genomic::cortical_area::CorticalArea> {
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            CustomCorticalType, IOCorticalAreaConfigurationFlag, MemoryCorticalType,
+        };
+        let specs: Vec<(CorticalID, u32, CorticalAreaType)> = vec![
+            (
+                CorticalID::try_from_bytes(b"cpsprt01").unwrap(),
+                10,
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            ),
+            (
+                CorticalID::try_from_bytes(b"mpsprt01").unwrap(),
+                11,
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+            ),
+            (
+                CoreCorticalType::Power.to_cortical_id(),
+                1,
+                CorticalAreaType::Core(CoreCorticalType::Power),
+            ),
+            (
+                CorticalID::try_from_bytes(b"ipsx\0\0\x01\0").unwrap(),
+                12,
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            ),
+        ];
+        specs
+            .into_iter()
+            .map(|(id, idx, ty)| {
+                let mut area = CorticalArea::new(
+                    id,
+                    idx,
+                    "psp-roundtrip".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    ty,
+                )
+                .unwrap();
+                if let Some(v) = variant {
+                    area.properties.insert(
+                        feagi_structures::genomic::cortical_area::PSP_UNIFORM_DISTRIBUTION_KEY
+                            .to_string(),
+                        serde_json::json!(v),
+                    );
+                }
+                area
+            })
+            .collect()
+    }
+
+    /// Export a genome holding `areas`, import it as a connectome snapshot in `mode`, and
+    /// return one line per area whose effective PSP uniformity changed (property or NPU flag).
+    #[cfg(feature = "connectome-io")]
+    async fn psp_roundtrip_mismatches(
+        areas: Vec<feagi_structures::genomic::cortical_area::CorticalArea>,
+        mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+    ) -> Vec<String> {
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::models::CorticalAreaExt;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        let expected: Vec<_> = areas
+            .iter()
+            .map(|a| (a.cortical_id, a.cortical_type, a.psp_uniform_distribution()))
+            .collect();
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "psp-roundtrip".to_string(),
+                genome_title: "psp-roundtrip".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: areas.into_iter().map(|a| (a.cortical_id, a)).collect(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+        let connectome = Arc::new(RwLock::new(connectome_manager_for_import_tests()));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata {
+                tags: ahash::AHashMap::from_iter([(
+                    feagi_npu_neural::types::connectome::LITE_EDGE_ENCODING_TAG.to_string(),
+                    feagi_npu_neural::types::connectome::LITE_EDGE_ENCODING_SEMANTIC_V1.to_string(),
+                )]),
+                ..ConnectomeMetadata::default()
+            },
+            persist_mode: mode,
+            genome_json: Some(genome_json),
+            memory_area_ids: Vec::new(),
+            learning_frozen_memory_areas: Vec::new(),
+            learning_frozen_mappings: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await.expect("import");
+
+        let manager = connectome.read();
+        let npu = manager.get_npu().expect("npu attached").lock().unwrap();
+        let mut bad = Vec::new();
+        for (id, ty, want) in expected {
+            let area = manager.get_cortical_area(&id).expect("area imported");
+            let stored = area.psp_uniform_distribution();
+            let flag = npu.get_psp_uniform_distribution_for_cortical(&id);
+            if stored != want || flag != want {
+                bad.push(format!(
+                    "{ty:?}: want {want}, property {stored}, npu {flag}"
+                ));
+            }
+        }
+        bad
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn import_connectome_full_keeps_effective_psp_uniformity_per_area_type() {
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        let _g = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
+        let mut all = Vec::new();
+        for variant in [None, Some(true), Some(false)] {
+            for line in
+                psp_roundtrip_mismatches(psp_roundtrip_areas(variant), ConnectomePersistMode::Full)
+                    .await
+            {
+                all.push(format!("variant {variant:?} {line}"));
+            }
+        }
+        assert!(
+            all.is_empty(),
+            "full import changed PSP uniformity: {all:#?}"
+        );
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn import_connectome_lite_keeps_effective_psp_uniformity_per_area_type() {
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        let _g = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
+        let mut all = Vec::new();
+        for variant in [None, Some(true), Some(false)] {
+            for line in
+                psp_roundtrip_mismatches(psp_roundtrip_areas(variant), ConnectomePersistMode::Lite)
+                    .await
+            {
+                all.push(format!("variant {variant:?} {line}"));
+            }
+        }
+        assert!(
+            all.is_empty(),
+            "lite import changed PSP uniformity: {all:#?}"
+        );
     }
 
     /// After a full import the NPU holds the snapshot's neurons and synapses, not the
