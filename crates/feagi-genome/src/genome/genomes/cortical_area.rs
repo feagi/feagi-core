@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use feagi_connectome::feagi_connectome_neural::neural_basis::engine::BurstEngineIndex;
+use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::feagi_connectome_neural::neural_basis::visualization::{NeuronVisualizationVoxelIndex, NeuronVisualizationWordIndex};
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::{CorticalTypedGenerator, CorticalTypedStorage, CorticalTypedStorageOrGenerator};
@@ -53,7 +56,7 @@ where
 
 //region Contexts
 
-pub trait CorticalAreaCachingContext: Default {}
+pub trait CorticalAreaCachingContext {}
 
 /// In the case of dense storage, we dont want to store additional data
 #[derive(Default, Clone)]
@@ -61,14 +64,19 @@ pub struct CorticalAreaCachingContextNone;
 
 impl CorticalAreaCachingContext for CorticalAreaCachingContextNone {}
 
-/// In the case of runtime, we will use memory to offer rapid lookups
-#[derive(Default)]
-pub struct CorticalAreaCachingContextCaching {
+/// In the case of runtime, we will use memory to offer rapid lookups along with npu data caching
+pub struct CorticalAreaCachingContextNPUCaching<FIQ: FeagiIndexQuantization> {
     pub incoming_mappings: HashSet<CorticalIdentifier>,
     pub outgoing_mappings: HashSet<CorticalIdentifier>,
+    /// What index is the cortical area saved under within the engine
+    pub cortical_area_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+    /// Where to start reading the information in the visualization feed // TODO swap to enum to denote different types?
+    pub visualization_array_read_start_index: NeuronVisualizationWordIndex<FIQ::NeuronBitBatchIndexQuant>,
+    /// What engine is the cortical area under
+    pub engine_index: BurstEngineIndex,
 }
 
-impl CorticalAreaCachingContext for CorticalAreaCachingContextCaching {}
+impl<FIQ: FeagiIndexQuantization> CorticalAreaCachingContext for CorticalAreaCachingContextNPUCaching<FIQ> {}
 
 
 /// If we only allow storage, Generator, or Either

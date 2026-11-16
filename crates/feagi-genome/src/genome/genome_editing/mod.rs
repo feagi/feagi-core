@@ -20,6 +20,7 @@ pub trait GenomeEditSequenceContext: Sized {
 }
  // TODO builder
 
+
 pub struct GenomeEditSequence<FIQ: FeagiIndexQuantization, GESC: GenomeEditSequenceContext> {
     context: GESC,
     steps: Vec<GenomeEditStepSequenceStep<FIQ, GESC>>

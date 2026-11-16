@@ -2,8 +2,12 @@ use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID};
 use crate::basis::cortical_area::CorticalTypedGenerator;
+use crate::genome::genome_editing::{GenomeEditSequence, GenomeEditSequenceContextLoadGenome, GenomeEditSequenceError};
+use crate::genome::genome_editing::steps::brain_region::GenomeEditStepBrainRegionAddingOnlyEnum;
+use crate::genome::genome_editing::steps::cortical_area::GenomeEditStepLoadGenomeCorticalAreaEnum;
+use crate::genome::genome_editing::steps::GenomeEditStepSequenceStep;
 use crate::genome::genome_object::GenomeObjectMetadata;
-use crate::genome::genomes::brain_region::BrainRegionSet;
+use crate::genome::genomes::brain_region::{BrainRegionContainer, BrainRegionSet};
 use crate::genome::genomes::{CachingContext, CachingContextCaching, GenomeReadingInterface};
 use crate::genome::genomes::cortical_area::CorticalAreaSet;
 
@@ -20,9 +24,9 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization> {
 
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
-
-    /// Called on init, and can be called to have everything wiped
-    pub fn reset_to_new_barebones_genome(
+    /// Called on init, and can be called to have everything wiped. Loads with a genome with
+    /// only the root area
+    pub fn new_with_void_genome(
         genome_metadata: GenomeObjectMetadata,
         target_burst_rate: TargetFrequency,
         new_root_genome_id: BrainRegionID,
@@ -42,8 +46,72 @@ impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
             brain_regions: brain_region_set,
             cortical_areas: cortical_area_set,
         }
-
     }
+    
+    // TODO new from sequence
+    
+    pub fn reload_genome_from_sequence(
+        &mut self,
+        sequence: GenomeEditSequence<FIQ, GenomeEditSequenceContextLoadGenome>
+    ) -> Result<(), GenomeEditSequenceError> {
+        
+        // TODO validation
+        
+        
+        
+        // TODO NPU conversion
+    }
+    
+    
+    fn process_successful_edit_sequence(&mut self, sequence: Vec<GenomeEditStepSequenceStep<FIQ, GenomeEditSequenceContextLoadGenome>>)
+    {
+        for step in sequence {
+            match step {
+                GenomeEditStepSequenceStep::BrainRegion(br) => {
+                    match br {
+                        GenomeEditStepBrainRegionAddingOnlyEnum::AddRegion {
+                            metadata,
+                            positioning,
+                            this_brain_region_id,
+                            this_brain_region_ancestry,
+                            optional_parent_region 
+                        } => {
+                            let parent = optional_parent_region.unwrap_or_else(
+                                || {
+                                    *self.brain_regions.get_root_brain_region_container().get_root_id()
+                                }
+                            );
+                            
+                            self.brain_regions.add_new_brain_region(
+                                this_brain_region_id,
+                                BrainRegionContainer::new_inner(
+                                    this_brain_region_ancestry,
+                                    metadata,
+                                    positioning
+                                );
+                            )
+                            
+                        }
+                    }
+                }
+                GenomeEditStepSequenceStep::CorticalArea(ca) => {
+                    match ca {
+                        GenomeEditStepLoadGenomeCorticalAreaEnum::AddArea { 
+                            metadata,
+                            positioning,
+                            faux_cortical_identifier,
+                            neurogenesis,
+                            parent_region 
+                        } => {
+                            
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    
 }
 
 

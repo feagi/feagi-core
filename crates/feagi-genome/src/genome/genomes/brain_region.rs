@@ -88,7 +88,8 @@ pub trait BrainRegionCachingContext: Default {
         let region = BrainRegionContainer::new_inner(
             ancestor_id,
             metadata,
-            positioning
+            positioning,
+            /* basis::brain_region::BrainRegionID */,
         );
 
         brain_region_set.add_new_brain_region(region_id, region);
@@ -124,6 +125,7 @@ impl BrainRegionHierarchyContext for BrainRegionHierarchyContextRoot {}
 
 #[derive(Clone)]
 pub struct BrainRegionHierarchyContextInner {
+    pub parent_region: BrainRegionID,
     pub positioning: GenomeObjectPositioning,
 }
 
@@ -199,11 +201,11 @@ BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot>
 impl<CachingContext: BrainRegionCachingContext>
 BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>
 {
-    pub fn new_inner(ancestor_id: BrainRegionAncestryID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning, ) -> Self {
+    pub fn new_inner(ancestor_id: BrainRegionAncestryID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning, parent_region: BrainRegionID) -> Self {
         Self {
             ancestor_id,
             metadata,
-            hierarchy: BrainRegionHierarchyContextInner { positioning },
+            hierarchy: BrainRegionHierarchyContextInner {parent_region, positioning },
             cache: Default::default(),
         }
     }
