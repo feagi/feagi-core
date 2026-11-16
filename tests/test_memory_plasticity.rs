@@ -156,7 +156,7 @@ fn cortical_id_by_name(genome: &feagi_evolutionary::RuntimeGenome, name: &str) -
 #[test]
 fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
     let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../feagi-rs/genomes/associative_mem_genome.json");
+        .join("tests/fixtures/genomes/associative_mem_genome.json");
     let genome =
         load_genome_from_file(&genome_path).expect("Failed to load associative_mem_genome.json");
 
@@ -258,7 +258,7 @@ fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
 #[test]
 fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
     let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../feagi-rs/genomes/associative_mem_genome.json");
+        .join("tests/fixtures/genomes/associative_mem_genome.json");
     let genome =
         load_genome_from_file(&genome_path).expect("Failed to load associative_mem_genome.json");
 
