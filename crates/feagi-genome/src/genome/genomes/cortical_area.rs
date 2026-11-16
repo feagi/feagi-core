@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
-use crate::basis::cortical_area::{CorticalTypedGeneratorPrecursor, CorticalTypedStorage, CorticalTypedStorageOrGeneratorPrecursor};
+use crate::basis::cortical_area::{CorticalTypedGenerator, CorticalTypedStorage, CorticalTypedStorageOrGenerator};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
 pub struct CorticalAreaSet<FIQ, CachingContext, NeuronDataContext>
@@ -76,11 +76,11 @@ pub trait StoredNeuronDataContext<FIQ: FeagiIndexQuantization> {
 
 }
 
-impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedGeneratorPrecursor<FIQ> {}
+impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedGenerator<FIQ> {}
 
 impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorage<FIQ> {}
 
-impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorageOrGeneratorPrecursor<FIQ> {}
+impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTypedStorageOrGenerator<FIQ> {}
 
 //endregion
 

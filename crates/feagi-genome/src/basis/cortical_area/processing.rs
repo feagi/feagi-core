@@ -30,7 +30,7 @@ pub mod interconnect {
     #[cfg(feature = "alloc")]
     use feagi_connectome::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator, NMNeurogenesisValidatedStorage, NMNeurogenesisValidatedStorageOrGenerator};
     use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierInnerEncoderRandom;
-    use crate::basis::cortical_area::processing::CorticalTypeProcessing;
+    use crate::basis::cortical_area::processing::{CTProcessingSubtypedStorageOrGenerator, CorticalTypeProcessing};
     use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
 
     //region CorticalType
@@ -64,6 +64,7 @@ pub mod interconnect {
         type PossibleNeuronModelKindEnum = CTProcessingInterconnectNMModeled;
 
         type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledGenerator<FIQ>;
+        type PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>;
 
         fn into_neuron_model_enum(self) -> Self::PossibleNeuronModelKindEnum { self.0 }
     }
@@ -248,6 +249,28 @@ pub mod interconnect {
         FeagiSimple(NMFeagiSimpleQuanted<NMNeurogenesisStorageOrGenerator<FIQ>>),
     }
 
+    impl<FIQ: FeagiIndexQuantization> From<CTProcessingSubtypedStorageOrGenerator<FIQ>> for NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>> {
+        fn from(value: CTProcessingSubtypedStorageOrGenerator<FIQ>) -> Self {
+            match value {
+
+                //CTPr::ExclusivePower(sog) => {
+                //    NMModeled::ExclusivePower(sog)
+               // }
+                CTProcessingSubtypedStorageOrGenerator::Interconnect(sog) => {
+                    match sog {
+                        CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiAdvanced(s) => {
+                            NMModeled::FeagiAdvanced(s)
+                        }
+                        CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiSimple(s) => {
+                            NMModeled::FeagiSimple(s)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone)]
     pub enum CTProcessingInterconnectNMModeledValidatedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
@@ -269,7 +292,7 @@ pub enum CTProcessingSubtypedKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "CTProcessingInterconnectNMModeledGenerator<FIQ>: Serialize", deserialize = "CTProcessingInterconnectNMModeledGenerator<FIQ>: Deserialize<'de>"))]
-pub enum CTProcessingSubtypedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+pub enum CTProcessingSubtypedGenerator<FIQ: FeagiIndexQuantization> {
     Interconnect(CTProcessingInterconnectNMModeledGenerator<FIQ>)
 }
 
@@ -283,7 +306,7 @@ pub enum CTProcessingSubtypedStorage<FIQ: FeagiIndexQuantization> {
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>: Serialize", deserialize = "CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>: Deserialize<'de>"))]
-pub enum CTProcessingSubtypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+pub enum CTProcessingSubtypedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
     Interconnect(CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>)
 }
 

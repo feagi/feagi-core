@@ -71,6 +71,8 @@ pub mod power {
         type PossibleNeuronModelKindEnum = CTFoundationPowerNMModeled;
 
         type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTFoundationPowerNMModeledGenerator<FIQ>;
+        type PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTFoundationPowerNMModeledStorageOrGenerator<FIQ>;
+        
 
         fn into_neuron_model_enum(self) -> Self::PossibleNeuronModelKindEnum { self.0 }
     }
@@ -238,6 +240,18 @@ pub mod power {
     pub enum CTFoundationPowerNMModeledStorageOrGenerator<FIQ: FeagiIndexQuantization> {
         ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisStorageOrGenerator<FIQ>>),
     }
+    
+    impl<FIQ: FeagiIndexQuantization> From<CTFoundationPowerNMModeledStorageOrGenerator<FIQ>> for NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>> {
+        fn from(value: CTFoundationPowerNMModeledStorageOrGenerator<FIQ>) -> Self {
+            match value {
+                CTFoundationPowerNMModeledStorageOrGenerator::ExclusivePower(sog) => {
+                    NMModeled::ExclusivePower(sog)
+                }
+            }
+        }
+    }
+    
+    
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone)]
@@ -259,7 +273,7 @@ pub enum CTFoundationSubtypedKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "CTFoundationPowerNMModeledGenerator<FIQ>: Serialize", deserialize = "CTFoundationPowerNMModeledGenerator<FIQ>: Deserialize<'de>"))]
-pub enum CTFoundationSubtypedGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+pub enum CTFoundationSubtypedGenerator<FIQ: FeagiIndexQuantization> {
     Power(CTFoundationPowerNMModeledGenerator<FIQ>)
 }
 
@@ -273,7 +287,7 @@ pub enum CTFoundationSubtypedStorage<FIQ: FeagiIndexQuantization> {
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "CTFoundationPowerNMModeledStorageOrGenerator<FIQ>: Serialize", deserialize = "CTFoundationPowerNMModeledStorageOrGenerator<FIQ>: Deserialize<'de>"))]
-pub enum CTFoundationSubtypedStorageOrGeneratorPrecursor<FIQ: FeagiIndexQuantization> {
+pub enum CTFoundationSubtypedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
     Power(CTFoundationPowerNMModeledStorageOrGenerator<FIQ>)
 }
 

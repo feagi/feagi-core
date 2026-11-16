@@ -224,12 +224,13 @@ impl CorticalIDEnum for MaybeCorticalIdentifier {}
 //region Cortical Identifier Inner
 
 pub trait CorticalIdentifierInnerEncoder: Sized {
-    /// Any additional data / systems needed to do the encoding. Is passed in as a mut reference to allow
+    
+    /// Any additional systems needed to do the encoding. Is passed in as a mut reference to allow
     /// variety when retrying
     type ContextRequiredToEncode;
     
-    /// What data can be decoded
-    type DecodableContext;
+    /// What data itself can be encoded and decoded
+    type DecodableData;
 
     const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy;
 
@@ -240,10 +241,10 @@ pub trait CorticalIdentifierInnerEncoder: Sized {
     fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError>;
     
     /// Extract the decodable context
-    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableContext;
+    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData;
     
-    fn encode_to_bytes_new(context: &mut Self::ContextRequiredToEncode)
-        -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
+    fn encode_to_bytes_new(data: Self::DecodableData, context: &mut Self::ContextRequiredToEncode)
+                           -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
         let mut bytes = [0,0,0,0,0,0];
         Self::encode_to_bytes(&mut bytes, context)?;
         Ok(CorticalIdentifierInner{bytes, _p: Default::default()})
@@ -263,9 +264,11 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
         Encoder::try_decode_from_bytes(bytes)
     }
     
-    pub fn try_new_from_context(context: &mut Encoder::ContextRequiredToEncode)
-                                -> Result<Self, CorticalIdentifierParseError> {
-        Encoder::encode_to_bytes_new(context)
+    pub fn try_new_from_data_and_context(
+        data: Encoder::DecodableData,
+        context: &mut Encoder::ContextRequiredToEncode)
+        -> Result<Self, CorticalIdentifierParseError> {
+        Encoder::encode_to_bytes_new(data, context)
     }
 }
 
@@ -294,7 +297,7 @@ pub struct CorticalIdentifierInnerEncoderRandom;
 
 impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
     type ContextRequiredToEncode = ();
-    type DecodableContext = ();
+    type DecodableData = ();
     const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
         CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8); // Did you get the broom closet ending? The broom closet ending was my favorite!
 
@@ -308,7 +311,7 @@ impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
         Ok(CorticalIdentifierInner{ bytes, _p: Default::default() })
     }
 
-    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableContext {
+    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData {
         &() // nothing to get
     }
 }
