@@ -86,7 +86,60 @@ pub fn validate_genome(genome: &RuntimeGenome) -> ValidationResult {
     // Cross-validate (e.g., check references between sections)
     cross_validate(genome, &mut result);
 
+    // Warn about memory.capture without a replay loop
+    validate_memory_capture_loops(genome, &mut result);
+
     result
+}
+
+/// Warning for a memory area that records with `memory.capture` but has no
+/// `sequential_memory` mapping from itself to itself.
+pub const MEMORY_CAPTURE_WITHOUT_LOOP_WARNING: &str = "memory.capture on this area records episodes but cannot replay them: add a sequential_memory mapping from the area to itself.";
+
+/// True when the area's own mapping list holds a `sequential_memory` rule to itself.
+fn area_has_sequential_memory_loop(
+    cortical_id: &CorticalID,
+    area: &feagi_structures::genomic::cortical_area::CorticalArea,
+) -> bool {
+    let Some(Value::Object(dstmap)) = area.properties.get("cortical_mapping_dst") else {
+        return false;
+    };
+    let Some(Value::Array(rules)) = dstmap.get(&cortical_id.as_base_64()) else {
+        return false;
+    };
+    rules.iter().any(|rule| {
+        let id = match rule {
+            Value::Object(obj) => obj.get("morphology_id").and_then(Value::as_str),
+            Value::Array(arr) => arr.first().and_then(Value::as_str),
+            _ => None,
+        };
+        id == Some("sequential_memory")
+    })
+}
+
+/// D10: a memory area subscribed to a `memory.capture` modulator without a self
+/// `sequential_memory` mapping records episodes it cannot replay. Warning only.
+fn validate_memory_capture_loops(genome: &RuntimeGenome, result: &mut ValidationResult) {
+    use feagi_structures::genomic::cortical_area::CorticalAreaType;
+    use feagi_structures::genomic::ModulatorKind;
+
+    for (cortical_id, area) in &genome.cortical_areas {
+        if !matches!(area.cortical_type, CorticalAreaType::Memory(_)) {
+            continue;
+        }
+        let Some(Value::Array(subscribed)) = area.properties.get("modulators") else {
+            continue;
+        };
+        let captures = subscribed.iter().filter_map(Value::as_str).any(|id| {
+            genome
+                .modulators
+                .get(id)
+                .is_some_and(|instance| instance.kind == ModulatorKind::MemoryCapture)
+        });
+        if captures && !area_has_sequential_memory_loop(cortical_id, area) {
+            result.add_warning(MEMORY_CAPTURE_WITHOUT_LOOP_WARNING.to_string());
+        }
+    }
 }
 
 /// Auto-fix common genome issues (zero dimensions, zero per_voxel_neuron_cnt, missing physiology)

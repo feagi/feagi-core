@@ -282,6 +282,10 @@ pub struct CorticalAreaInfo {
     /// "recall_only". Omitted for non-memory areas.
     #[serde(rename = "replay_trigger", skip_serializing_if = "Option::is_none")]
     pub replay_trigger: Option<String>,
+    /// Optional cap on one `memory.capture` recording piece, in bursts; absent when unset.
+    /// Omitted for non-memory areas.
+    #[serde(rename = "capture_max_bursts", skip_serializing_if = "Option::is_none")]
+    pub capture_max_bursts: Option<u32>,
     /// Set on an update response when the change altered the memory area's pattern shape
     /// (temporal depth, episodic upstream set or MP encoding mode) and neurons that no longer
     /// fit were removed. Absent on reads and on updates that removed nothing.
@@ -635,6 +639,11 @@ pub struct SystemHealth {
 pub struct FiredNeuron {
     pub neuron_id: u32,
     pub voxel: Option<(u32, u32, u32)>,
+    /// Fire kind (`FIRE_KIND_*` in the burst engine): 0 = STDP-eligible (dense, or associative
+    /// memory fire), 1 = episodic memory (pattern-injection fire), 2 = chain recall (a step of a
+    /// `sequential_memory` chain replay). Stored per fired neuron in the Fire Ledger, exact for
+    /// every tracked area.
+    pub fire_kind: u8,
 }
 
 /// Every neuron of one area that fired in one burst (empty when the area was silent).

@@ -104,6 +104,9 @@ pub const MEMORY_NEURON_CAP_KEY: &str = "memory_neuron_cap";
 pub const LTM_EVICTION_KEY: &str = "ltm_eviction";
 /// Genome key selecting which fires of a memory neuron replay its stored frames onto its twin.
 pub const REPLAY_TRIGGER_KEY: &str = "replay_trigger";
+/// Genome key for the optional per-area cap on one `memory.capture` recording piece, in bursts
+/// (integer >= 1). Unset means the cap is derived from 5 s at runtime. Stored only for now.
+pub const CAPTURE_MAX_BURSTS_KEY: &str = "capture_max_bursts";
 
 /// Which fires of a memory neuron replay its stored frames onto its twin area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -267,6 +270,21 @@ pub fn validate_memory_mp_properties(properties: &HashMap<String, Value>) -> Res
         }
     }
 
+    match properties.get(CAPTURE_MAX_BURSTS_KEY) {
+        None | Some(Value::Null) => {}
+        Some(value) => {
+            if value
+                .as_u64()
+                .is_none_or(|v| !(1..=u64::from(u32::MAX)).contains(&v))
+            {
+                return Err(format!(
+                    "{CAPTURE_MAX_BURSTS_KEY} must be a whole number from 1 to {}, got {value}",
+                    u32::MAX
+                ));
+            }
+        }
+    }
+
     let mp_learning = match properties.get(MP_LEARNING_ENABLED_KEY) {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => *b,
@@ -318,6 +336,9 @@ pub struct MemoryAreaProperties {
     pub ltm_eviction: LtmEvictionMode,
     /// Which fires of a memory neuron replay its frames onto the twin area.
     pub replay_trigger: ReplayTrigger,
+    /// Optional cap on one `memory.capture` recording piece, in bursts (>= 1); `None` derives it
+    /// at runtime. Stored only.
+    pub capture_max_bursts: Option<u32>,
 }
 
 impl Default for MemoryAreaProperties {
@@ -338,6 +359,7 @@ impl Default for MemoryAreaProperties {
             memory_neuron_cap: 0,
             ltm_eviction: LtmEvictionMode::Lru,
             replay_trigger: ReplayTrigger::AnyFire,
+            capture_max_bursts: None,
         }
     }
 }
@@ -455,6 +477,11 @@ pub fn extract_memory_properties(
             .unwrap_or(defaults.memory_neuron_cap),
         ltm_eviction,
         replay_trigger,
+        capture_max_bursts: properties
+            .get(CAPTURE_MAX_BURSTS_KEY)
+            .and_then(|v| v.as_u64())
+            .filter(|v| *v >= 1)
+            .map(|v| v.min(u64::from(u32::MAX)) as u32),
     })
 }
 

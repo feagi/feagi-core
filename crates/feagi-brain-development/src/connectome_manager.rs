@@ -4163,6 +4163,7 @@ impl ConnectomeManager {
         use tracing::info;
 
         self.validate_memory_outbound_mapping_contract(src_area_id, dst_area_id, &mapping_data)?;
+        self.validate_sequential_memory_mapping(src_area_id, dst_area_id, &mapping_data)?;
         if enforce_region_io {
             crate::region_io_designation::validate_cross_region_mapping_proposal(
                 self,
@@ -4694,6 +4695,56 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Enforce the `sequential_memory` contract: it is the episode-link loop of one MEMORY
+    /// area, so source and destination must be the same memory area, and an area holds at most
+    /// one such rule. Mappings without a `sequential_memory` rule are not checked.
+    pub fn validate_sequential_memory_mapping(
+        &self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        mapping_data: &[serde_json::Value],
+    ) -> BduResult<()> {
+        let count = mapping_data
+            .iter()
+            .filter(|rule| {
+                rule.as_object()
+                    .and_then(|rule_obj| rule_obj.get("morphology_id"))
+                    .and_then(|value| value.as_str())
+                    .or_else(|| {
+                        rule.as_array()
+                            .and_then(|rule_array| rule_array.first())
+                            .and_then(|value| value.as_str())
+                    })
+                    == Some("sequential_memory")
+            })
+            .count();
+        if count == 0 {
+            return Ok(());
+        }
+        if src_area_id != dst_area_id {
+            return Err(BduError::InvalidMorphology(format!(
+                "sequential_memory must map a memory area to itself, got {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+        let area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        })?;
+        if !matches!(area.cortical_type, CorticalAreaType::Memory(_)) {
+            return Err(BduError::InvalidMorphology(format!(
+                "sequential_memory is only allowed on a memory area; {} is not a memory area",
+                src_area_id
+            )));
+        }
+        if count > 1 {
+            return Err(BduError::InvalidMorphology(format!(
+                "a memory area may have at most one sequential_memory mapping; {} has {}",
+                src_area_id, count
+            )));
+        }
+        Ok(())
+    }
+
     /// Number of synapses that currently exist for the mapping `src` -> `dst`.
     pub fn count_mapping_synapses(&self, src: &CorticalID, dst: &CorticalID) -> usize {
         let (Some(npu), Some(src_idx), Some(dst_idx)) = (
@@ -4935,7 +4986,12 @@ impl ConnectomeManager {
                 // Use direct source-target batch removal here rather than index-based removal.
                 // This avoids false "Pruned 0" outcomes when propagation synapse_index is stale
                 // during repeated rapid remap operations.
-                npu.remove_synapses_between(sources, targets)
+                // Episode links (memory.capture) are spared: only deleting the loop removes them.
+                npu.remove_synapses_between_sparing(
+                    sources,
+                    targets,
+                    feagi_npu_neural::synapse::SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
+                )
             };
             let remove_time = remove_start.elapsed();
             let total_time = start.elapsed();
@@ -5003,6 +5059,14 @@ impl ConnectomeManager {
         // - `apply_cortical_mapping_for_pair()` returns the created synapse count but does not update
         //   StateManager/caches; we do that immediately after the call.
         let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
+        if src_idx == dst_idx
+            && self
+                .cortical_areas
+                .get(src_area_id)
+                .is_some_and(|a| matches!(a.cortical_type, CorticalAreaType::Memory(_)))
+        {
+            self.sync_sequential_loop_after_edit(&npu_arc, src_area_id, src_idx);
+        }
         tracing::debug!(
             target: "feagi-bdu",
             "Synaptogenesis created {} synapses for {} -> {}",
@@ -5837,6 +5901,124 @@ impl ConnectomeManager {
         out
     }
 
+    /// Register the `sequential_memory` loop of a memory area with the NPU: the PSP, type and
+    /// delay of the rule and its modulation group, which every episode link carries.
+    fn register_sequential_loop_for_rule(
+        &self,
+        npu_arc: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        area_id: &CorticalID,
+        area_idx: u32,
+        rule: &serde_json::Value,
+    ) -> BduResult<()> {
+        let (weight, psp, synapse_type, delay_bursts) =
+            self.resolve_synapse_params_for_rule(area_id, rule)?;
+        let ids = rule.as_object().map(rule_modulator_ids).unwrap_or_default();
+        let npu = npu_arc
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        let modulation_group = npu.allocate_modulation_group(&ids);
+        if !ids.is_empty() && modulation_group == 0 {
+            warn!(
+                target: "feagi-bdu",
+                "sequential_memory on {} lists modulator ids {:?}, but none is a defined synaptic modulator; episode links run without modulation",
+                area_id, ids
+            );
+        }
+        npu.register_sequential_loop(
+            area_idx,
+            feagi_npu_burst_engine::SequentialLoopParams {
+                weight,
+                psp,
+                synapse_type,
+                delay_bursts,
+                modulation_group,
+            },
+        );
+        Ok(())
+    }
+
+    /// Register every memory area's `sequential_memory` loop from the stored mappings, push
+    /// each area's `capture_max_bursts`, then re-stamp the loop's modulation group and PSP onto
+    /// the episode links already in the NPU. Run after a connectome load: lite rows carry the
+    /// edge flag but no modulation group, and a full load resets the NPU's loop table.
+    /// Returns the number of links stamped.
+    pub fn refresh_sequential_loops(&self) -> usize {
+        let Some(npu_arc) = self.npu.clone() else {
+            return 0;
+        };
+        let memory_ids: Vec<CorticalID> = self
+            .cortical_areas
+            .iter()
+            .filter(|(_, area)| matches!(area.cortical_type, CorticalAreaType::Memory(_)))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &memory_ids {
+            self.sync_memory_associative_lif_params(id);
+            let Some(&idx) = self.cortical_id_to_idx.get(id) else {
+                continue;
+            };
+            let Some(rules) = self.get_mapping_rules(id, id) else {
+                continue;
+            };
+            let loop_rule = rules.iter().find(|rule| {
+                rule.as_object()
+                    .and_then(|obj| obj.get("morphology_id"))
+                    .and_then(|v| v.as_str())
+                    == Some("sequential_memory")
+            });
+            if let Some(rule) = loop_rule {
+                if let Err(e) = self.register_sequential_loop_for_rule(&npu_arc, id, idx, rule) {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Could not register the sequential_memory loop of {}: {}",
+                        id, e
+                    );
+                }
+            }
+        }
+        npu_arc
+            .lock()
+            .map(|npu| npu.restamp_sequential_links())
+            .unwrap_or(0)
+    }
+
+    /// After a mapping of a memory area to itself changed: a present `sequential_memory` rule
+    /// keeps its links (they are re-stamped from the rule); a mapping without one is the loop
+    /// being deleted, so the loop registration and the episode links go.
+    fn sync_sequential_loop_after_edit(
+        &self,
+        npu_arc: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        area_id: &CorticalID,
+        area_idx: u32,
+    ) {
+        let has_loop = self
+            .get_mapping_rules(area_id, area_id)
+            .is_some_and(|rules| {
+                rules.iter().any(|rule| {
+                    rule.as_object()
+                        .and_then(|obj| obj.get("morphology_id"))
+                        .and_then(|v| v.as_str())
+                        == Some("sequential_memory")
+                })
+            });
+        let Ok(npu) = npu_arc.lock() else {
+            return;
+        };
+        if has_loop {
+            npu.restamp_sequential_links();
+        } else if npu.unregister_sequential_loop(area_idx) {
+            let removed = npu.remove_sequential_links(area_idx);
+            info!(
+                target: "feagi-bdu",
+                "sequential_memory loop of {} deleted: {} episode link(s) removed",
+                area_id, removed
+            );
+        } else {
+            // No loop was registered, but links may remain from an earlier load.
+            npu.remove_sequential_links(area_idx);
+        }
+    }
+
     /// Apply cortical mapping for a specific area pair
     fn apply_cortical_mapping_for_pair(
         &mut self,
@@ -5965,6 +6147,18 @@ impl ConnectomeManager {
                     );
                     return Err(e);
                 }
+            }
+
+            // The loop of a memory area holds its episode links, created at runtime by
+            // memory.capture; its rule is registered with the NPU even though it builds no
+            // synapses (the modulation group is allocated here, not when links appear).
+            if morphology_id == "sequential_memory" {
+                self.register_sequential_loop_for_rule(
+                    &npu_arc,
+                    src_area_id,
+                    src_cortical_idx,
+                    rule,
+                )?;
             }
 
             // Apply the morphology rule
@@ -6178,6 +6372,18 @@ impl ConnectomeManager {
                 trace!(
                     target: "feagi-bdu",
                     "Memory replay morphology: {} -> {} (no physical synapses)",
+                    src_idx, dst_idx
+                );
+                Ok(0)
+            }
+            "sequential_memory" => {
+                // Episode-link loop of one memory area: it holds links created at runtime by
+                // memory.capture, never at mapping time, so no synapses are created here. The
+                // rule's PSP, type and delay are read by the caller like for any other mapping.
+                use tracing::trace;
+                trace!(
+                    target: "feagi-bdu",
+                    "Sequential memory morphology: {} -> {} (no synapses at mapping time)",
                     src_idx, dst_idx
                 );
                 Ok(0)
@@ -7706,8 +7912,14 @@ impl ConnectomeManager {
             replay_recall_only: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .is_some_and(|p| p.replay_trigger == feagi_evolutionary::ReplayTrigger::RecallOnly),
         };
+        let capture_max_bursts = feagi_evolutionary::extract_memory_properties(&area.properties)
+            .and_then(|p| p.capture_max_bursts);
         match npu.lock() {
-            Ok(mut npu) => npu.set_memory_associative_lif_params(idx, params),
+            Ok(mut npu) => {
+                npu.set_memory_associative_lif_params(idx, params);
+                // The area's memory.capture piece cap rides along with its other runtime params.
+                npu.set_memory_capture_max_bursts(idx, capture_max_bursts);
+            }
             Err(e) => warn!(
                 target: "feagi-bdu",
                 "Failed to lock NPU to set memory LIF params for {}: {}",
@@ -8884,6 +9096,30 @@ impl ConnectomeManager {
             }
         } else {
             Vec::new()
+        }
+    }
+
+    /// Outgoing synapses with edge flags and modulation group:
+    /// `(target, weight, psp, synapse_type, edge_flags, modulation_group)`.
+    pub fn get_outgoing_synapses_detailed(
+        &self,
+        source_neuron_id: u64,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        match self.npu.as_ref().and_then(|n| n.lock().ok()) {
+            Some(g) => g.get_outgoing_synapses_detailed(source_neuron_id as u32),
+            None => Vec::new(),
+        }
+    }
+
+    /// Incoming synapses with edge flags and modulation group:
+    /// `(source, weight, psp, synapse_type, edge_flags, modulation_group)`.
+    pub fn get_incoming_synapses_detailed(
+        &self,
+        target_neuron_id: u64,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        match self.npu.as_ref().and_then(|n| n.lock().ok()) {
+            Some(g) => g.get_incoming_synapses_detailed(target_neuron_id as u32),
+            None => Vec::new(),
         }
     }
 
@@ -11203,6 +11439,7 @@ pub(crate) mod tests {
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
                 change_record: None,
+                episode_members: Vec::new(),
             }])
             .expect("seeded long-term memory neuron");
             assert_eq!(
@@ -12814,6 +13051,114 @@ pub(crate) mod tests {
                 vec![serde_json::json!({"morphology_id": "associative_memory"})],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn test_sequential_memory_is_a_memory_self_loop_creating_no_synapses() {
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+            MemoryCorticalType,
+        };
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let other_memory_id = CorticalID::try_from_bytes(b"mmem0002").unwrap();
+        let plain_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        for (id, name, cortical_type, x) in [
+            (
+                memory_id,
+                "Memory A",
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+                0,
+            ),
+            (
+                other_memory_id,
+                "Memory B",
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+                2,
+            ),
+            (
+                plain_id,
+                "Plain",
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+                4,
+            ),
+        ] {
+            let is_memory = matches!(cortical_type, CorticalAreaType::Memory(_));
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (x, 0, 0).into(),
+                cortical_type,
+            )
+            .unwrap();
+            if is_memory {
+                area.properties
+                    .insert("is_mem_type".to_string(), serde_json::json!(true));
+            }
+            manager.add_cortical_area(area).unwrap();
+        }
+
+        let rule = || {
+            serde_json::json!({
+                "morphology_id": "sequential_memory",
+                "morphology_scalar": 1,
+                "postSynapticCurrent_multiplier": 1.0,
+                "plasticity_flag": false,
+                "synaptic_delay_bursts": 2,
+            })
+        };
+
+        // To another memory area, from a non-memory area, and to a non-memory area: rejected.
+        for (src, dst) in [
+            (memory_id, other_memory_id),
+            (plain_id, plain_id),
+            (memory_id, plain_id),
+        ] {
+            let err = manager.update_cortical_mapping(&src, &dst, vec![rule()]);
+            assert!(
+                matches!(err, Err(BduError::InvalidMorphology(_))),
+                "{src} -> {dst}: {err:?}"
+            );
+        }
+        // A second one on the same area is rejected.
+        let twice = manager.update_cortical_mapping(&memory_id, &memory_id, vec![rule(), rule()]);
+        assert!(
+            matches!(twice, Err(BduError::InvalidMorphology(ref m)) if m.contains("at most one")),
+            "{twice:?}"
+        );
+
+        // The self-loop on a memory area is accepted and creates no synapses.
+        manager
+            .add_neuron(
+                &memory_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        manager
+            .update_cortical_mapping(&memory_id, &memory_id, vec![rule()])
+            .unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&memory_id, &memory_id)
+            .unwrap();
+        assert_eq!(created, 0, "sequential_memory creates no synapses");
+        assert_eq!(manager.count_mapping_synapses(&memory_id, &memory_id), 0);
     }
 
     #[test]

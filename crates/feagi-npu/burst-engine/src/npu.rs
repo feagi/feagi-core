@@ -33,7 +33,8 @@
 use crate::chain_latency_trace::{emit_area_cortical_fire_detail, emit_chain_latency_trace};
 use crate::fire_ledger::FireLedger;
 use crate::fire_structures::{
-    FireQueue, FiringNeuron, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE,
+    FireQueue, FiringNeuron, FIRE_KIND_CHAIN_RECALL, FIRE_KIND_EPISODIC_MEMORY,
+    FIRE_KIND_STDP_ELIGIBLE,
 };
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::modulator_engine::ModulatorEngine;
@@ -45,7 +46,9 @@ use crate::sparse_memory_lif::{
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use ahash::AHashSet;
-use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+use feagi_npu_neural::synapse::{
+    compute_synaptic_contribution, SYNAPSE_EDGE_ASSOCIATIVE_MEMORY, SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
+};
 use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
@@ -434,6 +437,9 @@ pub struct RustNPU<
     rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
     /// @cursor:critical-path — idle when no modulator bindings and no spike trains are registered.
     modulator_engine: std::sync::Mutex<ModulatorEngine>,
+    /// `memory.capture` recording state and `sequential_memory` loop parameters (see
+    /// `memory_capture.rs`). Idle for a brain with no capture subscription and no loop.
+    memory_capture: std::sync::Mutex<crate::memory_capture::MemoryCaptureState>,
 
     /// Classifier class pairs checked against this burst's fire queue.
     classifier_error_watches: std::sync::RwLock<Vec<ClassifierErrorWatch>>,
@@ -501,6 +507,9 @@ pub(crate) struct FireStructures {
     /// Real storage-backed neuron IDs that must appear in the fire queue this burst (manual force).
     /// Merged after Phase 2 so LIF/refractory/excitability do not apply.
     pub(crate) pending_authoritative_fq: Vec<(NeuronId, f32)>,
+    /// Chain replay state of `sequential_memory` loops: lockout, chain head, visited set, ranked
+    /// successors. Transient or derived; idle for a brain with no loop and no recording.
+    pub(crate) replay_chains: crate::memory_chain::ReplayChains,
 }
 
 /// Replay frame captured from upstream activity for memory replay.
@@ -625,6 +634,7 @@ impl<
                     crate::synaptic_arrival_schedule::SynapticArrivalSchedule::default(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
+                replay_chains: Default::default(),
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
@@ -644,6 +654,7 @@ impl<
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
             modulator_engine: std::sync::Mutex::new(ModulatorEngine::default()),
+            memory_capture: std::sync::Mutex::new(Default::default()),
             classifier_error_watches: std::sync::RwLock::new(Vec::new()),
         })
     }
@@ -839,6 +850,7 @@ impl<
                     crate::synaptic_arrival_schedule::SynapticArrivalSchedule::default(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
+                replay_chains: Default::default(),
             };
         }
 
@@ -865,6 +877,11 @@ impl<
             .lock()
             .expect("modulator engine lock")
             .clear_baselines();
+        // Loops, caps and sessions belong to the previous genome; the new one registers its own.
+        self.memory_capture
+            .lock()
+            .expect("memory capture lock")
+            .clear_all();
 
         Ok(())
     }
@@ -2562,6 +2579,371 @@ impl<
             .is_some()
     }
 
+    /// Strongest successor of `head` through its live flagged links that has not played yet:
+    /// the first of the ranked order, ties (and unranked links) by neuron id. Returns the
+    /// target and the link's delay in bursts.
+    fn best_chain_successor(
+        order: &AHashMap<u32, Vec<u32>>,
+        synapse_storage: &impl SynapseStorage,
+        propagation_engine: &SynapticPropagationEngine,
+        head: u32,
+        visited: &AHashSet<u32>,
+    ) -> Option<(u32, u32)> {
+        let indices = propagation_engine.synapse_index.get(&NeuronId(head))?;
+        let mut best: Option<(usize, u32, u32)> = None;
+        for &i in indices {
+            if i >= synapse_storage.count()
+                || !synapse_storage.valid_mask()[i]
+                || synapse_storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY == 0
+            {
+                continue;
+            }
+            let target = synapse_storage.target_neurons()[i];
+            if visited.contains(&target) {
+                continue;
+            }
+            let rank = crate::memory_chain::rank_in(order, head, target);
+            let delay = synapse_storage.delay_bursts()[i].max(1) as u32;
+            let better = match best {
+                None => true,
+                Some((best_rank, best_target, _)) => (rank, target) < (best_rank, best_target),
+            };
+            if better {
+                best = Some((rank, target, delay));
+            }
+        }
+        best.map(|(_, target, delay)| (target, delay))
+    }
+
+    /// Delay in bursts of the live flagged link `source -> target`, if there is one.
+    fn chain_link_delay(
+        synapse_storage: &impl SynapseStorage,
+        propagation_engine: &SynapticPropagationEngine,
+        source: u32,
+        target: u32,
+    ) -> Option<u32> {
+        let indices = propagation_engine.synapse_index.get(&NeuronId(source))?;
+        indices.iter().find_map(|&i| {
+            (i < synapse_storage.count()
+                && synapse_storage.valid_mask()[i]
+                && synapse_storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY != 0
+                && synapse_storage.target_neurons()[i] == target)
+                .then(|| synapse_storage.delay_bursts()[i].max(1) as u32)
+        })
+    }
+
+    /// Chain replay for one burst, for the areas that have a `sequential_memory` loop or record.
+    ///
+    /// - A chain is started only by a recall fire of a state that has a successor.
+    /// - While a chain runs in an area, every other replay of that area is blocked (lockout),
+    ///   window echoes included; the chain's own steps are not.
+    /// - While an area records, no new replay of any kind starts in it. A chain that is already
+    ///   running keeps stepping and its queued frames play on.
+    /// - Several starts in one burst: the lowest neuron id wins, the rest are blocked.
+    ///
+    /// Blocked fires are left in `replay_chains.suppressed` for the frame scheduler.
+    fn memory_chain_pass(
+        &self,
+        fire_queue: &mut FireQueue,
+        burst_count: u64,
+        fire_structures: &mut FireStructures,
+        propagation_engine: &mut SynapticPropagationEngine,
+    ) {
+        if !fire_structures.replay_chains.engaged {
+            return;
+        }
+        let chains = &mut fire_structures.replay_chains;
+        chains.suppressed.clear();
+        chains.stepping.clear();
+        // A chain ends at its cap, or when its awaited arrival never came.
+        chains.chains.retain(|_, run| {
+            burst_count <= run.deadline
+                && burst_count.saturating_sub(run.start_burst) <= run.cap_bursts
+        });
+        let synapse_storage = self.synapse_storage.read().unwrap();
+        let mut steps: AHashMap<u32, u32> = AHashMap::new();
+
+        for (area_idx, neurons) in fire_queue.neurons_by_area.iter_mut() {
+            let area_idx = *area_idx;
+            if neurons.is_empty() || !chains.area_engaged(area_idx) {
+                continue;
+            }
+            // Fires of a chain that is gone (or not awaited) replay nothing.
+            let awaited = chains.chains.get(&area_idx).and_then(|run| run.next);
+            let arrived = awaited.filter(|next| neurons.iter().any(|n| n.neuron_id.0 == *next));
+            // Episode neurons whose whole chain completed this burst (Q1).
+            let mut completed: Vec<u32> = Vec::new();
+
+            if let Some(id) = arrived {
+                let mut ended = false;
+                if let Some(run) = chains.chains.get_mut(&area_idx) {
+                    run.visited.insert(id);
+                    run.head = id;
+                    if run.episode.is_none() {
+                        crate::memory_chain::advance_candidates(
+                            &chains.episodes,
+                            id,
+                            &mut run.candidates,
+                            &mut completed,
+                        );
+                        crate::memory_chain::open_candidates(
+                            &chains.first_index,
+                            &chains.episodes,
+                            id,
+                            &mut run.candidates,
+                            &mut completed,
+                        );
+                    }
+                    // An episode chain follows its member list exactly (no visited set, no
+                    // ranking); a state chain takes its strongest unplayed successor.
+                    let listed_next = run
+                        .episode
+                        .as_ref()
+                        .map(|list| list.get(run.pos + 1).copied());
+                    let next = match listed_next {
+                        Some(listed) => {
+                            run.pos += 1;
+                            listed.and_then(|target| {
+                                Self::chain_link_delay(
+                                    &*synapse_storage,
+                                    propagation_engine,
+                                    id,
+                                    target,
+                                )
+                                .map(|delay| (target, delay))
+                            })
+                        }
+                        None => Self::best_chain_successor(
+                            &chains.order,
+                            &*synapse_storage,
+                            propagation_engine,
+                            id,
+                            &run.visited,
+                        ),
+                    };
+                    match next {
+                        Some((target, delay)) => {
+                            run.next = Some(target);
+                            run.deadline = burst_count + u64::from(delay);
+                            steps.insert(id, target);
+                            chains.stepping.push((area_idx, id));
+                        }
+                        None => ended = true,
+                    }
+                }
+                if ended {
+                    chains.chains.remove(&area_idx);
+                }
+                for n in neurons.iter() {
+                    if n.neuron_id.0 != id {
+                        chains.suppressed.insert(n.neuron_id.0);
+                        chains.note_lockout(area_idx, 1);
+                    }
+                }
+                Self::fire_completed_episodes(chains, neurons, area_idx, &completed);
+                continue;
+            }
+
+            if chains.chains.contains_key(&area_idx) {
+                for n in neurons.iter() {
+                    chains.suppressed.insert(n.neuron_id.0);
+                    chains.note_lockout(area_idx, 1);
+                }
+                continue;
+            }
+
+            // No chain runs. A chain-recall fire that is not awaited replays nothing.
+            for n in neurons.iter() {
+                if n.fire_kind == FIRE_KIND_CHAIN_RECALL {
+                    chains.suppressed.insert(n.neuron_id.0);
+                }
+            }
+
+            if chains.recording.contains(&area_idx) {
+                for n in neurons.iter() {
+                    if n.fire_kind != FIRE_KIND_CHAIN_RECALL {
+                        chains.suppressed.insert(n.neuron_id.0);
+                        // An episode neuron fires at a piece end and replays nothing: it is not
+                        // a blocked replay.
+                        if !chains.episodes.contains_key(&n.neuron_id.0) {
+                            chains.note_recording_block(area_idx, 1);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if !chains.loop_areas.contains(&area_idx) {
+                continue;
+            }
+            let mut cues: Vec<u32> = neurons
+                .iter()
+                .filter(|n| {
+                    n.fire_kind == FIRE_KIND_STDP_ELIGIBLE
+                        && n.neuron_id.0 >= MEMORY_NEURON_ID_START
+                })
+                .map(|n| n.neuron_id.0)
+                .collect();
+            cues.sort_unstable();
+            let loop_params = self
+                .memory_capture
+                .lock()
+                .ok()
+                .and_then(|capture| capture.loop_params(area_idx));
+            // Q1 fires only through an open loop gate (one-state episodes included).
+            let gate_open = loop_params.is_some_and(|params| {
+                compute_synaptic_contribution(params.weight, params.psp, params.synapse_type)
+                    * propagation_engine.transmission_scale_of_group(params.modulation_group)
+                    > 0.0
+            });
+            let mut started = None;
+            for &cue in &cues {
+                if let Some(members) = chains.episodes.get(&cue) {
+                    // Recall of an episode neuron: the chain begins at its first member and
+                    // follows the list. There is no link from the episode neuron, so the first
+                    // arrival is scheduled directly, through the loop's gate and gain.
+                    let Some(params) = loop_params else {
+                        continue;
+                    };
+                    let psp = compute_synaptic_contribution(
+                        params.weight,
+                        params.psp,
+                        params.synapse_type,
+                    ) * propagation_engine
+                        .transmission_scale_of_group(params.modulation_group);
+                    if members.is_empty() || psp <= 0.0 {
+                        continue;
+                    }
+                    started = Some((
+                        cue,
+                        members[0],
+                        u32::from(params.delay_bursts.max(1)),
+                        AHashSet::new(),
+                        Some((members.clone(), psp)),
+                    ));
+                    break;
+                }
+                let mut visited = AHashSet::new();
+                visited.insert(cue);
+                if let Some((target, delay)) = Self::best_chain_successor(
+                    &chains.order,
+                    &*synapse_storage,
+                    propagation_engine,
+                    cue,
+                    &visited,
+                ) {
+                    started = Some((cue, target, delay, visited, None));
+                    break;
+                }
+            }
+            let Some((cue, target, delay, visited, episode)) = started else {
+                // No chain starts. A cued state that is a one-state episode still completes it.
+                if gate_open {
+                    for &cue in &cues {
+                        if chains.first_index.contains_key(&cue) {
+                            let mut none = Vec::new();
+                            crate::memory_chain::open_candidates(
+                                &chains.first_index,
+                                &chains.episodes,
+                                cue,
+                                &mut none,
+                                &mut completed,
+                            );
+                            break;
+                        }
+                    }
+                    Self::fire_completed_episodes(chains, neurons, area_idx, &completed);
+                }
+                continue;
+            };
+            let mut candidates: Vec<(u32, usize)> = Vec::new();
+            if episode.is_none() && gate_open {
+                crate::memory_chain::open_candidates(
+                    &chains.first_index,
+                    &chains.episodes,
+                    cue,
+                    &mut candidates,
+                    &mut completed,
+                );
+            }
+            let cap_bursts = self
+                .memory_capture
+                .lock()
+                .map(|capture| capture.replay_cap_bursts(area_idx))
+                .unwrap_or(u64::MAX / 4);
+            chains.chains.insert(
+                area_idx,
+                crate::memory_chain::ChainRun {
+                    start_burst: burst_count,
+                    cap_bursts,
+                    head: cue,
+                    next: Some(target),
+                    deadline: burst_count + u64::from(delay),
+                    visited,
+                    episode: episode.as_ref().map(|(list, _)| list.clone()),
+                    pos: 0,
+                    candidates,
+                },
+            );
+            if let Some((_, psp)) = episode {
+                // The episode neuron's own replay fire is a chain-recall fire: it strengthens
+                // what it is linked to and creates nothing. Its first member arrives after the
+                // loop's delay.
+                for n in neurons.iter_mut() {
+                    if n.neuron_id.0 == cue {
+                        n.fire_kind = FIRE_KIND_CHAIN_RECALL;
+                    }
+                }
+                *fire_structures
+                    .synaptic_arrival_schedule
+                    .memory_chain_by_arrival_burst
+                    .entry(burst_count + u64::from(delay))
+                    .or_default()
+                    .entry(target)
+                    .or_insert(0.0) += psp;
+            } else {
+                steps.insert(cue, target);
+                chains.stepping.push((area_idx, cue));
+            }
+            for n in neurons.iter() {
+                if n.neuron_id.0 != cue {
+                    chains.suppressed.insert(n.neuron_id.0);
+                    chains.note_lockout(area_idx, 1);
+                }
+            }
+            Self::fire_completed_episodes(chains, neurons, area_idx, &completed);
+        }
+        if !steps.is_empty() {
+            propagation_engine.set_chain_steps(steps);
+        }
+    }
+
+    /// Q1: fire the episode neurons whose whole chain completed this burst, with the chain-recall
+    /// kind. The fire is inert: it never starts a chain (the pass has already handled this
+    /// area) and replays nothing.
+    fn fire_completed_episodes(
+        chains: &mut crate::memory_chain::ReplayChains,
+        neurons: &mut Vec<FiringNeuron>,
+        area_idx: u32,
+        completed: &[u32],
+    ) {
+        for &e in completed {
+            if neurons.iter().any(|n| n.neuron_id.0 == e) {
+                continue;
+            }
+            neurons.push(FiringNeuron {
+                neuron_id: NeuronId(e),
+                membrane_potential: 1.0,
+                cortical_idx: area_idx,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_CHAIN_RECALL,
+            });
+            chains.suppressed.insert(e);
+        }
+    }
+
     fn schedule_memory_replay_from_fire_queue(
         &self,
         fire_queue: &FireQueue,
@@ -2580,6 +2962,13 @@ impl<
         if twin_map.is_empty() {
             return;
         }
+        // Fires the chain pass blocked this burst (running chain, recording area, same-burst
+        // loser). Empty, and never allocated, for a brain with no loop and no recording.
+        let suppressed = if fire_structures.replay_chains.engaged {
+            std::mem::take(&mut fire_structures.replay_chains.suppressed)
+        } else {
+            AHashSet::new()
+        };
 
         let mut scheduled = 0usize;
         for (cortical_idx, neurons) in &fire_queue.neurons_by_area {
@@ -2595,6 +2984,9 @@ impl<
                     continue;
                 }
                 let neuron_id = neuron.neuron_id.0;
+                if !suppressed.is_empty() && suppressed.contains(&neuron_id) {
+                    continue;
+                }
                 let frames = match replay_frames.get(&neuron_id) {
                     Some(frames) => frames,
                     None => continue,
@@ -2754,6 +3146,24 @@ impl<
             &mut pending_memory,
             &mut fire_structures.pending_memory_injections,
         );
+        // A chain replay runs in an area: a recall cue for that area is held back and dropped,
+        // not queued. Live encoding (episodic fires) is never held back.
+        if !fire_structures.replay_chains.chains.is_empty() && !pending_memory.is_empty() {
+            let mut held_back: Vec<u32> = Vec::new();
+            {
+                let chains = &fire_structures.replay_chains.chains;
+                pending_memory.retain(|(_, area_idx, _, kind)| {
+                    let keep = *kind == FIRE_KIND_EPISODIC_MEMORY || !chains.contains_key(area_idx);
+                    if !keep {
+                        held_back.push(*area_idx);
+                    }
+                    keep
+                });
+            }
+            for area_idx in held_back {
+                fire_structures.replay_chains.note_lockout(area_idx, 1);
+            }
+        }
         if !pending_memory.is_empty() {
             tracing::debug!(
                 "[NPU] Drained {} pending memory injections for burst {}",
@@ -2817,6 +3227,23 @@ impl<
                 memory_candidate_count,
                 burst_count
             );
+        }
+        // Chain-replay arrivals (flagged episode links, summed apart from associative PSP): the
+        // target becomes a candidate that fires with the chain-recall kind, unless the same
+        // burst already stages it with a kind of its own (live encoding keeps its kind).
+        if let Some(arrivals) = fire_structures
+            .synaptic_arrival_schedule
+            .take_chain(burst_count)
+        {
+            for (id, psp) in arrivals {
+                fire_structures
+                    .memory_candidate_fire_kind
+                    .entry(id)
+                    .or_insert(FIRE_KIND_CHAIN_RECALL);
+                fire_structures
+                    .fire_candidate_list
+                    .add_candidate(NeuronId(id), psp);
+            }
         }
         // Resolve memory neuron candidates sourced via synaptic propagation.
         // Memory neurons can be targets of associative synapses; ensure they have cortical metadata.
@@ -2972,6 +3399,15 @@ impl<
         emit_chain_latency_trace(burst_count, &dynamics_result.fire_queue);
         emit_area_cortical_fire_detail(burst_count, &dynamics_result.fire_queue);
 
+        // Chain replay: lockout, recording block, chain start and steps (returns at once when no
+        // area has a loop or records).
+        self.memory_chain_pass(
+            &mut dynamics_result.fire_queue,
+            burst_count,
+            &mut fire_structures,
+            &mut propagation_engine,
+        );
+
         // Schedule replay injections based on memory neuron firing in this burst.
         self.schedule_memory_replay_from_fire_queue(
             &dynamics_result.fire_queue,
@@ -3011,6 +3447,20 @@ impl<
                     &delayed.fcl_by_delay,
                     &delayed.memory_associative_by_delay,
                 );
+            if !fire_structures.replay_chains.stepping.is_empty() {
+                fire_structures
+                    .synaptic_arrival_schedule
+                    .schedule_chain(burst_count, &delayed.chain_by_delay);
+                // A head whose step produced nothing (gate closed, gain 0) ends the chain.
+                let driven: AHashSet<u32> = delayed.chain_driven.iter().copied().collect();
+                let stepping = std::mem::take(&mut fire_structures.replay_chains.stepping);
+                for (area_idx, head) in stepping {
+                    if !driven.contains(&head) {
+                        fire_structures.replay_chains.chains.remove(&area_idx);
+                    }
+                }
+                propagation_engine.set_chain_steps(AHashMap::new());
+            }
             let psp_degradation_updates = self.apply_psp_degeneration_from_fired_neurons(
                 &fired_ids,
                 &propagation_engine,
@@ -3108,6 +3558,10 @@ impl<
                 }
             }
         }
+
+        // Phase 3.7: `memory.capture` recording state for this burst (cold: returns at once when no
+        // area subscribes to a capture modulator and none is recording).
+        self.tick_memory_capture(burst_count, &mut fire_structures.replay_chains);
 
         let phase3_duration = phase3_start.elapsed();
 
@@ -4745,6 +5199,415 @@ impl<
             .unwrap_or(false)
     }
 
+    /// Advance the recording state of every capture-subscribed memory area to `burst`.
+    fn tick_memory_capture(&self, burst: u64, chains: &mut crate::memory_chain::ReplayChains) {
+        let states: Vec<(u32, bool)> = match self.modulator_engine.lock() {
+            Ok(modulators) => modulators.memory_capture_states().collect(),
+            Err(_) => return,
+        };
+        let Ok(mut capture) = self.memory_capture.lock() else {
+            return;
+        };
+        if states.is_empty() && !capture.recording_areas().next().is_some() {
+            return;
+        }
+        capture.tick(burst, &states);
+        chains.sync_recording(capture.recording_areas());
+    }
+
+    /// Set (or clear) an area's `capture_max_bursts`: the burst count of one recording piece.
+    pub fn set_memory_capture_max_bursts(&self, area_idx: u32, max_bursts: Option<u32>) {
+        if let Ok(mut capture) = self.memory_capture.lock() {
+            capture.set_max_bursts(area_idx, max_bursts);
+        }
+    }
+
+    /// Register the `sequential_memory` loop of a memory area: the parameters every episode
+    /// link of the area is inserted with.
+    pub fn register_sequential_loop(
+        &self,
+        area_idx: u32,
+        params: crate::memory_capture::SequentialLoopParams,
+    ) {
+        if let Ok(mut capture) = self.memory_capture.lock() {
+            capture.set_loop(area_idx, params);
+        }
+        // Memory-neuron sources of this brain may now carry flagged links: the propagation
+        // filter switches on (it stays off, and free, for a brain with no loop).
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .sequential_links_possible = true;
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures.replay_chains.loop_areas.insert(area_idx);
+        fire_structures.replay_chains.refresh_engaged();
+    }
+
+    /// Forget an area's loop registration. Returns whether one existed. Links are not touched;
+    /// see [`Self::remove_sequential_links`].
+    pub fn unregister_sequential_loop(&self, area_idx: u32) -> bool {
+        let had = self
+            .memory_capture
+            .lock()
+            .map(|mut capture| capture.clear_loop(area_idx))
+            .unwrap_or(false);
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures.replay_chains.forget_area(area_idx);
+        had
+    }
+
+    /// Stamp the ranked successors of the listed source states (best first). The plasticity
+    /// service ranks them (it owns the neuron columns); the NPU only reads the order. A source
+    /// with an empty list loses its entry.
+    pub fn set_successor_order(&self, ranked: Vec<(u32, Vec<u32>)>) {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .replay_chains
+            .stamp_order(ranked);
+    }
+
+    /// Add, replace or forget episode neurons: each upsert is an episode neuron id with its
+    /// ordered member ids. A recall of an episode neuron starts a chain at its first member (see
+    /// [`Self::memory_chain_pass`]). Derived data, stamped by the plasticity service.
+    pub fn set_episode_members(&self, upserts: Vec<(u32, Vec<u32>)>, removed: &[u32]) {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .replay_chains
+            .stamp_episodes(upserts, removed);
+    }
+
+    /// Episode neurons the NPU knows, `(episode id, members)`, sorted by id (tests and tooling).
+    pub fn episode_members_known(&self) -> Vec<(u32, Vec<u32>)> {
+        let fire_structures = self.fire_structures.lock().unwrap();
+        let mut out: Vec<(u32, Vec<u32>)> = fire_structures
+            .replay_chains
+            .episodes
+            .iter()
+            .map(|(id, members)| (*id, members.clone()))
+            .collect();
+        out.sort_unstable_by_key(|(id, _)| *id);
+        out
+    }
+
+    /// Every live episode link `(source, target)` whose source belongs to `area_idx` (cold
+    /// path: scans the synapse array). The service uses it to rebuild its ranking after a load.
+    pub fn sequential_edges(&self, area_idx: u32) -> Vec<(u32, u32)> {
+        let Some(cortical) = self.cortical_id_for_index(area_idx) else {
+            return Vec::new();
+        };
+        let engine = self.propagation_engine.read().unwrap();
+        let storage = self.synapse_storage.read().unwrap();
+        (0..storage.count())
+            .filter(|&i| {
+                storage.valid_mask()[i]
+                    && storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY != 0
+                    && engine
+                        .neuron_to_area
+                        .get(&NeuronId(storage.source_neurons()[i]))
+                        == Some(&cortical)
+            })
+            .map(|i| (storage.source_neurons()[i], storage.target_neurons()[i]))
+            .collect()
+    }
+
+    /// Whether a chain replay is running in the area right now.
+    pub fn chain_replay_active(&self, area_idx: u32) -> bool {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .replay_chains
+            .chains
+            .contains_key(&area_idx)
+    }
+
+    /// Replays blocked so far, `(by a running chain, by recording)`. A tonic capture driver
+    /// keeps the second one rising: the twin stays silent while the area records.
+    pub fn memory_replay_blocked_counts(&self) -> (u64, u64) {
+        let fire_structures = self.fire_structures.lock().unwrap();
+        (
+            fire_structures.replay_chains.blocked_by_lockout,
+            fire_structures.replay_chains.blocked_by_recording,
+        )
+    }
+
+    /// Replays of one memory area blocked so far, `(by a running chain, by recording)`.
+    pub fn memory_replay_blocked_counts_for_area(&self, area_idx: u32) -> (u64, u64) {
+        let fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .replay_chains
+            .blocked_by_area
+            .get(&area_idx)
+            .copied()
+            .unwrap_or((0, 0))
+    }
+
+    /// The registered `sequential_memory` loop of a memory area, if it has one.
+    pub fn sequential_loop_params(
+        &self,
+        area_idx: u32,
+    ) -> Option<crate::memory_capture::SequentialLoopParams> {
+        self.memory_capture
+            .lock()
+            .ok()
+            .and_then(|capture| capture.loop_params(area_idx))
+    }
+
+    /// Whether the area is inside a recording session right now (the NPU's own view, as of the
+    /// last committed burst).
+    pub fn memory_capture_recording(&self, area_idx: u32) -> bool {
+        self.memory_capture
+            .lock()
+            .map(|capture| capture.is_recording(area_idx))
+            .unwrap_or(false)
+    }
+
+    /// Everything the plasticity service needs for one pass: the recording boundary events since
+    /// the last call, the loop parameters and the magnitude of each recording area. Returns at
+    /// once, with nothing, for a brain with no capture subscription and no loop.
+    pub fn take_capture_work(&self) -> crate::memory_capture::CaptureWork {
+        let mut work = crate::memory_capture::CaptureWork::default();
+        let recording: Vec<u32> = {
+            let Ok(mut capture) = self.memory_capture.lock() else {
+                return work;
+            };
+            if capture.is_idle() {
+                return work;
+            }
+            work.events = capture.drain_events();
+            work.stale_areas = capture.drain_stale();
+            work.loops = capture.loops().clone();
+            capture.recording_areas().collect()
+        };
+        if !recording.is_empty() {
+            if let Ok(modulators) = self.modulator_engine.lock() {
+                for area in recording {
+                    work.magnitudes
+                        .insert(area, modulators.memory_capture_magnitude(area));
+                }
+            }
+        }
+        work
+    }
+
+    /// Insert episode links `(source, target)` for a memory area, in order, with the loop's
+    /// PSP, type and delay, the loop's modulation group and the sequential edge flag.
+    ///
+    /// Incremental: the synapse is appended to storage and its index entry is pushed onto the
+    /// propagation index, with no rebuild. A link that already exists (same pair, flag set) is
+    /// left as it is. Returns how many links were added; 0 when the area has no loop.
+    pub fn add_sequential_links(&self, area_idx: u32, pairs: &[(u32, u32)]) -> usize {
+        self.add_sequential_links_inserted(area_idx, pairs).len()
+    }
+
+    /// Like [`Self::add_sequential_links`], returning the pairs that were actually inserted
+    /// (a duplicate or a failed insert is not in the result).
+    pub fn add_sequential_links_inserted(
+        &self,
+        area_idx: u32,
+        pairs: &[(u32, u32)],
+    ) -> Vec<(u32, u32)> {
+        if pairs.is_empty() {
+            return Vec::new();
+        }
+        let Some(params) = self.sequential_loop_params(area_idx) else {
+            return Vec::new();
+        };
+        let mut inserted: Vec<(u32, u32)> = Vec::new();
+        {
+            let mut storage = self.synapse_storage.write().unwrap();
+            let mut engine = self.propagation_engine.write().unwrap();
+            for &(source, target) in pairs {
+                let exists = engine
+                    .synapse_index
+                    .get(&NeuronId(source))
+                    .map(|indices| {
+                        indices.iter().any(|&i| {
+                            i < storage.count()
+                                && storage.valid_mask()[i]
+                                && storage.target_neurons()[i] == target
+                                && storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY != 0
+                        })
+                    })
+                    .unwrap_or(false);
+                if exists {
+                    continue;
+                }
+                let Ok(idx) = storage.add_synapse(
+                    source,
+                    target,
+                    params.weight,
+                    params.psp,
+                    params.synapse_type as u8,
+                    SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
+                    params.delay_bursts.max(1),
+                ) else {
+                    continue;
+                };
+                if params.modulation_group != 0 {
+                    storage.set_modulation_group(idx, params.modulation_group);
+                }
+                engine
+                    .synapse_index
+                    .entry(NeuronId(source))
+                    .or_default()
+                    .push(idx);
+                inserted.push((source, target));
+            }
+        }
+        if !inserted.is_empty() {
+            self.note_synapses_created_for_area(area_idx, inserted.len());
+        }
+        inserted
+    }
+
+    /// Move the health-facing synapse counters for `count` synapses created inside one area.
+    fn note_synapses_created_for_area(&self, area_idx: u32, count: usize) {
+        let state = feagi_state_manager::StateManager::instance();
+        if let Some(manager) = state.try_read() {
+            manager.note_synaptic_plasticity_change();
+            if let Some(id) = self.cortical_id_for_index(area_idx) {
+                manager.add_cortical_area_outgoing_synapses(&id.as_base_64(), count);
+                manager.add_cortical_area_incoming_synapses(&id.as_base_64(), count);
+            }
+            manager
+                .get_core_state()
+                .add_synapse_count(u32::try_from(count).unwrap_or(u32::MAX));
+        };
+    }
+
+    /// Cortical id to loop parameters for every area with a loop (cold path helper).
+    fn sequential_loops_by_cortical_id(
+        &self,
+    ) -> AHashMap<CorticalID, (u32, crate::memory_capture::SequentialLoopParams)> {
+        let loops: Vec<(u32, crate::memory_capture::SequentialLoopParams)> = self
+            .memory_capture
+            .lock()
+            .map(|capture| capture.loops().iter().map(|(k, v)| (*k, *v)).collect())
+            .unwrap_or_default();
+        loops
+            .into_iter()
+            .filter_map(|(idx, params)| Some((self.cortical_id_for_index(idx)?, (idx, params))))
+            .collect()
+    }
+
+    /// Re-stamp the loop's modulation group and PSP onto every episode link of every area that
+    /// has a loop. Used after a mapping edit and after a connectome load (lite rows carry the
+    /// edge flag but no modulation group). Returns how many links were stamped.
+    pub fn restamp_sequential_links(&self) -> usize {
+        let by_cortical = self.sequential_loops_by_cortical_id();
+        if by_cortical.is_empty() {
+            return 0;
+        }
+        let engine = self.propagation_engine.read().unwrap();
+        let mut storage = self.synapse_storage.write().unwrap();
+        let mut stamped = 0usize;
+        for i in 0..storage.count() {
+            if !storage.valid_mask()[i]
+                || storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY == 0
+            {
+                continue;
+            }
+            let source = NeuronId(storage.source_neurons()[i]);
+            let Some((_, params)) = engine
+                .neuron_to_area
+                .get(&source)
+                .and_then(|cortical| by_cortical.get(cortical))
+            else {
+                continue;
+            };
+            storage.postsynaptic_potentials_mut()[i] = params.psp;
+            if params.modulation_group != 0 {
+                storage.set_modulation_group(i, params.modulation_group);
+            }
+            stamped += 1;
+        }
+        drop(storage);
+        drop(engine);
+        // The links may have come from a load or an edit: the service rebuilds its ranking.
+        if let Ok(mut capture) = self.memory_capture.lock() {
+            for (idx, _) in by_cortical.values() {
+                capture.mark_stale(*idx);
+            }
+        }
+        stamped
+    }
+
+    /// Remove every episode link whose source neuron belongs to `area_idx` (its loop mapping was
+    /// deleted). Returns how many were removed.
+    pub fn remove_sequential_links(&self, area_idx: u32) -> usize {
+        let Some(cortical) = self.cortical_id_for_index(area_idx) else {
+            return 0;
+        };
+        let engine = self.propagation_engine.read().unwrap();
+        let mut storage = self.synapse_storage.write().unwrap();
+        let doomed: Vec<usize> = (0..storage.count())
+            .filter(|&i| {
+                storage.valid_mask()[i]
+                    && storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY != 0
+                    && engine
+                        .neuron_to_area
+                        .get(&NeuronId(storage.source_neurons()[i]))
+                        == Some(&cortical)
+            })
+            .collect();
+        let mut removed = 0usize;
+        for i in doomed {
+            if storage.remove_synapse(i).is_ok() {
+                removed += 1;
+            }
+        }
+        removed
+    }
+
+    /// Like [`Self::remove_synapses_between`], but a synapse whose edge flags intersect
+    /// `spare_flags` is kept. A mapping edit uses it to spare the episode links.
+    ///
+    /// NOTE: like the unflagged call, this does NOT rebuild the synapse index.
+    pub fn remove_synapses_between_sparing(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+        spare_flags: u8,
+    ) -> usize {
+        if sources.is_empty() || targets.is_empty() {
+            return 0;
+        }
+        let source_set: AHashSet<u32> = sources.into_iter().map(|n| n.0).collect();
+        let target_set: AHashSet<u32> = targets.into_iter().map(|n| n.0).collect();
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        let mut to_remove = Vec::new();
+        for idx in 0..synapse_storage.count() {
+            if !synapse_storage.valid_mask()[idx]
+                || synapse_storage.edge_flags()[idx] & spare_flags != 0
+            {
+                continue;
+            }
+            if source_set.contains(&synapse_storage.source_neurons()[idx])
+                && target_set.contains(&synapse_storage.target_neurons()[idx])
+            {
+                to_remove.push(idx);
+            }
+        }
+        let mut total_removed = 0usize;
+        for idx in to_remove {
+            if synapse_storage.remove_synapse(idx).is_ok() {
+                total_removed += 1;
+            }
+        }
+        total_removed
+    }
+
+    /// Whether a subscribed `memory.capture` modulator is active for this area right now.
+    /// Query only: nothing consumes it yet.
+    pub fn memory_capture_active(&self, cortical_idx: u32) -> bool {
+        self.modulator_engine
+            .lock()
+            .map(|m| m.memory_capture_active(cortical_idx))
+            .unwrap_or(false)
+    }
+
     /// Whether a memory area is held as a full snapshot right now: the brain's learning-freeze
     /// switch for the area, or an active `memory.freeze` modulator. One answer for both.
     pub fn memory_area_learning_frozen(&self, cortical_idx: u32) -> bool {
@@ -6196,6 +7059,57 @@ impl<
         synapses
     }
 
+    /// Like [`Self::get_outgoing_synapses`] (same order, same filter) plus the packed edge flags
+    /// and modulation group. Returns `(target, weight, psp, synapse_type, edge_flags, modulation_group)`.
+    /// Read-only; `modulation_group` is 0 when no groups are allocated.
+    pub fn get_outgoing_synapses_detailed(
+        &self,
+        source_neuron_id: u32,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        let prop_engine = self.propagation_engine.read().unwrap();
+        let Some(indices) = prop_engine.synapse_index.get(&NeuronId(source_neuron_id)) else {
+            return Vec::new();
+        };
+        let st = self.synapse_storage.read().unwrap();
+        let mut out = Vec::new();
+        for &i in indices {
+            if i < st.count() && st.valid_mask()[i] {
+                out.push((
+                    st.target_neurons()[i],
+                    st.weights()[i],
+                    st.postsynaptic_potentials()[i],
+                    st.types()[i],
+                    st.edge_flags().get(i).copied().unwrap_or(0),
+                    st.modulation_groups().get(i).copied().unwrap_or(0),
+                ));
+            }
+        }
+        out
+    }
+
+    /// Like [`Self::get_incoming_synapses`] plus edge flags and modulation group.
+    /// Returns `(source, weight, psp, synapse_type, edge_flags, modulation_group)`.
+    pub fn get_incoming_synapses_detailed(
+        &self,
+        target_neuron_id: u32,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        let st = self.synapse_storage.read().unwrap();
+        let mut out = Vec::new();
+        for i in 0..st.count() {
+            if st.valid_mask()[i] && st.target_neurons()[i] == target_neuron_id {
+                out.push((
+                    st.source_neurons()[i],
+                    st.weights()[i],
+                    st.postsynaptic_potentials()[i],
+                    st.types()[i],
+                    st.edge_flags().get(i).copied().unwrap_or(0),
+                    st.modulation_groups().get(i).copied().unwrap_or(0),
+                ));
+            }
+        }
+        out
+    }
+
     /// Rebuild the synapse index in the propagation engine
     ///
     /// CRITICAL: This MUST be called after adding/removing synapses to update the
@@ -6778,6 +7692,10 @@ impl<
                     {
                         continue;
                     }
+                    // Episode links are ordered and flagged: the unordered pass never changes them.
+                    if synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY != 0 {
+                        continue;
+                    }
 
                     let src_neuron = synapse_storage.source_neurons()[syn_idx];
                     let dst_neuron = synapse_storage.target_neurons()[syn_idx];
@@ -6971,6 +7889,9 @@ impl<
                         for &syn_idx in indices {
                             if syn_idx >= synapse_storage.count()
                                 || !synapse_storage.valid_mask()[syn_idx]
+                                || synapse_storage.edge_flags()[syn_idx]
+                                    & SYNAPSE_EDGE_SEQUENTIAL_MEMORY
+                                    != 0
                             {
                                 continue;
                             }
@@ -7453,6 +8374,21 @@ impl<
             .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
     }
 
+    /// Most recent FireLedger frames of a tracked area with each fired id's stored fire kind
+    /// (oldest first, at most `max_depth`). Read-only.
+    pub fn get_fire_ledger_recent_frames_with_kinds(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<crate::fire_ledger::LedgerFrame>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .get_recent_frames_with_kinds(cortical_idx, max_depth)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
+    }
+
     /// Stop tracking a cortical area in the FireLedger. Returns whether it was tracked.
     pub fn untrack_fire_ledger_area(&mut self, cortical_idx: u32) -> bool {
         self.fire_structures
@@ -7514,6 +8450,24 @@ impl<
                 FeagiError::RuntimeError(format!("Episodic memory FireLedger track failed: {e}"))
             })?;
         Ok(())
+    }
+
+    /// Most recent frames (oldest first) of the episodic memory FireLedger for a tracked area:
+    /// the memory neurons that fired with [`crate::fire_structures::FIRE_KIND_EPISODIC_MEMORY`].
+    /// Errors when the area is not tracked there. Read-only.
+    pub fn get_episodic_memory_fire_ledger_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .episodic_memory_fire_ledger
+            .get_recent_frames(cortical_idx, max_depth)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Episodic memory FireLedger query failed: {e}"))
+            })
     }
 
     pub fn get_episodic_memory_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {

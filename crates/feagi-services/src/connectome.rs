@@ -40,6 +40,9 @@ const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
 /// neurons outside schema v1 bincode.
 const LTM_CHANGE_RECORDS_TAG: &str = "ltm_change_records_v1";
 
+/// Metadata tag holding the ordered member lists of episode neurons outside schema v1 bincode.
+const LTM_EPISODE_MEMBERS_TAG: &str = "ltm_episode_members_v1";
+
 /// Metadata tag holding per-synapse modulation groups outside schema v1 bincode.
 const SYNAPSE_MODULATION_GROUPS_TAG: &str = "synapse_modulation_groups_v1";
 
@@ -212,6 +215,7 @@ fn write_connectome_to_writer<W: Write>(
     crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
     persist_class_channel_weights_for_schema_v1(&mut export_snapshot)?;
     persist_change_records_for_schema_v1(&mut export_snapshot)?;
+    persist_episode_members_for_schema_v1(&mut export_snapshot)?;
     persist_modulation_groups_for_schema_v1(&mut export_snapshot)?;
     persist_learning_freeze_for_schema_v1(&mut export_snapshot)?;
     let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
@@ -366,6 +370,7 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
     restore_class_channel_weights_for_schema_v1(&mut snapshot)?;
     restore_change_records_for_schema_v1(&mut snapshot)?;
+    restore_episode_members_for_schema_v1(&mut snapshot)?;
     restore_modulation_groups_for_schema_v1(&mut snapshot)?;
     restore_learning_freeze_for_schema_v1(&mut snapshot)?;
 
@@ -393,6 +398,73 @@ pub(crate) fn calculate_checksum(data: &[u8]) -> u64 {
         hash = hash.wrapping_mul(FNV_PRIME);
     }
     hash
+}
+
+/// JSON record of one episode neuron's ordered member list.
+#[derive(Debug, Serialize, Deserialize)]
+struct EpisodeMembersRecord {
+    neuron_id: u32,
+    members: Vec<u32>,
+}
+
+/// Keep episode member lists out of the schema v1 neuron record (positional and immutable).
+fn persist_episode_members_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let records: Vec<EpisodeMembersRecord> = snapshot
+        .long_term_memory_neurons
+        .iter()
+        .filter(|neuron| !neuron.episode_members.is_empty())
+        .map(|neuron| EpisodeMembersRecord {
+            neuron_id: neuron.neuron_id,
+            members: neuron.episode_members.clone(),
+        })
+        .collect();
+    if records.is_empty() {
+        snapshot.metadata.tags.remove(LTM_EPISODE_MEMBERS_TAG);
+        return Ok(());
+    }
+    let encoded = serde_json::to_string(&records).map_err(|error| {
+        ConnectomeError::Serialization(format!(
+            "failed to encode long-term memory episode member lists: {error}"
+        ))
+    })?;
+    snapshot
+        .metadata
+        .tags
+        .insert(LTM_EPISODE_MEMBERS_TAG.to_string(), encoded);
+    Ok(())
+}
+
+fn restore_episode_members_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let Some(encoded) = snapshot.metadata.tags.get(LTM_EPISODE_MEMBERS_TAG) else {
+        return Ok(());
+    };
+    let records: Vec<EpisodeMembersRecord> = serde_json::from_str(encoded).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!(
+            "long-term memory episode member lists tag is invalid: {error}"
+        ))
+    })?;
+    let mut by_id: std::collections::HashMap<u32, Vec<u32>> = std::collections::HashMap::new();
+    for record in records {
+        if by_id.insert(record.neuron_id, record.members).is_some() {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "duplicate episode member list for long-term memory neuron {}",
+                record.neuron_id
+            )));
+        }
+    }
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        if let Some(members) = by_id.remove(&neuron.neuron_id) {
+            neuron.episode_members = members;
+        }
+    }
+    if !by_id.is_empty() {
+        let mut missing: Vec<u32> = by_id.into_keys().collect();
+        missing.sort_unstable();
+        return Err(ConnectomeError::BrainArtifact(format!(
+            "episode member lists refer to unknown long-term memory neurons: {missing:?}"
+        )));
+    }
+    Ok(())
 }
 
 /// Keep associative class-channel weights out of the schema v1 neuron record.
@@ -872,6 +944,7 @@ mod tests {
                 class_channels: Vec::new(),
                 class_channel_weights: Vec::new(),
                 change_record: None,
+                episode_members: Vec::new(),
             }],
             long_term_memory_replay_frames: vec![(
                 50_000_000,
@@ -1045,6 +1118,7 @@ mod tests {
                     class_channels: Vec::new(),
                     class_channel_weights: Vec::new(),
                     change_record: None,
+                    episode_members: Vec::new(),
                 },
                 SerializableLongTermMemoryNeuron {
                     neuron_id: 50_002_623,
@@ -1063,6 +1137,7 @@ mod tests {
                     class_channels: vec![4, 9],
                     class_channel_weights: weights.clone(),
                     change_record: None,
+                    episode_members: Vec::new(),
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
@@ -1120,6 +1195,53 @@ mod tests {
         long_term_memory_neurons: Vec<SerializableLongTermMemoryNeuron>,
         long_term_memory_replay_frames: Vec<(u32, Vec<SerializableMemoryReplayFrame>)>,
         lite_synapses: Vec<SerializableSemanticSynapse>,
+    }
+
+    /// Episode member lists ride in a metadata tag, outside the positional schema v1 record.
+    #[test]
+    fn episode_member_lists_round_trip_outside_schema_v1_layout() {
+        let mut snapshot =
+            neutral_snapshot(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full);
+        let row = |neuron_id: u32, members: Vec<u32>| SerializableLongTermMemoryNeuron {
+            neuron_id,
+            cortical_area_idx: 1,
+            cortical_id: None,
+            pattern_hash: Some(u64::from(neuron_id)),
+            is_longterm_memory: true,
+            is_active: true,
+            lifespan_current: 100,
+            lifespan_initial: 10,
+            lifespan_growth_rate: 1.0,
+            creation_burst: 1,
+            last_activation_burst: 2,
+            activation_count: 2,
+            spatial_signature: None,
+            class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
+            change_record: None,
+            episode_members: members,
+        };
+        snapshot.long_term_memory_neurons = vec![
+            row(50_000_000, Vec::new()),
+            row(50_000_001, Vec::new()),
+            row(50_000_002, vec![50_000_001, 50_000_000, 50_000_001]),
+        ];
+        let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+        let loaded = load_connectome_from_bytes(&bytes).unwrap();
+        assert!(loaded.metadata.tags.contains_key(LTM_EPISODE_MEMBERS_TAG));
+        assert_eq!(
+            loaded.long_term_memory_neurons[2].episode_members,
+            vec![50_000_001, 50_000_000, 50_000_001],
+            "the ordered list, repeats included"
+        );
+        assert!(loaded.long_term_memory_neurons[0]
+            .episode_members
+            .is_empty());
+        // A brain with no episode neuron carries no tag.
+        snapshot.long_term_memory_neurons[2].episode_members.clear();
+        let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+        let loaded = load_connectome_from_bytes(&bytes).unwrap();
+        assert!(!loaded.metadata.tags.contains_key(LTM_EPISODE_MEMBERS_TAG));
     }
 
     fn neutral_snapshot(
@@ -1213,6 +1335,7 @@ mod tests {
                 upstream_cortical_ids: vec!["area_a".to_string(), "area_b".to_string()],
                 steps: vec![vec![entries(0), Vec::new()], vec![entries(1), entries(2)]],
             }),
+            episode_members: Vec::new(),
         }
     }
 

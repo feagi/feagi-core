@@ -836,6 +836,10 @@ where
         dispatch!(self, memory_freeze_active(cortical_idx))
     }
 
+    pub fn memory_capture_active(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, memory_capture_active(cortical_idx))
+    }
+
     pub fn memory_area_learning_frozen(&self, cortical_idx: u32) -> bool {
         dispatch!(self, memory_area_learning_frozen(cortical_idx))
     }
@@ -905,6 +909,97 @@ where
 
     pub fn synapse_count(&self) -> usize {
         dispatch!(self, synapse_count())
+    }
+
+    pub fn set_memory_capture_max_bursts(&self, area_idx: u32, max_bursts: Option<u32>) {
+        dispatch!(self, set_memory_capture_max_bursts(area_idx, max_bursts))
+    }
+
+    pub fn register_sequential_loop(
+        &self,
+        area_idx: u32,
+        params: crate::memory_capture::SequentialLoopParams,
+    ) {
+        dispatch!(self, register_sequential_loop(area_idx, params))
+    }
+
+    pub fn unregister_sequential_loop(&self, area_idx: u32) -> bool {
+        dispatch!(self, unregister_sequential_loop(area_idx))
+    }
+
+    pub fn sequential_loop_params(
+        &self,
+        area_idx: u32,
+    ) -> Option<crate::memory_capture::SequentialLoopParams> {
+        dispatch!(self, sequential_loop_params(area_idx))
+    }
+
+    pub fn memory_capture_recording(&self, area_idx: u32) -> bool {
+        dispatch!(self, memory_capture_recording(area_idx))
+    }
+
+    pub fn take_capture_work(&self) -> crate::memory_capture::CaptureWork {
+        dispatch!(self, take_capture_work())
+    }
+
+    pub fn add_sequential_links(&self, area_idx: u32, pairs: &[(u32, u32)]) -> usize {
+        dispatch!(self, add_sequential_links(area_idx, pairs))
+    }
+
+    pub fn add_sequential_links_inserted(
+        &self,
+        area_idx: u32,
+        pairs: &[(u32, u32)],
+    ) -> Vec<(u32, u32)> {
+        dispatch!(self, add_sequential_links_inserted(area_idx, pairs))
+    }
+
+    pub fn set_successor_order(&self, ranked: Vec<(u32, Vec<u32>)>) {
+        dispatch!(self, set_successor_order(ranked))
+    }
+
+    pub fn sequential_edges(&self, area_idx: u32) -> Vec<(u32, u32)> {
+        dispatch!(self, sequential_edges(area_idx))
+    }
+
+    pub fn set_episode_members(&self, upserts: Vec<(u32, Vec<u32>)>, removed: &[u32]) {
+        dispatch!(self, set_episode_members(upserts, removed))
+    }
+
+    pub fn episode_members_known(&self) -> Vec<(u32, Vec<u32>)> {
+        dispatch!(self, episode_members_known())
+    }
+
+    pub fn chain_replay_active(&self, area_idx: u32) -> bool {
+        dispatch!(self, chain_replay_active(area_idx))
+    }
+
+    pub fn memory_replay_blocked_counts(&self) -> (u64, u64) {
+        dispatch!(self, memory_replay_blocked_counts())
+    }
+
+    pub fn memory_replay_blocked_counts_for_area(&self, area_idx: u32) -> (u64, u64) {
+        dispatch!(self, memory_replay_blocked_counts_for_area(area_idx))
+    }
+
+    pub fn restamp_sequential_links(&self) -> usize {
+        dispatch!(self, restamp_sequential_links())
+    }
+
+    pub fn remove_sequential_links(&self, area_idx: u32) -> usize {
+        dispatch!(self, remove_sequential_links(area_idx))
+    }
+
+    pub fn remove_synapses_between_sparing(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+        spare_flags: u8,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            remove_synapses_between_sparing(sources, targets, spare_flags)
+        )
     }
 
     /// Rebuild power neuron cache (useful after major structural changes)
@@ -1031,6 +1126,20 @@ where
 
     pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_outgoing_synapses(_neuron_id))
+    }
+
+    pub fn get_incoming_synapses_detailed(
+        &self,
+        neuron_id: u32,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        dispatch!(self, get_incoming_synapses_detailed(neuron_id))
+    }
+
+    pub fn get_outgoing_synapses_detailed(
+        &self,
+        neuron_id: u32,
+    ) -> Vec<(u32, f32, f32, u8, u8, u16)> {
+        dispatch!(self, get_outgoing_synapses_detailed(neuron_id))
     }
 
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
@@ -1485,6 +1594,21 @@ where
         }
     }
 
+    pub fn get_episodic_memory_fire_ledger_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_episodic_memory_fire_ledger_recent_frames(cortical_idx, max_depth)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_episodic_memory_fire_ledger_recent_frames(cortical_idx, max_depth)
+            }
+        }
+    }
+
     pub fn get_episodic_memory_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
         match self {
             DynamicNPUGeneric::F32(npu) => {
@@ -1573,6 +1697,18 @@ where
         max_depth: usize,
     ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
         dispatch!(self, get_fire_ledger_recent_frames(cortical_idx, max_depth))
+    }
+
+    /// Most recent FireLedger frames with each fired id's stored fire kind (oldest first).
+    pub fn get_fire_ledger_recent_frames_with_kinds(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<crate::fire_ledger::LedgerFrame>> {
+        dispatch!(
+            self,
+            get_fire_ledger_recent_frames_with_kinds(cortical_idx, max_depth)
+        )
     }
 
     /// Stop tracking a cortical area in the FireLedger. Returns whether it was tracked.

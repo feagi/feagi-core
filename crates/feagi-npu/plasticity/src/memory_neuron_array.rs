@@ -93,6 +93,19 @@ impl Default for MemoryNeuronLifecycleConfig {
     }
 }
 
+/// Result of [`MemoryNeuronArray::boost_lifespan_by_id`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifespanBoost {
+    /// The id is unknown or the neuron expired.
+    NotActive,
+    /// The neuron was already long-term; nothing changed.
+    AlreadyLongTerm,
+    /// The lifespan grew; the usual conversion applies when it reaches the threshold.
+    Boosted,
+    /// The neuron (slot index) became long-term now.
+    BecameLongTerm(usize),
+}
+
 /// Why a memory neuron left the array.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryNeuronRemovalReason {
@@ -105,6 +118,8 @@ pub enum MemoryNeuronRemovalReason {
     ShapeChanged,
     /// Removed on explicit request (delete by id), not by the lifecycle.
     Requested,
+    /// An episode neuron removed because one of its member states left the array.
+    MemberRemoved,
 }
 
 /// A memory neuron that left the array and whose NPU-side footprint still has to be removed.
@@ -168,6 +183,44 @@ pub struct MemoryNeuronDetail {
     /// Change record (by neuron id) of a change-encoded neuron that has one.
     #[serde(default)]
     pub change_record: Option<MemoryChangeRecord>,
+    /// Ordered member states of an episode neuron (`memory.capture`); empty for a state.
+    #[serde(default)]
+    pub episode_members: Vec<u32>,
+}
+
+impl MemoryNeuronDetail {
+    /// An episode neuron has an ordered member list; a state has none.
+    pub fn is_episode(&self) -> bool {
+        !self.episode_members.is_empty()
+    }
+}
+
+/// Seed of the hash that identifies an episode neuron (its ordered member ids). It differs from
+/// the seed of window pattern hashes, which share `pattern_hash_to_index`.
+pub const EPISODE_HASH_SEED: u64 = 0x4550_4953_4f44_4531;
+
+/// Identity hash of an episode: its ordered member neuron ids under [`EPISODE_HASH_SEED`].
+pub fn episode_pattern_hash(members: &[u32]) -> u64 {
+    let mut bytes = Vec::with_capacity(members.len() * 4);
+    for id in members {
+        bytes.extend_from_slice(&id.to_le_bytes());
+    }
+    xxhash_rust::xxh64::xxh64(&bytes, EPISODE_HASH_SEED)
+}
+
+/// What creating an episode neuron did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpisodeCreate {
+    /// A new episode neuron (slot index).
+    Created(usize),
+    /// The same member list already had one: it was reactivated (slot index).
+    Reactivated(usize),
+    /// The hash matched a neuron with a different member list (or no list): nothing was made.
+    HashMismatch,
+    /// A member is not an active memory neuron of the area: nothing was made.
+    MemberGone,
+    /// No room, and the only victims would be the episode's own members: nothing was made.
+    NoRoom,
 }
 
 /// Memory neuron array statistics
@@ -181,6 +234,16 @@ pub struct MemoryNeuronStats {
     pub memory_usage_bytes: usize,
     pub avg_lifespan: f64,
     pub avg_activation_count: f64,
+}
+
+/// Strength of a memory neuron as the next step of a replayed episode; `Ord` compares the
+/// fields in the order of the successor rule, so the strongest successor sorts last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SuccessorStrength {
+    pub long_term: bool,
+    pub lifespan_current: u32,
+    pub activation_count: u32,
+    pub last_activation_burst: u64,
 }
 
 /// High-performance Structure of Arrays for memory neurons
@@ -226,6 +289,10 @@ pub struct MemoryNeuronArray {
     class_channel_weights: HashMap<usize, HashMap<u32, f32>>,
     /// Change records (by upstream neuron id) of change-encoded neurons.
     change_records: HashMap<usize, MemoryChangeRecord>,
+    /// Ordered member ids of each episode neuron slot (`memory.capture`).
+    episode_members: HashMap<usize, Vec<u32>>,
+    /// Episode neuron ids that list a member id, so a member's death finds them at once.
+    episodes_of_member: HashMap<u32, Vec<u32>>,
     /// Decisions waiting for a later answer, and which pattern was already corrected.
     presentation_ledger: crate::classifier_reward::PresentationLedger,
     /// LTM-only index: (cortical_area_idx, spatial_signature) -> neuron indices.
@@ -283,6 +350,8 @@ impl MemoryNeuronArray {
             class_channels: HashMap::new(),
             class_channel_weights: HashMap::new(),
             change_records: HashMap::new(),
+            episode_members: HashMap::new(),
+            episodes_of_member: HashMap::new(),
             presentation_ledger: crate::classifier_reward::PresentationLedger::default(),
             spatial_ltm_index: HashMap::new(),
             id_manager: NeuronIdManager::new(),
@@ -467,6 +536,29 @@ impl MemoryNeuronArray {
             .map(|&(_, idx)| idx)
     }
 
+    /// Like [`Self::pick_victim`], but never a neuron whose id is in `protected`.
+    fn pick_victim_except(
+        &self,
+        area: u32,
+        current_burst: u64,
+        protected: &HashSet<u32>,
+    ) -> Option<usize> {
+        let evictable = |idx: usize| {
+            self.last_activation_burst[idx] != current_burst
+                && !protected.contains(&self.neuron_ids[idx])
+        };
+        if let Some(set) = self.stm_order.get(&area) {
+            if let Some(&(_, idx)) = set.iter().find(|&&(_, idx)| evictable(idx)) {
+                return Some(idx);
+            }
+        }
+        self.ltm_order
+            .get(&area)?
+            .iter()
+            .find(|&&(_, idx)| evictable(idx))
+            .map(|&(_, idx)| idx)
+    }
+
     /// Remove an active neuron to free its slot and record it for NPU-side cleanup.
     fn evict_neuron(&mut self, idx: usize) {
         self.remove_neuron(idx, MemoryNeuronRemovalReason::Evicted);
@@ -574,6 +666,18 @@ impl MemoryNeuronArray {
             self.evict_neuron(victim);
         }
 
+        self.allocate_slot(pattern_hash, cortical_area_id, current_burst, config)
+    }
+
+    /// Take a slot and an id for a new neuron of `pattern_hash` and initialise its lifecycle.
+    /// The caller has already made room.
+    fn allocate_slot(
+        &mut self,
+        pattern_hash: u64,
+        cortical_area_id: u32,
+        current_burst: u64,
+        config: &MemoryNeuronLifecycleConfig,
+    ) -> Option<usize> {
         // Get neuron index (reuse or allocate new)
         let neuron_idx = self.get_available_index_internal()?;
 
@@ -749,8 +853,49 @@ impl MemoryNeuronArray {
         if !self.is_valid_index(idx) || !self.is_active[idx] || self.is_longterm_memory[idx] {
             return None;
         }
+        if !self.episode_may_convert(idx) {
+            return None;
+        }
         self.convert_to_longterm(idx);
         Some(idx)
+    }
+
+    /// Boost an active short-term neuron's lifespan toward the long-term threshold by
+    /// `magnitude_percent` of the remaining gap (rounded up). At 100 or more the neuron becomes
+    /// long-term at once, through the same conversion as the lifespan path. A long-term neuron
+    /// and an unknown or expired id are left alone.
+    pub fn boost_lifespan_by_id(
+        &mut self,
+        neuron_id: u32,
+        magnitude_percent: f32,
+        longterm_threshold: u32,
+    ) -> LifespanBoost {
+        let Some(idx) = self.find_neuron_index_by_global_id(neuron_id) else {
+            return LifespanBoost::NotActive;
+        };
+        if !self.is_valid_index(idx) || !self.is_active[idx] {
+            return LifespanBoost::NotActive;
+        }
+        if self.is_longterm_memory[idx] {
+            return LifespanBoost::AlreadyLongTerm;
+        }
+        let magnitude = magnitude_percent.clamp(0.0, 100.0);
+        let current = self.lifespan_current[idx];
+        let target = if magnitude >= 100.0 {
+            current.max(longterm_threshold)
+        } else {
+            let gap = longterm_threshold.saturating_sub(current) as f64;
+            current.saturating_add((gap * f64::from(magnitude) / 100.0).ceil() as u32)
+        };
+        // The ordered indexes key on the lifespan: take the slot out, change it, put it back.
+        self.order_remove(idx);
+        self.lifespan_current[idx] = target;
+        self.order_insert(idx);
+        if magnitude >= 100.0 && self.episode_may_convert(idx) {
+            self.convert_to_longterm(idx);
+            return LifespanBoost::BecameLongTerm(idx);
+        }
+        LifespanBoost::Boosted
     }
 
     /// Check for neurons ready for long-term memory conversion
@@ -761,18 +906,44 @@ impl MemoryNeuronArray {
         }
 
         let mut converted_indices = Vec::new();
+        let mut episodes = Vec::new();
 
         for i in 0..n {
             if self.is_active[i]
                 && !self.is_longterm_memory[i]
                 && self.lifespan_current[i] >= longterm_threshold
             {
+                if self.episode_members.contains_key(&i) {
+                    episodes.push(i);
+                    continue;
+                }
+                self.convert_to_longterm(i);
+                converted_indices.push(i);
+            }
+        }
+        // An episode neuron becomes long-term only once all its members are, so it is judged
+        // after the states of this pass.
+        for i in episodes {
+            if self.episode_may_convert(i) {
                 self.convert_to_longterm(i);
                 converted_indices.push(i);
             }
         }
 
         converted_indices
+    }
+
+    /// An episode neuron may become long-term only when every member is long-term. A state may
+    /// always convert.
+    fn episode_may_convert(&self, idx: usize) -> bool {
+        match self.episode_members.get(&idx) {
+            None => true,
+            Some(members) => members.iter().all(|id| {
+                self.find_neuron_index_by_global_id(*id).is_some_and(|m| {
+                    self.is_valid_index(m) && self.is_active[m] && self.is_longterm_memory[m]
+                })
+            }),
+        }
     }
 
     /// Check for neurons ready for long-term conversion using per-area thresholds.
@@ -810,6 +981,7 @@ impl MemoryNeuronArray {
             .collect();
 
         let mut converted_indices = Vec::new();
+        let mut episodes = Vec::new();
         for (area_id, indices) in area_indices {
             if frozen_areas.contains(&area_id) {
                 continue;
@@ -824,9 +996,20 @@ impl MemoryNeuronArray {
                     && !self.is_longterm_memory[neuron_idx]
                     && self.lifespan_current[neuron_idx] >= threshold
                 {
+                    if self.episode_members.contains_key(&neuron_idx) {
+                        episodes.push(neuron_idx);
+                        continue;
+                    }
                     self.convert_to_longterm(neuron_idx);
                     converted_indices.push(neuron_idx);
                 }
+            }
+        }
+        // An episode neuron is judged after the states of the pass: it needs all of them.
+        for neuron_idx in episodes {
+            if self.episode_may_convert(neuron_idx) {
+                self.convert_to_longterm(neuron_idx);
+                converted_indices.push(neuron_idx);
             }
         }
 
@@ -913,6 +1096,23 @@ impl MemoryNeuronArray {
         self.neuron_id_to_index.get(&neuron_id).copied()
     }
 
+    /// How strong a state is as the next step of a replayed episode (a field order that sorts
+    /// strongest last): long-term beats short-term, then the larger `lifespan_current`, then
+    /// the larger `activation_count`, then the state that fired most recently
+    /// (`last_activation_burst`). `None` for an id that is not an active memory neuron.
+    pub fn successor_strength(&self, neuron_id: u32) -> Option<SuccessorStrength> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        if !self.is_valid_index(idx) || !self.is_active[idx] {
+            return None;
+        }
+        Some(SuccessorStrength {
+            long_term: self.is_longterm_memory[idx],
+            lifespan_current: self.lifespan_current[idx],
+            activation_count: self.activation_count[idx],
+            last_activation_burst: self.last_activation_burst[idx],
+        })
+    }
+
     /// True when `neuron_id` is an active memory neuron. No allocation; equivalent to
     /// `get_memory_neuron_detail(neuron_id).is_some()`.
     pub fn is_active_memory_neuron(&self, neuron_id: u32) -> bool {
@@ -961,7 +1161,147 @@ impl MemoryNeuronArray {
                 })
                 .unwrap_or_default(),
             change_record: self.change_records.get(&idx).cloned(),
+            episode_members: self.episode_members.get(&idx).cloned().unwrap_or_default(),
         })
+    }
+
+    /// Ordered member list of an active episode neuron, `None` for a state or an unknown id.
+    pub fn episode_members_of(&self, neuron_id: u32) -> Option<&[u32]> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        if !self.is_valid_index(idx) || !self.is_active[idx] {
+            return None;
+        }
+        self.episode_members.get(&idx).map(|list| list.as_slice())
+    }
+
+    /// Every active episode neuron with its member list, `(area, episode id, members)`.
+    pub fn episode_lists(&self) -> Vec<(u32, u32, Vec<u32>)> {
+        let mut out: Vec<(u32, u32, Vec<u32>)> = self
+            .episode_members
+            .iter()
+            .filter(|(idx, _)| self.is_valid_index(**idx) && self.is_active[**idx])
+            .map(|(idx, members)| {
+                (
+                    self.cortical_area_ids[*idx],
+                    self.neuron_ids[*idx],
+                    members.clone(),
+                )
+            })
+            .collect();
+        out.sort_unstable_by_key(|(_, id, _)| *id);
+        out
+    }
+
+    /// Number of active episode neurons in an area.
+    pub fn episode_count_in_area(&self, area_idx: u32) -> usize {
+        self.episode_members
+            .keys()
+            .filter(|idx| {
+                self.is_valid_index(**idx)
+                    && self.is_active[**idx]
+                    && self.cortical_area_ids[**idx] == area_idx
+            })
+            .count()
+    }
+
+    /// Create the episode neuron of an ordered member list, or reactivate the one it has.
+    ///
+    /// Identity is the ordered member ids under a separate hash seed; on a hash hit the member
+    /// lists are compared and a difference creates nothing. Every member must be an active
+    /// memory neuron of the area. Making room never evicts a member; with no other victim the
+    /// episode is skipped. A frozen area records nothing.
+    pub fn create_episode_neuron(
+        &mut self,
+        members: &[u32],
+        cortical_area_id: u32,
+        current_burst: u64,
+        config: &MemoryNeuronLifecycleConfig,
+        frozen_areas: &HashSet<u32>,
+    ) -> EpisodeCreate {
+        if members.is_empty() {
+            return EpisodeCreate::MemberGone;
+        }
+        let all_present = members.iter().all(|id| {
+            self.find_neuron_index_by_global_id(*id).is_some_and(|idx| {
+                self.is_valid_index(idx)
+                    && self.is_active[idx]
+                    && self.cortical_area_ids[idx] == cortical_area_id
+            })
+        });
+        if !all_present {
+            return EpisodeCreate::MemberGone;
+        }
+        let hash = episode_pattern_hash(members);
+        if let Some(&existing_idx) = self.pattern_hash_to_index.get(&(cortical_area_id, hash)) {
+            if self.is_active[existing_idx] {
+                if self
+                    .episode_members
+                    .get(&existing_idx)
+                    .map(|l| l.as_slice())
+                    != Some(members)
+                {
+                    return EpisodeCreate::HashMismatch;
+                }
+                if frozen_areas.contains(&cortical_area_id) {
+                    return if self.note_frozen_reactivation(existing_idx) {
+                        EpisodeCreate::Reactivated(existing_idx)
+                    } else {
+                        EpisodeCreate::NoRoom
+                    };
+                }
+                return match self.reactivate_memory_neuron_internal(existing_idx, current_burst) {
+                    Some(idx) => EpisodeCreate::Reactivated(idx),
+                    None => EpisodeCreate::NoRoom,
+                };
+            }
+        }
+        if frozen_areas.contains(&cortical_area_id) {
+            return EpisodeCreate::NoRoom;
+        }
+
+        let protected: HashSet<u32> = members.iter().copied().collect();
+        let area_at_cap = config.memory_neuron_cap > 0
+            && self.area_neuron_count(cortical_area_id) >= config.memory_neuron_cap as usize;
+        if area_at_cap || self.pool_full() {
+            if config.ltm_eviction == LtmEviction::None {
+                return EpisodeCreate::NoRoom;
+            }
+            let victim_area = if area_at_cap {
+                cortical_area_id
+            } else {
+                match self.most_populated_lru_area(
+                    cortical_area_id,
+                    config.ltm_eviction,
+                    frozen_areas,
+                ) {
+                    Some(area) => area,
+                    None => return EpisodeCreate::NoRoom,
+                }
+            };
+            if frozen_areas.contains(&victim_area) {
+                return EpisodeCreate::NoRoom;
+            }
+            let Some(victim) = self.pick_victim_except(victim_area, current_burst, &protected)
+            else {
+                return EpisodeCreate::NoRoom;
+            };
+            self.evict_neuron(victim);
+        }
+        // The victim's death may have taken other episodes of the area with it, never ours:
+        // its members are protected and it does not exist yet.
+        let Some(neuron_idx) = self.allocate_slot(hash, cortical_area_id, current_burst, config)
+        else {
+            return EpisodeCreate::NoRoom;
+        };
+        self.episode_members.insert(neuron_idx, members.to_vec());
+        let episode_id = self.neuron_ids[neuron_idx];
+        for member in members {
+            let list = self.episodes_of_member.entry(*member).or_default();
+            if !list.contains(&episode_id) {
+                list.push(episode_id);
+            }
+        }
+        EpisodeCreate::Created(neuron_idx)
     }
 
     /// Active long-term memory neurons only. Short-term memory is never included.
@@ -1067,6 +1407,27 @@ impl MemoryNeuronArray {
                 Err(_) => skipped_invalid += 1,
             }
         }
+        // An episode whose member did not come back is dropped: its list would name a stranger.
+        let broken: Vec<u32> = self
+            .episode_members
+            .iter()
+            .filter(|(idx, members)| {
+                self.is_active[**idx]
+                    && !members.iter().all(|id| {
+                        self.find_neuron_index_by_global_id(*id)
+                            .is_some_and(|m| self.is_active[m])
+                    })
+            })
+            .map(|(idx, _)| self.neuron_ids[*idx])
+            .collect();
+        if !broken.is_empty() {
+            tracing::warn!(
+                target: "plasticity",
+                "[PLASTICITY] LTM restore dropped {} episode neuron(s) whose member states were not restored",
+                broken.len()
+            );
+            self.remove_neurons_by_id(&broken, MemoryNeuronRemovalReason::MemberRemoved);
+        }
         let dropped_total = dropped_by_area_cap + dropped_by_pool;
         if dropped_total + skipped_invalid > 0 {
             tracing::warn!(
@@ -1138,6 +1499,16 @@ impl MemoryNeuronArray {
         }
         if let Some(record) = &detail.change_record {
             self.change_records.insert(neuron_idx, record.clone());
+        }
+        if !detail.episode_members.is_empty() {
+            self.episode_members
+                .insert(neuron_idx, detail.episode_members.clone());
+            for member in &detail.episode_members {
+                let list = self.episodes_of_member.entry(*member).or_default();
+                if !list.contains(&detail.neuron_id) {
+                    list.push(detail.neuron_id);
+                }
+            }
         }
         if detail.is_longterm_memory {
             self.index_spatial_ltm(neuron_idx);
@@ -1495,6 +1866,39 @@ impl MemoryNeuronArray {
 
         let area_id = self.cortical_area_ids[neuron_idx];
 
+        // An episode neuron leaves its members' index. Its members stay.
+        if let Some(members) = self.episode_members.remove(&neuron_idx) {
+            for member in members {
+                if let Some(list) = self.episodes_of_member.get_mut(&member) {
+                    list.retain(|episode| *episode != neuron_id);
+                    if list.is_empty() {
+                        self.episodes_of_member.remove(&member);
+                    }
+                }
+            }
+        }
+        // A member state takes its episode neurons with it. Ids are reused, so an episode that
+        // outlived a member would name a stranger.
+        if let Some(episodes) = self.episodes_of_member.remove(&neuron_id) {
+            for episode_id in episodes {
+                let Some(&episode_idx) = self.neuron_id_to_index.get(&episode_id) else {
+                    continue;
+                };
+                if !self.is_valid_index(episode_idx) || !self.is_active[episode_idx] {
+                    continue;
+                }
+                self.removed.push(RemovedMemoryNeuron {
+                    neuron_id: episode_id,
+                    area_idx: self.cortical_area_ids[episode_idx],
+                    was_longterm: self.is_longterm_memory[episode_idx],
+                    reason: MemoryNeuronRemovalReason::MemberRemoved,
+                    counted_in_stats: true,
+                });
+                self.is_active[episode_idx] = false;
+                self.cleanup_dead_neuron_internal(episode_idx);
+            }
+        }
+
         // Remove pattern association
         if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
             self.pattern_hash_to_index.remove(&(area_id, pattern_hash));
@@ -1569,6 +1973,8 @@ impl MemoryNeuronArray {
         self.class_channels.clear();
         self.class_channel_weights.clear();
         self.change_records.clear();
+        self.episode_members.clear();
+        self.episodes_of_member.clear();
         self.presentation_ledger = crate::classifier_reward::PresentationLedger::default();
         self.spatial_ltm_index.clear();
 
@@ -2250,6 +2656,7 @@ mod tests {
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
             change_record: None,
+            episode_members: Vec::new(),
         }];
         let skipped = restored
             .restore_long_term_memory_neurons(&stm_only)
@@ -2763,6 +3170,7 @@ mod tests {
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
             change_record: None,
+            episode_members: Vec::new(),
         };
         // Pool of 3, five records: the three most recent survive and the call is Ok.
         let mut array = MemoryNeuronArray::new(3);
@@ -2811,6 +3219,7 @@ mod tests {
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
             change_record: None,
+            episode_members: Vec::new(),
         };
         // Pool of 2. The oldest record has the highest id, so it is dropped while its id is
         // above every kept id. A duplicate and an out-of-range record must not fail the call.
@@ -2904,5 +3313,223 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ---- episode neurons (`memory.capture`) ----
+
+    fn states(array: &mut MemoryNeuronArray, n: u64, area: u32, burst: u64) -> Vec<u32> {
+        let config = MemoryNeuronLifecycleConfig::default();
+        (0..n)
+            .map(|h| {
+                let idx = array
+                    .create_memory_neuron(1000 + h, area, burst, &config)
+                    .unwrap();
+                array.get_neuron_id(idx).unwrap()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_episode_with_the_same_ordered_members_is_reactivated_not_duplicated() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let members = states(&mut array, 3, 1, 1);
+        let first = array.create_episode_neuron(&members, 1, 2, &config, &HashSet::new());
+        let EpisodeCreate::Created(idx) = first else {
+            panic!("{first:?}")
+        };
+        let again = array.create_episode_neuron(&members, 1, 3, &config, &HashSet::new());
+        assert_eq!(again, EpisodeCreate::Reactivated(idx));
+        assert_eq!(array.activation_count[idx], 2);
+        // The order is part of the identity.
+        let reversed: Vec<u32> = members.iter().rev().copied().collect();
+        assert!(matches!(
+            array.create_episode_neuron(&reversed, 1, 4, &config, &HashSet::new()),
+            EpisodeCreate::Created(_)
+        ));
+        assert_eq!(array.episode_count_in_area(1), 2);
+        assert_ne!(
+            episode_pattern_hash(&members),
+            episode_pattern_hash(&reversed)
+        );
+    }
+
+    #[test]
+    fn a_hash_hit_with_a_different_member_list_makes_nothing() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let members = states(&mut array, 3, 1, 1);
+        let EpisodeCreate::Created(idx) =
+            array.create_episode_neuron(&members[..2], 1, 2, &config, &HashSet::new())
+        else {
+            panic!("created");
+        };
+        // Force a collision: the hash of the other list points at the first episode's slot.
+        let other = &members[1..];
+        array
+            .pattern_hash_to_index
+            .insert((1, episode_pattern_hash(other)), idx);
+        let count_before = array.area_neuron_count(1);
+        let outcome = array.create_episode_neuron(other, 1, 3, &config, &HashSet::new());
+        assert_eq!(outcome, EpisodeCreate::HashMismatch);
+        assert_eq!(
+            array.area_neuron_count(1),
+            count_before,
+            "nothing was created"
+        );
+        assert_eq!(
+            array.episode_members_of(array.neuron_ids[idx]),
+            Some(&members[..2])
+        );
+    }
+
+    #[test]
+    fn making_room_for_an_episode_never_evicts_its_members() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig {
+            memory_neuron_cap: 3,
+            ..Default::default()
+        };
+        let members = states(&mut array, 3, 1, 1);
+        // At the cap with only members to evict: skipped.
+        assert_eq!(
+            array.create_episode_neuron(&members, 1, 5, &config, &HashSet::new()),
+            EpisodeCreate::NoRoom
+        );
+        assert_eq!(array.area_neuron_count(1), 3);
+        for id in &members {
+            assert!(array.is_active_memory_neuron(*id));
+        }
+        // One extra (non-member) state is the victim instead.
+        let config4 = MemoryNeuronLifecycleConfig {
+            memory_neuron_cap: 4,
+            ..Default::default()
+        };
+        let extra = array
+            .create_memory_neuron(5000, 1, 2, &config4)
+            .and_then(|i| array.get_neuron_id(i))
+            .unwrap();
+        let outcome = array.create_episode_neuron(&members, 1, 5, &config4, &HashSet::new());
+        assert!(matches!(outcome, EpisodeCreate::Created(_)), "{outcome:?}");
+        assert!(!array.is_active_memory_neuron(extra), "the non-member went");
+        for id in &members {
+            assert!(array.is_active_memory_neuron(*id));
+        }
+    }
+
+    #[test]
+    fn a_member_removed_takes_its_episodes_and_an_episode_removed_leaves_its_members() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let members = states(&mut array, 3, 1, 1);
+        let EpisodeCreate::Created(idx) =
+            array.create_episode_neuron(&members, 1, 2, &config, &HashSet::new())
+        else {
+            panic!("created");
+        };
+        let episode = array.neuron_ids[idx];
+        array.remove_neurons_by_id(&[episode], MemoryNeuronRemovalReason::Requested);
+        for id in &members {
+            assert!(array.is_active_memory_neuron(*id), "members stay");
+        }
+        assert!(array.episodes_of_member.is_empty() && array.episode_members.is_empty());
+        array.drain_removed_neurons();
+
+        let EpisodeCreate::Created(idx) =
+            array.create_episode_neuron(&members, 1, 3, &config, &HashSet::new())
+        else {
+            panic!("created");
+        };
+        let episode = array.neuron_ids[idx];
+        array.remove_neurons_by_id(&[members[1]], MemoryNeuronRemovalReason::Requested);
+        assert!(
+            !array.is_active_memory_neuron(episode),
+            "the episode went with its member"
+        );
+        let removed = array.drain_removed_neurons();
+        assert!(removed.iter().any(
+            |r| r.neuron_id == episode && r.reason == MemoryNeuronRemovalReason::MemberRemoved
+        ));
+        assert!(array.episodes_of_member.is_empty() && array.episode_members.is_empty());
+    }
+
+    #[test]
+    fn an_episode_becomes_long_term_only_once_all_its_members_are() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let members = states(&mut array, 2, 1, 1);
+        let EpisodeCreate::Created(idx) =
+            array.create_episode_neuron(&members, 1, 2, &config, &HashSet::new())
+        else {
+            panic!("created");
+        };
+        let episode = array.neuron_ids[idx];
+        let threshold = config.longterm_threshold;
+        // Boosted to the threshold, but one member is still short-term.
+        array.boost_lifespan_by_id(members[0], 100.0, threshold);
+        assert_eq!(
+            array.boost_lifespan_by_id(episode, 100.0, threshold),
+            LifespanBoost::Boosted
+        );
+        assert!(!array.is_longterm_memory[idx]);
+        let converted = array.check_longterm_conversion_by_area_except(
+            &HashMap::new(),
+            threshold,
+            &HashSet::new(),
+        );
+        assert!(!converted.contains(&idx));
+        // The last member converts; the episode follows in the same pass.
+        array.boost_lifespan_by_id(members[1], 100.0, threshold);
+        let converted = array.check_longterm_conversion_by_area_except(
+            &HashMap::new(),
+            threshold,
+            &HashSet::new(),
+        );
+        assert!(converted.contains(&idx));
+        assert!(array.is_longterm_memory[idx]);
+    }
+
+    #[test]
+    fn an_episode_and_its_member_list_survive_export_and_restore() {
+        let mut array = MemoryNeuronArray::new(64);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let members = states(&mut array, 3, 1, 1);
+        let threshold = config.longterm_threshold;
+        for id in &members {
+            array.boost_lifespan_by_id(*id, 100.0, threshold);
+        }
+        let EpisodeCreate::Created(idx) =
+            array.create_episode_neuron(&members, 1, 2, &config, &HashSet::new())
+        else {
+            panic!("created");
+        };
+        let episode = array.neuron_ids[idx];
+        array.boost_lifespan_by_id(episode, 100.0, threshold);
+        assert!(array.is_longterm_memory[idx]);
+        let exported = array.export_long_term_memory_neurons();
+        assert_eq!(exported.iter().filter(|d| d.is_episode()).count(), 1);
+
+        let mut restored = MemoryNeuronArray::new(64);
+        restored
+            .restore_long_term_memory_neurons(&exported)
+            .unwrap();
+        assert_eq!(
+            restored.episode_members_of(episode),
+            Some(members.as_slice())
+        );
+        // Its member index works again: removing a member removes the episode.
+        restored.remove_neurons_by_id(&[members[2]], MemoryNeuronRemovalReason::Requested);
+        assert!(!restored.is_active_memory_neuron(episode));
+
+        // An episode whose member did not come back is dropped.
+        let mut partial: Vec<MemoryNeuronDetail> = exported
+            .iter()
+            .filter(|d| d.neuron_id != members[0])
+            .cloned()
+            .collect();
+        partial.sort_by_key(|d| d.neuron_id);
+        let mut dropped = MemoryNeuronArray::new(64);
+        dropped.restore_long_term_memory_neurons(&partial).unwrap();
+        assert!(!dropped.is_active_memory_neuron(episode));
     }
 }

@@ -28,6 +28,7 @@
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+pub mod capture_recording;
 pub mod classifier_reward;
 pub mod episodic_scan;
 pub mod executor; // Abstraction layer for different execution models
@@ -46,6 +47,7 @@ pub mod stdp_core; // Platform-agnostic STDP (no_std compatible)
 // Re-export key types
 pub use executor::{AsyncPlasticityExecutor, PlasticityExecutor};
 // pub use lifecycle_manager::PlasticityLifecycleManager;  // DEPRECATED
+pub use capture_recording::{CaptureAreaInfo, CaptureRecording};
 pub use classifier_reward::{
     scanning_instance_affect, AnswerObservation, ChannelAffect, ChannelUpdate, PresentationLedger,
     RecordedDecision,
@@ -55,8 +57,9 @@ pub use episodic_scan::{
     spatial_signature_hash, window_relative_coords, ScanKernel, ScanWindow,
 };
 pub use memory_neuron_array::{
-    ChangeEntry, LtmEviction, MemoryChangeRecord, MemoryNeuronArray, MemoryNeuronDetail,
-    MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, MemoryNeuronStats, RemovedMemoryNeuron,
+    episode_pattern_hash, ChangeEntry, EpisodeCreate, LifespanBoost, LtmEviction, MemoryChangeRecord, MemoryNeuronArray,
+    MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, MemoryNeuronStats,
+    RemovedMemoryNeuron, SuccessorStrength,
 };
 pub use memory_shape::{MemoryAreaShape, MemoryShapeMismatch, ReplayFrameShape};
 pub use memory_stats_cache::{

@@ -2084,6 +2084,7 @@ name = "feagi-npu-plasticity"
 version = "0.0.61"
 dependencies = [
  "ahash",
+ "criterion",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "feagi-npu-runtime",

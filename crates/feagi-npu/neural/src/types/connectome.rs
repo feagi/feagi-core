@@ -75,6 +75,12 @@ pub struct SerializableLongTermMemoryNeuron {
     /// layout. Connectome I/O stores records in metadata tag `ltm_change_records_v1`.
     #[serde(skip)]
     pub change_record: Option<SerializableChangeRecord>,
+    /// Ordered member states of an episode neuron (`memory.capture`); empty for a state.
+    ///
+    /// Schema v1 bincode is positional and immutable, so this field is omitted from that
+    /// layout. Connectome I/O stores non-empty lists in metadata tag `ltm_episode_members_v1`.
+    #[serde(skip)]
+    pub episode_members: Vec<u32>,
 }
 
 /// One bucketed MP change at a voxel of an upstream area: `(x, y, z, ordinal, bucket)`.
@@ -1387,6 +1393,7 @@ mod tests {
             class_channels: Vec::new(),
             class_channel_weights: Vec::new(),
             change_record: None,
+            episode_members: Vec::new(),
         }];
 
         let ltm_ids = HashSet::from([50_000_001]);

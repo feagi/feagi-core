@@ -221,9 +221,9 @@ macro_rules! motor_cortical_units {
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // Notes: 128 notes x 1 x 1.
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-280, -60, -20], channel_dimensions_default: [128, 1, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [128, 1, 1]),
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-380, -60, -20], channel_dimensions_default: [128, 1, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [128, 1, 1]),
                         // Expression: 5 controls x 1 x 10 level steps.
-                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-300, -60, -20], channel_dimensions_default: [5, 1, 10], channel_dimensions_min: [5, 1, 1], channel_dimensions_max: [5, 1, 1024])
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-395, -60, -20], channel_dimensions_default: [5, 1, 10], channel_dimensions_min: [5, 1, 1], channel_dimensions_max: [5, 1, 1024])
                     }
                 },
 

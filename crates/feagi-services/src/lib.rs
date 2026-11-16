@@ -97,6 +97,8 @@ pub mod connectome;
 pub mod genome;
 #[cfg(feature = "std")]
 pub mod impls;
+#[cfg(feature = "plasticity")]
+pub mod plasticity_runtime;
 pub mod traits;
 pub mod types;
 

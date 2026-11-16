@@ -34,3 +34,11 @@ serde_json = { workspace = true }  # Golden-trace tests for teaching visuals
 
 
 
+
+[dev-dependencies.criterion]
+version = "0.5"
+features = ["html_reports"]
+
+[[bench]]
+name = "memory_burst"
+harness = false

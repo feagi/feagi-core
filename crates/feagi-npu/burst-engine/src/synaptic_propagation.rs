@@ -48,7 +48,8 @@ use std::sync::{Once, OnceLock};
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
 use feagi_npu_neural::synapse::{
-    compute_synaptic_contribution, SynapseType as FeagiSynapseType, SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+    compute_synaptic_contribution, SynapseType as FeagiSynapseType,
+    SYNAPSE_EDGE_ASSOCIATIVE_MEMORY, SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
 };
 use tracing::debug;
 
@@ -169,6 +170,12 @@ pub struct DelayedPropagationResult {
     pub fcl_by_delay: AHashMap<u32, PropagationResult>,
     /// `delay_bursts` → memory-neuron id → associative PSP sum.
     pub memory_associative_by_delay: AHashMap<u32, AHashMap<u32, f32>>,
+    /// `delay_bursts` → memory-neuron id → chain-replay PSP (flagged episode links of the
+    /// current chain step only), already scaled by the link's modulation group. Summed apart
+    /// from `memory_associative_by_delay`; never mixed into `fcl_by_delay`.
+    pub chain_by_delay: AHashMap<u32, AHashMap<u32, f32>>,
+    /// Chain heads whose step produced a contribution (a closed gate or zero gain produces none).
+    pub chain_driven: Vec<u32>,
 }
 
 fn fold_contributions_by_delay(
@@ -206,6 +213,13 @@ pub struct SynapticPropagationEngine {
     pub area_degeneration: AHashMap<CorticalID, f32>,
     /// Transmission-gain factors indexed by modulation group. Empty means every factor is 1.
     transmission_factors: Vec<f32>,
+    /// Some area has a `sequential_memory` loop, so memory-neuron sources may carry flagged
+    /// episode links. False (the default) skips every flag check: a brain with no loop pays
+    /// nothing.
+    pub sequential_links_possible: bool,
+    /// Chain replay: the one successor each current chain head may drive, by flagged link
+    /// (head id → chosen successor id). Set by the NPU each burst; empty when no chain steps.
+    chain_steps: AHashMap<u32, u32>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -241,6 +255,8 @@ impl SynapticPropagationEngine {
             area_postsynaptic_current: AHashMap::new(),
             area_degeneration: AHashMap::new(),
             transmission_factors: Vec::new(),
+            sequential_links_possible: false,
+            chain_steps: AHashMap::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
             last_profile: None,
@@ -250,6 +266,67 @@ impl SynapticPropagationEngine {
     /// Replace the transmission-gain table used by the next propagation.
     pub fn set_transmission_factors(&mut self, factors: Vec<f32>) {
         self.transmission_factors = factors;
+    }
+
+    /// Replace the chain steps of this burst (head id → the successor it may drive).
+    pub fn set_chain_steps(&mut self, steps: AHashMap<u32, u32>) {
+        self.chain_steps = steps;
+    }
+
+    /// Flagged links of the chain steps this burst, as PSP by arrival delay. A head whose gate is
+    /// closed (or whose gain is 0) contributes nothing and is left out of the second return.
+    fn chain_contributions<S: SynapseStorage>(
+        &self,
+        synapse_storage: &S,
+    ) -> (AHashMap<u32, AHashMap<u32, f32>>, Vec<u32>) {
+        let mut by_delay: AHashMap<u32, AHashMap<u32, f32>> = AHashMap::new();
+        let mut driven = Vec::new();
+        for (&source, &target) in &self.chain_steps {
+            let Some(indices) = self.synapse_index.get(&NeuronId(source)) else {
+                continue;
+            };
+            for &i in indices {
+                if i >= synapse_storage.count()
+                    || !synapse_storage.valid_mask()[i]
+                    || synapse_storage.edge_flags()[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY == 0
+                    || synapse_storage.target_neurons()[i] != target
+                {
+                    continue;
+                }
+                let synapse_type = match synapse_storage.types()[i] {
+                    0 => FeagiSynapseType::Excitatory,
+                    _ => FeagiSynapseType::Inhibitory,
+                };
+                let contribution = compute_synaptic_contribution(
+                    synapse_storage.weights()[i],
+                    synapse_storage.postsynaptic_potentials()[i],
+                    synapse_type,
+                );
+                let scaled = self.scale_transmission(synapse_storage, i, contribution);
+                if scaled > 0.0 {
+                    let delay = synapse_storage.delay_bursts()[i].max(1) as u32;
+                    *by_delay
+                        .entry(delay)
+                        .or_default()
+                        .entry(target)
+                        .or_insert(0.0) += scaled;
+                    driven.push(source);
+                }
+                break;
+            }
+        }
+        (by_delay, driven)
+    }
+
+    /// Transmission factor of a modulation group (gate and gain): 1.0 for no group or no factor.
+    pub fn transmission_scale_of_group(&self, group: u16) -> f32 {
+        if group == 0 || self.transmission_factors.is_empty() {
+            return 1.0;
+        }
+        self.transmission_factors
+            .get(group as usize)
+            .copied()
+            .unwrap_or(1.0)
     }
 
     /// Clear transmission scaling so every synapse contributes its unscaled PSP.
@@ -426,12 +503,28 @@ impl SynapticPropagationEngine {
 
         // PHASE 1: GATHER - Collect all synapse indices for fired neurons (parallel)
         let gather_start = profile_enabled.then(std::time::Instant::now);
+        // Flagged episode links (`sequential_memory`) never drive a target as ordinary synapses:
+        // only the current chain step does, through `chain_contributions`. The flag is read only
+        // for memory-neuron sources, and only when some area has a loop.
+        let check_flagged = self.sequential_links_possible;
+        let edge_flags = synapse_storage.edge_flags();
         let synapse_indices: Vec<usize> = fired_neurons
             .par_iter()
-            .filter_map(|&neuron_id| self.synapse_index.get(&neuron_id))
-            .flatten()
-            .copied()
+            .flat_map_iter(|&neuron_id| {
+                let check = check_flagged && neuron_id.0 >= MEMORY_NEURON_ID_START;
+                self.synapse_index
+                    .get(&neuron_id)
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .filter(move |&i| !check || edge_flags[i] & SYNAPSE_EDGE_SEQUENTIAL_MEMORY == 0)
+            })
             .collect();
+        let (chain_by_delay, chain_driven) = if self.chain_steps.is_empty() {
+            (AHashMap::new(), Vec::new())
+        } else {
+            self.chain_contributions(synapse_storage)
+        };
         let gather_ms = gather_start
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
             .unwrap_or(0.0);
@@ -451,7 +544,11 @@ impl SynapticPropagationEngine {
                     .unwrap_or(0.0),
                 rayon_threads: rayon::current_num_threads(),
             });
-            return Ok(DelayedPropagationResult::default());
+            return Ok(DelayedPropagationResult {
+                chain_by_delay,
+                chain_driven,
+                ..Default::default()
+            });
         }
 
         let total_synapses = synapse_indices.len();
@@ -565,6 +662,8 @@ impl SynapticPropagationEngine {
             return Ok(DelayedPropagationResult {
                 fcl_by_delay,
                 memory_associative_by_delay: assoc_by_delay,
+                chain_by_delay,
+                chain_driven,
             });
         }
 
@@ -870,6 +969,8 @@ impl SynapticPropagationEngine {
         Ok(DelayedPropagationResult {
             fcl_by_delay,
             memory_associative_by_delay: assoc_by_delay,
+            chain_by_delay,
+            chain_driven,
         })
     }
 
@@ -948,6 +1049,103 @@ mod tests {
         }
 
         synapse_storage
+    }
+
+    /// Memory neuron 50_000_001 with two episode links (flagged) and one plain synapse.
+    fn episode_link_synapses() -> StdSynapseArray {
+        let mut synapses = StdSynapseArray {
+            count: 3,
+            source_neurons: vec![50_000_001, 50_000_001, 50_000_001],
+            target_neurons: vec![50_000_002, 50_000_003, 10],
+            weights: vec![255.0, 255.0, 255.0],
+            postsynaptic_potentials: vec![100.0, 100.0, 50.0],
+            types: vec![0, 0, 0],
+            edge_flags: vec![
+                SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
+                SYNAPSE_EDGE_SEQUENTIAL_MEMORY,
+                0,
+            ],
+            delay_bursts: vec![1, 2, 1],
+            valid_mask: vec![true, true, true],
+            eligibility_traces: vec![0.0; 3],
+            modulation_groups: Vec::new(),
+            modulation_groups_allocated: false,
+            source_index: ahash::AHashMap::new(),
+            memory_target_index: ahash::AHashMap::new(),
+        };
+        for i in 0..synapses.count() {
+            let source = synapses.source_neurons()[i];
+            synapses.source_index.entry(source).or_default().push(i);
+        }
+        synapses
+    }
+
+    fn episode_link_engine(synapses: &StdSynapseArray) -> SynapticPropagationEngine {
+        let mut engine = SynapticPropagationEngine::new();
+        engine.build_synapse_index(synapses);
+        let area = CoreCorticalType::Power.to_cortical_id();
+        let mut mapping = AHashMap::new();
+        for id in [50_000_001u32, 50_000_002, 50_000_003, 10] {
+            mapping.insert(NeuronId(id), area);
+        }
+        engine.set_neuron_mapping(mapping);
+        engine
+    }
+
+    #[test]
+    fn episode_links_drive_nothing_but_the_chosen_chain_step() {
+        let synapses = episode_link_synapses();
+        let fired = vec![NeuronId(50_000_001)];
+        let mps = AHashMap::new();
+
+        // No loop in the brain: the flag check is off and nothing is filtered.
+        let mut engine = episode_link_engine(&synapses);
+        let plain = engine.propagate_delayed(&fired, &synapses, &mps).unwrap();
+        let fcl_targets: usize = plain
+            .fcl_by_delay
+            .values()
+            .flat_map(|areas| areas.values())
+            .map(Vec::len)
+            .sum();
+        assert_eq!(fcl_targets, 3);
+
+        // A loop exists, no chain step: only the plain synapse drives its target.
+        let mut engine = episode_link_engine(&synapses);
+        engine.sequential_links_possible = true;
+        let result = engine.propagate_delayed(&fired, &synapses, &mps).unwrap();
+        let fcl_targets: Vec<NeuronId> = result
+            .fcl_by_delay
+            .values()
+            .flat_map(|areas| areas.values())
+            .flatten()
+            .map(|(id, _)| *id)
+            .collect();
+        assert_eq!(fcl_targets, vec![NeuronId(10)]);
+        assert!(result.chain_by_delay.is_empty() && result.chain_driven.is_empty());
+
+        // The chain step picks one link: its PSP goes to the chain map, at the link's delay,
+        // never to the ordinary FCL.
+        engine.set_chain_steps([(50_000_001u32, 50_000_003u32)].into_iter().collect());
+        let result = engine.propagate_delayed(&fired, &synapses, &mps).unwrap();
+        assert_eq!(result.chain_driven, vec![50_000_001]);
+        assert_eq!(result.chain_by_delay.len(), 1);
+        assert!(result.chain_by_delay[&2][&50_000_003] > 0.0);
+        let fcl_targets: Vec<NeuronId> = result
+            .fcl_by_delay
+            .values()
+            .flat_map(|areas| areas.values())
+            .flatten()
+            .map(|(id, _)| *id)
+            .collect();
+        assert_eq!(fcl_targets, vec![NeuronId(10)]);
+
+        // A closed gate (factor 0) leaves the head undriven and schedules nothing.
+        let mut synapses = synapses;
+        synapses.modulation_groups = vec![0, 1, 0];
+        synapses.modulation_groups_allocated = true;
+        engine.set_transmission_factors(vec![1.0, 0.0]);
+        let result = engine.propagate_delayed(&fired, &synapses, &mps).unwrap();
+        assert!(result.chain_by_delay.is_empty() && result.chain_driven.is_empty());
     }
 
     #[test]

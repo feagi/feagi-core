@@ -1,0 +1,176 @@
+{
+  "about": "Shared fixture: IO area configuration flag (u16, cortical id bytes 4-5, little-endian) to the datasheet port fields it defines, or \"invalid\" where Rust try_from_data_type_configuration_flag errors. The same file lives in nrs-composer, feagi-mcp and feagi-core (feagi-structures) and each repo's test asserts it. Keys absent from an expectation are not defined by the flag.",
+  "cases": [
+    {
+      "flag": 0,
+      "expect": {
+        "kind": "Boolean",
+        "signed": false
+      },
+      "note": "Boolean"
+    },
+    {
+      "flag": 768,
+      "expect": {
+        "kind": "Boolean",
+        "signed": false
+      },
+      "note": "Boolean: frame and positioning bits are ignored"
+    },
+    {
+      "flag": 1,
+      "expect": {
+        "kind": "Percentage",
+        "signed": false,
+        "frame": "Absolute",
+        "positioning": "Linear"
+      },
+      "note": "Percentage Absolute Linear"
+    },
+    {
+      "flag": 513,
+      "expect": {
+        "kind": "Percentage",
+        "signed": false,
+        "frame": "Absolute",
+        "positioning": "Fractional"
+      },
+      "note": "Percentage Absolute Fractional"
+    },
+    {
+      "flag": 257,
+      "expect": {
+        "kind": "Percentage",
+        "signed": false,
+        "frame": "Incremental",
+        "positioning": "Linear"
+      },
+      "note": "Percentage Incremental Linear"
+    },
+    {
+      "flag": 3,
+      "expect": {
+        "kind": "Percentage3D",
+        "signed": false,
+        "frame": "Absolute",
+        "positioning": "Linear"
+      },
+      "note": "Percentage3D"
+    },
+    {
+      "flag": 260,
+      "expect": {
+        "kind": "Percentage4D",
+        "signed": false,
+        "frame": "Incremental",
+        "positioning": "Linear"
+      },
+      "note": "Percentage4D"
+    },
+    {
+      "flag": 261,
+      "expect": {
+        "kind": "SignedPercentage",
+        "signed": true,
+        "frame": "Incremental",
+        "positioning": "Linear"
+      },
+      "note": "SignedPercentage Incremental Linear"
+    },
+    {
+      "flag": 518,
+      "expect": {
+        "kind": "SignedPercentage2D",
+        "signed": true,
+        "frame": "Absolute",
+        "positioning": "Fractional"
+      },
+      "note": "SignedPercentage2D Absolute Fractional"
+    },
+    {
+      "flag": 775,
+      "expect": {
+        "kind": "SignedPercentage3D",
+        "signed": true,
+        "frame": "Incremental",
+        "positioning": "Fractional"
+      },
+      "note": "SignedPercentage Incremental Fractional (3D)"
+    },
+    {
+      "flag": 8,
+      "expect": {
+        "kind": "SignedPercentage4D",
+        "signed": true,
+        "frame": "Absolute",
+        "positioning": "Linear"
+      },
+      "note": "SignedPercentage4D"
+    },
+    {
+      "flag": 89,
+      "expect": {
+        "kind": "CartesianPlane",
+        "frame": "Absolute"
+      },
+      "note": "CartesianPlane Absolute, sub-unit bits ignored"
+    },
+    {
+      "flag": 265,
+      "expect": {
+        "kind": "CartesianPlane",
+        "frame": "Incremental"
+      },
+      "note": "CartesianPlane Incremental"
+    },
+    {
+      "flag": 10,
+      "expect": {
+        "kind": "Misc",
+        "frame": "Absolute"
+      },
+      "note": "Misc Absolute"
+    },
+    {
+      "flag": 267,
+      "expect": {
+        "kind": "PoseEstimation",
+        "frame": "Incremental"
+      },
+      "note": "PoseEstimation, pose schema 0"
+    },
+    {
+      "flag": 7179,
+      "expect": {
+        "kind": "PoseEstimation",
+        "frame": "Absolute"
+      },
+      "note": "PoseEstimation, pose schema bits ignored"
+    },
+    {
+      "flag": 12,
+      "expect": "invalid",
+      "note": "variant 12 is above 11"
+    },
+    {
+      "flag": 15,
+      "expect": "invalid",
+      "note": "variant 15 is above 11"
+    },
+    {
+      "flag": 521,
+      "expect": "invalid",
+      "note": "positioning bit set on variant 9"
+    },
+    {
+      "flag": 522,
+      "expect": "invalid",
+      "note": "positioning bit set on variant 10"
+    },
+    {
+      "flag": 523,
+      "expect": "invalid",
+      "note": "positioning bit set on variant 11"
+    }
+  ]
+}

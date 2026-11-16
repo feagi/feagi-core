@@ -9,6 +9,7 @@ pub mod error;
 pub mod request;
 pub mod response;
 pub mod types;
+pub(crate) mod unit_placement;
 pub use types::{ApiState, Json, Path, Query, State};
 
 pub use error::{ApiError, ApiErrorCode};

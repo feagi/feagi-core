@@ -169,6 +169,7 @@ pub struct RawCorticalArea {
     pub memory_neuron_cap: Option<u32>,
     pub ltm_eviction: Option<String>,
     pub replay_trigger: Option<String>,
+    pub capture_max_bursts: Option<u32>,
     pub consecutive_fire_cnt_max: Option<u32>,
     pub snooze_length: Option<u32>,
 
@@ -700,6 +701,10 @@ impl GenomeParser {
             if let Some(v) = &raw_area.replay_trigger {
                 area.properties
                     .insert("replay_trigger".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.capture_max_bursts {
+                area.properties
+                    .insert("capture_max_bursts".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties

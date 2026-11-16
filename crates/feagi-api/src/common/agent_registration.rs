@@ -3,6 +3,7 @@
 
 //! Shared registration helpers used across transports.
 
+use super::unit_placement::{unit_sub_area_positions, SubAreaTemplate};
 use crate::common::{ApiError, ApiState};
 use crate::v1::RegistrationAreaDiff;
 use feagi_config::load_config;
@@ -23,7 +24,6 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
 
-const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
 const SEGMENTED_VISION_GROUP_X_GAP_VOXELS: i32 = 10;
 /// When grouped Servo encoder registrations declare ``motor_servo_group_id`` and
 /// ``sensor_tag`` (jointpos / jointvel), IPU placement follows the corresponding
@@ -288,6 +288,67 @@ fn midi_properties_from_coder(
     let columns = as_nonzero_usize(properties.get("note_columns"))?;
     let depth = as_nonzero_usize(properties.get("expression_depth"))?;
     Some((columns, depth))
+}
+
+/// IPU position of a Servo encoder: the matched PositionalServo OPU sub-area position (same
+/// Y/Z), shifted along X so the strip sits beside its motor.
+fn servo_encoder_position_from_motor(motor_position: (i32, i32, i32)) -> (i32, i32, i32) {
+    (
+        motor_position.0 + SERVO_ENCODER_X_OFFSET_FROM_MATCHED_MOTOR_VOXELS,
+        motor_position.1,
+        motor_position.2,
+    )
+}
+
+/// Expected dimensions of one sensory sub-area for a registration: encoder properties
+/// first, MIDI sizing, then the per-device width expand for grouped scalar strips.
+fn sensory_sub_area_dimensions(
+    sensory_unit: SensoryCorticalUnit,
+    encoder_properties: Option<&Value>,
+    sub_index: usize,
+    unit_topology: &UnitTopology,
+    device_count: usize,
+) -> (usize, usize, usize) {
+    let template_w = unit_topology.channel_dimensions_default[0] as usize;
+    let template_h = unit_topology.channel_dimensions_default[1] as usize;
+    let template_d = unit_topology.channel_dimensions_default[2] as usize;
+    let mut expected_dimensions = resolve_sensory_dimensions_from_encoder_properties(
+        encoder_properties,
+        sub_index,
+        (template_w, template_h, template_d),
+    );
+    // MIDI Input: both areas are sized from the registered MIDI properties.
+    if sensory_unit == SensoryCorticalUnit::MidiInput {
+        expected_dimensions = midi_area_dimensions(
+            sub_index,
+            unit_topology,
+            midi_properties_from_coder(encoder_properties, "MidiInput"),
+        );
+    }
+    // Grouped scalar strips: one X column per device. Percentage
+    // encoders only pin Z depth, so a non-template depth (e.g. 50)
+    // must not skip the width expand or the IPU collapses to 1
+    // device (Servo). The same expand applies to Proximity and
+    // MiscData so N-channel encoder IPUs match motor OPU width,
+    // and to RawIMU / SmartIMU, whose encoders write channel
+    // `c` at `c * channel_width` (6 or 8 columns per site).
+    if matches!(
+        sensory_unit,
+        SensoryCorticalUnit::Servo
+            | SensoryCorticalUnit::Proximity
+            | SensoryCorticalUnit::MiscData
+            | SensoryCorticalUnit::RawIMU
+            | SensoryCorticalUnit::SmartIMU
+    ) {
+        let per_channel_x = if sensory_unit == SensoryCorticalUnit::Servo {
+            template_w
+        } else {
+            expected_dimensions.0
+        };
+        expected_dimensions =
+            apply_grouped_scalar_encoder_width(expected_dimensions, per_channel_x, device_count);
+    }
+    expected_dimensions
 }
 
 /// Per-channel dims of one MIDI area (0 Notes, 1 Expression) sized from the registered
@@ -1275,14 +1336,13 @@ async fn reconcile_device_registrations(
                 };
 
                 // Precompute dimensions and positions for all sub-areas in this
-                // motor unit/group. Keep a guaranteed X-gap between neighboring
-                // areas regardless of their computed width.
+                // motor unit/group. Placement is the shared per-unit rule
+                // (`unit_placement`); pointer units then override with their own rule.
                 let mut expected_dimensions_by_sub: Vec<Option<(usize, usize, usize)>> =
                     vec![None; cortical_ids.len()];
-                let mut expected_position_by_sub: Vec<Option<(i32, i32, i32)>> =
+                let mut sub_templates: Vec<Option<SubAreaTemplate>> =
                     vec![None; cortical_ids.len()];
-                let mut previous_position_x: Option<i32> = None;
-                let mut previous_width: Option<i32> = None;
+                let mut sub_widths: Vec<i32> = vec![1; cortical_ids.len()];
                 for i in 0..cortical_ids.len() {
                     let sub_index = CorticalSubUnitIndex::from(i as u8);
                     let Some(unit_topology) = topology.get(&sub_index) else {
@@ -1302,20 +1362,22 @@ async fn reconcile_device_registrations(
                         per_channel_depth,
                     );
                     expected_dimensions_by_sub[i] = Some(expected_dimensions);
-
-                    let y = unit_topology.relative_position[1] + (group_u16 as i32 * 20);
-                    let z = unit_topology.relative_position[2];
-                    let width_i32 = expected_dimensions.0 as i32;
-                    let x = if let (Some(prev_x), Some(_prev_w)) =
-                        (previous_position_x, previous_width)
-                    {
-                        // Areas are anchored from their minimum X and extend to +X.
-                        // To keep a fixed empty gap when placing current area on the
-                        // left of previous area:
-                        // current_x + current_width + gap <= previous_x
-                        prev_x - width_i32 - MOTOR_AREA_X_GAP_VOXELS
-                    } else {
-                        unit_topology.relative_position[0]
+                    sub_widths[i] = expected_dimensions.0 as i32;
+                    sub_templates[i] = Some(SubAreaTemplate {
+                        position: unit_topology.relative_position,
+                        height: unit_topology.channel_dimensions_default[1] as i32,
+                    });
+                }
+                let shared_positions =
+                    unit_sub_area_positions(group_u16, &sub_templates, &sub_widths, true);
+                let mut expected_position_by_sub: Vec<Option<(i32, i32, i32)>> =
+                    vec![None; cortical_ids.len()];
+                for i in 0..cortical_ids.len() {
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let (Some(unit_topology), Some(shared)) =
+                        (topology.get(&sub_index), shared_positions[i])
+                    else {
+                        continue;
                     };
                     expected_position_by_sub[i] =
                         Some(if motor_unit == MotorCorticalUnit::SpatialPointer {
@@ -1330,10 +1392,8 @@ async fn reconcile_device_registrations(
                                 frame_handling.as_deref(),
                             )
                         } else {
-                            (x, y, z)
+                            shared
                         });
-                    previous_position_x = Some(x);
-                    previous_width = Some(width_i32);
                 }
 
                 if motor_unit == MotorCorticalUnit::PositionalServo {
@@ -1764,6 +1824,37 @@ async fn reconcile_device_registrations(
                         HashMap::new()
                     };
 
+                // Shared per-unit placement (`unit_placement`). SegmentedVision units already
+                // separate in X (group offsets) and keep their existing Y/Z, so they skip the
+                // Y stride.
+                let mut sub_templates: Vec<Option<SubAreaTemplate>> =
+                    vec![None; cortical_ids.len()];
+                let mut sub_widths: Vec<i32> = vec![1; cortical_ids.len()];
+                for i in 0..cortical_ids.len() {
+                    let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8))
+                    else {
+                        continue;
+                    };
+                    let dims = sensory_sub_area_dimensions(
+                        sensory_unit,
+                        encoder_properties,
+                        i,
+                        unit_topology,
+                        device_count,
+                    );
+                    sub_widths[i] = dims.0 as i32;
+                    sub_templates[i] = Some(SubAreaTemplate {
+                        position: unit_topology.relative_position,
+                        height: unit_topology.channel_dimensions_default[1] as i32,
+                    });
+                }
+                let shared_positions = unit_sub_area_positions(
+                    group_u16,
+                    &sub_templates,
+                    &sub_widths,
+                    sensory_unit != SensoryCorticalUnit::SegmentedVision,
+                );
+
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
                     let cortical_id_b64 = cortical_id.as_base_64();
                     let sub_index = CorticalSubUnitIndex::from(i as u8);
@@ -1777,49 +1868,13 @@ async fn reconcile_device_registrations(
                             continue;
                         }
                     };
-                    let template_w = unit_topology.channel_dimensions_default[0] as usize;
-                    let template_h = unit_topology.channel_dimensions_default[1] as usize;
-                    let template_d = unit_topology.channel_dimensions_default[2] as usize;
-                    let mut expected_dimensions =
-                        resolve_sensory_dimensions_from_encoder_properties(
-                            encoder_properties,
-                            i,
-                            (template_w, template_h, template_d),
-                        );
-                    // MIDI Input: both areas are sized from the registered MIDI properties.
-                    if sensory_unit == SensoryCorticalUnit::MidiInput {
-                        expected_dimensions = midi_area_dimensions(
-                            i,
-                            unit_topology,
-                            midi_properties_from_coder(encoder_properties, "MidiInput"),
-                        );
-                    }
-                    // Grouped scalar strips: one X column per device. Percentage
-                    // encoders only pin Z depth, so a non-template depth (e.g. 50)
-                    // must not skip the width expand or the IPU collapses to 1
-                    // device (Servo). The same expand applies to Proximity and
-                    // MiscData so N-channel encoder IPUs match motor OPU width,
-                    // and to RawIMU / SmartIMU, whose encoders write channel
-                    // `c` at `c * channel_width` (6 or 8 columns per site).
-                    if matches!(
+                    let expected_dimensions = sensory_sub_area_dimensions(
                         sensory_unit,
-                        SensoryCorticalUnit::Servo
-                            | SensoryCorticalUnit::Proximity
-                            | SensoryCorticalUnit::MiscData
-                            | SensoryCorticalUnit::RawIMU
-                            | SensoryCorticalUnit::SmartIMU
-                    ) {
-                        let per_channel_x = if sensory_unit == SensoryCorticalUnit::Servo {
-                            template_w
-                        } else {
-                            expected_dimensions.0
-                        };
-                        expected_dimensions = apply_grouped_scalar_encoder_width(
-                            expected_dimensions,
-                            per_channel_x,
-                            device_count,
-                        );
-                    }
+                        encoder_properties,
+                        i,
+                        unit_topology,
+                        device_count,
+                    );
                     let group_x_offset = *segmented_group_x_offsets.get(&group_u16).unwrap_or(&0);
                     let existing_segmented_yz =
                         if sensory_unit == SensoryCorticalUnit::SegmentedVision {
@@ -1829,14 +1884,15 @@ async fn reconcile_device_registrations(
                         } else {
                             None
                         };
+                    let (shared_x, shared_y, shared_z) = shared_positions[i].unwrap_or((
+                        unit_topology.relative_position[0],
+                        unit_topology.relative_position[1],
+                        unit_topology.relative_position[2],
+                    ));
                     let base_expected_position = (
-                        unit_topology.relative_position[0] + group_x_offset,
-                        existing_segmented_yz
-                            .map(|(y, _)| y)
-                            .unwrap_or(unit_topology.relative_position[1]),
-                        existing_segmented_yz
-                            .map(|(_, z)| z)
-                            .unwrap_or(unit_topology.relative_position[2]),
+                        shared_x + group_x_offset,
+                        existing_segmented_yz.map(|(y, _)| y).unwrap_or(shared_y),
+                        existing_segmented_yz.map(|(_, z)| z).unwrap_or(shared_z),
                     );
                     let mut expected_position = base_expected_position;
                     if sensory_unit == SensoryCorticalUnit::Servo {
@@ -1849,11 +1905,8 @@ async fn reconcile_device_registrations(
                                     .get(&(motor_gid, motor_sub))
                                     .copied()
                                 {
-                                    expected_position = (
-                                        mx + SERVO_ENCODER_X_OFFSET_FROM_MATCHED_MOTOR_VOXELS,
-                                        my,
-                                        mz,
-                                    );
+                                    expected_position =
+                                        servo_encoder_position_from_motor((mx, my, mz));
                                 }
                             }
                         }
@@ -2373,6 +2426,23 @@ mod count_output_registration_tests {
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
+
+    #[test]
+    fn servo_encoder_follows_its_stacked_motor() {
+        use crate::common::unit_placement::{unit_sub_area_positions, SubAreaTemplate};
+        let topo = MotorCorticalUnit::PositionalServo.get_unit_default_topology();
+        let t = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let templates = vec![Some(SubAreaTemplate {
+            position: t.relative_position,
+            height: t.channel_dimensions_default[1] as i32,
+        })];
+        for group in 0..3u16 {
+            let motor = unit_sub_area_positions(group, &templates, &[1], true)[0].unwrap();
+            let enc = super::servo_encoder_position_from_motor(motor);
+            assert_eq!((enc.1, enc.2), (motor.1, motor.2));
+            assert_eq!(enc.0, motor.0 - 30);
+        }
+    }
 
     #[test]
     fn misc_data_output_uses_registered_dimensions() {

@@ -24,6 +24,10 @@ pub const FIRE_KIND_STDP_ELIGIBLE: u8 = 0;
 /// fire ledger like other memory fires; the episodic-only ledger is a subset view for
 /// pattern machinery that needs episodic-tagged activity alone.
 pub const FIRE_KIND_EPISODIC_MEMORY: u8 = 1;
+/// Memory neuron fired as a step of a chain replay (`sequential_memory` loop): the next state of
+/// an episode, reached through a flagged link from the current chain head. For STDP it behaves
+/// like any recall fire (existing links strengthen, none are created).
+pub const FIRE_KIND_CHAIN_RECALL: u8 = 2;
 
 /// A single neuron that fired in the current burst
 #[derive(Debug, Clone)]

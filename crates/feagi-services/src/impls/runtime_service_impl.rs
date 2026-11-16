@@ -236,22 +236,25 @@ impl RuntimeService for RuntimeServiceImpl {
         let mut out = Vec::with_capacity(windows.len());
         for (idx, window) in windows {
             let frames = npu
-                .get_fire_ledger_recent_frames(idx, bursts)
+                .get_fire_ledger_recent_frames_with_kinds(idx, bursts)
                 .map_err(|e| {
                     ServiceError::Backend(format!(
                         "Fire history read failed for area {}: {}",
                         idx, e
                     ))
                 })?;
+            // The ledger stores each fired neuron's fire kind (default when absent).
             let frames = frames
                 .into_iter()
-                .map(|(burst, bitmap)| FireHistoryFrame {
-                    burst,
-                    neurons: bitmap
+                .map(|frame| FireHistoryFrame {
+                    burst: frame.timestep,
+                    neurons: frame
+                        .fired
                         .iter()
                         .map(|neuron_id| FiredNeuron {
                             neuron_id,
                             voxel: npu.get_neuron_coordinates(neuron_id),
+                            fire_kind: frame.kind_of(neuron_id),
                         })
                         .collect(),
                 })
@@ -947,7 +950,8 @@ mod fire_history_tests {
             area.frames[0].neurons,
             vec![FiredNeuron {
                 neuron_id: neuron,
-                voxel: Some((1, 2, 3))
+                voxel: Some((1, 2, 3)),
+                fire_kind: 0
             }]
         );
         assert!(
@@ -973,6 +977,44 @@ mod fire_history_tests {
                 .is_err(),
             "area untracked again after unsubscribe"
         );
+    }
+
+    #[tokio::test]
+    async fn fire_history_reports_fire_kind_per_spike() {
+        use feagi_npu_burst_engine::{FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
+        const MEM_EPISODIC: u32 = 50_000_000;
+        const MEM_ASSOC: u32 = 50_000_001;
+        let (svc, npu, neuron) = service_with_one_neuron();
+        svc.subscribe_fire_history(&[AREA], 3).await.unwrap();
+        {
+            let mut n = npu.lock().unwrap();
+            n.configure_episodic_memory_fire_ledger_window(AREA, 3)
+                .unwrap();
+            let id = CorticalID::try_from_bytes(b"cfirehis").unwrap();
+            n.register_dynamic_neuron_mapping(MEM_EPISODIC, id);
+            n.register_dynamic_neuron_mapping(MEM_ASSOC, id);
+            n.inject_memory_neuron_to_fcl_with_kind(
+                MEM_EPISODIC,
+                AREA,
+                2.0,
+                FIRE_KIND_EPISODIC_MEMORY,
+            );
+            n.inject_memory_neuron_to_fcl_with_kind(MEM_ASSOC, AREA, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+        }
+        burst(&npu, neuron, true);
+
+        let history = svc.get_fire_history(&[AREA], 1).await.unwrap();
+        let area = &history.areas[0];
+        let kind_of = |id: u32| {
+            area.frames[0]
+                .neurons
+                .iter()
+                .find(|n| n.neuron_id == id)
+                .map(|n| n.fire_kind)
+        };
+        assert_eq!(kind_of(neuron), Some(FIRE_KIND_STDP_ELIGIBLE));
+        assert_eq!(kind_of(MEM_EPISODIC), Some(FIRE_KIND_EPISODIC_MEMORY));
+        assert_eq!(kind_of(MEM_ASSOC), Some(FIRE_KIND_STDP_ELIGIBLE));
     }
 
     #[tokio::test]

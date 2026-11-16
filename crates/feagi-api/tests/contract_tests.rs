@@ -278,10 +278,12 @@ fn build_test_state() -> ApiState {
                                     FiredNeuron {
                                         neuron_id: 7,
                                         voxel: Some((1, 2, 3)),
+                                        fire_kind: 0,
                                     },
                                     FiredNeuron {
                                         neuron_id: 50_000_001,
                                         voxel: None,
+                                        fire_kind: 1,
                                     },
                                 ],
                             },
@@ -4888,6 +4890,12 @@ async fn test_burst_engine_fire_history_route_shape_and_limits() {
     assert_eq!(area["frames"][1]["burst"], json!(42));
     assert_eq!(area["frames"][1]["voxels"], json!([[1, 2, 3]]));
     assert_eq!(area["frames"][1]["memory_neuron_ids"], json!([50000001]));
+    assert_eq!(area["frames"][1]["voxel_fire_kinds"], json!([0]));
+    assert_eq!(area["frames"][1]["memory_fire_kinds"], json!([1]));
+    assert_eq!(
+        body["fire_kind_names"],
+        json!({"0": "stdp_eligible", "1": "episodic_memory", "2": "chain_recall"})
+    );
 
     // Default bursts, duplicate ids collapse to one area.
     let (status, body) = request_json(
@@ -5006,6 +5014,151 @@ fn plastic_projector_rule(weight: f64) -> Value {
         "ltd_multiplier": 1,
         "plasticity_window": 1
     })
+}
+
+/// `GET /v1/cortical_area/memory?detail=true` and `GET /v1/connectome/memory_neuron` report an
+/// episode neuron's kind and ordered member list, and the area's recording state, episode count
+/// and blocked-replay counts.
+#[tokio::test]
+async fn test_memory_routes_report_episode_kind_members_recording_and_blocked_counts() {
+    use feagi_npu_plasticity::executor::PlasticityExecutor;
+    use feagi_npu_plasticity::{
+        episode_pattern_hash, AsyncPlasticityExecutor, MemoryMpMode, MemoryNeuronDetail,
+    };
+
+    let state = build_test_state();
+    ensure_singleton_connectome_has_npu();
+    let memory_id = general_purpose::STANDARD.encode(b"mepimemA");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: memory_id.clone(),
+            name: "episode-mem".to_string(),
+            dimensions: (1, 1, 1),
+            position: (10, 0, 0),
+            area_type: "Memory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: Some(1.0),
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: None,
+        }])
+        .await
+        .expect("create memory area");
+    let area_idx = state
+        .connectome_service
+        .get_cortical_area(&memory_id)
+        .await
+        .expect("memory area")
+        .cortical_idx;
+
+    // The routes read the process-wide manager's plasticity executor.
+    let singleton = ConnectomeManager::instance();
+    let npu = singleton.read().get_npu().expect("singleton npu").clone();
+    let exec = Arc::new(Mutex::new(AsyncPlasticityExecutor::new(
+        feagi_npu_plasticity::PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu,
+    )));
+    singleton.write().set_plasticity_executor(exec.clone());
+    let ids = [50_000_100u32, 50_000_101];
+    let episode_id = 50_000_102u32;
+    {
+        let guard = exec.lock().unwrap();
+        PlasticityExecutor::register_memory_area(
+            &*guard,
+            area_idx,
+            "episode-mem".to_string(),
+            1,
+            Vec::new(),
+            None,
+            MemoryMpMode::PatternOnly,
+        );
+        let detail = |neuron_id: u32, hash: u64, members: Vec<u32>| MemoryNeuronDetail {
+            neuron_id,
+            cortical_area_idx: area_idx,
+            pattern_hash: Some(hash),
+            is_longterm_memory: true,
+            is_active: true,
+            lifespan_current: 100,
+            lifespan_initial: 20,
+            lifespan_growth_rate: 2.0,
+            creation_burst: 1,
+            last_activation_burst: 2,
+            activation_count: 3,
+            spatial_signature: None,
+            class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
+            change_record: None,
+            episode_members: members,
+        };
+        guard
+            .restore_long_term_memory_neurons(&[
+                detail(ids[0], 1, Vec::new()),
+                detail(ids[1], 2, Vec::new()),
+                detail(episode_id, episode_pattern_hash(&ids), ids.to_vec()),
+            ])
+            .expect("restore");
+    }
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/cortical_area/memory?cortical_id={memory_id}&detail=true"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["episode_neuron_count"], json!(1));
+    assert_eq!(body["recording"], json!(false));
+    assert_eq!(body["replay_blocked_by_lockout"], json!(0));
+    assert_eq!(body["replay_blocked_by_recording"], json!(0));
+    let items = body["memory_neuron_details"].as_array().expect("details");
+    let episode = items
+        .iter()
+        .find(|item| item["neuron_id"] == json!(episode_id))
+        .expect("the episode neuron is listed");
+    assert_eq!(episode["kind"], json!("episode"));
+    assert_eq!(episode["episode_members"], json!(ids));
+    let state_item = items
+        .iter()
+        .find(|item| item["neuron_id"] == json!(ids[0]))
+        .expect("a state is listed");
+    assert_eq!(state_item["kind"], json!("state"));
+    assert_eq!(state_item["episode_members"], json!([]));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/connectome/memory_neuron?neuron_id={episode_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["kind"], json!("episode"));
+    assert_eq!(body["episode_members"], json!(ids));
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/connectome/memory_neuron?neuron_id={}", ids[1]),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["kind"], json!("state"));
+    assert_eq!(body["episode_members"], json!([]));
+    println!("k: kind, episode_members, recording, episode_neuron_count, blocked counts present");
 }
 
 /// `PUT /v1/cortical_area/learning_frozen` and `GET /v1/connectome/learning_frozen`:

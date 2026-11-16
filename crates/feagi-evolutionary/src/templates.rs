@@ -414,6 +414,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "episodic_scan",
         "memory_replay",
         "associative_memory",
+        "sequential_memory",
         "rotator_z",
         "all_to_0-0-0",
         "0-0-0_to_all",
@@ -570,6 +571,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // associative_memory (bi-directional STDP) - Function-based morphology
     registry.add_morphology(
         "associative_memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // sequential_memory (episode-link loop of one memory area) - Function-based morphology
+    registry.add_morphology(
+        "sequential_memory".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -949,6 +960,7 @@ mod tests {
         assert!(registry.contains("episodic_memory"));
         assert!(registry.contains("episodic_scan"));
         assert!(registry.contains("associative_memory"));
+        assert!(registry.contains("sequential_memory"));
     }
 
     #[test]

@@ -1,0 +1,3963 @@
+{
+  "feagi_core_commit": "6168f5822ac7d3c40e3624e4e50be7f832920aee",
+  "traces": [
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=6 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=5 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [
+            "to_ltm m1"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3",
+            "m2 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [
+            "attach footprint synapses to the newest memory neuron"
+          ],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3",
+            "m2 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": [
+            "aux0>m2 w=9 psp=0.1 type=0 flags=1 group=0",
+            "m2>aux0 w=7 psp=0.1 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3",
+            "m2 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3",
+            "m2 long_term=false lifespan=1 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [
+            "removed m2 Expired"
+          ],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 15,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 16,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 17,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 18,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 19,
+          "commands": [
+            "inject m3 reactivation=false replay_frames=1",
+            "register m3"
+          ],
+          "events": [
+            "edit the up to mem mapping (psp multiplier 2.0) and regenerate its synapses"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up2"
+            ]
+          },
+          "input": "C",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4",
+            "m3 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 20,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4",
+            "m3 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 21,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=4",
+            "m3 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 22,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=5",
+            "m3 long_term=false lifespan=1 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 23,
+          "commands": [
+            "removed m3 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=5"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 24,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=8 activations=5"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        }
+      ],
+      "name": "window_depth1",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "stimuli": "A,B,C = 2-neuron patterns"
+        },
+        "initial_lifespan": 4,
+        "lifespan_growth_rate": 3.0,
+        "longterm_threshold": 7,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=2",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=5 activations=1",
+            "m2 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m3 reactivation=false replay_frames=3",
+            "register m3"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "up": [
+              "up0",
+              "up2"
+            ]
+          },
+          "input": "C",
+          "memory": [
+            "m1 long_term=false lifespan=4 activations=1",
+            "m2 long_term=false lifespan=5 activations=1",
+            "m3 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [
+            "inject m4 reactivation=false replay_frames=2",
+            "register m4"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=3 activations=1",
+            "m2 long_term=false lifespan=4 activations=1",
+            "m3 long_term=false lifespan=5 activations=1",
+            "m4 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 4,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [
+            "inject m5 reactivation=false replay_frames=1",
+            "register m5"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m4"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1",
+            "m2 long_term=false lifespan=3 activations=1",
+            "m3 long_term=false lifespan=4 activations=1",
+            "m4 long_term=false lifespan=5 activations=1",
+            "m5 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m5"
+            ],
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=1 activations=1",
+            "m2 long_term=false lifespan=2 activations=1",
+            "m3 long_term=false lifespan=3 activations=1",
+            "m4 long_term=false lifespan=4 activations=1",
+            "m5 long_term=false lifespan=5 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin2"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=4 activations=2",
+            "m2 long_term=false lifespan=1 activations=1",
+            "m3 long_term=false lifespan=2 activations=1",
+            "m4 long_term=false lifespan=3 activations=1",
+            "m5 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [
+            "inject m2 reactivation=true replay_frames=2",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=3 activations=2",
+            "m2 long_term=false lifespan=4 activations=2",
+            "m3 long_term=false lifespan=1 activations=1",
+            "m4 long_term=false lifespan=2 activations=1",
+            "m5 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [
+            "inject m3 reactivation=true replay_frames=3",
+            "register m3"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "up": [
+              "up0",
+              "up2"
+            ]
+          },
+          "input": "C",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=2",
+            "m2 long_term=false lifespan=3 activations=2",
+            "m3 long_term=false lifespan=4 activations=2",
+            "m4 long_term=false lifespan=1 activations=1",
+            "m5 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [
+            "inject m4 reactivation=true replay_frames=2",
+            "register m4"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=1 activations=2",
+            "m2 long_term=false lifespan=2 activations=2",
+            "m3 long_term=false lifespan=3 activations=2",
+            "m4 long_term=false lifespan=4 activations=2",
+            "m5 long_term=false lifespan=1 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [
+            "inject m5 reactivation=true replay_frames=1",
+            "register m5",
+            "removed m1 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m4"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m2 long_term=false lifespan=1 activations=2",
+            "m3 long_term=false lifespan=2 activations=2",
+            "m4 long_term=false lifespan=3 activations=2",
+            "m5 long_term=false lifespan=4 activations=2"
+          ],
+          "memory_neurons": 4,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [
+            "removed m2 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m5"
+            ],
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=1 activations=2",
+            "m4 long_term=false lifespan=2 activations=2",
+            "m5 long_term=false lifespan=3 activations=2"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [
+            "inject m6 reactivation=false replay_frames=1",
+            "register m6",
+            "removed m3 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin2"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m4 long_term=false lifespan=1 activations=2",
+            "m5 long_term=false lifespan=2 activations=2",
+            "m6 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 15,
+          "commands": [
+            "inject m7 reactivation=false replay_frames=2",
+            "register m7",
+            "removed m4 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m6"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m5 long_term=false lifespan=1 activations=2",
+            "m6 long_term=false lifespan=5 activations=1",
+            "m7 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 16,
+          "commands": [
+            "inject m8 reactivation=false replay_frames=3",
+            "register m8",
+            "removed m5 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m7"
+            ],
+            "up": [
+              "up1",
+              "up3"
+            ]
+          },
+          "input": "D",
+          "memory": [
+            "m6 long_term=false lifespan=4 activations=1",
+            "m7 long_term=false lifespan=5 activations=1",
+            "m8 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 17,
+          "commands": [
+            "inject m9 reactivation=false replay_frames=2",
+            "register m9"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m8"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m6 long_term=false lifespan=3 activations=1",
+            "m7 long_term=false lifespan=4 activations=1",
+            "m8 long_term=false lifespan=5 activations=1",
+            "m9 long_term=false lifespan=6 activations=1"
+          ],
+          "memory_neurons": 4,
+          "synapses": null
+        },
+        {
+          "burst": 18,
+          "commands": [
+            "inject m10 reactivation=false replay_frames=1",
+            "register m10"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m9"
+            ],
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m10 long_term=false lifespan=6 activations=1",
+            "m6 long_term=false lifespan=2 activations=1",
+            "m7 long_term=false lifespan=3 activations=1",
+            "m8 long_term=false lifespan=4 activations=1",
+            "m9 long_term=false lifespan=5 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 19,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m10"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m10 long_term=false lifespan=5 activations=1",
+            "m6 long_term=false lifespan=1 activations=1",
+            "m7 long_term=false lifespan=2 activations=1",
+            "m8 long_term=false lifespan=3 activations=1",
+            "m9 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 20,
+          "commands": [
+            "removed m6 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin1",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m10 long_term=false lifespan=4 activations=1",
+            "m7 long_term=false lifespan=1 activations=1",
+            "m8 long_term=false lifespan=2 activations=1",
+            "m9 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 4,
+          "synapses": null
+        }
+      ],
+      "name": "window_depth3",
+      "settings": {
+        "excitability": 1,
+        "extra": {},
+        "initial_lifespan": 6,
+        "lifespan_growth_rate": 3.0,
+        "longterm_threshold": 100,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 3
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [
+            "attach footprint synapses to the newest memory neuron"
+          ],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": [
+            "aux0>m1 w=9 psp=0.1 type=0 flags=1 group=0",
+            "m1>aux0 w=7 psp=0.1 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=38 activations=1",
+            "m2 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=37 activations=1",
+            "m2 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=38 activations=2",
+            "m2 long_term=false lifespan=38 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=37 activations=2",
+            "m2 long_term=false lifespan=37 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [
+            "inject m3 reactivation=false replay_frames=1",
+            "register m3",
+            "removed m1 Evicted"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ],
+            "up": [
+              "up0",
+              "up2"
+            ]
+          },
+          "input": "C",
+          "memory": [
+            "m2 long_term=false lifespan=36 activations=1",
+            "m3 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": []
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m2 long_term=false lifespan=35 activations=1",
+            "m3 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m4 reactivation=false replay_frames=1",
+            "register m4",
+            "removed m2 Evicted"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin2"
+            ],
+            "up": [
+              "up1",
+              "up3"
+            ]
+          },
+          "input": "D",
+          "memory": [
+            "m3 long_term=false lifespan=38 activations=1",
+            "m4 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m4"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=37 activations=1",
+            "m4 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [
+            "inject m5 reactivation=false replay_frames=1",
+            "register m5",
+            "removed m3 Evicted"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin1",
+              "twin3"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m4 long_term=false lifespan=38 activations=1",
+            "m5 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m5"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m4 long_term=false lifespan=37 activations=1",
+            "m5 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m4 long_term=false lifespan=36 activations=1",
+            "m5 long_term=false lifespan=38 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        }
+      ],
+      "name": "cap_lru",
+      "settings": {
+        "excitability": 1,
+        "extra": {},
+        "initial_lifespan": 40,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 2,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "bind modulator (MemoryFormation) to the memory area"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=29 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [],
+          "events": [
+            "driver held on"
+          ],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=28 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=27 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=29 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=28 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=27 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=26 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [],
+          "events": [
+            "driver released"
+          ],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=25 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=24 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=23 activations=2",
+            "m2 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=22 activations=2",
+            "m2 long_term=false lifespan=29 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=21 activations=2",
+            "m2 long_term=false lifespan=28 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=20 activations=2",
+            "m2 long_term=false lifespan=27 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        }
+      ],
+      "name": "formation_blocked",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "modulator": "memory.formation -100"
+        },
+        "initial_lifespan": 30,
+        "lifespan_growth_rate": 2.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "bind modulator (MemoryFreeze) to the memory area"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [],
+          "events": [
+            "driver held on"
+          ],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "drv": [
+              "drv0"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [
+            "driver released"
+          ],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=1 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2",
+            "removed m1 Expired"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m2 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m2 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m2 long_term=false lifespan=1 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [
+            "removed m2 Expired"
+          ],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": null
+        },
+        {
+          "burst": 15,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": null
+        },
+        {
+          "burst": 16,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": null
+        }
+      ],
+      "name": "learning_freeze",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "modulator": "memory.freeze +100"
+        },
+        "initial_lifespan": 3,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "associative_memory self mapping with STDP, window 3"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=80 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2",
+            "to_ltm m1"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=false lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "to_ltm m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": [
+            "m1>m1 w=100 psp=4 type=0 flags=1 group=0",
+            "m1>m2 w=100 psp=4 type=0 flags=1 group=0",
+            "m2>m1 w=100 psp=4 type=0 flags=1 group=0",
+            "m2>m2 w=100 psp=4 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 3,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=1",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [
+            "inject m2 reactivation=true replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1",
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1",
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1",
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1",
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 15,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=2",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 16,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "recall: A alone, replay_trigger any_fire"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 17,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 18,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 19,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 20,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 21,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 22,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=3",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 23,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "replay_trigger = recall_only"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 24,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 25,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 26,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1",
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 27,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1",
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 28,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 29,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 30,
+          "commands": [
+            "inject m2 reactivation=true replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 31,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 32,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 33,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 34,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 35,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 36,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 37,
+          "commands": [],
+          "events": [
+            "edit the associative mapping (plasticity_window 3 -> 2) and regenerate its synapses"
+          ],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=4",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": []
+        },
+        {
+          "burst": 38,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 39,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": [
+            "m1>m1 w=100 psp=4 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 40,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 41,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 42,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 43,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 44,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=80 activations=5",
+            "m2 long_term=true lifespan=80 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        }
+      ],
+      "name": "assoc_stdp",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "mapping": "associative_memory stdp"
+        },
+        "initial_lifespan": 80,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 80,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "associative_memory self mapping with R-STDP gated by a reward modulator"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=80 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=79 activations=1",
+            "m2 long_term=false lifespan=80 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=78 activations=1",
+            "m2 long_term=false lifespan=79 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=77 activations=1",
+            "m2 long_term=false lifespan=78 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=76 activations=1",
+            "m2 long_term=false lifespan=77 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=75 activations=1",
+            "m2 long_term=false lifespan=76 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=74 activations=1",
+            "m2 long_term=false lifespan=75 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=75 activations=2",
+            "m2 long_term=false lifespan=74 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m2 reactivation=true replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=false lifespan=74 activations=2",
+            "m2 long_term=false lifespan=75 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=73 activations=2",
+            "m2 long_term=false lifespan=74 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=72 activations=2",
+            "m2 long_term=false lifespan=73 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=71 activations=2",
+            "m2 long_term=false lifespan=72 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=70 activations=2",
+            "m2 long_term=false lifespan=71 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=69 activations=2",
+            "m2 long_term=false lifespan=70 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [
+            "reward arrives with B"
+          ],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=70 activations=3",
+            "m2 long_term=false lifespan=69 activations=2"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 15,
+          "commands": [
+            "inject m2 reactivation=true replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "rew": [
+              "rew0"
+            ],
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B+reward",
+          "memory": [
+            "m1 long_term=false lifespan=69 activations=3",
+            "m2 long_term=false lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 16,
+          "commands": [
+            "to_ltm m1",
+            "to_ltm m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": [
+            "m1>m1 w=100 psp=4 type=0 flags=1 group=0",
+            "m1>m2 w=100 psp=4 type=0 flags=1 group=0",
+            "m2>m1 w=100 psp=4 type=0 flags=1 group=0",
+            "m2>m2 w=100 psp=4 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 17,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 18,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 19,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 20,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 21,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=3",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 22,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 23,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 24,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1",
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 25,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1",
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1",
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 26,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1",
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 27,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 28,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=69 activations=4",
+            "m2 long_term=true lifespan=70 activations=3"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        }
+      ],
+      "name": "assoc_rstdp",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "mapping": "associative_memory rstdp, reward"
+        },
+        "initial_lifespan": 80,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "2",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=0",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "4",
+          "memory": [
+            "m1 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=0",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "7",
+          "memory": [
+            "m1 long_term=false lifespan=29 activations=1",
+            "m2 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=0",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "9",
+          "memory": [
+            "m1 long_term=false lifespan=31 activations=2",
+            "m2 long_term=false lifespan=29 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m3 reactivation=false replay_frames=0",
+            "register m3"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ],
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "9",
+          "memory": [
+            "m1 long_term=false lifespan=30 activations=2",
+            "m2 long_term=false lifespan=28 activations=1",
+            "m3 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [
+            "inject m4 reactivation=false replay_frames=0",
+            "register m4"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ],
+            "up": [
+              "up0"
+            ]
+          },
+          "input": "7",
+          "memory": [
+            "m1 long_term=false lifespan=29 activations=2",
+            "m2 long_term=false lifespan=27 activations=1",
+            "m3 long_term=false lifespan=29 activations=1",
+            "m4 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 4,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [
+            "inject m5 reactivation=false replay_frames=0",
+            "register m5"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m4"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=28 activations=2",
+            "m2 long_term=false lifespan=26 activations=1",
+            "m3 long_term=false lifespan=28 activations=1",
+            "m4 long_term=false lifespan=29 activations=1",
+            "m5 long_term=false lifespan=30 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m5"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=27 activations=2",
+            "m2 long_term=false lifespan=25 activations=1",
+            "m3 long_term=false lifespan=27 activations=1",
+            "m4 long_term=false lifespan=28 activations=1",
+            "m5 long_term=false lifespan=29 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=26 activations=2",
+            "m2 long_term=false lifespan=24 activations=1",
+            "m3 long_term=false lifespan=26 activations=1",
+            "m4 long_term=false lifespan=27 activations=1",
+            "m5 long_term=false lifespan=28 activations=1"
+          ],
+          "memory_neurons": 5,
+          "synapses": null
+        }
+      ],
+      "name": "mp_differential",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "mp_mode": "mp_differential",
+          "quantization": 1.0
+        },
+        "initial_lifespan": 30,
+        "lifespan_growth_rate": 2.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 2
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [],
+          "memory_neurons": 0,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=3",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up2"
+            ]
+          },
+          "input": "C",
+          "memory": [
+            "m1 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=2",
+            "register m2"
+          ],
+          "events": [
+            "attach footprint synapses to the newest memory neuron"
+          ],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=39 activations=1",
+            "m2 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": [
+            "aux0>m1 w=9 psp=0.1 type=0 flags=1 group=0",
+            "m1>aux0 w=7 psp=0.1 type=0 flags=1 group=0"
+          ]
+        },
+        {
+          "burst": 4,
+          "commands": [
+            "inject m3 reactivation=false replay_frames=1",
+            "register m3"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ],
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=38 activations=1",
+            "m2 long_term=false lifespan=39 activations=1",
+            "m3 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m3"
+            ],
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=37 activations=1",
+            "m2 long_term=false lifespan=38 activations=1",
+            "m3 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=36 activations=1",
+            "m2 long_term=false lifespan=37 activations=1",
+            "m3 long_term=false lifespan=38 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [
+            "removed m1 ShapeChanged",
+            "removed m2 ShapeChanged"
+          ],
+          "events": [
+            "temporal_depth 3 -> 1: purge, then re-register",
+            "purge removed=2 removed_long_term=0 reasons={\"replay_offset_exceeds_temporal_depth\": 2}"
+          ],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=37 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 8,
+          "commands": [
+            "inject m4 reactivation=false replay_frames=1",
+            "register m4"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m3 long_term=false lifespan=36 activations=1",
+            "m4 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m4"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=35 activations=1",
+            "m4 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=34 activations=1",
+            "m4 long_term=false lifespan=38 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [
+            "inject m5 reactivation=false replay_frames=1",
+            "register m5"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m3 long_term=false lifespan=33 activations=1",
+            "m4 long_term=false lifespan=37 activations=1",
+            "m5 long_term=false lifespan=40 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m5"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=32 activations=1",
+            "m4 long_term=false lifespan=36 activations=1",
+            "m5 long_term=false lifespan=39 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=31 activations=1",
+            "m4 long_term=false lifespan=35 activations=1",
+            "m5 long_term=false lifespan=38 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [],
+          "events": [],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m3 long_term=false lifespan=30 activations=1",
+            "m4 long_term=false lifespan=34 activations=1",
+            "m5 long_term=false lifespan=37 activations=1"
+          ],
+          "memory_neurons": 3,
+          "synapses": null
+        }
+      ],
+      "name": "shape_purge",
+      "settings": {
+        "excitability": 1,
+        "extra": {
+          "new_depth": 1
+        },
+        "initial_lifespan": 40,
+        "lifespan_growth_rate": 1.0,
+        "longterm_threshold": 1000,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 3
+      }
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "commands": [
+            "inject m1 reactivation=false replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": []
+        },
+        {
+          "burst": 1,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 2,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ],
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=false lifespan=7 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 3,
+          "commands": [
+            "to_ltm m1"
+          ],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 4,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 5,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2",
+            "m2 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 6,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2",
+            "m2 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 7,
+          "commands": [],
+          "events": [
+            "save: connectome exported, 1 long-term neuron(s) exported"
+          ],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2",
+            "m2 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 8,
+          "commands": [],
+          "events": [
+            "reload: snapshot applied, long-term neurons restored, area re-registered"
+          ],
+          "fired": {},
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=2"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 9,
+          "commands": [
+            "inject m1 reactivation=true replay_frames=1",
+            "register m1"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up0",
+              "up1"
+            ]
+          },
+          "input": "A",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 10,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 11,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin0",
+              "twin1"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3"
+          ],
+          "memory_neurons": 1,
+          "synapses": null
+        },
+        {
+          "burst": 12,
+          "commands": [
+            "inject m2 reactivation=false replay_frames=1",
+            "register m2"
+          ],
+          "events": [],
+          "fired": {
+            "up": [
+              "up2",
+              "up3"
+            ]
+          },
+          "input": "B",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3",
+            "m2 long_term=false lifespan=4 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 13,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "mem": [
+              "m2"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3",
+            "m2 long_term=false lifespan=3 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        },
+        {
+          "burst": 14,
+          "commands": [],
+          "events": [],
+          "fired": {
+            "twin": [
+              "twin2",
+              "twin3"
+            ]
+          },
+          "input": "quiet",
+          "memory": [
+            "m1 long_term=true lifespan=7 activations=3",
+            "m2 long_term=false lifespan=2 activations=1"
+          ],
+          "memory_neurons": 2,
+          "synapses": null
+        }
+      ],
+      "name": "save_reload",
+      "settings": {
+        "excitability": 1,
+        "extra": {},
+        "initial_lifespan": 4,
+        "lifespan_growth_rate": 4.0,
+        "longterm_threshold": 6,
+        "ltm_eviction": "Lru",
+        "memory_neuron_cap": 0,
+        "temporal_depth": 1
+      }
+    }
+  ]
+}

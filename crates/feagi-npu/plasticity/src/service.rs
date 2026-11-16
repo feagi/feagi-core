@@ -19,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
+use crate::capture_recording::{CaptureAreaInfo, CaptureRecording};
 use crate::classifier_reward::{
     scanning_instance_affect, AnswerObservation, ChannelAffect, RecordedDecision,
 };
@@ -28,8 +29,9 @@ use crate::episodic_scan::{
 };
 use crate::log_rate_limiter::{BurstLogRateLimiter, TimeLogRateLimiter};
 use crate::memory_neuron_array::{
-    ChangeEntry, MemoryChangeRecord, MemoryNeuronArray, MemoryNeuronDetail,
-    MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason, RemovedMemoryNeuron,
+    ChangeEntry, EpisodeCreate, LifespanBoost, MemoryChangeRecord, MemoryNeuronArray,
+    MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason,
+    RemovedMemoryNeuron, SuccessorStrength,
 };
 use crate::memory_stats_cache::{self, MemoryPoolCounters, MemoryPoolSnapshot, MemoryStatsCache};
 use crate::mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding};
@@ -339,6 +341,19 @@ pub struct MemoryCorticalAreaRuntimeInfo {
     /// Occupancy of the pool shared by all memory areas.
     #[serde(default)]
     pub memory_pool: MemoryPoolSnapshot,
+    /// Active episode neurons (`memory.capture`) in this area, short-term and long-term.
+    #[serde(default)]
+    pub episode_neuron_count: usize,
+    /// The area is inside a recording session (its `memory.capture` driver is on).
+    #[serde(default)]
+    pub recording: bool,
+    /// Replays of this area blocked so far because a chain replay was running.
+    #[serde(default)]
+    pub replay_blocked_by_lockout: u64,
+    /// Replays of this area blocked so far because the area was recording. A tonic driver keeps
+    /// this rising: the twin stays silent while the area records.
+    #[serde(default)]
+    pub replay_blocked_by_recording: u64,
 }
 
 impl MemoryCorticalAreaRuntimeInfo {
@@ -402,6 +417,9 @@ pub struct PlasticityService {
 
     /// Pool occupancy published after every burst for lock-free readers (health check).
     pool_counters: Arc<MemoryPoolCounters>,
+
+    /// `memory.capture` recording: states, episode links and boosts (see `capture_recording`).
+    capture: Arc<Mutex<CaptureRecording>>,
 }
 
 /// Single entry point for "this memory area is a full snapshot right now". The NPU decides:
@@ -466,6 +484,7 @@ impl PlasticityService {
                 CREATION_FAILURE_WARN_PERIOD,
             ))),
             pool_counters: Arc::new(MemoryPoolCounters::default()),
+            capture: Arc::new(Mutex::new(CaptureRecording::default())),
         }
     }
 
@@ -513,6 +532,7 @@ impl PlasticityService {
         let mp_window_warn_limiter = Arc::clone(&self.mp_window_warn_limiter);
         let creation_failure_warn_limiter = Arc::clone(&self.creation_failure_warn_limiter);
         let pool_counters = Arc::clone(&self.pool_counters);
+        let capture = Arc::clone(&self.capture);
 
         tracing::info!(target: "plasticity", "🧠 Starting PlasticityService background thread...");
 
@@ -549,6 +569,7 @@ impl PlasticityService {
                     &mp_window_warn_limiter,
                     &creation_failure_warn_limiter,
                     &pool_counters,
+                    &capture,
                 );
             }
         })
@@ -579,6 +600,7 @@ impl PlasticityService {
         mp_window_warn_limiter: &Arc<Mutex<BurstLogRateLimiter>>,
         creation_failure_warn_limiter: &Arc<Mutex<TimeLogRateLimiter>>,
         pool_counters: &Arc<MemoryPoolCounters>,
+        capture: &Arc<Mutex<CaptureRecording>>,
     ) {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
 
@@ -614,6 +636,23 @@ impl PlasticityService {
             std::collections::HashSet<u32>,
         ) = {
             let npu_lock = npu.lock().unwrap();
+            // `memory.capture`: the NPU's recording boundary events, loops and magnitudes. It
+            // returns at once when no area records, subscribes or has a loop.
+            let work = npu_lock.take_capture_work();
+            {
+                let mut recording = capture.lock().unwrap();
+                recording.begin_pass(
+                    current_timestep,
+                    work.events,
+                    work.loops.keys().copied(),
+                    work.magnitudes.iter().map(|(k, v)| (*k, *v)).collect(),
+                );
+                // Links changed outside this service (a load, a mapping edit, a new loop): the
+                // live links are the truth, and the ranking is rebuilt from them.
+                for area_idx in work.stale_areas {
+                    recording.replace_edges(area_idx, npu_lock.sequential_edges(area_idx));
+                }
+            }
             let frozen: std::collections::HashSet<u32> = memory_areas_snapshot
                 .keys()
                 .copied()
@@ -668,6 +707,10 @@ impl PlasticityService {
             for neuron_idx in converted_neurons {
                 let neuron_id = array.get_neuron_id(neuron_idx);
                 let area_idx = array.get_cortical_area_id(neuron_idx);
+                if let Some(area_idx) = area_idx {
+                    // A state turned long-term: its predecessors may now rank it higher.
+                    capture.lock().unwrap().mark_dirty(area_idx);
+                }
                 let pattern_hash = array.get_pattern_hash(neuron_idx);
                 if let (Some(neuron_id), Some(area_idx), Some(pattern_hash)) =
                     (neuron_id, area_idx, pattern_hash)
@@ -1175,6 +1218,60 @@ impl PlasticityService {
             }
         }
 
+        // `memory.capture`: states this burst encoded in a recording area. Only encoding fires
+        // are in `encoded_this_burst`; recall, replay and scanner fires never are. Links are
+        // inserted after the array lock is released (NPU-then-array lock order).
+        let mut episode_links: Vec<(u32, u32, u32, bool)> = Vec::new();
+        if !encoded_this_burst.is_empty() {
+            let mut recording = capture.lock().unwrap();
+            for (area_idx, neuron_idx, _) in &encoded_this_burst {
+                // An encoded state changes its activation count and recency, which its
+                // predecessors rank by (recording or not).
+                recording.mark_dirty(*area_idx);
+                if !recording.is_recording(*area_idx) {
+                    continue;
+                }
+                if frozen_areas.contains(area_idx) {
+                    // `memory.freeze` outranks capture: nothing is recorded and the next
+                    // state starts a fresh chain.
+                    recording.break_chain(*area_idx);
+                    continue;
+                }
+                let Some(neuron_id) = array.get_neuron_id(*neuron_idx) else {
+                    continue;
+                };
+                let outcome = recording.note_state(*area_idx, neuron_id, current_timestep);
+                if outcome.boost {
+                    let threshold = memory_lifecycle_configs
+                        .lock()
+                        .unwrap()
+                        .get(area_idx)
+                        .map(|c| c.longterm_threshold)
+                        .unwrap_or(config.memory_lifecycle_config.longterm_threshold);
+                    let boost = array.boost_lifespan_by_id(
+                        neuron_id,
+                        recording.magnitude(*area_idx),
+                        threshold,
+                    );
+                    if let LifespanBoost::BecameLongTerm(idx) = boost {
+                        stats.lock().unwrap().memory_neurons_converted_ltm += 1;
+                        if let (Some(area), Some(pattern_hash)) =
+                            (array.get_cortical_area_id(idx), array.get_pattern_hash(idx))
+                        {
+                            commands.push(PlasticityCommand::MemoryNeuronConvertedToLtm {
+                                neuron_id,
+                                area_idx: area,
+                                pattern_hash,
+                            });
+                        }
+                    }
+                }
+                if let Some(source) = outcome.link_from {
+                    episode_links.push((*area_idx, source, neuron_id, outcome.boundary));
+                }
+            }
+        }
+
         Self::bind_classifier_class_channels(
             &mut array,
             &memory_areas_snapshot,
@@ -1195,6 +1292,117 @@ impl PlasticityService {
             &frozen_areas,
         );
         Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
+
+        // `memory.capture`: a recording piece ended, so its ordered states become one episode
+        // neuron (created, or reactivated when the same list exists). It is a memory neuron of
+        // the same area, never a state, and it fires as an ordinary episodic memory fire so an
+        // `associative_memory` area can learn from it.
+        let mut episode_upserts: Vec<(u32, Vec<u32>)> = Vec::new();
+        {
+            let closed = capture.lock().unwrap().take_closed();
+            for piece in closed {
+                let lifecycle_config = memory_lifecycle_configs
+                    .lock()
+                    .unwrap()
+                    .get(&piece.area_idx)
+                    .copied()
+                    .unwrap_or_default();
+                let outcome = array.create_episode_neuron(
+                    &piece.members,
+                    piece.area_idx,
+                    current_timestep,
+                    &lifecycle_config,
+                    &frozen_areas,
+                );
+                let (episode_idx, created) = match outcome {
+                    EpisodeCreate::Created(idx) => (idx, true),
+                    EpisodeCreate::Reactivated(idx) => (idx, false),
+                    other => {
+                        capture
+                            .lock()
+                            .unwrap()
+                            .note_episode(piece.area_idx, false, false);
+                        match other {
+                            EpisodeCreate::HashMismatch => tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] memory.capture area {}: an episode neuron with this hash has a different member list; no episode neuron made",
+                                piece.area_idx
+                            ),
+                            EpisodeCreate::NoRoom => tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] memory.capture area {}: no room for an episode neuron without evicting its own members; skipped",
+                                piece.area_idx
+                            ),
+                            _ => tracing::debug!(
+                                target: "plasticity",
+                                "[PLASTICITY] memory.capture area {}: a member state is gone; no episode neuron",
+                                piece.area_idx
+                            ),
+                        }
+                        continue;
+                    }
+                };
+                let Some(episode_id) = array.get_neuron_id(episode_idx) else {
+                    continue;
+                };
+                let pattern_hash = array.get_pattern_hash(episode_idx).unwrap_or(0);
+                {
+                    let mut recording = capture.lock().unwrap();
+                    recording.note_episode(piece.area_idx, created, !created);
+                    recording.track_episode(episode_id);
+                    // Boosted once per session, like its states.
+                    if recording.boost_once(piece.area_idx, episode_id) {
+                        let threshold = lifecycle_config.longterm_threshold;
+                        if let LifespanBoost::BecameLongTerm(idx) =
+                            array.boost_lifespan_by_id(episode_id, piece.magnitude, threshold)
+                        {
+                            stats.lock().unwrap().memory_neurons_converted_ltm += 1;
+                            commands.push(PlasticityCommand::MemoryNeuronConvertedToLtm {
+                                neuron_id: episode_id,
+                                area_idx: array.get_cortical_area_id(idx).unwrap_or(piece.area_idx),
+                                pattern_hash,
+                            });
+                        }
+                    }
+                }
+                episode_upserts.push((episode_id, piece.members.clone()));
+                if created {
+                    stats.lock().unwrap().memory_neurons_created += 1;
+                    if let Some(area_name) = memory_area_names.lock().unwrap().get(&piece.area_idx)
+                    {
+                        memory_stats_cache::on_neuron_created(memory_stats_cache, area_name);
+                    }
+                    commands.push(PlasticityCommand::RegisterMemoryNeuron {
+                        neuron_id: episode_id,
+                        area_idx: piece.area_idx,
+                        threshold: 1.0,
+                        membrane_potential: 0.0,
+                    });
+                } else {
+                    commands.push(PlasticityCommand::RegisterMemoryNeuron {
+                        neuron_id: episode_id,
+                        area_idx: piece.area_idx,
+                        threshold: 1.5,
+                        membrane_potential: 0.0,
+                    });
+                }
+                // No replay frames: an episode neuron replays through its member list.
+                commands.push(PlasticityCommand::InjectMemoryNeuronToFCL {
+                    neuron_id: episode_id,
+                    area_idx: piece.area_idx,
+                    membrane_potential: 1.5,
+                    pattern_hash,
+                    is_reactivation: !created,
+                    replay_frames: Vec::new(),
+                });
+                commands.push(PlasticityCommand::UpdateStateCounters {
+                    memory_neurons_created: usize::from(created),
+                    current_memory_neuron_count: array.pool_in_use(),
+                    area_idx: piece.area_idx,
+                    neuron_id: episode_id,
+                });
+            }
+        }
 
         // Step 3: Age short-term neurons. Runs after every create and reactivate so a
         // neuron matched this burst is not aged out before it can be matched.
@@ -1220,10 +1428,88 @@ impl PlasticityService {
         );
         Self::publish_pool_counters(&array, pool_counters);
 
+        // Replay ranking: the successors of every state of a loop area whose strength changed
+        // are ordered by the neuron columns (read here, behind the array lock) and stamped into
+        // the NPU's successor table below. A new link is part of the ranking at once.
+        let removed_ids: HashSet<u32> = removed.iter().map(|r| r.neuron_id).collect();
+        let (successor_order, episodes_gone): (Vec<(u32, Vec<u32>)>, Vec<u32>) = {
+            let mut recording = capture.lock().unwrap();
+            let episodes_gone = recording.take_removed_episodes(&removed_ids);
+            recording.forget_neurons(&removed_ids);
+            for (area_idx, source, target, _) in &episode_links {
+                if !removed_ids.contains(source) && !removed_ids.contains(target) {
+                    recording.add_edge(*area_idx, *source, *target);
+                }
+            }
+            let mut ranked: Vec<(u32, Vec<u32>)> = Vec::new();
+            for area_idx in recording.take_dirty() {
+                let Some(edges) = recording.edges_of(area_idx) else {
+                    continue;
+                };
+                for (source, targets) in edges {
+                    let mut strong: Vec<(SuccessorStrength, u32)> = targets
+                        .iter()
+                        .filter_map(|t| array.successor_strength(*t).map(|k| (k, *t)))
+                        .collect();
+                    // Strongest first; equal strength falls to the lower neuron id.
+                    strong.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+                    ranked.push((*source, strong.into_iter().map(|(_, t)| t).collect()));
+                }
+            }
+            (recording.changed_orders(ranked), episodes_gone)
+        };
+
         // The NPU is locked only after the array is released: the burst loop holds the NPU
         // and then reads the array, so holding both in the other order can deadlock.
         drop(array);
         let removal_commands = Self::remove_from_npu(npu, command_queue, &removed);
+        if !episode_upserts.is_empty() || !episodes_gone.is_empty() {
+            // The NPU starts a chain from an episode neuron's member list; it only reads it.
+            npu.lock()
+                .unwrap()
+                .set_episode_members(std::mem::take(&mut episode_upserts), &episodes_gone);
+        }
+        if !removed.is_empty() || !episode_links.is_empty() || !successor_order.is_empty() {
+            // Insert the episode links (incremental, no index rebuild). A link whose end left
+            // the array this pass is dropped. Only links the NPU inserted are counted.
+            let mut inserted_counts: Vec<(u32, u64, u64)> = Vec::new();
+            if !episode_links.is_empty() || !successor_order.is_empty() {
+                // Per area: the plain links and the piece-boundary links, inserted apart so the
+                // count of boundary links is exact.
+                type LinkPairs = Vec<(u32, u32)>;
+                let mut by_area: HashMap<u32, (LinkPairs, LinkPairs)> = HashMap::new();
+                for (area_idx, source, target, boundary) in episode_links {
+                    if !removed_ids.contains(&source) && !removed_ids.contains(&target) {
+                        let entry = by_area.entry(area_idx).or_default();
+                        if boundary {
+                            entry.1.push((source, target));
+                        } else {
+                            entry.0.push((source, target));
+                        }
+                    }
+                }
+                let npu_lock = npu.lock().unwrap();
+                for (area_idx, (plain, boundary)) in by_area {
+                    let plain_added = npu_lock.add_sequential_links_inserted(area_idx, &plain);
+                    let boundary_added =
+                        npu_lock.add_sequential_links_inserted(area_idx, &boundary);
+                    inserted_counts.push((
+                        area_idx,
+                        (plain_added.len() + boundary_added.len()) as u64,
+                        boundary_added.len() as u64,
+                    ));
+                }
+                if !successor_order.is_empty() {
+                    npu_lock.set_successor_order(successor_order);
+                }
+            }
+            if !inserted_counts.is_empty() {
+                let mut recording = capture.lock().unwrap();
+                for (area_idx, links, boundary_links) in inserted_counts {
+                    recording.record_inserted(area_idx, links, boundary_links);
+                }
+            }
+        }
 
         // Enqueue commands
         if !commands.is_empty() {
@@ -1285,6 +1571,9 @@ impl PlasticityService {
                     memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name)
                 }
                 MemoryNeuronRemovalReason::Requested => {
+                    memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name)
+                }
+                MemoryNeuronRemovalReason::MemberRemoved => {
                     memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name)
                 }
             }
@@ -2680,6 +2969,7 @@ impl PlasticityService {
     /// removes runtime registrations and queued commands that refer to the
     /// previous connectome's numeric cortical indexes.
     pub fn clear_memory_area_registrations(&self) {
+        self.capture.lock().unwrap().clear();
         self.memory_areas.lock().unwrap().clear();
         self.memory_lifecycle_configs.lock().unwrap().clear();
         self.memory_area_names.lock().unwrap().clear();
@@ -2916,6 +3206,58 @@ impl PlasticityService {
         drained
     }
 
+    /// Run one plasticity pass for `timestep` on the calling thread and return when it is done.
+    ///
+    /// Test only: it lets a deterministic test drive the service burst by burst. Never combine
+    /// it with [`Self::start`]: the background thread and this call would both consume the same
+    /// burst state.
+    #[doc(hidden)]
+    pub fn run_burst_sync(&self, timestep: u64) {
+        Self::compute_plasticity(
+            timestep,
+            &self.npu,
+            &self.memory_neuron_array,
+            &self.memory_areas,
+            &self.memory_lifecycle_configs,
+            &self.memory_area_names,
+            &self.pattern_detector,
+            &self.command_queue,
+            &self.stats,
+            &self.config,
+            &self.memory_stats_cache,
+            &self.mp_window_warn_limiter,
+            &self.creation_failure_warn_limiter,
+            &self.pool_counters,
+            &self.capture,
+        );
+    }
+
+    /// Recording summary of one memory area: sessions, pieces, episode links and boosts since
+    /// the service started. `None` for an area that never recorded.
+    pub fn capture_area_info(&self, area_idx: u32) -> Option<CaptureAreaInfo> {
+        self.capture.lock().unwrap().info(area_idx)
+    }
+
+    /// Drop recording state that names removed neurons.
+    fn forget_captured(&self, removed: &[RemovedMemoryNeuron]) {
+        if removed.is_empty() {
+            return;
+        }
+        let ids: HashSet<u32> = removed.iter().map(|r| r.neuron_id).collect();
+        let gone = {
+            let mut recording = self.capture.lock().unwrap();
+            let gone = recording.take_removed_episodes(&ids);
+            recording.forget_neurons(&ids);
+            gone
+        };
+        if !gone.is_empty() {
+            self.npu
+                .lock()
+                .unwrap()
+                .set_episode_members(Vec::new(), &gone);
+        }
+    }
+
     pub fn enqueue_commands_for_test(&self, commands: Vec<PlasticityCommand>) {
         let mut queue = self.command_queue.lock().unwrap();
         queue.extend(commands);
@@ -2939,9 +3281,27 @@ impl PlasticityService {
         &self,
         neurons: &[MemoryNeuronDetail],
     ) -> Result<usize, String> {
-        let mut array = self.memory_neuron_array.lock().unwrap();
-        let restored = array.restore_long_term_memory_neurons(neurons);
-        Self::publish_pool_counters(&array, &self.pool_counters);
+        let (restored, episodes) = {
+            let mut array = self.memory_neuron_array.lock().unwrap();
+            let restored = array.restore_long_term_memory_neurons(neurons);
+            Self::publish_pool_counters(&array, &self.pool_counters);
+            (restored, array.episode_lists())
+        };
+        // The NPU's episode table is derived: rebuilt from the restored lists (the NPU lock is
+        // taken after the array lock is released, as everywhere else).
+        {
+            let mut recording = self.capture.lock().unwrap();
+            for (_, id, _) in &episodes {
+                recording.track_episode(*id);
+            }
+        }
+        let table: Vec<(u32, Vec<u32>)> = episodes
+            .into_iter()
+            .map(|(_, id, members)| (id, members))
+            .collect();
+        if !table.is_empty() {
+            self.npu.lock().unwrap().set_episode_members(table, &[]);
+        }
         restored
     }
 
@@ -3023,6 +3383,7 @@ impl PlasticityService {
                 .count();
             (removed, long_term)
         };
+        self.forget_captured(&removed);
         let commands = Self::remove_from_npu(&self.npu, &self.command_queue, &removed);
         if !commands.is_empty() {
             self.command_queue.lock().unwrap().extend(commands);
@@ -3092,6 +3453,7 @@ impl PlasticityService {
                 .count();
             (removed, requested)
         };
+        self.forget_captured(&removed);
         let commands = Self::remove_from_npu(&self.npu, &self.command_queue, &removed);
         if !commands.is_empty() {
             self.command_queue.lock().unwrap().extend(commands);
@@ -3239,11 +3601,24 @@ impl PlasticityService {
                     )
                 })
                 .unwrap_or((0, 0, 0, 0));
+        // The NPU owns the recording state and the blocked-replay counts; it is read before the
+        // array lock is taken (NPU-then-array order).
+        let (recording, (blocked_lockout, blocked_recording)) = {
+            let npu = self.npu.lock().unwrap();
+            (
+                npu.memory_capture_recording(cortical_idx),
+                npu.memory_replay_blocked_counts_for_area(cortical_idx),
+            )
+        };
         let array = self.memory_neuron_array.lock().unwrap();
         let upstream_pattern_cache_size = self
             .pattern_detector
             .cached_pattern_count_for_area(cortical_idx);
         MemoryCorticalAreaRuntimeInfo {
+            episode_neuron_count: array.episode_count_in_area(cortical_idx),
+            recording,
+            replay_blocked_by_lockout: blocked_lockout,
+            replay_blocked_by_recording: blocked_recording,
             short_term_neuron_count: array.count_short_term_in_area(cortical_idx),
             long_term_neuron_count: array.count_long_term_in_area(cortical_idx),
             upstream_pattern_cache_size,
@@ -4905,6 +5280,7 @@ mod tests {
                 &self.service.mp_window_warn_limiter,
                 &limiter,
                 &pool,
+                &self.service.capture,
             );
             burst
         }
@@ -5670,6 +6046,7 @@ mod tests {
                 &self.service.mp_window_warn_limiter,
                 &limiter,
                 &pool,
+                &self.service.capture,
             );
             for command in self.service.drain_commands() {
                 if let PlasticityCommand::InjectMemoryNeuronToFCL {

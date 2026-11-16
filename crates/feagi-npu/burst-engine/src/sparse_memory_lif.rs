@@ -11,7 +11,9 @@
 use ahash::AHashMap;
 use feagi_npu_neural::excitability_random;
 
-use crate::fire_structures::{FiringNeuron, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
+use crate::fire_structures::{
+    FiringNeuron, FIRE_KIND_CHAIN_RECALL, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE,
+};
 
 /// Configurable LIF-style parameters for associative memory neurons (per memory cortical area).
 #[derive(Debug, Clone)]
@@ -252,6 +254,21 @@ pub fn resolve_memory_neuron_output(
             cortical_idx,
             total_fcl_candidate,
         ));
+    }
+
+    // A chain step carries only flagged link PSP (summed apart from associative PSP, already
+    // gated and scaled): it fires deterministically with its own kind and never touches the
+    // sparse associative state.
+    if staged_fire_kind_from_injection == Some(FIRE_KIND_CHAIN_RECALL) {
+        return Some(FiringNeuron {
+            neuron_id: feagi_npu_neural::types::NeuronId(neuron_id),
+            membrane_potential: total_fcl_candidate,
+            cortical_idx,
+            x: 0,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_CHAIN_RECALL,
+        });
     }
 
     let (Some(assoc_map), Some(params_by_area)) = (associative_psp, lif_params_by_cortical) else {

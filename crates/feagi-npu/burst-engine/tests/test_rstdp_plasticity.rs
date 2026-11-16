@@ -1218,3 +1218,39 @@ fn test_learning_rate_factor_zero_stops_associative_synthesis() {
     let (outgoing, added) = run_assoc_learning_stop(false);
     assert!(outgoing >= 1 && added >= 1, "control must synthesize");
 }
+
+/// Detailed synapse reads expose the packed edge flags (associative-memory edge) and the
+/// modulation group alongside the existing tuple fields.
+#[test]
+fn test_detailed_synapse_reads_report_edge_flags_and_modulation_group() {
+    use feagi_npu_neural::synapse::edge_flags::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+    let (mut npu, _src, _dst, reward, _pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10);
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let (a, b) = cofire_memory_pair(&mut npu, reward, true);
+
+    let out = npu.get_outgoing_synapses_detailed(a);
+    assert_eq!(out.len(), 1, "associative synapse synthesized");
+    assert_eq!(out[0].0, b);
+    assert_eq!(
+        out[0].4 & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY
+    );
+    assert_eq!(out[0].5, 0, "unstamped synapse is in modulation group 0");
+    // Same synapse, same order as the tuple read.
+    let plain = npu.get_outgoing_synapses(a);
+    assert_eq!((plain[0].0, plain[0].1), (out[0].0, out[0].1));
+
+    npu.stamp_synapse_modulation_group(0, usize::MAX / 2, 3);
+    let out = npu.get_outgoing_synapses_detailed(a);
+    assert_eq!(out[0].5, 3, "stamped modulation group is reported");
+    let inc = npu.get_incoming_synapses_detailed(b);
+    assert_eq!(inc.len(), 1);
+    assert_eq!(inc[0].0, a);
+    assert_eq!(
+        inc[0].4 & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY
+    );
+    assert_eq!(inc[0].5, 3);
+}

@@ -1,0 +1,1576 @@
+{
+  "feagi_core_commit": "010ef73cf1b51cd5f4452ce49f1cb5e6d4b94917",
+  "traces": [
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 15,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 16,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 17,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 18,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 19,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up2:0"
+            ]
+          }
+        },
+        {
+          "burst": 20,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 21,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 22,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 23,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 24,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "window_depth1"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up2:0"
+            ]
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up2:0"
+            ]
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 15,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 16,
+          "kinds": {
+            "up": [
+              "up1:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 17,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 18,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 19,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 20,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "window_depth3"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up2:0"
+            ]
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": [
+              "up1:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "cap_lru"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "formation_blocked"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 15,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 16,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "learning_freeze"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "mem": [
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "mem": [
+              "m1:0",
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "mem": [
+              "m1:0",
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "mem": [
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 15,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 16,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 17,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 18,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 19,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 20,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 21,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 22,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 23,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 24,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 25,
+          "kinds": {
+            "mem": [
+              "m1:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 26,
+          "kinds": {
+            "mem": [
+              "m1:0",
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 27,
+          "kinds": {
+            "mem": [
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 28,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 29,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 30,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 31,
+          "kinds": {
+            "mem": [
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 32,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 33,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 34,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 35,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 36,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 37,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 38,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 39,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 40,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 41,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 42,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 43,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 44,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        }
+      ],
+      "name": "assoc_stdp"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "mem": [
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "mem": [
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 15,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 16,
+          "kinds": {
+            "mem": [
+              "m2:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 17,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 18,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 19,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 20,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 21,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 22,
+          "kinds": {
+            "mem": [],
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 23,
+          "kinds": {
+            "mem": [
+              "m1:1"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 24,
+          "kinds": {
+            "mem": [
+              "m1:0",
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 25,
+          "kinds": {
+            "mem": [
+              "m1:0",
+              "m2:0"
+            ],
+            "up": []
+          }
+        },
+        {
+          "burst": 26,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 27,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        },
+        {
+          "burst": 28,
+          "kinds": {
+            "mem": [],
+            "up": []
+          }
+        }
+      ],
+      "name": "assoc_rstdp"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": [
+              "up0:0"
+            ]
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "mp_differential"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up2:0"
+            ]
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "shape_purge"
+    },
+    {
+      "bursts": [
+        {
+          "burst": 0,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 1,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 2,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 3,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 4,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 5,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 6,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 7,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 8,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 9,
+          "kinds": {
+            "up": [
+              "up0:0",
+              "up1:0"
+            ]
+          }
+        },
+        {
+          "burst": 10,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 11,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 12,
+          "kinds": {
+            "up": [
+              "up2:0",
+              "up3:0"
+            ]
+          }
+        },
+        {
+          "burst": 13,
+          "kinds": {
+            "up": []
+          }
+        },
+        {
+          "burst": 14,
+          "kinds": {
+            "up": []
+          }
+        }
+      ],
+      "name": "save_reload"
+    }
+  ]
+}

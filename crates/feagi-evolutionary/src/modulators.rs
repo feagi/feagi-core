@@ -50,6 +50,14 @@ impl ModulatorInstance {
                 "memory.freeze requires magnitude_percent > 0".to_string(),
             ));
         }
+        if self.kind == ModulatorKind::MemoryCapture
+            && !(1.0..=100.0).contains(&self.magnitude_percent)
+        {
+            return Err(ModulatorValidationError(format!(
+                "memory.capture requires magnitude_percent between 1 and 100 (got {})",
+                self.magnitude_percent
+            )));
+        }
         Ok(())
     }
 
@@ -382,6 +390,45 @@ mod memory_freeze_tests {
         assert_eq!(
             parsed.get("hold").unwrap().kind,
             ModulatorKind::MemoryFreeze
+        );
+    }
+}
+
+#[cfg(test)]
+mod memory_capture_tests {
+    use super::*;
+
+    fn capture_instance(magnitude_percent: f32) -> ModulatorInstance {
+        ModulatorInstance {
+            kind: ModulatorKind::MemoryCapture,
+            magnitude_percent,
+            effect_duration_bursts: 1,
+            rest_bursts: 0,
+            graded: false,
+            full_scale_potential: None,
+            driver_cortical_id: CorticalID::modulator_driver(1),
+        }
+    }
+
+    #[test]
+    fn memory_capture_magnitude_must_be_one_to_one_hundred() {
+        assert!(capture_instance(0.0).validate().is_err());
+        assert!(capture_instance(-1.0).validate().is_err());
+        assert!(capture_instance(101.0).validate().is_err());
+        assert!(capture_instance(1.0).validate().is_ok());
+        assert!(capture_instance(100.0).validate().is_ok());
+        let message = capture_instance(0.0).validate().unwrap_err().to_string();
+        assert!(message.contains("between 1 and 100"), "{message}");
+    }
+
+    #[test]
+    fn memory_capture_round_trips_through_genome_json() {
+        let mut registry = ModulatorRegistry::new();
+        registry.insert("rec".to_string(), capture_instance(50.0));
+        let parsed = parse_modulator_registry(Some(&registry.to_json())).unwrap();
+        assert_eq!(
+            parsed.get("rec").unwrap().kind,
+            ModulatorKind::MemoryCapture
         );
     }
 }

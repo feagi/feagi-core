@@ -97,7 +97,7 @@ pub use modulators::{
 pub use plasticity_detector::{
     extract_memory_properties, genome_has_plasticity, validate_memory_mp_properties,
     LtmEvictionMode, MemoryAreaProperties, MpChangeMode, ReplayTrigger,
-    DEFAULT_MEMORY_FIRING_THRESHOLD, LTM_EVICTION_KEY, MEMORY_NEURON_CAP_KEY, MP_CHANGE_MODE_KEY,
+    CAPTURE_MAX_BURSTS_KEY, DEFAULT_MEMORY_FIRING_THRESHOLD, LTM_EVICTION_KEY, MEMORY_NEURON_CAP_KEY, MP_CHANGE_MODE_KEY,
     MP_DELTA_QUANTIZATION_KEY, MP_LEARNING_ENABLED_KEY, MP_RATIO_QUANTIZATION_KEY,
     REPLAY_TRIGGER_KEY,
 };

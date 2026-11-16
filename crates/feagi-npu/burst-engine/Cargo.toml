@@ -82,6 +82,11 @@ name = "grouping_optimization"
 path = "benches/grouping_optimization.rs"
 harness = false
 
+[[bench]]
+name = "propagation_filter"
+path = "benches/propagation_filter.rs"
+harness = false
+
 #[[bench]]
 #name = "largescale_perf_test"
 #harness = false

@@ -102,6 +102,11 @@ pub struct MemoryNeuronDetailResponse {
     pub creation_burst: u64,
     pub last_activation_burst: u64,
     pub activation_count: u32,
+    /// `"state"` for a neuron that encodes one input pattern, `"episode"` for an episode
+    /// neuron (`memory.capture`): one per recorded piece, with an ordered member list.
+    pub kind: String,
+    /// Ordered member state ids of an episode neuron; empty for a state.
+    pub episode_members: Vec<u64>,
     pub outgoing_synapse_count: usize,
     pub incoming_synapse_count: usize,
     pub outgoing_synapses: serde_json::Value,
@@ -685,15 +690,21 @@ pub async fn get_area_synapses(
 
     let mut all_synapses = Vec::new();
     for neuron_id in neuron_ids {
-        let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
+        let outgoing = npu_lock.get_outgoing_synapses_detailed(neuron_id);
 
-        for (target_id, weight, psp, synapse_type) in outgoing {
+        for (target_id, weight, psp, synapse_type, flags, group) in outgoing {
             let mut synapse_obj = HashMap::new();
             synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(neuron_id));
             synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(target_id));
             synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
             synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
             synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            synapse_obj.insert("edge_flags".to_string(), serde_json::json!(flags));
+            synapse_obj.insert(
+                "edge_flag_names".to_string(),
+                serde_json::json!(crate::endpoints::cortical_area::edge_flag_names(flags)),
+            );
+            synapse_obj.insert("modulation_group".to_string(), serde_json::json!(group));
             all_synapses.push(synapse_obj);
         }
     }
@@ -759,15 +770,21 @@ pub async fn get_area_synapses_incoming(
 
     let mut all_synapses = Vec::new();
     for neuron_id in neuron_ids {
-        let incoming = npu_lock.get_incoming_synapses(neuron_id);
+        let incoming = npu_lock.get_incoming_synapses_detailed(neuron_id);
 
-        for (source_id, weight, psp, synapse_type) in incoming {
+        for (source_id, weight, psp, synapse_type, flags, group) in incoming {
             let mut synapse_obj = HashMap::new();
             synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(source_id));
             synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(neuron_id));
             synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
             synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
             synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            synapse_obj.insert("edge_flags".to_string(), serde_json::json!(flags));
+            synapse_obj.insert(
+                "edge_flag_names".to_string(),
+                serde_json::json!(crate::endpoints::cortical_area::edge_flag_names(flags)),
+            );
+            synapse_obj.insert("modulation_group".to_string(), serde_json::json!(group));
             all_synapses.push(synapse_obj);
         }
     }
@@ -1544,8 +1561,8 @@ pub async fn get_memory_neuron(
         })
         .unwrap_or_else(|| (String::new(), String::new()));
 
-    let outgoing_full = mgr.get_outgoing_synapses(q.neuron_id as u64);
-    let incoming_full = mgr.get_incoming_synapses(q.neuron_id as u64);
+    let outgoing_full = mgr.get_outgoing_synapses_detailed(q.neuron_id as u64);
+    let incoming_full = mgr.get_incoming_synapses_detailed(q.neuron_id as u64);
     let oc = outgoing_full.len();
     let ic = incoming_full.len();
     let (out_json, in_json) =
@@ -1565,6 +1582,13 @@ pub async fn get_memory_neuron(
         creation_burst: detail.creation_burst,
         last_activation_burst: detail.last_activation_burst,
         activation_count: detail.activation_count,
+        kind: if detail.is_episode() {
+            "episode"
+        } else {
+            "state"
+        }
+        .to_string(),
+        episode_members: detail.episode_members.iter().map(|id| *id as u64).collect(),
         outgoing_synapse_count: oc,
         incoming_synapse_count: ic,
         outgoing_synapses: out_json,

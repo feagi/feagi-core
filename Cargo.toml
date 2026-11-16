@@ -101,7 +101,7 @@ feagi-services = { version = "=0.0.61", path = "crates/feagi-services", optional
 
 [dev-dependencies]
 # For integration tests that need GenomeService
-feagi-services = { version = "=0.0.61", path = "crates/feagi-services" }
+feagi-services = { version = "=0.0.61", path = "crates/feagi-services", features = ["plasticity"] }
 feagi-npu-runtime = { version = "=0.0.61", path = "crates/feagi-npu/runtime", features = ["std"] }
 ahash = { workspace = true }
 feagi-config = { version = "=0.0.61", path = "crates/feagi-config" }

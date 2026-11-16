@@ -20,11 +20,36 @@ use ahash::AHashMap;
 use roaring::RoaringBitmap;
 use std::collections::VecDeque;
 
-use crate::fire_structures::FireQueue;
+use crate::fire_structures::{FireQueue, FIRE_KIND_STDP_ELIGIBLE};
 
 type MembranePotentialMap = AHashMap<u32, f32>;
 type TimestampedMembranePotentialFrame = (u64, MembranePotentialMap);
 type MembranePotentialHistory = VecDeque<TimestampedMembranePotentialFrame>;
+
+/// Fired ids of one frame that carry a non-default fire kind, one bitmap per kind.
+/// Empty for a frame in which every fire has the default kind ([`FIRE_KIND_STDP_ELIGIBLE`]).
+pub type FrameKinds = Vec<(u8, RoaringBitmap)>;
+
+/// One ledger frame with the fire kind of its fired ids.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LedgerFrame {
+    pub timestep: u64,
+    /// Every neuron id that fired in this timestep.
+    pub fired: RoaringBitmap,
+    /// Ids with a non-default kind, one bitmap per kind (each a subset of `fired`).
+    pub kinds: FrameKinds,
+}
+
+impl LedgerFrame {
+    /// Fire kind of `neuron_id` in this frame; the default kind when it has no stored kind.
+    pub fn kind_of(&self, neuron_id: u32) -> u8 {
+        self.kinds
+            .iter()
+            .find(|(_, ids)| ids.contains(neuron_id))
+            .map(|(kind, _)| *kind)
+            .unwrap_or(FIRE_KIND_STDP_ELIGIBLE)
+    }
+}
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum FireLedgerError {
@@ -83,6 +108,8 @@ pub struct FireLedger {
 struct TrackedAreaHistory {
     window_size: usize,
     frames: VecDeque<(u64, RoaringBitmap)>, // oldest -> newest
+    /// Non-default fire kinds, index-aligned with `frames` (same length, pushed and popped together).
+    kinds: VecDeque<FrameKinds>,
 }
 
 impl FireLedger {
@@ -128,7 +155,7 @@ impl FireLedger {
                         .saturating_sub(window_size as u64)
                         .saturating_add(1);
                     for t in start..=self.current_timestep {
-                        hist.push_frame(t, RoaringBitmap::new());
+                        hist.push_frame(t, RoaringBitmap::new(), Vec::new());
                     }
                 }
                 self.tracked.insert(cortical_idx, hist);
@@ -156,6 +183,9 @@ impl FireLedger {
         for (_, bitmap) in hist.frames.iter_mut() {
             bitmap.clear();
         }
+        for kinds in hist.kinds.iter_mut() {
+            kinds.clear();
+        }
         if let Some(mp_ring) = self.mp_history.get_mut(&cortical_idx) {
             for (_, potentials) in mp_ring.iter_mut() {
                 potentials.clear();
@@ -178,6 +208,14 @@ impl FireLedger {
                 for &neuron_id in neuron_ids {
                     bitmap.remove(neuron_id);
                 }
+            }
+            for kinds in hist.kinds.iter_mut() {
+                for (_, ids) in kinds.iter_mut() {
+                    for &neuron_id in neuron_ids {
+                        ids.remove(neuron_id);
+                    }
+                }
+                kinds.retain(|(_, ids)| !ids.is_empty());
             }
         }
         if let Some(mp_ring) = self.mp_history.get_mut(&cortical_idx) {
@@ -293,6 +331,8 @@ impl FireLedger {
             AHashMap::with_capacity(self.tracked.len());
         // Also build MP maps for MP-enabled areas.
         let mut fired_mps: AHashMap<u32, AHashMap<u32, f32>> = AHashMap::new();
+        // Non-default fire kinds of this timestep, per tracked area.
+        let mut fired_kinds: AHashMap<u32, FrameKinds> = AHashMap::new();
 
         for (&cortical_idx, neurons) in &fire_queue.neurons_by_area {
             if self.tracked.contains_key(&cortical_idx) {
@@ -309,6 +349,26 @@ impl FireLedger {
                         .collect();
                     fired_mps.insert(cortical_idx, mp_map);
                 }
+                let mut kinds: FrameKinds = Vec::new();
+                for n in neurons
+                    .iter()
+                    .filter(|n| n.fire_kind != FIRE_KIND_STDP_ELIGIBLE)
+                {
+                    match kinds.iter_mut().find(|(k, _)| *k == n.fire_kind) {
+                        Some((_, ids)) => {
+                            ids.insert(n.neuron_id.0);
+                        }
+                        None => {
+                            let mut ids = RoaringBitmap::new();
+                            ids.insert(n.neuron_id.0);
+                            kinds.push((n.fire_kind, ids));
+                        }
+                    }
+                }
+                if !kinds.is_empty() {
+                    kinds.sort_unstable_by_key(|(k, _)| *k);
+                    fired_kinds.insert(cortical_idx, kinds);
+                }
                 fired_bitmaps.insert(cortical_idx, bitmap);
             }
         }
@@ -317,7 +377,7 @@ impl FireLedger {
         if self.current_timestep > 0 && timestep > self.current_timestep + 1 {
             for missing_t in (self.current_timestep + 1)..timestep {
                 for hist in self.tracked.values_mut() {
-                    hist.push_frame(missing_t, RoaringBitmap::new());
+                    hist.push_frame(missing_t, RoaringBitmap::new(), Vec::new());
                 }
                 for (&area_idx, mp_ring) in self.mp_history.iter_mut() {
                     if self
@@ -343,7 +403,8 @@ impl FireLedger {
         // Write this timestep.
         for (&cortical_idx, hist) in self.tracked.iter_mut() {
             let bitmap = fired_bitmaps.remove(&cortical_idx).unwrap_or_default();
-            hist.push_frame(timestep, bitmap);
+            let kinds = fired_kinds.remove(&cortical_idx).unwrap_or_default();
+            hist.push_frame(timestep, bitmap, kinds);
         }
 
         // Write MP data for this timestep.
@@ -391,6 +452,36 @@ impl FireLedger {
         let take = max_depth.min(hist.window_size).min(hist.frames.len());
         let skip = hist.frames.len() - take;
         Ok(hist.frames.iter().skip(skip).cloned().collect())
+    }
+
+    /// Like [`Self::get_recent_frames`], with each frame's stored fire kinds.
+    ///
+    /// Use [`LedgerFrame::kind_of`] for the kind of one fired id (default when absent).
+    pub fn get_recent_frames_with_kinds(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<LedgerFrame>, FireLedgerError> {
+        if max_depth == 0 {
+            return Err(FireLedgerError::InvalidDepth);
+        }
+        let hist = self
+            .tracked
+            .get(&cortical_idx)
+            .ok_or(FireLedgerError::AreaNotTracked { cortical_idx })?;
+        let take = max_depth.min(hist.window_size).min(hist.frames.len());
+        let skip = hist.frames.len() - take;
+        Ok(hist
+            .frames
+            .iter()
+            .zip(hist.kinds.iter())
+            .skip(skip)
+            .map(|((timestep, fired), kinds)| LedgerFrame {
+                timestep: *timestep,
+                fired: fired.clone(),
+                kinds: kinds.clone(),
+            })
+            .collect())
     }
 
     /// Get a dense, burst-aligned window of bitmaps for a tracked area.
@@ -472,6 +563,7 @@ impl TrackedAreaHistory {
         Self {
             window_size,
             frames: VecDeque::with_capacity(cap),
+            kinds: VecDeque::with_capacity(cap),
         }
     }
 
@@ -479,6 +571,7 @@ impl TrackedAreaHistory {
         self.window_size = new_size;
         while self.frames.len() > new_size {
             self.frames.pop_front();
+            self.kinds.pop_front();
         }
     }
 
@@ -488,10 +581,12 @@ impl TrackedAreaHistory {
         Some((*start, *end))
     }
 
-    fn push_frame(&mut self, timestep: u64, bitmap: RoaringBitmap) {
+    fn push_frame(&mut self, timestep: u64, bitmap: RoaringBitmap, kinds: FrameKinds) {
         self.frames.push_back((timestep, bitmap));
+        self.kinds.push_back(kinds);
         while self.frames.len() > self.window_size {
             self.frames.pop_front();
+            self.kinds.pop_front();
         }
     }
 }
@@ -723,5 +818,178 @@ mod tests {
         let other = ledger.get_dense_window_bitmaps(2, 1, 1).unwrap();
         assert!(other[0].1.contains(7));
         assert!(!ledger.clear_recorded_activity(99));
+    }
+
+    fn queue_with_kinds(area: u32, fires: &[(u32, u8)]) -> FireQueue {
+        let mut fq = FireQueue::new();
+        for &(id, kind) in fires {
+            fq.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(id),
+                membrane_potential: 1.0,
+                cortical_idx: area,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: kind,
+            });
+        }
+        fq
+    }
+
+    const KIND_X: u8 = 7;
+
+    #[test]
+    fn test_fire_kinds_are_stored_per_frame_and_default_when_absent() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        let fq = queue_with_kinds(1, &[(10, 0), (11, 1), (12, KIND_X), (13, 1)]);
+        ledger.archive_burst(1, &fq).unwrap();
+        ledger
+            .archive_burst(2, &queue_with_kinds(1, &[(10, 0)]))
+            .unwrap();
+
+        let frames = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].timestep, 1);
+        assert_eq!(frames[0].fired.len(), 4);
+        assert_eq!(frames[0].kinds.len(), 2, "one bitmap per non-default kind");
+        assert_eq!(frames[0].kind_of(10), FIRE_KIND_STDP_ELIGIBLE);
+        assert_eq!(frames[0].kind_of(11), 1);
+        assert_eq!(frames[0].kind_of(12), KIND_X);
+        assert_eq!(frames[0].kind_of(13), 1);
+        assert_eq!(frames[0].kind_of(999), FIRE_KIND_STDP_ELIGIBLE);
+        assert!(
+            frames[1].kinds.is_empty(),
+            "default-only frame stores nothing"
+        );
+        assert!(matches!(
+            ledger.get_recent_frames_with_kinds(5, 1),
+            Err(FireLedgerError::AreaNotTracked { cortical_idx: 5 })
+        ));
+    }
+
+    #[test]
+    fn test_fire_kinds_gap_frames_are_empty_and_aligned() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 8).unwrap();
+        ledger
+            .archive_burst(1, &queue_with_kinds(1, &[(1, 1)]))
+            .unwrap();
+        ledger
+            .archive_burst(4, &queue_with_kinds(1, &[(2, KIND_X)]))
+            .unwrap();
+        let frames = ledger.get_recent_frames_with_kinds(1, 8).unwrap();
+        let steps: Vec<u64> = frames.iter().map(|f| f.timestep).collect();
+        assert_eq!(steps, vec![1, 2, 3, 4]);
+        assert_eq!(frames[0].kind_of(1), 1);
+        assert!(frames[1].kinds.is_empty() && frames[2].kinds.is_empty());
+        assert_eq!(frames[3].kind_of(2), KIND_X);
+    }
+
+    #[test]
+    fn test_fire_kinds_forget_neuron_ids() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        ledger.track_area(2, 4).unwrap();
+        ledger
+            .archive_burst(1, &queue_with_kinds(1, &[(10, 1), (11, 1), (12, KIND_X)]))
+            .unwrap();
+        ledger.forget_neuron_ids(1, &[10, 12]);
+        let frames = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert!(!frames[0].fired.contains(10) && !frames[0].fired.contains(12));
+        assert_eq!(frames[0].kind_of(11), 1);
+        assert_eq!(
+            frames[0].kinds.len(),
+            1,
+            "a kind left with no ids is dropped"
+        );
+        for (_, ids) in &frames[0].kinds {
+            assert!(ids.is_subset(&frames[0].fired));
+        }
+        assert_eq!(frames[0].kind_of(10), FIRE_KIND_STDP_ELIGIBLE);
+    }
+
+    #[test]
+    fn test_fire_kinds_clear_recorded_activity() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        ledger.track_area(2, 4).unwrap();
+        let mut fq = queue_with_kinds(1, &[(10, 1)]);
+        for n in queue_with_kinds(2, &[(20, 1)])
+            .neurons_by_area
+            .remove(&2)
+            .unwrap()
+        {
+            fq.add_neuron(n);
+        }
+        ledger.archive_burst(1, &fq).unwrap();
+        assert!(ledger.clear_recorded_activity(1));
+        let cleared = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert!(cleared[0].fired.is_empty() && cleared[0].kinds.is_empty());
+        let other = ledger.get_recent_frames_with_kinds(2, 4).unwrap();
+        assert_eq!(other[0].kind_of(20), 1, "other areas keep their kinds");
+        // Later bursts still archive kinds.
+        ledger
+            .archive_burst(2, &queue_with_kinds(1, &[(11, KIND_X)]))
+            .unwrap();
+        let after = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert_eq!(after.len(), 2);
+        assert_eq!(after[1].kind_of(11), KIND_X);
+    }
+
+    #[test]
+    fn test_fire_kinds_resize_keeps_frames_and_kinds_aligned() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        for t in 1..=4u64 {
+            let kind = if t % 2 == 0 { 1 } else { KIND_X };
+            ledger
+                .archive_burst(t, &queue_with_kinds(1, &[(t as u32, kind)]))
+                .unwrap();
+        }
+        ledger.track_area(1, 2).unwrap();
+        let frames = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].timestep, 3);
+        assert_eq!(frames[0].kind_of(3), KIND_X);
+        assert_eq!(frames[1].kind_of(4), 1);
+        // Growing keeps working and new frames push in step.
+        ledger.track_area(1, 3).unwrap();
+        ledger
+            .archive_burst(5, &queue_with_kinds(1, &[(5, KIND_X)]))
+            .unwrap();
+        ledger
+            .archive_burst(6, &queue_with_kinds(1, &[(6, 1)]))
+            .unwrap();
+        let frames = ledger.get_recent_frames_with_kinds(1, 3).unwrap();
+        let steps: Vec<u64> = frames.iter().map(|f| f.timestep).collect();
+        assert_eq!(steps, vec![4, 5, 6]);
+        assert_eq!(frames[0].kind_of(4), 1);
+        assert_eq!(frames[1].kind_of(5), KIND_X);
+        assert_eq!(frames[2].kind_of(6), 1);
+    }
+
+    #[test]
+    fn test_fire_kinds_untrack_then_retrack_starts_clean() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        ledger
+            .archive_burst(1, &queue_with_kinds(1, &[(10, 1)]))
+            .unwrap();
+        assert!(ledger.untrack_area(1));
+        assert!(matches!(
+            ledger.get_recent_frames_with_kinds(1, 1),
+            Err(FireLedgerError::AreaNotTracked { cortical_idx: 1 })
+        ));
+        ledger.track_area(1, 4).unwrap();
+        let frames = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert!(frames
+            .iter()
+            .all(|f| f.fired.is_empty() && f.kinds.is_empty()));
+        ledger
+            .archive_burst(2, &queue_with_kinds(1, &[(10, FIRE_KIND_STDP_ELIGIBLE)]))
+            .unwrap();
+        let frames = ledger.get_recent_frames_with_kinds(1, 4).unwrap();
+        assert_eq!(frames.last().unwrap().kind_of(10), FIRE_KIND_STDP_ELIGIBLE);
     }
 }

@@ -72,6 +72,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("memcap-i", "memory_neuron_cap"),
     ("ltmevc-t", "ltm_eviction"),
     ("rplytr-t", "replay_trigger"),
+    ("capmxb-i", "capture_max_bursts"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),

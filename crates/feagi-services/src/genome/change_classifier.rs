@@ -175,6 +175,7 @@ impl CorticalChangeClassifier {
             "memory_neuron_cap",
             "ltm_eviction",
             "replay_trigger",
+            "capture_max_bursts",
             // Membrane potential
             "mp_charge_accumulation",
             "neuron_mp_charge_accumulation",

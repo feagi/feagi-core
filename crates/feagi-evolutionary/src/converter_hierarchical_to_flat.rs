@@ -333,6 +333,7 @@ fn convert_properties_to_flat(
         ("memory_neuron_cap", ("memcap-i", "cx")),
         ("ltm_eviction", ("ltmevc-t", "cx")),
         ("replay_trigger", ("rplytr-t", "cx")),
+        ("capture_max_bursts", ("capmxb-i", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),

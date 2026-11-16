@@ -15,6 +15,9 @@ pub struct SynapticArrivalSchedule {
     pub fcl_by_arrival_burst: AHashMap<u64, FireCandidateList>,
     /// `arrival_burst` -> memory-neuron-id -> associative PSP sum for that burst.
     pub memory_associative_by_arrival_burst: AHashMap<u64, AHashMap<u32, f32>>,
+    /// `arrival_burst` -> memory-neuron-id -> chain-replay PSP (flagged episode links), kept
+    /// apart from the associative sums.
+    pub memory_chain_by_arrival_burst: AHashMap<u64, AHashMap<u32, f32>>,
 }
 
 impl SynapticArrivalSchedule {
@@ -44,6 +47,32 @@ impl SynapticArrivalSchedule {
                 *entry.entry(k).or_insert(0.0) += v;
             }
         }
+    }
+
+    /// Merge chain-replay PSP from fires at `fire_burst` into future buckets.
+    pub fn schedule_chain(
+        &mut self,
+        fire_burst: u64,
+        chain_by_delay: &AHashMap<u32, AHashMap<u32, f32>>,
+    ) {
+        for (&delay_bursts, targets) in chain_by_delay {
+            let arrival = fire_burst.saturating_add(u64::from(delay_bursts));
+            let entry = self
+                .memory_chain_by_arrival_burst
+                .entry(arrival)
+                .or_default();
+            for (&k, &v) in targets {
+                *entry.entry(k).or_insert(0.0) += v;
+            }
+        }
+    }
+
+    /// Chain-replay PSP arriving at `arrival_burst`, if any.
+    pub fn take_chain(&mut self, arrival_burst: u64) -> Option<AHashMap<u32, f32>> {
+        if self.memory_chain_by_arrival_burst.is_empty() {
+            return None;
+        }
+        self.memory_chain_by_arrival_burst.remove(&arrival_burst)
     }
 
     /// Drain scheduled arrivals for `arrival_burst` into the live FCL and associative map.
@@ -89,6 +118,12 @@ impl SynapticArrivalSchedule {
             mmap.retain(|k, _| !neuron_ids.contains(k));
         }
         self.memory_associative_by_arrival_burst
+            .retain(|_, m| !m.is_empty());
+
+        for cmap in self.memory_chain_by_arrival_burst.values_mut() {
+            cmap.retain(|k, _| !neuron_ids.contains(k));
+        }
+        self.memory_chain_by_arrival_burst
             .retain(|_, m| !m.is_empty());
     }
 }

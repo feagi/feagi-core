@@ -11,8 +11,8 @@ use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_runtime::NeuronStorage;
 use feagi_structures::genomic::{
-    gate_factor, memory_formation_factor, memory_freeze_active, modulator_signal,
-    multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
+    gate_factor, memory_capture_active, memory_formation_factor, memory_freeze_active,
+    modulator_signal, multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
 };
 
 use crate::fire_structures::FireQueue;
@@ -68,6 +68,8 @@ struct ActiveFactors {
     memory_formation_by_area: AHashMap<u32, f32>,
     /// cortical idx -> whether a subscribed `memory.freeze` signal sum is above 0.
     memory_freeze_by_area: AHashMap<u32, bool>,
+    /// cortical idx -> whether a subscribed `memory.capture` signal sum is above 0.
+    memory_capture_by_area: AHashMap<u32, bool>,
 }
 
 /// Burst-engine side of the modulator system.
@@ -199,6 +201,40 @@ impl ModulatorEngine {
             .get(&cortical_idx)
             .copied()
             .unwrap_or(false)
+    }
+
+    /// Whether a subscribed `memory.capture` modulator is active (combined signal > 0) for
+    /// this area. No subscription means false.
+    pub fn memory_capture_active(&self, cortical_idx: u32) -> bool {
+        self.active
+            .memory_capture_by_area
+            .get(&cortical_idx)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// `(area, capture active)` for every area that subscribes to a `memory.capture` modulator,
+    /// as of the last commit. Empty when no area subscribes.
+    pub fn memory_capture_states(&self) -> impl Iterator<Item = (u32, bool)> + '_ {
+        self.active
+            .memory_capture_by_area
+            .iter()
+            .map(|(area, on)| (*area, *on))
+    }
+
+    /// Largest magnitude (percent) of the `memory.capture` modulators the area subscribes to;
+    /// 0 when it subscribes to none.
+    pub fn memory_capture_magnitude(&self, cortical_idx: u32) -> f32 {
+        self.area_subscriptions
+            .get(&cortical_idx)
+            .map(|ids| {
+                ids.iter()
+                    .filter_map(|id| self.binding(id))
+                    .filter(|b| b.kind == ModulatorKind::MemoryCapture)
+                    .map(|b| b.magnitude_percent)
+                    .fold(0.0_f32, f32::max)
+            })
+            .unwrap_or(0.0)
     }
 
     pub fn set_spike_train_areas(&mut self, areas: AHashSet<u32>) {
@@ -595,6 +631,25 @@ impl ModulatorEngine {
                 active
                     .memory_freeze_by_area
                     .insert(*area, memory_freeze_active(&freeze));
+            }
+        }
+        for (area, ids) in &self.area_subscriptions {
+            let capture: Vec<f32> = ids
+                .iter()
+                .filter_map(|id| {
+                    let binding = self.binding(id)?;
+                    (binding.kind == ModulatorKind::MemoryCapture).then(|| {
+                        signals
+                            .get(&binding.driver_cortical_idx)
+                            .copied()
+                            .unwrap_or(0.0)
+                    })
+                })
+                .collect();
+            if !capture.is_empty() {
+                active
+                    .memory_capture_by_area
+                    .insert(*area, memory_capture_active(&capture));
             }
         }
         let needed = self.needed_params();

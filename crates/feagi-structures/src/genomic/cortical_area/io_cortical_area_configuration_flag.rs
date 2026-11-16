@@ -218,6 +218,83 @@ impl IOCorticalAreaConfigurationFlag {
     }
 }
 
+/// The port-describing fields an IO flag defines (see
+/// [`IOCorticalAreaConfigurationFlag::port_encoding_fields`]). `None` means the flag does not define it.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct PortEncodingFields {
+    /// Variant name, e.g. `"SignedPercentage3D"`.
+    pub kind: &'static str,
+    pub signed: Option<bool>,
+    pub frame: Option<FrameChangeHandling>,
+    pub positioning: Option<PercentageNeuronPositioning>,
+}
+
+impl IOCorticalAreaConfigurationFlag {
+    /// The fields this flag defines for describing a port (kind, signed, frame, positioning).
+    ///
+    /// * `Boolean`: kind and `signed = false` (it has no frame handling or positioning).
+    /// * `Percentage*` and `SignedPercentage*`: all four (`signed` is true for `SignedPercentage*`).
+    /// * `CartesianPlane`, `Misc`, `PoseEstimation`: kind and frame only; the flag defines no signedness.
+    ///
+    /// `tests/io-flag-fixture.json` is the table shared with Composer and feagi-mcp, which decode the
+    /// same flags in Python; this method is the truth they are checked against.
+    pub const fn port_encoding_fields(&self) -> PortEncodingFields {
+        match self {
+            Self::Boolean => PortEncodingFields {
+                kind: "Boolean",
+                signed: Some(false),
+                frame: None,
+                positioning: None,
+            },
+            Self::Percentage(f, p) => Self::percentage_fields("Percentage", false, *f, *p),
+            Self::Percentage2D(f, p) => Self::percentage_fields("Percentage2D", false, *f, *p),
+            Self::Percentage3D(f, p) => Self::percentage_fields("Percentage3D", false, *f, *p),
+            Self::Percentage4D(f, p) => Self::percentage_fields("Percentage4D", false, *f, *p),
+            Self::SignedPercentage(f, p) => {
+                Self::percentage_fields("SignedPercentage", true, *f, *p)
+            }
+            Self::SignedPercentage2D(f, p) => {
+                Self::percentage_fields("SignedPercentage2D", true, *f, *p)
+            }
+            Self::SignedPercentage3D(f, p) => {
+                Self::percentage_fields("SignedPercentage3D", true, *f, *p)
+            }
+            Self::SignedPercentage4D(f, p) => {
+                Self::percentage_fields("SignedPercentage4D", true, *f, *p)
+            }
+            Self::CartesianPlane(f) => Self::frame_only_fields("CartesianPlane", *f),
+            Self::Misc(f) => Self::frame_only_fields("Misc", *f),
+            Self::PoseEstimation(f, _) => Self::frame_only_fields("PoseEstimation", *f),
+        }
+    }
+
+    const fn percentage_fields(
+        kind: &'static str,
+        signed: bool,
+        frame: FrameChangeHandling,
+        positioning: PercentageNeuronPositioning,
+    ) -> PortEncodingFields {
+        PortEncodingFields {
+            kind,
+            signed: Some(signed),
+            frame: Some(frame),
+            positioning: Some(positioning),
+        }
+    }
+
+    const fn frame_only_fields(
+        kind: &'static str,
+        frame: FrameChangeHandling,
+    ) -> PortEncodingFields {
+        PortEncodingFields {
+            kind,
+            signed: None,
+            frame: Some(frame),
+            positioning: None,
+        }
+    }
+}
+
 impl From<&IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBitmask {
     fn from(data_type: &IOCorticalAreaConfigurationFlag) -> Self {
         data_type.to_data_type_configuration_flag()

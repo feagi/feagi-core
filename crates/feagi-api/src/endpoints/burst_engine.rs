@@ -1421,16 +1421,26 @@ pub async fn get_fire_history(
             .map(|frame| {
                 let mut voxels: Vec<[u32; 3]> = Vec::new();
                 let mut memory_neuron_ids: Vec<u32> = Vec::new();
+                let mut voxel_fire_kinds: Vec<u8> = Vec::new();
+                let mut memory_fire_kinds: Vec<u8> = Vec::new();
                 for neuron in &frame.neurons {
                     match neuron.voxel {
-                        Some((x, y, z)) => voxels.push([x, y, z]),
-                        None => memory_neuron_ids.push(neuron.neuron_id),
+                        Some((x, y, z)) => {
+                            voxels.push([x, y, z]);
+                            voxel_fire_kinds.push(neuron.fire_kind);
+                        }
+                        None => {
+                            memory_neuron_ids.push(neuron.neuron_id);
+                            memory_fire_kinds.push(neuron.fire_kind);
+                        }
                     }
                 }
                 serde_json::json!({
                     "burst": frame.burst,
                     "voxels": voxels,
                     "memory_neuron_ids": memory_neuron_ids,
+                    "voxel_fire_kinds": voxel_fire_kinds,
+                    "memory_fire_kinds": memory_fire_kinds,
                 })
             })
             .collect();
@@ -1464,6 +1474,14 @@ pub async fn get_fire_history(
         serde_json::json!(
             feagi_services::traits::runtime_service::FIRE_HISTORY_SUBSCRIPTION_TTL.as_secs()
         ),
+    );
+    response.insert(
+        "fire_kind_names".to_string(),
+        serde_json::json!({
+            feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE.to_string(): "stdp_eligible",
+            feagi_npu_burst_engine::FIRE_KIND_EPISODIC_MEMORY.to_string(): "episodic_memory",
+            feagi_npu_burst_engine::FIRE_KIND_CHAIN_RECALL.to_string(): "chain_recall",
+        }),
     );
     response.insert("areas".to_string(), serde_json::Value::Object(areas));
     Ok(Json(response))

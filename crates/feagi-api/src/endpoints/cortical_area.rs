@@ -166,6 +166,10 @@ pub struct MemoryNeuronListItem {
     /// Remaining lifespan in bursts (current value).
     pub lifespan: u32,
     pub is_long_term: bool,
+    /// `"state"` or `"episode"` (an episode neuron of `memory.capture`).
+    pub kind: String,
+    /// Ordered member state ids of an episode neuron; empty for a state.
+    pub episode_members: Vec<u64>,
 }
 
 /// Lifecycle values the area record already resolved, plus the keys that stay in
@@ -208,6 +212,7 @@ fn memory_parameters_from_reported_area(
             .replay_trigger
             .clone()
             .unwrap_or_else(|| extracted.replay_trigger.as_str().to_string()),
+        capture_max_bursts: area.capture_max_bursts.or(extracted.capture_max_bursts),
     }
 }
 
@@ -236,6 +241,10 @@ pub struct MemoryCorticalAreaParamsResponse {
     /// Which fires of a memory neuron replay its frames onto its twin: "any_fire" replays on
     /// every fire, "recall_only" only on associative recall.
     pub replay_trigger: String,
+    /// Optional cap on one `memory.capture` recording piece, in bursts. Absent when unset
+    /// (the cap is then derived from 5 s at runtime).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_max_bursts: Option<u32>,
 }
 
 /// Occupancy of the pool shared by all memory areas.
@@ -269,6 +278,15 @@ pub struct MemoryCorticalAreaResponse {
     pub reactivated_total: usize,
     /// Occupancy of the pool shared by all memory areas.
     pub memory_pool: MemoryPoolResponse,
+    /// Active episode neurons (`memory.capture`) in this area.
+    pub episode_neuron_count: usize,
+    /// The area is inside a recording session (its `memory.capture` driver is on).
+    pub recording: bool,
+    /// Replays of this area blocked so far because a chain replay was running.
+    pub replay_blocked_by_lockout: u64,
+    /// Replays of this area blocked so far because the area was recording. A tonic driver keeps
+    /// this rising: the twin stays silent while the area records.
+    pub replay_blocked_by_recording: u64,
     /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
     /// "mp_differential", or "mp_ratio". Differs from `memory_parameters` when a change
     /// mode was auto-disabled (temporal_depth < 2). `None` if the area is not registered.
@@ -322,36 +340,61 @@ pub(crate) fn peer_cortical_voxel_fields(
     m
 }
 
+/// Decoded edge flag names for a packed edge-flag byte (bit order; unknown bits only in the raw value).
+pub(crate) fn edge_flag_names(flags: u8) -> Vec<&'static str> {
+    feagi_npu_neural::synapse::edge_flags::SYNAPSE_EDGE_FLAG_NAMES
+        .iter()
+        .filter(|(bit, _)| flags & bit != 0)
+        .map(|(_, name)| *name)
+        .collect()
+}
+
+/// Insert `edge_flags` (raw byte), `edge_flag_names` (decoded) and `modulation_group` into a synapse object.
+pub(crate) fn insert_synapse_tags(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    flags: u8,
+    group: u16,
+) {
+    obj.insert("edge_flags".to_string(), serde_json::json!(flags));
+    obj.insert(
+        "edge_flag_names".to_string(),
+        serde_json::json!(edge_flag_names(flags)),
+    );
+    obj.insert("modulation_group".to_string(), serde_json::json!(group));
+}
+
 /// Build JSON arrays for NPU synapse tuples, aligned with `/v1/connectome/{cortical_area_id}/synapses`,
 /// plus peer cortical id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
 pub(crate) fn synapse_details_for_neuron(
     mgr: &feagi_brain_development::ConnectomeManager,
     neuron_id: u32,
-    outgoing: &[(u32, f32, f32, u8)],
-    incoming: &[(u32, f32, f32, u8)],
+    outgoing: &[(u32, f32, f32, u8, u8, u16)],
+    incoming: &[(u32, f32, f32, u8, u8, u16)],
 ) -> (serde_json::Value, serde_json::Value) {
     let outgoing_json: Vec<serde_json::Value> = outgoing
         .iter()
-        .map(|&(target_id, weight, psp, synapse_type)| {
+        .map(|&(target_id, weight, psp, synapse_type, flags, group)| {
             let mut obj = serde_json::Map::new();
             obj.insert("source_neuron_id".to_string(), serde_json::json!(neuron_id));
             obj.insert("target_neuron_id".to_string(), serde_json::json!(target_id));
             obj.insert("weight".to_string(), serde_json::json!(weight));
             obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
             obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            insert_synapse_tags(&mut obj, flags, group);
             obj.extend(peer_cortical_voxel_fields(mgr, target_id as u64, "target"));
             serde_json::Value::Object(obj)
         })
         .collect();
     let incoming_json: Vec<serde_json::Value> = incoming
         .iter()
-        .map(|&(source_id, weight, psp, synapse_type)| {
+        .map(|&(source_id, weight, psp, synapse_type, flags, group)| {
             let mut obj = serde_json::Map::new();
             obj.insert("source_neuron_id".to_string(), serde_json::json!(source_id));
             obj.insert("target_neuron_id".to_string(), serde_json::json!(neuron_id));
             obj.insert("weight".to_string(), serde_json::json!(weight));
             obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
             obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            insert_synapse_tags(&mut obj, flags, group);
             obj.extend(peer_cortical_voxel_fields(mgr, source_id as u64, "source"));
             serde_json::Value::Object(obj)
         })
@@ -447,8 +490,8 @@ async fn resolve_voxel_neurons(
         ) = {
             let manager = feagi_brain_development::ConnectomeManager::instance();
             let mgr = manager.read();
-            let outgoing_full = mgr.get_outgoing_synapses(nid as u64);
-            let incoming_full = mgr.get_incoming_synapses(nid as u64);
+            let outgoing_full = mgr.get_outgoing_synapses_detailed(nid as u64);
+            let incoming_full = mgr.get_incoming_synapses_detailed(nid as u64);
             let oc = outgoing_full.len();
             let ic = incoming_full.len();
             let (o_start, o_end, out_has_more) = synapse_page_window(oc, synapse_page);
@@ -4047,6 +4090,8 @@ pub async fn get_memory_cortical_area(
                 activation_count: d.activation_count,
                 lifespan: d.lifespan_current,
                 is_long_term: d.is_longterm_memory,
+                kind: if d.is_episode() { "episode" } else { "state" }.to_string(),
+                episode_members: d.episode_members.iter().map(|id| *id as u64).collect(),
             })
             .collect();
         (ids, total, Some(items))
@@ -4084,6 +4129,10 @@ pub async fn get_memory_cortical_area(
             pool_in_use: runtime.memory_pool.pool_in_use,
             pool_ltm: runtime.memory_pool.pool_ltm,
         },
+        episode_neuron_count: runtime.episode_neuron_count,
+        recording: runtime.recording,
+        replay_blocked_by_lockout: runtime.replay_blocked_by_lockout,
+        replay_blocked_by_recording: runtime.replay_blocked_by_recording,
         effective_mp_mode: runtime.effective_mp_mode,
         upstream_cortical_area_indices,
         upstream_cortical_area_count,
@@ -4437,8 +4486,8 @@ mod voxel_neurons_dto_tests {
     #[test]
     fn synapse_details_matches_connectome_shape() {
         let mgr = feagi_brain_development::ConnectomeManager::new_for_testing();
-        let out_full = vec![(10, 2.0, 5.0, 1)];
-        let inc_full = vec![(3, 4.0, 6.0, 0)];
+        let out_full = vec![(10, 2.0, 5.0, 1, 1u8, 3u16)];
+        let inc_full = vec![(3, 4.0, 6.0, 0, 0u8, 0u16)];
         let (out, inc) = synapse_details_for_neuron(&mgr, 7, &out_full, &inc_full);
         let out_a = out.as_array().expect("outgoing array");
         assert_eq!(out_a[0]["source_neuron_id"], serde_json::json!(7));
@@ -4446,12 +4495,19 @@ mod voxel_neurons_dto_tests {
         assert_eq!(out_a[0]["weight"], serde_json::json!(2.0));
         assert_eq!(out_a[0]["postsynaptic_potential"], serde_json::json!(5.0));
         assert_eq!(out_a[0]["synapse_type"], serde_json::json!(1));
+        assert_eq!(out_a[0]["edge_flags"], serde_json::json!(1));
+        assert_eq!(
+            out_a[0]["edge_flag_names"],
+            serde_json::json!(["associative_memory"])
+        );
+        assert_eq!(out_a[0]["modulation_group"], serde_json::json!(3));
         assert!(out_a[0].get("target_cortical_id").is_some());
         assert!(out_a[0].get("target_cortical_name").is_some());
         assert!(out_a[0].get("target_x").is_some());
         let in_a = inc.as_array().expect("incoming array");
         assert_eq!(in_a[0]["source_neuron_id"], serde_json::json!(3));
         assert_eq!(in_a[0]["target_neuron_id"], serde_json::json!(7));
+        assert_eq!(in_a[0]["edge_flag_names"], serde_json::json!([]));
         assert!(in_a[0].get("source_cortical_id").is_some());
         assert!(in_a[0].get("source_cortical_name").is_some());
         assert!(in_a[0].get("source_x").is_some());
@@ -4870,7 +4926,8 @@ mod classifier_area_id_tests {
 /// Freeze (`frozen: true`) or resume (`false`) learning in one memory area: mappings into and
 /// out of it do not learn, and its memory neurons keep their snapshot (no creation, ageing,
 /// eviction or conversion). Brain-instance runtime state, saved with the connectome and never
-/// in the genome. A `memory.freeze` modulator has the same effect while it is active.
+/// in the genome. A `memory.freeze` modulator has the same effect while it is active. A `memory.capture`
+/// modulator only marks the area as recording; it does not freeze learning.
 ///
 /// Body: `{"cortical_area": <base64>, "frozen": <bool>}`.
 /// Response: `{"cortical_area", "frozen"}`; 400 when the area is unknown or not a memory area.
