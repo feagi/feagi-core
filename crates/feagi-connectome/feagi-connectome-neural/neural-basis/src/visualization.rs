@@ -4,7 +4,6 @@ use feagi_basis::collections::bit_packed_bool::par_data::BitBatchParDataVector;
 use feagi_basis::create_wrapped_quantized_unsigned_integer;
 #[cfg(feature = "alloc")]
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
-#[cfg(feature = "alloc")]
 use crate::quantization_levels::FeagiIndexQuantization;
 
 pub const VISUALIZATION_VERSION: u8 = 0;
@@ -16,8 +15,8 @@ pub struct BurstVisualizationData<FIQ: FeagiIndexQuantization> {
     pub version: u8,
     pub change_counter: VisualizationStructureChangeCounter,
     pub bit_data: BitBatchParDataVector<
-        NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>,
-        NeuronVisualizationVoxelIndex<FIQ::NeuronIndexQuant>,
+        NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>,
+        NeuronVisualizationVoxelBitIndex<FIQ::NeuronIndexQuant>,
         VoxelBitPacked
     >
 }
@@ -45,17 +44,22 @@ impl<FIQ: FeagiIndexQuantization> Recyclable for BurstVisualizationData<FIQ> {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct VisualizationStructureChangeCounter(pub u16);
 
-
+/// Provides context for a cortical area to understand how to read visualization data
+pub enum CorticalAreaVisualizationContext<FIQ: FeagiIndexQuantization> {
+    /// Voxel data, cortical area starts reading at this byte
+    DimensionalVoxelIndex(NeuronVisualizationVoxelByteIndex<FIQ::NeuronBitBatchIndexQuant>)
+    // TODO memory
+}
 
 
 pub type VoxelBitPacked = u8;
 
 create_wrapped_quantized_unsigned_integer!(
     /// Represents the index of the byte index on the neuron visualization array
-    pub NeuronVisualizationWordIndex
+    pub NeuronVisualizationVoxelByteIndex
 );
 
 create_wrapped_quantized_unsigned_integer!(
     /// Represents the index of the bit index on the neuron visualization array
-    pub NeuronVisualizationVoxelIndex
+    pub NeuronVisualizationVoxelBitIndex
 );

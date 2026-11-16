@@ -5,7 +5,7 @@ use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutChangePolicy, NeuronLayoutError, NeuronLayoutRestrictor, NeuronLayoutSparsity, NeuronLayoutTag};
 use crate::quantization_levels::FeagiIndexQuantization;
-use crate::visualization::NeuronVisualizationVoxelIndex;
+use crate::visualization::NeuronVisualizationVoxelBitIndex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NeuronLayoutVoxel<FIQ: FeagiIndexQuantization> {

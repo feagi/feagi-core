@@ -1,6 +1,6 @@
 use crate::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use crate::quantization_levels::FeagiIndexQuantization;
-use crate::visualization::NeuronVisualizationWordIndex;
+use crate::visualization::NeuronVisualizationVoxelByteIndex;
 
 macro_rules! _impl_connectome_edit_step_requirements {
     {$StepSpecificName:ident} => {
@@ -137,7 +137,7 @@ impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> C
 pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization>
 {
     pub new_cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
-    pub visualization_start_index: NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>
+    pub visualization_start_index: NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>
 }
 
 #[derive(Debug, thiserror::Error)]

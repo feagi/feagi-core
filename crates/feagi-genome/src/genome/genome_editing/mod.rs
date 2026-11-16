@@ -1,125 +1,32 @@
-use std::collections::HashSet;
-use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
 use steps::GenomeEditStepSequenceStep;
-use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID};
-use crate::basis::cortical_area::cortical_identifiers::FauxCorticalIdentifier;
-use crate::genome::genome_editing::steps::brain_region::{GenomeEditStepBrainRegionAddingOnlyEnum, GenomeEditStepBrainRegionError};
-use crate::genome::genome_editing::steps::cortical_area::{GenomeEditStepCorticalAreaError, GenomeEditStepLoadGenomeCorticalAreaEnum};
-use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
+use crate::genome::genome_editing::edit_context::GenomeEditSequenceContext;
+use crate::genome::genome_editing::steps::brain_region::{GenomeEditStepBrainRegionError};
+use crate::genome::genome_editing::steps::cortical_area::{GenomeEditStepCorticalAreaError};
 pub mod steps;
-pub mod genome_edit_sequence_verifier;
+pub mod verified_sequence;
+pub mod edit_context;
 
 
-pub trait GenomeEditSequenceContext: Sized {
-    // Cant put FIQ at top due to `GenomeEditStepSequenceStep`
-    
-    type BrainRegionStepEnum;
-    type CorticalAreaStepEnum<FIQ: FeagiIndexQuantization>;
-    
-}
- // TODO builder
+ // TODO builder instead, do an initial wave of checks, output as a opaque sequence that is 
+// serializable
 
-
+/// A sequence of steps + some initial properties for detailing a change to be made in the genome /
+/// connectome
 pub struct GenomeEditSequence<FIQ: FeagiIndexQuantization, GESC: GenomeEditSequenceContext> {
     context: GESC,
     steps: Vec<GenomeEditStepSequenceStep<FIQ, GESC>>
 }
 
-
-impl<FIQ: FeagiIndexQuantization> GenomeEditSequence<FIQ, GenomeEditSequenceContextLoadGenome> {
+impl<FIQ: FeagiIndexQuantization, GESC: GenomeEditSequenceContext> GenomeEditSequence<FIQ, GESC> {
     
-    /// Builds a new request to reset to a barebones empty genome
-    pub fn reset_to_barebone_genome(
-        genome_metadata: GenomeObjectMetadata,
-        target_burst_rate: TargetFrequency,
-        new_root_genome_id: BrainRegionID,
-        new_root_genome_ancestry_id: BrainRegionAncestryID,
-    ) -> Self {
-        Self {
-            context: GenomeEditSequenceContextLoadGenome {
-                genome_metadata,
-                target_burst_rate,
-                new_root_genome_id,
-                new_root_genome_ancestry_id,
-            },
-            steps: vec![],
-        }
+    /// Adds a step to the end
+    pub fn append_step(&mut self, step: GenomeEditStepSequenceStep<FIQ, GESC>) {
+        self.steps.push(step)
     }
     
 }
 
-
-
-//region Load Genome
-
-pub struct GenomeEditSequenceContextLoadGenome {
-    genome_metadata: GenomeObjectMetadata,
-    target_burst_rate: TargetFrequency,
-    new_root_genome_id: BrainRegionID,
-    new_root_genome_ancestry_id: BrainRegionAncestryID,
-}
-
-impl GenomeEditSequenceContextLoadGenome {
-    pub fn genome_metadata(&self) -> &GenomeObjectMetadata {
-        &self.genome_metadata
-    }
-
-    pub fn target_burst_rate(&self) -> TargetFrequency {
-        self.target_burst_rate
-    }
-
-    pub fn new_root_genome_id(&self) -> BrainRegionID {
-        self.new_root_genome_id
-    }
-
-    pub fn new_root_genome_ancestry_id(&self) -> BrainRegionAncestryID {
-        self.new_root_genome_ancestry_id
-    }
-}
-
-impl GenomeEditSequenceContext for GenomeEditSequenceContextLoadGenome {
-    type BrainRegionStepEnum = GenomeEditStepBrainRegionAddingOnlyEnum;
-    type CorticalAreaStepEnum<FIQ: FeagiIndexQuantization> = GenomeEditStepLoadGenomeCorticalAreaEnum<FIQ>;
-}
-
-
-/*
-//endregion
-
-//region Amalgamate Genome
-
-pub struct GenomeEditSequenceContextAmalgamateGenome {
-    spawn_location: GenomeObjectPositioning,
-}
-
-impl GenomeEditSequenceContext for GenomeEditSequenceContextAmalgamateGenome {
-    type BrainRegionStepEnum<FIQ: FeagiIndexQuantization> = ();
-    type CorticalAreaStepEnum<FIQ: FeagiIndexQuantization> = ();
-}
-
-//endregion
-
-
-//region Edit Genome
-
-pub struct GenomeEditSequenceContextEditGenome {
-    
-}
-
-impl GenomeEditSequenceContext for GenomeEditSequenceContextEditGenome {
-    type BrainRegionStepEnum<FIQ: FeagiIndexQuantization> = ();
-    type CorticalAreaStepEnum<FIQ: FeagiIndexQuantization> = ();
-}
-
-//endregion
-
-
- */
-
-
-
-//endregion
 
 /// Describes how intense (how long) an edit operation is
 #[repr(u8)]

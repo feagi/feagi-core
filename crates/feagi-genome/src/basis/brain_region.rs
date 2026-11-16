@@ -23,3 +23,29 @@ impl From<BrainRegionID> for BrainRegionAncestryID {
     }
 }
 
+/// Allows definition of a pair of brain region and brain region ancestry IDs easily in constructors
+pub enum BrainRegionIdAndAncestryConstructor {
+    /// Self ID and Ancestry ID will be an identical uuidv7 based on current time
+    IdenticalNow(),
+    /// Self ID and Ancestry ID will be an identical uuidv7 that was given
+    IdenticalSpecific(BrainRegionID),
+    /// Self ID and Ancestry ID will be specific values
+    Unique(BrainRegionID, BrainRegionAncestryID)
+}
+
+impl BrainRegionIdAndAncestryConstructor {
+    pub fn into_pair(self) -> (BrainRegionID, BrainRegionAncestryID) {
+        match self {
+            BrainRegionIdAndAncestryConstructor::IdenticalNow() => {
+                let id = BrainRegionID::new_now();
+                (id.clone(), id.into())
+            }
+            BrainRegionIdAndAncestryConstructor::IdenticalSpecific(id) => {
+                (id.clone(), id.into())
+            }
+            BrainRegionIdAndAncestryConstructor::Unique(id, aid) => {
+                (id, aid)
+            }
+        }
+    }
+}

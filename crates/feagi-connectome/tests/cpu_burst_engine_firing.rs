@@ -36,7 +36,7 @@ use feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::from_stor
 use feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
 use feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
 use feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_connectome_neural::neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelIndex};
+use feagi_connectome_neural::neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelBitIndex};
 
 type Fiq = FeagiIndexQuantizationStandard;
 type Visualization = BurstVisualizationData<Fiq>;
@@ -173,10 +173,10 @@ fn firing_neurons_are_sent_out_as_visualization() {
 
     // The same through the bit accessor listeners would use
     for neuron in 0..6 {
-        assert_eq!(visualization.bit_data.get_bool(NeuronVisualizationVoxelIndex::quant_from_usize_unchecked(neuron)), Some(true));
+        assert_eq!(visualization.bit_data.get_bool(NeuronVisualizationVoxelBitIndex::quant_from_usize_unchecked(neuron)), Some(true));
     }
     for neuron in 8..24 {
-        assert_eq!(visualization.bit_data.get_bool(NeuronVisualizationVoxelIndex::quant_from_usize_unchecked(neuron)), Some(false));
+        assert_eq!(visualization.bit_data.get_bool(NeuronVisualizationVoxelBitIndex::quant_from_usize_unchecked(neuron)), Some(false));
     }
 }
 

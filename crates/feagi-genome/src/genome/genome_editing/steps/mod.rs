@@ -9,5 +9,6 @@ pub(crate) enum GenomeEditStepSequenceStep<FIQ: FeagiIndexQuantization, GESC: Ge
     CorticalArea(GESC::CorticalAreaStepEnum<FIQ>),
     //ConnectivityRule
     //CorticalMapping
-    
 }
+
+// TODO into connectome step

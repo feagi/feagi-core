@@ -17,7 +17,7 @@ use neural_basis::neuron_model::NeuronModel;
 use neural_basis::neuron_model::wrapped_indexing::{CorticalAreaEngineIndex, NeuronEngineIndex, CorticalAreaQuantIndex, NeuronModelNeuronQuantIndex};
 use neural_basis::quantization_levels::FeagiIndexQuantization;
 #[cfg(feature = "alloc")]
-use neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelIndex, NeuronVisualizationWordIndex, VisualizationStructureChangeCounter, VoxelBitPacked};
+use neural_basis::visualization::{BurstVisualizationData, NeuronVisualizationVoxelBitIndex, NeuronVisualizationVoxelByteIndex, VisualizationStructureChangeCounter, VoxelBitPacked};
 
 //region Parallel Structs
 // These hold heap allocated `QuantIndexedVector`s, so need alloc
@@ -34,7 +34,7 @@ pub struct EnginePerCorticalData<FIQ: FeagiIndexQuantization> {
     pub neuron_count: QuantIndexedVector<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>, CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>>,
     /// The first visualization word of the area. It has one bit per neuron, padded to a whole word
     pub visualization_start_index:
-        QuantIndexedVector<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>>,
+        QuantIndexedVector<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>>,
 }
 
 #[cfg(feature = "alloc")]
@@ -258,7 +258,7 @@ pub struct CpuEngineNeuronData<FIQ: FeagiIndexQuantization> {
 pub struct CpuAddedCorticalArea<FIQ: FeagiIndexQuantization> {
     pub cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     pub first_neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant>,
-    pub visualization_start_index: NeuronVisualizationWordIndex<FIQ::NeuronIndexQuant>,
+    pub visualization_start_index: NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>,
 }
 
 /// Why a cortical area could not be added to a CPU engine. Nothing was changed
@@ -309,10 +309,10 @@ impl<FIQ: FeagiIndexQuantization> CpuEngineNeuronData<FIQ> {
         let first_word = self.visualization.bit_data.store().len();
         let word_total = first_word + neuron_count.div_ceil(Self::NEURONS_PER_VISUALIZATION_WORD);
         let visualization_start_index =
-            NeuronVisualizationWordIndex::quant_try_from_usize(first_word).map_err(|_| CpuAddCorticalAreaError::TooMuchVisualization)?;
+            NeuronVisualizationVoxelByteIndex::quant_try_from_usize(first_word).map_err(|_| CpuAddCorticalAreaError::TooMuchVisualization)?;
         let bit_total = word_total
             .checked_mul(Self::NEURONS_PER_VISUALIZATION_WORD)
-            .and_then(|bits| NeuronVisualizationVoxelIndex::quant_try_from_usize(bits).ok())
+            .and_then(|bits| NeuronVisualizationVoxelBitIndex::quant_try_from_usize(bits).ok())
             .ok_or(CpuAddCorticalAreaError::TooMuchVisualization)?;
 
         // Nothing can fail from here
