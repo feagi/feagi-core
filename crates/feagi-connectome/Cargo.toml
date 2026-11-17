@@ -23,7 +23,7 @@ alloc = [
 
 burst-cpu = [
     "std",
-    "connectome-burst/burst-cpu", "connectome-models/burst-cpu",
+    "connectome-burst/burst-cpu",
 ]
 
 burst-esp32 = [
@@ -37,6 +37,9 @@ connectome-basis = { path = "connectome-basis", default-features = false }
 connectome-models = { path = "connectome-models", default-features = false }
 connectome-burst = { path = "connectome-burst", default-features = false }
 connectome-proc = { path = "connectome-proc" }
+
+[dev-dependencies]
+feagi-basis = { path = "../feagi-basis", features = ["std"] }
 
 [lints]
 workspace = true

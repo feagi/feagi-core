@@ -32,9 +32,9 @@ pub mod power {
     use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
     use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
     use feagi_connectome::connectome_models::neuron_models::models::kind::NMKind;
-    use feagi_connectome::connectome_models::neuron_models::models::{NMMember, NMModeled, NMNeurogenesisGenerator, NMNeurogenesisValidatedGenerator};
+    use feagi_connectome::connectome_models::neuron_models::models::{NMMember, NMModeled, NMNeurogenesisGenerator};
     #[cfg(feature = "alloc")]
-    use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator, NMNeurogenesisValidatedStorage, NMNeurogenesisValidatedStorageOrGenerator};
+    use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
     use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInnerEncoderRandom};
     use crate::basis::cortical_area::foundation::CorticalTypeFoundation;
     use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
@@ -208,27 +208,12 @@ pub mod power {
         }
     }
 
-    #[derive(Debug, Clone)]
-    pub enum CTFoundationPowerNMModeledValidatedGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedGenerator<FIQ>>),
-    }
-
-
-
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(bound(serialize = "NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>: Serialize", deserialize = "NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>: Deserialize<'de>"))]
     pub enum CTFoundationPowerNMModeledStorage<FIQ: FeagiIndexQuantization> {
         ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisStorage<FIQ>>),
     }
-
-    #[cfg(feature = "alloc")]
-    #[derive(Debug, Clone)]
-    pub enum CTFoundationPowerNMModeledValidatedStorage<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedStorage<FIQ>>),
-    }
-
-
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,12 +234,6 @@ pub mod power {
     }
     
     
-
-    #[cfg(feature = "alloc")]
-    #[derive(Debug, Clone)]
-    pub enum CTFoundationPowerNMModeledValidatedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
-        ExclusivePower(NMExclusivePowerQuanted<NMNeurogenesisValidatedStorageOrGenerator<FIQ>>),
-    }
 
     //endregion
 

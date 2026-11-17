@@ -28,9 +28,9 @@ pub mod interconnect {
     use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuanted};
     use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::{NMFeagiSimpleQuantKind, NMFeagiSimpleQuanted};
     use feagi_connectome::connectome_models::neuron_models::models::kind::NMKind;
-    use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator, NMNeurogenesisValidatedGenerator};
+    use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
     #[cfg(feature = "alloc")]
-    use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator, NMNeurogenesisValidatedStorage, NMNeurogenesisValidatedStorageOrGenerator};
+    use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
     use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierInnerEncoderRandom;
     use crate::basis::cortical_area::processing::CorticalTypeProcessing;
     use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
@@ -207,14 +207,6 @@ pub mod interconnect {
         }
     }
 
-    #[derive(Debug, Clone)]
-    pub enum CTProcessingInterconnectNMModeledValidatedGenerator<FIQ: FeagiIndexQuantization> {
-        FeagiAdvanced(NMFeagiAdvancedQuanted<NMNeurogenesisValidatedGenerator<FIQ>>),
-        FeagiSimple(NMFeagiSimpleQuanted<NMNeurogenesisValidatedGenerator<FIQ>>),
-    }
-
-
-
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(bound(
@@ -225,15 +217,6 @@ pub mod interconnect {
         FeagiAdvanced(NMFeagiAdvancedQuanted<NMNeurogenesisStorage<FIQ>>),
         FeagiSimple(NMFeagiSimpleQuanted<NMNeurogenesisStorage<FIQ>>),
     }
-
-    #[cfg(feature = "alloc")]
-    #[derive(Debug, Clone)]
-    pub enum CTProcessingInterconnectNMModeledValidatedStorage<FIQ: FeagiIndexQuantization> {
-        FeagiAdvanced(NMFeagiAdvancedQuanted<NMNeurogenesisValidatedStorage<FIQ>>),
-        FeagiSimple(NMFeagiSimpleQuanted<NMNeurogenesisValidatedStorage<FIQ>>),
-    }
-
-
 
     #[cfg(feature = "alloc")]
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,13 +239,6 @@ pub mod interconnect {
         }
     }
 
-
-    #[cfg(feature = "alloc")]
-    #[derive(Debug, Clone)]
-    pub enum CTProcessingInterconnectNMModeledValidatedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
-        FeagiAdvanced(NMFeagiAdvancedQuanted<NMNeurogenesisValidatedStorageOrGenerator<FIQ>>),
-        FeagiSimple(NMFeagiSimpleQuanted<NMNeurogenesisValidatedStorageOrGenerator<FIQ>>),
-    }
 
     //endregion
 

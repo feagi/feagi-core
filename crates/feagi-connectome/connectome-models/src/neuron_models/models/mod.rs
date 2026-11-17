@@ -7,11 +7,6 @@ use crate::neuron_models::models::memory_fire_hashing::quantizations::NMMemoryFi
 use core::marker::PhantomData;
 #[cfg(feature = "alloc")]
 use connectome_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
-use connectome_basis::neuron_model::neurogenesis::validation::ValidatedNeurogenesisGenerator;
-#[cfg(feature = "alloc")]
-use connectome_basis::neuron_model::neurogenesis::validation::{
-    ValidatedNeurogenesisStorage, ValidatedNeurogenesisStorageOrGenerator,
-};
 #[cfg(feature = "alloc")]
 use connectome_basis::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
 use connectome_basis::neuron_model::NeuronModel;
@@ -67,31 +62,6 @@ pub struct NMNeurogenesisStorageOrGenerator<FIQ>(PhantomData<FIQ>);
 #[cfg(feature = "alloc")]
 impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisStorageOrGenerator<FIQ> {
     type Of<NM: NeuronModel> = NeurogenesisStorageOrGenerator<FIQ, NM>;
-}
-
-/// The validated generator of a cortical area
-pub struct NMNeurogenesisValidatedGenerator<FIQ>(PhantomData<FIQ>);
-
-impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisValidatedGenerator<FIQ> {
-    type Of<NM: NeuronModel> = ValidatedNeurogenesisGenerator<FIQ, NM>;
-}
-
-/// The validated stored neuron data of a cortical area
-#[cfg(feature = "alloc")]
-pub struct NMNeurogenesisValidatedStorage<FIQ>(PhantomData<FIQ>);
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisValidatedStorage<FIQ> {
-    type Of<NM: NeuronModel> = ValidatedNeurogenesisStorage<FIQ, NM>;
-}
-
-/// The validated stored neuron data or generator of a cortical area
-#[cfg(feature = "alloc")]
-pub struct NMNeurogenesisValidatedStorageOrGenerator<FIQ>(PhantomData<FIQ>);
-
-#[cfg(feature = "alloc")]
-impl<FIQ: FeagiIndexQuantization> NMContainer for NMNeurogenesisValidatedStorageOrGenerator<FIQ> {
-    type Of<NM: NeuronModel> = ValidatedNeurogenesisStorageOrGenerator<FIQ, NM>;
 }
 
 //endregion

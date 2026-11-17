@@ -1,5 +1,6 @@
-use crate::connectome_basis::connectome_editing::{FeagiNeuronModelTypes, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
-use crate::connectome_basis::engine::EngineChangeCommandOtherError;
+use crate::neuron_models::neuron_model_types::FeagiNeuronModelTypes;
+use connectome_basis::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use connectome_basis::engine::engine_change_command::EngineChangeCommandOtherError;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::target_frequency::TargetFrequency;
 use connectome_basis::engine::BurstEngine;

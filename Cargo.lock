@@ -207,6 +207,7 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "connectome-basis",
+ "connectome-models",
  "feagi-basis",
  "half",
  "heapless 0.9.3",
@@ -339,7 +340,6 @@ name = "connectome-models"
 version = "0.1.1"
 dependencies = [
  "connectome-basis",
- "connectome-burst",
  "feagi-basis",
  "half",
  "paste",
@@ -800,6 +800,7 @@ dependencies = [
  "connectome-burst",
  "connectome-models",
  "connectome-proc",
+ "feagi-basis",
 ]
 
 [[package]]

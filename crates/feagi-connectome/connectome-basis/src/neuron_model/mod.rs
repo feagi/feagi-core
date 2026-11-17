@@ -1,7 +1,5 @@
 use crate::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
-#[cfg(feature = "alloc")]
-use crate::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
-use crate::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor, NeuronLayoutTag};
+use crate::neuron_model::neuron_layout::NeuronLayoutTag;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::quantization_levels::MembranePotentialQuantization;
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
@@ -10,11 +8,6 @@ use model_data::{
     NeuronDataInternalSpecification, NeuronDataScratchSpecification, NeuronDataVarianceSpecification,
 };
 use neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults;
-use neurogenesis::validation::{NeurogenesisValidationError, NeurogenesisValidator, ValidatedNeurogenesisMethod};
-#[cfg(feature = "alloc")]
-use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
-#[cfg(feature = "alloc")]
-use crate::neuron_model::neurogenesis::validation::ValidatedNeurogenesisStorageOrGenerator;
 
 //pub mod interfacing;
 pub mod model_data;
@@ -128,46 +121,6 @@ pub trait NeuronModel: MembranePotentialQuantization {
         )
     }
 
-    fn verify_and_wrap_generator<
-        FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>,
-        V: NeurogenesisValidator<FIQ, Self>,
-    > (generator: Self::NeurogenesisByGenerator<FIQ>)
-        -> Result<ValidatedNeurogenesisMethod<FIQ, Self, Self::NeurogenesisByGenerator<FIQ>>, NeurogenesisValidationError> {
-        
-        ValidatedNeurogenesisMethod::validate_and_wrap::<V, Res>(generator)
-    }
-
-    #[cfg(feature = "alloc")]
-    fn verify_and_wrap_storage<
-        FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>,
-        V: NeurogenesisValidator<FIQ, Self>,
-    > (storage: NeurogenesisByStorage<FIQ, Self> )
-        -> Result<ValidatedNeurogenesisMethod<FIQ, Self, NeurogenesisByStorage<FIQ, Self>>, NeurogenesisValidationError> {
-        
-        ValidatedNeurogenesisMethod::validate_and_wrap::<V, Res>(storage)
-    }
-
-    #[cfg(feature = "alloc")]
-    fn verify_and_wrap_storage_or_generator<
-        FIQ: FeagiIndexQuantization,
-        Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>,
-        V: NeurogenesisValidator<FIQ, Self>,
-    > (storage_or_generator: NeurogenesisStorageOrGenerator<FIQ, Self>)
-        -> Result<ValidatedNeurogenesisStorageOrGenerator<FIQ, Self>, NeurogenesisValidationError> {
-        
-        match storage_or_generator {
-            NeurogenesisStorageOrGenerator::Storage(s) => {
-                Ok(ValidatedNeurogenesisStorageOrGenerator::Storage(Self::verify_and_wrap_storage::<FIQ, Res, V>(s)?))
-            }
-            NeurogenesisStorageOrGenerator::Generator(g) => {
-                Ok(ValidatedNeurogenesisStorageOrGenerator::Generator(Self::verify_and_wrap_generator::<FIQ, Res, V>(g)?))
-            }
-        }
-
-    }
-    
     //endregion
 }
 

@@ -16,8 +16,7 @@ use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-/// How a cortical area gets spawned, implemented by every precursor (the saveable form). Neurons
-/// are only spawned through [`ValidatedNeurogenesisMethod`](validation::ValidatedNeurogenesisMethod), which provides the validated layout
+/// How a cortical area gets spawned, implemented by every precursor (the saveable form)
 pub trait NeurogenesisMethod<FIQ, NM>: Clone + core::fmt::Debug + Send + Sync + Serialize + DeserializeOwned
 where
     FIQ: FeagiIndexQuantization,

@@ -5,6 +5,7 @@ pub mod npu_loop;
 
 use commands::{NeuronProcessorSingleEngineCommandHandler, NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use core::marker::PhantomData;
+use crate::neuron_models::neuron_model_types::FeagiNeuronModelTypes;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelBuilder;
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiRequestResponseChannelsAllocBackend;

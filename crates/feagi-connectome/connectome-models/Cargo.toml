@@ -17,25 +17,19 @@ description = "Concrete FEAGI neuron models built on the connectome basis"
 std = [
     "alloc",
     "serde/std", "thiserror/std", "half/std",
-    "feagi-basis/std", "connectome-basis/std", "connectome-burst/std",
+    "feagi-basis/std", "connectome-basis/std",
 ]
 
 alloc = [
     "serde/alloc", "half/alloc",
-    "feagi-basis/alloc", "connectome-basis/alloc", "connectome-burst/alloc",
+    "feagi-basis/alloc", "connectome-basis/alloc",
 ]
 
-# Implements the CPU burst engine dynamics for each model
-burst-cpu = [
-    "std",
-    "connectome-burst/burst-cpu",
-]
 
 
 [dependencies]
 # Sibling Crates
 connectome-basis = { path = "../connectome-basis", default-features = false }
-connectome-burst = { path = "../connectome-burst", default-features = false }
 
 # Workspace Crates
 feagi-basis = { path = "../../feagi-basis", default-features = false }

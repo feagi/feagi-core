@@ -1,4 +1,4 @@
-use crate::connectome_basis::connectome_editing::FeagiNeuronModelTypes;
+use crate::neuron_models::neuron_model_types::FeagiNeuronModelTypes;
 use crate::neural_processors::singular::commands::NeuronProcessorSingleEngineCommandHandler;
 use crate::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;

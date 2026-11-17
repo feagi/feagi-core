@@ -17,13 +17,13 @@ description = "Rayon burst engine logic for multithread / core CPU neuron proces
 std = [
     "alloc",
     "serde/std", "half/std", "ahash/std",
-    "feagi-basis/std", "connectome-basis/std",
+    "feagi-basis/std", "connectome-basis/std", "connectome-models/std",
 ]
 
 alloc = [
     
     "serde/alloc", "heapless/alloc", "half/alloc",
-    "feagi-basis/alloc", "connectome-basis/alloc",
+    "feagi-basis/alloc", "connectome-basis/alloc", "connectome-models/alloc",
 ]
 
 rayon = [
@@ -34,6 +34,7 @@ rayon = [
 [dependencies]
 # Connectome Crates
 connectome-basis = {path = "../../connectome-basis", default-features = false }
+connectome-models = {path = "../../connectome-models", default-features = false }
 
 # Root Crates
 feagi-basis = {path = "../../../feagi-basis", default-features = false }
