@@ -1,4 +1,4 @@
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use steps::GenomeEditStepSequenceStep;
 use crate::genome::genome_editing::edit_context::GenomeEditSequenceContext;
 use crate::genome::genome_editing::steps::brain_region::{GenomeEditStepBrainRegionError};

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use feagi_connectome::feagi_connectome_neural::neural_basis::connectome_editing::ConnectomeEditStepType;
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::connectome_editing::ConnectomeEditStepType;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::{BrainRegionID, BrainRegionIdAndAncestryConstructor};
 use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, FauxCorticalIdentifier};
 use crate::basis::cortical_area::CorticalTypedSpawningParameters;

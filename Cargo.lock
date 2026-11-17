@@ -202,6 +202,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "burst-cpu"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "connectome-basis",
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "rayon",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "burst-esp32"
+version = "0.1.1"
+dependencies = [
+ "connectome-basis",
+ "feagi-basis",
+ "heapless 0.9.3",
+ "paste",
+ "serde",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +311,52 @@ checksum = "cfc320937d09e6de266b31b9afb480f197d7a861be86be7cb2ea7e5d1bfffc5e"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "connectome-basis"
+version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "connectome-burst"
+version = "0.1.1"
+dependencies = [
+ "burst-cpu",
+ "burst-esp32",
+ "connectome-basis",
+]
+
+[[package]]
+name = "connectome-models"
+version = "0.1.1"
+dependencies = [
+ "connectome-basis",
+ "connectome-burst",
+ "feagi-basis",
+ "half",
+ "paste",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "connectome-proc"
+version = "0.1.1"
+dependencies = [
+ "feagi-macro-components",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -724,41 +796,10 @@ dependencies = [
 name = "feagi-connectome"
 version = "0.1.1"
 dependencies = [
- "base64 0.23.1",
- "feagi-basis",
- "feagi-connectome-neural",
- "feagi-connectome-proc",
- "half",
- "heapless 0.9.3",
- "paste",
- "rand 0.10.3",
- "rayon",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "feagi-connectome-neural"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "neural-basis",
- "neural-burst-cpu",
- "neural-burst-esp32",
- "rayon",
-]
-
-[[package]]
-name = "feagi-connectome-proc"
-version = "0.1.1"
-dependencies = [
- "feagi-macro-components",
- "heck",
- "proc-macro2",
- "quote",
- "syn 3.0.6",
+ "connectome-basis",
+ "connectome-burst",
+ "connectome-models",
+ "connectome-proc",
 ]
 
 [[package]]
@@ -1672,44 +1713,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 dependencies = [
  "getrandom 0.2.17",
-]
-
-[[package]]
-name = "neural-basis"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "half",
- "heapless 0.9.3",
- "paste",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "neural-burst-cpu"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "half",
- "heapless 0.9.3",
- "neural-basis",
- "paste",
- "rayon",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "neural-burst-esp32"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "heapless 0.9.3",
- "neural-basis",
- "paste",
- "serde",
 ]
 
 [[package]]
@@ -3559,7 +3562,6 @@ checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
- "serde_core",
  "wasm-bindgen",
 ]
 

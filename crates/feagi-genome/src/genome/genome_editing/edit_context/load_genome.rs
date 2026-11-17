@@ -1,5 +1,5 @@
 use feagi_basis::target_frequency::TargetFrequency;
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID, BrainRegionIdAndAncestryConstructor};
 use crate::genome::genome_editing::edit_context::GenomeEditSequenceContext;
 use crate::genome::genome_editing::GenomeEditSequence;

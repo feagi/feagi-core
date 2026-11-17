@@ -8,50 +8,35 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Base structs and traits to describe neural processing"
+description = "Neural connectome of FEAGI: shared basis, neuron models and burst engines"
 
 [features]
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std",
-    "feagi-basis/std", "feagi-connectome-neural/std"
+    "connectome-basis/std", "connectome-models/std", "connectome-burst/std",
 ]
 
 alloc = [
-    "serde_json",
-    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
-    "feagi-basis/alloc", "feagi-connectome-neural/alloc"
+    "connectome-basis/alloc", "connectome-models/alloc", "connectome-burst/alloc",
 ]
 
-burst-engine-cpu = [
+burst-cpu = [
     "std",
-    "feagi-connectome-neural/burst-engine-cpu"
+    "connectome-burst/burst-cpu", "connectome-models/burst-cpu",
+]
+
+burst-esp32 = [
+    "connectome-burst/burst-esp32",
 ]
 
 
 [dependencies]
 # Child Crates
-feagi-connectome-neural = { path = "feagi-connectome-neural" }
-feagi-connectome-proc = {path = "feagi-connectome-proc"}
-
-# Workspace Crates
-feagi-basis = { path = "../feagi-basis", default-features = false }
-
-# External Crates
-paste = { workspace = true }
-thiserror = { workspace = true, default-features = false }
-half = { workspace = true, features = ["serde"] }
-serde = { workspace = true, default-features = false, features = ["derive"] }
-base64 = { workspace = true, default-features = false }
-heapless = { workspace = true, default-features = false, features = ["serde"] }
-uuid = { workspace = true, features = ["serde"] }
-serde_json = { workspace = true, optional = true}
-rand = {workspace = true}
-rayon = {workspace = true, optional = true}
-
-[dev-dependencies]
-serde_json = { workspace = true, features = ["std"] }
+connectome-basis = { path = "connectome-basis", default-features = false }
+connectome-models = { path = "connectome-models", default-features = false }
+connectome-burst = { path = "connectome-burst", default-features = false }
+connectome-proc = { path = "connectome-proc" }
 
 [lints]
 workspace = true

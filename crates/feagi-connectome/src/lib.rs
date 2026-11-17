@@ -1,7 +1,8 @@
-pub mod neuron_models;
-//pub mod neural_processors;
+//! The FEAGI connectome: the shared basis of neuron / synapse models and burst engines, the
+//! concrete neuron models, and the burst engines that run them
 
-pub mod feagi_connectome_neural {
-    // TODO we need to restrict this later!
-    pub use feagi_connectome_neural::*;
-}
+// TODO feature gating
+
+pub use connectome_basis;
+pub use connectome_models;
+pub use connectome_burst;

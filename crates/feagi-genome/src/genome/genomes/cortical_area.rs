@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use feagi_connectome::feagi_connectome_neural::neural_basis::engine::BurstEngineIndex;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::feagi_connectome_neural::neural_basis::visualization::{CorticalAreaVisualizationContext, NeuronVisualizationVoxelByteIndex};
+use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
+use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::visualization::{CorticalAreaVisualizationContext, NeuronVisualizationVoxelByteIndex};
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::{CorticalTypedGenerator, CorticalTypedStorage, CorticalTypedStorageOrGenerator};

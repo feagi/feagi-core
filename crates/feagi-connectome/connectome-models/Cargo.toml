@@ -1,0 +1,53 @@
+[package]
+name = "connectome-models"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Concrete FEAGI neuron models built on the connectome basis"
+
+[features]
+
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+std = [
+    "alloc",
+    "serde/std", "thiserror/std", "half/std",
+    "feagi-basis/std", "connectome-basis/std", "connectome-burst/std",
+]
+
+alloc = [
+    "serde/alloc", "half/alloc",
+    "feagi-basis/alloc", "connectome-basis/alloc", "connectome-burst/alloc",
+]
+
+# Implements the CPU burst engine dynamics for each model
+burst-cpu = [
+    "std",
+    "connectome-burst/burst-cpu",
+]
+
+
+[dependencies]
+# Sibling Crates
+connectome-basis = { path = "../connectome-basis", default-features = false }
+connectome-burst = { path = "../connectome-burst", default-features = false }
+
+# Workspace Crates
+feagi-basis = { path = "../../feagi-basis", default-features = false }
+
+# External Crates
+paste = { workspace = true }
+thiserror = { workspace = true, default-features = false }
+half = { workspace = true, default-features = false, features = ["serde"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

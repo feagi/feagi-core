@@ -1,6 +1,6 @@
 #![cfg(feature = "std")]
 
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantizationStandard;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_genome::basis::brain_region::BrainRegionID;
 use feagi_genome::genome::genome_object::GenomeObjectMetadata;
 use feagi_genome::genome::genomes::designer::DesignerGenome;

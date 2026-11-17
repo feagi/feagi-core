@@ -1,0 +1,48 @@
+[package]
+name = "connectome-burst"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Burst engines for running FEAGI connectomes on various hardware"
+
+[features]
+
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+std = [
+    "alloc",
+    "connectome-basis/std",
+    "burst-cpu?/std",
+]
+
+alloc = [
+    "connectome-basis/alloc",
+    "burst-cpu?/alloc", "burst-esp32?/alloc",
+]
+
+# Multithreaded CPU engine (rayon)
+burst-cpu = [
+    "std",
+    "dep:burst-cpu", "burst-cpu/rayon",
+]
+
+burst-esp32 = [
+    "dep:burst-esp32",
+]
+
+
+[dependencies]
+# Child Crates
+burst-cpu = { path = "burst-cpu", optional = true }
+burst-esp32 = { path = "burst-esp32", optional = true }
+
+# Sibling Crates
+connectome-basis = { path = "../connectome-basis", default-features = false }
+
+[lints]
+workspace = true

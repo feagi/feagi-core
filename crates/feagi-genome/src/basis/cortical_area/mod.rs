@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGenerator, CTFoundationSubtypedKind};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::foundation::{CTFoundationSubtypedSpawningParameters, CTFoundationSubtypedStorage, CTFoundationSubtypedStorageOrGenerator};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutRestrictor, NeuronLayoutTag};
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::neuron_models::models::kind::{NMKind};
-use feagi_connectome::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
+use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutRestrictor, NeuronLayoutTag};
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_models::neuron_models::models::kind::{NMKind};
+use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
 #[cfg(feature = "alloc")]
-use feagi_connectome::neuron_models::models::NMNeurogenesisStorageOrGenerator;
+use feagi_connectome::connectome_models::neuron_models::models::NMNeurogenesisStorageOrGenerator;
 use crate::basis::cortical_area::cortical_identifiers::{ CorticalIdentifierInnerEncoder};
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedGenerator, CTProcessingSubtypedKind};
 #[cfg(feature = "alloc")]

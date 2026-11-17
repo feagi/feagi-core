@@ -36,7 +36,7 @@ default = [
 std = [
     "alloc",
     "thiserror/std", "serde/std", "serde_json/std",
-    "feagi-basis/std", "feagi-basis/rayon", "feagi-interop/std", "feagi-genome/std", "feagi-connectome/burst-engine-cpu",
+    "feagi-basis/std", "feagi-basis/rayon", "feagi-interop/std", "feagi-genome/std", "feagi-connectome/burst-cpu",
     "feagi-migrator/std", "feagi-pns-structures/std", "feagi-pns-processing/std"
 ]
 
@@ -115,11 +115,12 @@ members = [
     "crates/feagi-basis/feagi-basis-proc-common",
 
     "crates/feagi-connectome",
-    "crates/feagi-connectome/feagi-connectome-proc",
-    "crates/feagi-connectome/feagi-connectome-neural",
-    "crates/feagi-connectome/feagi-connectome-neural/neural-basis",
-    "crates/feagi-connectome/feagi-connectome-neural/neural-burst-cpu",
-    "crates/feagi-connectome/feagi-connectome-neural/neural-burst-esp32",
+    "crates/feagi-connectome/connectome-proc",
+    "crates/feagi-connectome/connectome-basis",
+    "crates/feagi-connectome/connectome-models",
+    "crates/feagi-connectome/connectome-burst",
+    "crates/feagi-connectome/connectome-burst/burst-cpu",
+    "crates/feagi-connectome/connectome-burst/burst-esp32",
 
     "crates/feagi-genome",
 

@@ -1,4 +1,4 @@
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::BrainRegionID;
 use crate::genome::genomes::brain_region::{BrainRegionGenomeContext, BrainRegionContainer, BrainRegionContainerRef, BrainRegionHierarchyContextRoot, BrainRegionSet, BrainRegionSetError};
 use crate::genome::genomes::cortical_area::{CorticalAreaSet, GenomeCorticalAreaContext};

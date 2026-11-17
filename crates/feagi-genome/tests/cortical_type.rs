@@ -1,19 +1,19 @@
 use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutRestrictor};
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::NeuronModel;
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
-use feagi_connectome::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantStandard32Bit;
-use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32};
-use feagi_connectome::neuron_models::models::exclusive_power::{
+use feagi_connectome::connectome_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::NeuronLayoutVoxel;
+use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayout, NeuronLayoutRestrictor};
+use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
+use feagi_connectome::connectome_basis::quantization_levels::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuantStandard32Bit;
+use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuantStandard32Bit;
+use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::{NMFoundationPowerNeurogenesisGeneratorQuanted, NMFoundationPowerQuantFloat16, NMFoundationPowerQuantFloat32};
+use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::{
     NMFoundationPowerDataCorticalInternal, NMFoundationPowerDataCorticalProperties, NMFoundationPowerDataCorticalVariance, NMFoundationPowerDataNeuronInternal,
 };
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neurogenesis::NeurogenesisMethod;
-use feagi_connectome::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedNeurogenesisGeneratorQuanted;
-use feagi_connectome::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
+use feagi_connectome::connectome_basis::neuron_model::neurogenesis::by_generator::NeurogenesisGenerator;
+use feagi_connectome::connectome_basis::neuron_model::neurogenesis::NeurogenesisMethod;
+use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedNeurogenesisGeneratorQuanted;
+use feagi_connectome::connectome_models::neuron_models::neurogenesis_generator_uniform_defaults::{NeurogenesisGeneratorUniformDefault, NeurogenesisGeneratorUniformDefaultInitParameters};
 use feagi_genome::basis::cortical_area::foundation::{CTGeneratorFoundationPowerModeled, CTGeneratorFoundationSubTyped, CorticalTypeFoundationPower, CorticalTypeFoundationSubtypeKind};
 use feagi_genome::basis::cortical_area::processing::{CTGeneratorProcessingInterconnectModeled, CTGeneratorProcessingSubTyped, CorticalTypeProcessingInterconnect, CorticalTypeProcessingSubtypeKind};
 use feagi_genome::basis::cortical_area::{CTGeneratorTyped, CorticalAllowedRegions, CorticalSubTypeUsesDefaultCorticalGenerator, CorticalType, CorticalTypeAndSubtype, CorticalTypeKind};

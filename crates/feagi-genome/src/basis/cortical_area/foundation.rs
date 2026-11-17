@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::{CorticalType};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::CorticalTypeAreaSpawningParameters;
-use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel};
-use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutTagVoxel};
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInner, CorticalIdentifierInnerEncoderRandom, CorticalIdentifierParseError};
 use crate::basis::cortical_area::foundation::power::{CTFoundationPower, CTFoundationPowerNMModeledGenerator};
 #[cfg(feature = "alloc")]
@@ -27,14 +27,14 @@ pub trait CorticalTypeFoundation: CorticalType<
 /// Fires every burst
 pub mod power {
     use serde::{Deserialize, Serialize};
-    use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
-    use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
-    use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-    use feagi_connectome::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
-    use feagi_connectome::neuron_models::models::kind::NMKind;
-    use feagi_connectome::neuron_models::models::{NMMember, NMModeled, NMNeurogenesisGenerator, NMNeurogenesisValidatedGenerator};
+    use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+    use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelBound, NeuronLayoutTagVoxel};
+    use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+    use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::{NMExclusivePowerQuantKind, NMExclusivePowerQuanted};
+    use feagi_connectome::connectome_models::neuron_models::models::kind::NMKind;
+    use feagi_connectome::connectome_models::neuron_models::models::{NMMember, NMModeled, NMNeurogenesisGenerator, NMNeurogenesisValidatedGenerator};
     #[cfg(feature = "alloc")]
-    use feagi_connectome::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator, NMNeurogenesisValidatedStorage, NMNeurogenesisValidatedStorageOrGenerator};
+    use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator, NMNeurogenesisValidatedStorage, NMNeurogenesisValidatedStorageOrGenerator};
     use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInnerEncoderRandom};
     use crate::basis::cortical_area::foundation::CorticalTypeFoundation;
     use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
@@ -103,14 +103,14 @@ pub mod power {
     // Neuron Model: Exclusive Power
     pub mod exclusive_power {
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
-        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-        use feagi_connectome::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
-        use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
-        use feagi_connectome::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal};
-        use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_bfloat_16::NMExclusivePowerQuantBFloat16;
-        use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_float_16::NMExclusivePowerQuantFloat16;
-        use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_float_32::NMExclusivePowerQuantFloat32;
-        use feagi_connectome::neuron_models::models::exclusive_power::quantizations::quant_float_64::NMExclusivePowerQuantFloat64;
+        use feagi_connectome::connectome_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+        use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+        use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+        use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::{NMExclusivePowerDataCorticalInternal, NMExclusivePowerDataCorticalProperties, NMExclusivePowerDataCorticalVariance, NMExclusivePowerDataNeuronInternal};
+        use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_bfloat_16::NMExclusivePowerQuantBFloat16;
+        use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_float_16::NMExclusivePowerQuantFloat16;
+        use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_float_32::NMExclusivePowerQuantFloat32;
+        use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_float_64::NMExclusivePowerQuantFloat64;
         use crate::basis::cortical_area::foundation::power::CTFoundationPowerNM;
 
         /// Default dimensions to use for this cortical type. Power is always exactly a single neuron
