@@ -1,30 +1,28 @@
 //! This burst engine does nothing. It simply follows edit commands, and returns plausible responses.
 //! No neuron or synapse dynamics are run on here
 
-use connectome_basis::connectome_editing::{ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeNeuronModelTypes};
-use connectome_basis::engine::{BurstEngine, BurstEngineIndex};
-use connectome_basis::engine::engine_change_command::EngineChangeCommandOtherError;
+use crate::NeuronProcessorSingleEngineVisualizationTransmitter;
+use burst_basis::burst_engine::{BurstEngine, BurstEngineIndex};
+use burst_basis::burst_engine_commands::EngineChangeCommandOtherError;
+use burst_basis::connectome_editing::{ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use connectome_basis::visualization::NeuronVisualizationVoxelByteIndex;
-use crate::NeuronProcessorSingleEngineVisualizationTransmitter;
 
-pub struct BurstEngineCPUPlacebo<FIQ, CNMT, Vis>
+pub struct BurstEngineCPUPlacebo<FIQ, Vis>
 where
     FIQ: FeagiIndexQuantization,
-    CNMT: ConnectomeNeuronModelTypes<FIQ>,
     Vis: Send // TODO
 {
     cortical_indexes: Vec<CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
     next_cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
-    _t: <BurstEngineCPUPlacebo<FIQ, CNMT, Vis> as BurstEngine<FIQ, CNMT, Vis>>::VisualizationTransmitter,
-    _p: core::marker::PhantomData<(CNMT, Vis)>
+    _t: <BurstEngineCPUPlacebo<FIQ, Vis> as BurstEngine<FIQ, Vis>>::VisualizationTransmitter,
+    _p: core::marker::PhantomData<(Vis)>
 }
 
-impl<FIQ, CNMT, VIS> BurstEngine<FIQ, CNMT, VIS> for BurstEngineCPUPlacebo<FIQ, CNMT, VIS>
+impl<FIQ, VIS> BurstEngine<FIQ, VIS> for BurstEngineCPUPlacebo<FIQ, VIS>
 where
     FIQ: FeagiIndexQuantization,
-    CNMT: ConnectomeNeuronModelTypes<FIQ>,
     VIS: Send // TODO
 {
     type InitParameters = ();
@@ -44,7 +42,7 @@ where
         // Do nothing lol
     }
 
-    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ, CNMT>) -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError> {
+    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ>) -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError> {
         let res = match step {
             ConnectomeEditStepEnum::Nothing => {
                 ConnectomeEditResultantEnum::Nothing
@@ -54,10 +52,10 @@ where
                 self.next_cortical_index += CorticalAreaEngineIndex::QUANT_ONE;
                 self.cortical_indexes.push(self.next_cortical_index);
                 
-                ConnectomeEditResultantEnum::CorticalAreaAdd(Result::Ok(ConnectomeEditResultantCorticalAreaAdd {
+                ConnectomeEditResultantEnum::CorticalAreaAdd(ConnectomeEditResultantCorticalAreaAdd {
                     new_cortical_index: self.next_cortical_index,
                     visualization_start_index: NeuronVisualizationVoxelByteIndex::QUANT_ZERO,
-                }))
+                })
             }
         };
         Ok(res)

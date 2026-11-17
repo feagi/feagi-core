@@ -1,17 +1,14 @@
-use std::fmt::Formatter;
+use crate::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use connectome_basis::quantization_levels::FeagiIndexQuantization;
+use connectome_basis::visualization::BurstVisualizationData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
-use crate::engine::engine_change_command::EngineChangeCommandOtherError;
-use crate::quantization_levels::FeagiIndexQuantization;
-use crate::visualization::BurstVisualizationData;
-
-pub mod engine_change_command;
-
+use std::fmt::Formatter;
 
 /// Some implementation meant to process neurons and synapses in real time. The point of FEAGI
-pub trait BurstEngine<FIQ, CNMT, Vis>: Sized
+pub trait BurstEngine<FIQ, Vis>: Sized
 where
     FIQ: FeagiIndexQuantization,
-    // Vis TODO
+// Vis TODO
 {
     /// Whatever is needed for the burst engine to init
     type InitParameters: Send;
@@ -36,7 +33,7 @@ where
     async fn run_burst(&mut self, send_visualization: bool);
 
     /// Apply a single connectome edit step, between bursts
-    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ, CNMT>)
+    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ>)
                                      -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>;
 }
 
@@ -50,4 +47,12 @@ impl core::fmt::Display for BurstEngineIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+/// Some other error occurred not obviously correlated to the command (possible backend hardware
+/// failure)
+#[derive(Debug, thiserror::Error)]
+pub enum EngineChangeCommandOtherError {
+    #[error("Unknown Error")]
+    UnknownError
 }

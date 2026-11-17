@@ -16,12 +16,12 @@ description = "Burst engines for running FEAGI connectomes on various hardware"
 
 std = [
     "alloc",
-    "connectome-basis/std",
+    "connectome-basis/std", "burst-basis/std",
     "burst-cpu?/std",
 ]
 
 alloc = [
-    "connectome-basis/alloc",
+    "connectome-basis/alloc", "burst-basis/alloc",
     "burst-cpu?/alloc", "burst-esp32?/alloc",
 ]
 
@@ -38,6 +38,8 @@ burst-esp32 = [
 
 [dependencies]
 # Child Crates
+feagi-basis = {path = "../../feagi-basis"}
+burst-basis = { path = "burst-basis"}
 burst-cpu = { path = "burst-cpu", optional = true }
 burst-esp32 = { path = "burst-esp32", optional = true }
 

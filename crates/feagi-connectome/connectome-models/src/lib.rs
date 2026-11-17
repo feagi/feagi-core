@@ -2,4 +2,3 @@
 
 pub mod neuron_models;
 pub mod neural_processors;
-pub mod connectome_editing;

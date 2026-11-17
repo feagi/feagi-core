@@ -119,6 +119,7 @@ members = [
     "crates/feagi-connectome/connectome-basis",
     "crates/feagi-connectome/connectome-models",
     "crates/feagi-connectome/connectome-burst",
+    "crates/feagi-connectome/connectome-burst/burst-basis",
     "crates/feagi-connectome/connectome-burst/burst-cpu",
     "crates/feagi-connectome/connectome-burst/burst-esp32",
 

@@ -9,7 +9,3 @@ pub mod synapse_model;
 // Visualization index types are always available (neuron layouts use them). Only the burst
 // visualization data, backed by a heap allocated `BitBatchParDataVector`, requires alloc
 pub mod visualization;
-// The burst engine trait depends on both connectome editing and visualization
-#[cfg(feature = "alloc")]
-pub mod engine;
-

@@ -33,8 +33,10 @@ rayon = [
 
 [dependencies]
 # Connectome Crates
+burst-basis = {path = "../burst-basis", default-features = false}
 connectome-basis = {path = "../../connectome-basis", default-features = false }
 connectome-models = {path = "../../connectome-models", default-features = false }
+
 
 # Root Crates
 feagi-basis = {path = "../../../feagi-basis", default-features = false }

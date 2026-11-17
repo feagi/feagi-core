@@ -1,10 +1,10 @@
 //! Burst engines, which run a connectome on a given kind of hardware. Each engine is a sub crate
 //! toggled by a feature of the same name
 
-pub use connectome_basis;
+pub mod npu_workers;
 
 #[cfg(feature = "burst-cpu")]
-/// Running the FEAGI neural model on the CPU. This module contains various ways to do that for
+/// Running the FEAGI neural model on the CPU. This module contains various engines to do that for
 /// various CPUS (single vs multithreaded, various SIMD instructions)
 pub use burst_cpu;
 

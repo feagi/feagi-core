@@ -202,10 +202,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "burst-basis"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "connectome-basis",
+ "connectome-models",
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "rayon",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "burst-cpu"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "burst-basis",
  "connectome-basis",
  "connectome-models",
  "feagi-basis",
@@ -330,9 +347,11 @@ dependencies = [
 name = "connectome-burst"
 version = "0.1.1"
 dependencies = [
+ "burst-basis",
  "burst-cpu",
  "burst-esp32",
  "connectome-basis",
+ "feagi-basis",
 ]
 
 [[package]]

@@ -1,10 +1,8 @@
-use crate::neuron_models::neuron_model_types::FeagiNeuronModelTypes;
 use crate::neural_processors::singular::commands::NeuronProcessorSingleEngineCommandHandler;
 use crate::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
-use connectome_basis::engine::BurstEngine;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use std::ops::ControlFlow;
 use std::time::{Duration, Instant};
