@@ -1,6 +1,10 @@
+use feagi_basis::BurstIndex;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use crate::neuron_models::models::feagi_advanced::NMFeagiAdvancedTrait;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
+
 
 pub struct FeagiAdvancedBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMFeagiAdvancedTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
@@ -35,7 +39,7 @@ where
 
 //endregion
 
-/*
+
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for FeagiAdvancedBurstEngineDynamics<FIQ, NM>
 where
@@ -43,9 +47,9 @@ where
     NM: NMFeagiAdvancedTrait,
 {
     fn process_model_cortical_area_dynamics(
-        burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        layout_context: &NeuronLayoutOf<FIQ, NM>,
-        cortical_data: (&NM::CorticalDataProperties, &mut NM::CorticalDataInternal, &mut NM::CorticalDataScratch),
+        _burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
+        _layout_context: &NeuronLayoutOf<FIQ, NM>,
+        _cortical_data: (&NM::CorticalDataProperties, &mut NM::CorticalDataInternal, &mut NM::CorticalDataScratch),
     ) -> () {
         // Unused
         ()
@@ -59,6 +63,7 @@ where
         cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
         neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),
     ) -> bool {
+        use crate::neuron_models::models::feagi_advanced::wrapped::*;
         // TODO extremely simple port, redo later
 
         let cortical_properties = cortical_data.0;
@@ -93,4 +98,4 @@ where
 }
 
 
- */
+ 

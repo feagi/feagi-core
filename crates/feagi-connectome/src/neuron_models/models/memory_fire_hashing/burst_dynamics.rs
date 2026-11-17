@@ -1,6 +1,9 @@
+use feagi_basis::BurstIndex;
+use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
 use feagi_connectome_neural::neural_basis::neuron_model::NeuralBurstEngineDynamics;
 use feagi_connectome_neural::neural_basis::quantization_levels::FeagiIndexQuantization;
+use crate::feagi_connectome_neural::neural_basis::neuron_model::neuron_layout::NeuronLayoutOf;
 
 pub struct MemoryFireHashingBurstEngineDynamics<FIQ: FeagiIndexQuantization, NM: NMMemoryFireHashingTrait>(core::marker::PhantomData<(FIQ, NM)>);
 
@@ -35,7 +38,7 @@ where
 
 //endregion
 
-/*
+
 #[cfg(feature = "burst-engine-cpu")]
 impl<FIQ, NM> feagi_connectome_neural::burst_engine_cpu::NeuronCPUParallelDynamics<FIQ, NM> for MemoryFireHashingBurstEngineDynamics<FIQ, NM>
 where
@@ -59,6 +62,7 @@ where
         cortical_data: (&NM::CorticalDataProperties, &NM::CorticalDataInternal, &NM::CorticalDataScratch),
         neuron_data: (&mut NM::NeuronDataInternal, &mut NM::NeuronDataScratch, &NM::NeuronDataVariance),
     ) -> bool {
+        use crate::neuron_models::models::memory_fire_hashing::wrapped::*;
 
         // TODO extremely memory port, redo later
 
@@ -92,4 +96,4 @@ where
 }
 
 
- */
+ 

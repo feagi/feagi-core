@@ -1,17 +1,23 @@
 use crate::neuron_models::models::memory_fire_hashing::NMMemoryFireHashingTrait;
 use feagi_basis::create_wrapped_quantized_decimal;
 
-create_wrapped_quantized_decimal!(
-    /// For handling timing
-    pub Period
-);
+pub mod wrapped {
+    use feagi_basis::create_wrapped_quantized_decimal;
+
+    create_wrapped_quantized_decimal!(
+        /// For handling amounts of time
+        pub Period
+    );
+}
+
+
 
 //region Cortical Properties
 
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMMemoryFireHashingDataCorticalProperties<NM: NMMemoryFireHashingTrait> {
     #[doc = " How long till a neuron of the cortical area can fire again"]
-    pub refractory_period: Period<NM::Period>,
+    pub refractory_period: wrapped::Period<NM::Period>,
 
     #[doc = " At what threshold do we fire"]
     pub firing_threshold: NM::MembranePotentialQuant,
@@ -29,7 +35,7 @@ pub struct NMMemoryFireHashingDataCorticalProperties<NM: NMMemoryFireHashingTrai
 
 impl<NM: NMMemoryFireHashingTrait> NMMemoryFireHashingDataCorticalProperties<NM> {
     pub const fn new(
-        refractory_period: Period<NM::Period>,
+        refractory_period: wrapped::Period<NM::Period>,
         firing_threshold: NM::MembranePotentialQuant,
         postsynaptic_current: NM::MembranePotentialQuant,
         postsynaptic_current_max: NM::MembranePotentialQuant,
@@ -165,7 +171,7 @@ impl<NM: NMMemoryFireHashingTrait> NMMemoryFireHashingDataCorticalVariance<NM> {
 #[derive(Clone, PartialEq, Debug, ::serde::Serialize, ::serde::Deserialize)]
 pub struct NMMemoryFireHashingDataNeuronInternal<NM: NMMemoryFireHashingTrait> {
     #[doc = " How many more bursts the neuron is refractory for"]
-    pub refractory_countdown: Period<NM::Period>,
+    pub refractory_countdown: wrapped::Period<NM::Period>,
 
     #[serde(skip)]
     #[doc = r" Public so that this struct may be written out with its fields named"]
@@ -173,7 +179,7 @@ pub struct NMMemoryFireHashingDataNeuronInternal<NM: NMMemoryFireHashingTrait> {
 }
 
 impl<NM: NMMemoryFireHashingTrait> NMMemoryFireHashingDataNeuronInternal<NM> {
-    pub const fn new(refractory_countdown: Period<NM::Period>) -> Self {
+    pub const fn new(refractory_countdown: wrapped::Period<NM::Period>) -> Self {
         Self {
             refractory_countdown,
             _p: ::core::marker::PhantomData,
