@@ -40,7 +40,7 @@ pub type NeuronProcessorSingleEngineVisualizationReceiver<FIQ> =
 
 /// Responsible for spawning a neuron processor running a single burst engine. The engine is
 /// initialized on the worker's own thread, so only its init parameters need to be `Send`
-pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> {
+pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, ()>> {
     /// The rate the burst loop starts ticking at
     pub initial_target_frequency: TargetFrequency,
     /// The rate bursts start sending visualization at
@@ -53,7 +53,7 @@ pub struct NeuronProcessorSingleEngineWorkerBuilder<FIQ: FeagiIndexQuantization,
 impl<FIQ, Engine> FeagiWorkerBuilder<FeagiStdThreadSpawner> for NeuronProcessorSingleEngineWorkerBuilder<FIQ, Engine>
 where
     FIQ: FeagiIndexQuantization,
-    Engine: BurstEngine<FIQ, ConnectomeDispatch, (), VisualizationTransmitter = NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>>,
+    Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, (), VisualizationTransmitter = NeuronProcessorSingleEngineVisualizationTransmitter<FIQ>>,
     Engine::InitParameters: 'static,
     Engine::InitError: core::error::Error + Send + 'static,
 {

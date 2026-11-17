@@ -1,4 +1,4 @@
-use crate::connectome_basis::connectome_editing::ConnectomeDispatch;
+use crate::connectome_basis::connectome_editing::FeagiNeuronModelTypes;
 use crate::neural_processors::singular::commands::NeuronProcessorSingleEngineCommandHandler;
 use crate::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 /// The burst loop. Each tick: schedules the next tick, handles every queued command, runs the
 /// burst (sending visualization if it is due), then waits until the scheduled tick. If a command
 /// paused it, it instead waits on and handles commands until resumed, then bursts
-pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>>(
+pub(crate) async fn run_neuron_processor_single_engine<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, ()>>(
     responder: FeagiResponderAlloc<
         FeagiWorkerRequest<NeuronProcessorSingleEngineRequest<FIQ>>,
         FeagiWorkerResponse<NeuronProcessorSingleEngineResponse<FIQ>>,

@@ -1,4 +1,4 @@
-use crate::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use crate::connectome_basis::connectome_editing::{FeagiNeuronModelTypes, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use crate::connectome_basis::engine::EngineChangeCommandOtherError;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::target_frequency::TargetFrequency;
@@ -15,7 +15,7 @@ pub enum NeuronProcessorSingleEngineRequest<FIQ: FeagiIndexQuantization> {
     VisualizationRate(TargetFrequency),
     /// Apply these connectome edit steps in order. Stops at the first step that fails. Pauses the
     /// worker, which stays paused afterward, even if a step failed, until sent `Resume`
-    ConnectomeEdits(Vec<ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>>),
+    ConnectomeEdits(Vec<ConnectomeEditStepEnum<FIQ, FeagiNeuronModelTypes>>),
     /// Stop bursting until resumed. While paused the worker only waits for and handles commands,
     /// so its caller can edit the connectome and update its own state before bursting continues
     Pause,
@@ -40,7 +40,7 @@ pub enum NeuronProcessorSingleEngineResponse<FIQ: FeagiIndexQuantization> {
 
 #[doc(hidden)]
 /// The state of the single engine neuron processor, which its commands act upon
-pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> {
+pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, ()>> {
     pub(crate) target_frequency: TargetFrequency,
     pub(crate) visualization_frequency: TargetFrequency,
     /// While paused, no bursts run and the worker only waits for commands
@@ -49,7 +49,7 @@ pub struct NeuronProcessorSingleEngineCommandHandler<FIQ: FeagiIndexQuantization
     pub(crate) _fiq: PhantomData<fn() -> FIQ>,
 }
 
-impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> FeagiWorkerCommandProcessor
+impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, ()>> FeagiWorkerCommandProcessor
     for NeuronProcessorSingleEngineCommandHandler<FIQ, Engine>
 {
     type CustomRequest = NeuronProcessorSingleEngineRequest<FIQ>;
@@ -82,11 +82,11 @@ impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, (
     }
 }
 
-impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, ConnectomeDispatch, ()>> NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
+impl<FIQ: FeagiIndexQuantization, Engine: BurstEngine<FIQ, FeagiNeuronModelTypes, ()>> NeuronProcessorSingleEngineCommandHandler<FIQ, Engine> {
     /// Relays each edit step to the engine in order, stopping at the first that fails
     async fn apply_connectome_edits(
         &mut self,
-        steps: Vec<ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>>,
+        steps: Vec<ConnectomeEditStepEnum<FIQ, FeagiNeuronModelTypes>>,
     ) -> Vec<Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>> {
         let mut results = Vec::with_capacity(steps.len());
         for step in steps {

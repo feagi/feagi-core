@@ -1,6 +1,6 @@
 use std::fmt::Formatter;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
-use crate::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeVisitorDispatchWrapper};
+use crate::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeNeuronModelTypes};
 use crate::engine::engine_change_command::EngineChangeCommandOtherError;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::BurstVisualizationData;
@@ -9,10 +9,10 @@ pub mod engine_change_command;
 
 
 /// Some implementation meant to process neurons and synapses in real time. The point of FEAGI
-pub trait BurstEngine<FIQ, CVDW, Vis>: Sized
+pub trait BurstEngine<FIQ, CNMT, Vis>: Sized
 where
     FIQ: FeagiIndexQuantization,
-    CVDW: ConnectomeVisitorDispatchWrapper<FIQ>,
+    CNMT: ConnectomeNeuronModelTypes<FIQ>,
     // Vis TODO
 {
     /// Whatever is needed for the burst engine to init
@@ -38,7 +38,7 @@ where
     async fn run_burst(&mut self, send_visualization: bool);
 
     /// Apply a single connectome edit step, between bursts
-    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ, CVDW>)
+    async fn process_connectome_edit(&mut self, step: ConnectomeEditStepEnum<FIQ, CNMT>)
                                      -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError>;
 }
 

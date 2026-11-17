@@ -7,7 +7,7 @@ use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::Feagi
 use feagi_basis::prelude::*;
 use neural_basis::connectome_editing::{
     ConnectomeEditErrorCorticalAreaAdd, ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum,
-    ConnectomeVisitorDispatchWrapper,
+    ConnectomeNeuronModelTypes,
 };
 use neural_basis::engine::engine_change_command::EngineChangeCommandOtherError;
 use neural_basis::engine::{BurstEngine, BurstEngineIndex};
@@ -75,12 +75,12 @@ where
     }
 }
 
-impl<FIQ, NeuronModels, VisTx, CVDW> BurstEngine<FIQ, CVDW, ()> for BurstEngineCPURayon<FIQ, NeuronModels, VisTx>
+impl<FIQ, NeuronModels, VisTx, CNMT> BurstEngine<FIQ, CNMT, ()> for BurstEngineCPURayon<FIQ, NeuronModels, VisTx>
 where
     FIQ: FeagiIndexQuantization,
     NeuronModels: CpuNeuronModelStores<FIQ>,
     VisTx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>,
-    CVDW: ConnectomeVisitorDispatchWrapper<FIQ, CorticalAreaNeurogenesisDispatch = NeuronModels::CorticalAreaNeurogenesisDispatch>,
+    CNMT: ConnectomeNeuronModelTypes<FIQ, CorticalAreaNeurogenesis = NeuronModels::CorticalAreaNeurogenesis>,
 {
     type InitParameters = ();
     type InitError = BurstEngineCPURayonInitError;
@@ -134,12 +134,12 @@ where
 
     async fn process_connectome_edit(
         &mut self,
-        step: ConnectomeEditStepEnum<FIQ, CVDW>,
+        step: ConnectomeEditStepEnum<FIQ, CNMT>,
     ) -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError> {
         match step {
             ConnectomeEditStepEnum::Nothing => Ok(ConnectomeEditResultantEnum::Nothing),
             ConnectomeEditStepEnum::CorticalAreaAdd(step) => {
-                match self.neuron_models.add_cortical_area(step.cortical_area_neurogenesis_dispatch, &mut self.neuron_data) {
+                match self.neuron_models.add_cortical_area(step.cortical_area_neurogenesis, &mut self.neuron_data) {
                     Ok(added) => Ok(ConnectomeEditResultantCorticalAreaAdd {
                         new_cortical_index: added.cortical_index,
                         visualization_start_index: added.visualization_start_index,

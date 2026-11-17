@@ -8,7 +8,7 @@ use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{Feag
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
 use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
 use feagi_basis::target_frequency::TargetFrequency;
-use feagi_connectome::connectome_basis::connectome_editing::{ConnectomeDispatch, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use feagi_connectome::connectome_basis::connectome_editing::{FeagiNeuronModelTypes, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantizationStandard;
 use feagi_connectome::neural_processors::singular::commands::{NeuronProcessorSingleEngineRequest, NeuronProcessorSingleEngineResponse};
 use feagi_connectome::neural_processors::singular::{
@@ -47,7 +47,7 @@ struct CountingEngine {
 #[error("Refused to init")]
 struct RefusedInit;
 
-impl BurstEngine<FIQ, ConnectomeDispatch, ()> for CountingEngine {
+impl BurstEngine<FIQ, FeagiNeuronModelTypes, ()> for CountingEngine {
     /// The burst counter, or `None` to fail init
     type InitParameters = Option<Arc<Counts>>;
     type InitError = RefusedInit;
@@ -74,7 +74,7 @@ impl BurstEngine<FIQ, ConnectomeDispatch, ()> for CountingEngine {
     }
 
     /// Refuses every connectome edit
-    async fn process_connectome_edit(&mut self, _step: ConnectomeEditStepEnum<FIQ, ConnectomeDispatch>)
+    async fn process_connectome_edit(&mut self, _step: ConnectomeEditStepEnum<FIQ, FeagiNeuronModelTypes>)
         -> Result<ConnectomeEditResultantEnum<FIQ>, EngineChangeCommandOtherError> {
         Err(EngineChangeCommandOtherError::UnknownError)
     }

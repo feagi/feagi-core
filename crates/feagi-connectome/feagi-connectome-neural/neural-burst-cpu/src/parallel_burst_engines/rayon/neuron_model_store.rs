@@ -22,7 +22,7 @@ use neural_basis::quantization_levels::FeagiIndexQuantization;
 /// `CpuNeuronModelStore` of each, and relays these calls to them
 pub trait CpuNeuronModelStores<FIQ: FeagiIndexQuantization>: Sized {
     /// The neurogenesis of a cortical area, at whichever neuron model and quantization it uses
-    type CorticalAreaNeurogenesisDispatch: Send;
+    type CorticalAreaNeurogenesis: Send;
 
     /// Every store, empty
     fn new() -> Self;
@@ -30,7 +30,7 @@ pub trait CpuNeuronModelStores<FIQ: FeagiIndexQuantization>: Sized {
     /// Adds the cortical area to the store of its neuron model and quantization
     fn add_cortical_area(
         &mut self,
-        neurogenesis: Self::CorticalAreaNeurogenesisDispatch,
+        neurogenesis: Self::CorticalAreaNeurogenesis,
         engine: &mut CpuEngineNeuronData<FIQ>,
     ) -> Result<CpuAddedCorticalArea<FIQ>, CpuAddCorticalAreaError>;
 

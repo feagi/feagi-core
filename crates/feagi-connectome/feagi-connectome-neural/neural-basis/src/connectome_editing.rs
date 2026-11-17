@@ -1,3 +1,4 @@
+use crate::engine::engine_change_command::EngineChangeCommandOtherError;
 use crate::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::NeuronVisualizationVoxelByteIndex;
@@ -8,13 +9,13 @@ macro_rules! _impl_connectome_edit_step_requirements {
 
 
 
-            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepType<FIQ, CVDW> for [<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW> {
+            impl<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>> ConnectomeEditStepType<FIQ, CNMT> for [<ConnectomeEditStep $StepSpecificName>]<FIQ, CNMT> {
                 type ConnectomeEditResultant = [<ConnectomeEditResultant $StepSpecificName>]<FIQ>;
                 type ConnectomeEditError = [<ConnectomeEditError $StepSpecificName>];
             }
 
-            impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> From<[<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>> for ConnectomeEditStepEnum<FIQ, CVDW> {
-                fn from(value: [<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>) -> Self {
+            impl<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>> From<[<ConnectomeEditStep $StepSpecificName>]<FIQ, CNMT>> for ConnectomeEditStepEnum<FIQ, CNMT> {
+                fn from(value: [<ConnectomeEditStep $StepSpecificName>]<FIQ, CNMT>) -> Self {
                     ConnectomeEditStepEnum::$StepSpecificName(value)
                 }
             }
@@ -39,7 +40,7 @@ macro_rules! _impl_connectome_edit_step_requirements {
     };
 }
 
-/// Creates ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>>
+/// Creates ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>>
 /// and ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization>
 macro_rules! create_step_and_result_enums {
     {
@@ -48,10 +49,10 @@ macro_rules! create_step_and_result_enums {
 
         paste::paste! {
 
-            pub enum ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
+            pub enum ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>> {
                 /// Used by GenomeEditStep to skip over edits that dont affect the connectome
                 Nothing,
-                $($StepSpecificName([<ConnectomeEditStep $StepSpecificName>]<FIQ, CVDW>),)+
+                $($StepSpecificName([<ConnectomeEditStep $StepSpecificName>]<FIQ, CNMT>),)+
             }
 
 
@@ -91,51 +92,14 @@ macro_rules! create_step_and_result_enums {
 }
 
 
-
-
-
-pub struct ConnectomeEditSequence<FIQ: FeagiIndexQuantization> {
-    steps: Vec<ConnectomeEditStepEnum<FIQ>>,
-}
-
-impl<FIQ: FeagiIndexQuantization> ConnectomeEditSequence<FIQ> { // TODO better support for multi engine stuff, right now this iterates 1 engine at a time!
-
-    pub fn new(steps: Vec<ConnectomeEditStepEnum<FIQ>>) -> Self {
-        Self {steps}
-    }
-
-    /// Used by the NPU to call the edit function on the burst engine
-    pub async fn build_resultant<F>(&self, f: F) -> Result<ConnectomeEditResultantSequence<FIQ>, ()>
-    where
-        F: AsyncFnMut(ConnectomeEditStepEnum<FIQ>) -> Result<Vec<ConnectomeEditResultantEnum<FIQ>>, ()>
-    {
-        let mut output: Vec<ConnectomeEditResultantEnum<FIQ>> = vec![];
-        for step in self.steps {
-            let resultant = f(step).await;
-            match resultant {
-                Ok(res) => {output.push(res)}
-                Err(err) => {return Err(())}
-            }
-        };
-        Ok(output)
-    }
-
-
-}
-
-
-pub struct ConnectomeEditResultantSequence<FIQ: FeagiIndexQuantization> {
-    steps: Vec<ConnectomeEditResultantEnum<FIQ>>,
-}
-
-/// Since the Neuron Models are made in higher level crates,
-pub trait ConnectomeVisitorDispatchWrapper<FIQ: FeagiIndexQuantization> {
-    type CorticalAreaNeurogenesisDispatch: Send;
+/// Since the Neuron Models are made in higher level crates, we need to use this to transfer those down
+pub trait ConnectomeNeuronModelTypes<FIQ: FeagiIndexQuantization> {
+    type CorticalAreaNeurogenesis: Send;
 }
 
 /// Defines some sort of edit step for the connectome, and the result that should be returned
-pub trait ConnectomeEditStepType<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>>:
-Sized + Into<ConnectomeEditStepEnum<FIQ, CVDW>> {
+pub trait ConnectomeEditStepType<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>>:
+Sized + Into<ConnectomeEditStepEnum<FIQ, CNMT>> {
     /// What would be returned if everything went fine
     type ConnectomeEditResultant: ConnectomeEditStepResultant<FIQ>;
     /// What is returned if something when wrong
@@ -153,7 +117,7 @@ pub trait ConnectomeEditError: core::error::Error{
 }
 
 
-/// Generate `ConnectomeEditStepEnum` and `ConnectomeEditResultantEnum`
+// Generate `ConnectomeEditStepEnum` and `ConnectomeEditResultantEnum`
 create_step_and_result_enums!{
     CorticalAreaAdd,
 }
@@ -164,16 +128,16 @@ create_step_and_result_enums!{
 
 //region Cortical Areas
 
-pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> {
-    pub cortical_area_neurogenesis_dispatch: CVDW::CorticalAreaNeurogenesisDispatch,
+pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>> {
+    pub cortical_area_neurogenesis: CNMT::CorticalAreaNeurogenesis,
     _p: core::marker::PhantomData<FIQ>,
 }
 
-impl<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>> ConnectomeEditStepCorticalAreaAdd<FIQ, CVDW> {
+impl<FIQ: FeagiIndexQuantization, CNMT: ConnectomeNeuronModelTypes<FIQ>> ConnectomeEditStepCorticalAreaAdd<FIQ, CNMT> {
     /// Adds a cortical area from its neurogenesis, at whichever neuron model it uses
-    pub fn new(cortical_area_neurogenesis_dispatch: CVDW::CorticalAreaNeurogenesisDispatch) -> Self {
+    pub fn new(cortical_area_neurogenesis: CNMT::CorticalAreaNeurogenesis) -> Self {
         Self {
-            cortical_area_neurogenesis_dispatch,
+            cortical_area_neurogenesis,
             _p: core::marker::PhantomData,
         }
     }
