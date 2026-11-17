@@ -90,6 +90,45 @@ macro_rules! create_step_and_result_enums {
     }
 }
 
+
+
+
+
+pub struct ConnectomeEditSequence<FIQ: FeagiIndexQuantization> {
+    steps: Vec<ConnectomeEditStepEnum<FIQ>>,
+}
+
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditSequence<FIQ> { // TODO better support for multi engine stuff, right now this iterates 1 engine at a time!
+
+    pub fn new(steps: Vec<ConnectomeEditStepEnum<FIQ>>) -> Self {
+        Self {steps}
+    }
+
+    /// Used by the NPU to call the edit function on the burst engine
+    pub async fn build_resultant<F>(&self, f: F) -> Result<ConnectomeEditResultantSequence<FIQ>, ()>
+    where
+        F: AsyncFnMut(ConnectomeEditStepEnum<FIQ>) -> Result<Vec<ConnectomeEditResultantEnum<FIQ>>, ()>
+    {
+        let mut output: Vec<ConnectomeEditResultantEnum<FIQ>> = vec![];
+        for step in self.steps {
+            let resultant = f(step).await;
+            match resultant {
+                Ok(res) => {output.push(res)}
+                Err(err) => {return Err(())}
+            }
+        };
+        Ok(output)
+    }
+
+
+}
+
+
+pub struct ConnectomeEditResultantSequence<FIQ: FeagiIndexQuantization> {
+    steps: Vec<ConnectomeEditResultantEnum<FIQ>>,
+}
+
+/// Since the Neuron Models are made in higher level crates,
 pub trait ConnectomeVisitorDispatchWrapper<FIQ: FeagiIndexQuantization> {
     type CorticalAreaNeurogenesisDispatch: Send;
 }
@@ -98,10 +137,14 @@ pub trait ConnectomeVisitorDispatchWrapper<FIQ: FeagiIndexQuantization> {
 pub trait ConnectomeEditStepType<FIQ: FeagiIndexQuantization, CVDW: ConnectomeVisitorDispatchWrapper<FIQ>>:
 Sized + Into<ConnectomeEditStepEnum<FIQ, CVDW>> {
     /// What would be returned if everything went fine
-    type ConnectomeEditResultant: Into<ConnectomeEditResultantEnum<FIQ>>;
+    type ConnectomeEditResultant: ConnectomeEditStepResultant<FIQ>;
     /// What is returned if something when wrong
     type ConnectomeEditError: ConnectomeEditError + Into<ConnectomeEditResultantEnum<FIQ>>;
 }
+
+pub trait ConnectomeEditStepResultant<FIQ: FeagiIndexQuantization>:
+Sized + Into<ConnectomeEditResultantEnum<FIQ>>
+{}
 
 
 pub trait ConnectomeEditError: core::error::Error{
@@ -141,6 +184,8 @@ pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization>
     pub new_cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     pub visualization_start_index: NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>
 }
+
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditStepResultant<FIQ> for ConnectomeEditResultantCorticalAreaAdd<FIQ> {}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectomeEditErrorCorticalAreaAdd {

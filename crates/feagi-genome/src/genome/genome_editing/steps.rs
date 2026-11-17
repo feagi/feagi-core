@@ -4,27 +4,35 @@ use feagi_connectome::feagi_connectome_neural::neural_basis::quantization_levels
 use crate::basis::brain_region::{BrainRegionID, BrainRegionIdAndAncestryConstructor};
 use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, FauxCorticalIdentifier};
 use crate::basis::cortical_area::CorticalTypedSpawningParameters;
-use crate::genome::genome_editing::GenomeEditSequenceContext;
+use crate::genome::genome_editing::{GenomeEditSequenceContext, GenomeEditSequenceIntensity};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
 
+
+/// A edit request submitted without being verified first. Verification first checks if the request
+/// is plausible, and it used to build the `GenomeValidatedEditStep` with any additional context
+/// required
 pub(crate) trait GenomeUnvalidatedEditStep<FIQ: FeagiIndexQuantization> {
     type ValidatedStep: GenomeValidatedEditStep<FIQ>;
-    type ConnectomeStep: ConnectomeEditStepType<FIQ>;
 
-    
+
+    const INTENSITY: GenomeEditSequenceIntensity;
 }
 
 
 
-
+/// A edit step validated by genome to be valid, and that may have additional context added as a
+/// result. May need to wait on connectome step to be done to implement.
 pub(crate) trait GenomeValidatedEditStep<FIQ: FeagiIndexQuantization> {
+    type GenomeResultant: GenomeEditResultant<FIQ, ConnectomeResultant=<Self::ConnectomeStep as ConnectomeEditStepType<FIQ>>::ConnectomeEditResultant>;
+    type ConnectomeStep: ConnectomeEditStepType<FIQ>;
 
-    type GenomeResultant: GenomeEditResultant<FIQ>;
 }
 
 pub(crate) trait GenomeEditResultant<FIQ: FeagiIndexQuantization> {
     type ConnectomeResultant;
+
+
 }
 
 
