@@ -1,12 +1,10 @@
 // Stored neuron data is heap allocated
-#[cfg(feature = "alloc")]
 pub mod from_storage;
 pub mod by_generator;
 pub mod scratch_variance_defaults;
 pub mod validation;
 
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
-#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 use crate::neuron_model::neurogenesis::validation::NeurogenesisValidationError;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
@@ -50,7 +48,7 @@ where
 }
 
 /// Either kind of saveable neurogenesis data of a cortical area
-#[cfg(feature = "alloc")]
+/// 
 #[derive(Clone, Debug, Serialize, ::serde::Deserialize)]
 #[serde(bound = "")]
 pub enum NeurogenesisStorageOrGenerator<FIQ, NM>

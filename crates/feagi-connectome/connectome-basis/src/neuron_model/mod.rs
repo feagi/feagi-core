@@ -12,8 +12,8 @@ use neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults
 //pub mod interfacing;
 pub mod model_data;
 pub mod neuron_layout;
+#[cfg(feature = "alloc")]
 pub mod neurogenesis;
-pub mod metamorphosis;
 pub mod neuron_pattern;
 
 /// Describes a specific neuron model for some usecase at a specific quantization level, as well
@@ -125,7 +125,6 @@ pub trait NeuronModel: MembranePotentialQuantization {
 }
 
 
-
 /// This marker trait is used to implement per neuron model dynamics per burst engine
 /// backend. Each burst engine has an extension of this trait, then a concrete implementation
 /// per neuron model to handle its math in the way that burst engine does so. Since
@@ -136,8 +135,7 @@ pub trait NeuralBurstEngineDynamics<FIQ, NM>
 where
     FIQ: FeagiIndexQuantization,
     NM: NeuronModel,
-{
-}
+{}
 
 pub mod wrapped_indexing {
     use feagi_basis::create_wrapped_quantized_unsigned_integer;

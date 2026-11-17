@@ -1,4 +1,3 @@
-#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::NeuronModel;
@@ -15,10 +14,8 @@ where
     // new() gets defined by the impl itself
 
     /// Any other fields needed to create this from a storage generator
-    #[cfg(feature = "alloc")]
     type OtherDataNeededForFromStorage;
 
-    #[cfg(feature = "alloc")]
     fn new_from_storage(
         storage: &NeurogenesisByStorage<FIQ, NM>,
         other_data: Self::OtherDataNeededForFromStorage

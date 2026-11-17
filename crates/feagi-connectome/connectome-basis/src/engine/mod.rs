@@ -1,6 +1,5 @@
 use std::fmt::Formatter;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::FeagiChannelTransmitter;
-use crate::connectome_editing::{ConnectomeEditResultantEnum, ConnectomeEditStepEnum, ConnectomeNeuronModelTypes};
 use crate::engine::engine_change_command::EngineChangeCommandOtherError;
 use crate::quantization_levels::FeagiIndexQuantization;
 use crate::visualization::BurstVisualizationData;
@@ -12,7 +11,6 @@ pub mod engine_change_command;
 pub trait BurstEngine<FIQ, CNMT, Vis>: Sized
 where
     FIQ: FeagiIndexQuantization,
-    CNMT: ConnectomeNeuronModelTypes<FIQ>,
     // Vis TODO
 {
     /// Whatever is needed for the burst engine to init
