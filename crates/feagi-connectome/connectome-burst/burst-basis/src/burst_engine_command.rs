@@ -1,5 +1,6 @@
+use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
-
+use crate::connectome_editing::{ConnectomeEditError, ConnectomeEditStepEnum, ConnectomeEditStepResultantEnum};
 //region Root Traits
 
 /// Commands relevant to a specific burst engine
@@ -26,6 +27,7 @@ pub trait BurstEngineCommandHandler<FIQ: FeagiIndexQuantization, Command: BurstE
 pub trait BurstEngineCommandEnumHandler<FIQ: FeagiIndexQuantization>:
 Sized
 + BurstEngineCommandHandler<FIQ, BurstEngineCommandNothing>
++ BurstEngineCommandHandler<FIQ, BurstEngineCommandConnectomeEditStep<FIQ>>
 {
     async fn handle_burst_engine_command_enum(&mut self, command: BurstEngineCommandEnum<FIQ>) -> Result<BurstEngineCommandResultantEnum<FIQ>, BurstEngineCommandError<FIQ>>
     {
@@ -33,7 +35,7 @@ Sized
             BurstEngineCommandEnum::Nothing(a) => {self.handle_command(a)}
 
             #[cfg(feature = "allow-edit-commands")]
-            BurstEngineCommandEnum::EditConnectome() => {self.handle_command(a)}
+            BurstEngineCommandEnum::EditConnectomeStep(a) => {self.handle_command(a)}
         }
     }
 }
@@ -43,13 +45,13 @@ pub enum BurstEngineCommandEnum<FIQ: FeagiIndexQuantization> {
     Nothing(BurstEngineCommandNothing),
     // TODO more (in memory stuff)
     #[cfg(feature = "allow-edit-commands")]
-    EditConnectome()
+    EditConnectomeStep(BurstEngineCommandConnectomeEditStep<FIQ>)
 }
 
 pub enum BurstEngineCommandResultantEnum<FIQ: FeagiIndexQuantization> {
     Nothing(BurstEngineCommandResultantNothing),
     #[cfg(feature = "allow-edit-commands")]
-    EditConnectome()
+    EditConnectomeStep(BurstEngineCommandResultantConnectomeEditStepResultant<FIQ>)
 }
 
 //endregion
@@ -80,6 +82,35 @@ impl<FIQ: FeagiIndexQuantization> Into<BurstEngineCommandResultantEnum<FIQ>> for
 
 //endregion
 
+// TODO Edit in place
+
+// TODO Force Fire
+
+// TODO Probes
+
+//region Connectome Edit
+
+// NOTE: ConnectomeEditStepEnum<FIQ> if from another mod, as is ConnectomeEditStepResultantEnum<FIQ
+
+type BurstEngineCommandConnectomeEditStep<FIQ: FeagiIndexQuantization> = ConnectomeEditStepEnum<FIQ>;
+
+impl<FIQ: FeagiIndexQuantization> BurstEngineCommand<FIQ> for BurstEngineCommandConnectomeEditStep<FIQ> {
+    type Resultant = BurstEngineCommandResultantConnectomeEditStepResultant<FIQ>;
+}
+
+impl<FIQ: FeagiIndexQuantization> Into<BurstEngineCommandEnum<FIQ>> for BurstEngineCommandConnectomeEditStep<FIQ> {
+    fn into(self) -> BurstEngineCommandEnum<FIQ> { BurstEngineCommandEnum::EditConnectomeStep(self) }
+}
+
+type BurstEngineCommandResultantConnectomeEditStepResultant<FIQ: FeagiIndexQuantization> = ConnectomeEditStepResultantEnum<FIQ>;
+
+impl<FIQ: FeagiIndexQuantization> BurstEngineCommandResultant<FIQ> for ConnectomeEditStepResultantEnum<FIQ> {}
+
+impl<FIQ: FeagiIndexQuantization> Into<BurstEngineCommandResultantEnum<FIQ>> for ConnectomeEditStepResultantEnum<FIQ> {
+    fn into(self) -> BurstEngineCommandResultantEnum<FIQ> { BurstEngineCommandResultantEnum::EditConnectomeStep(self) }
+}
+
+//endregion
 
 
 //endregion
@@ -90,7 +121,15 @@ impl<FIQ: FeagiIndexQuantization> Into<BurstEngineCommandResultantEnum<FIQ>> for
 pub enum BurstEngineCommandError<FIQ: FeagiIndexQuantization> {
     #[error("Burst Engine has failed! {0}")]
     GeneralEngineFailure(&'static str, bool), // second bool indicates if corrupt
+    #[error("Cortical area index {0} is invalid and cannot be read for this operation")]
+    InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ>),
 
+    #[cfg(feature = "allow-edit-commands")]
+    #[error(transparent)]
+    ConnectomeEditingError {
+        completed_steps: Vec<ConnectomeEditStepResultantEnum<FIQ>>,
+        error: ConnectomeEditError<FIQ>
+    },
     #[cfg(not(feature = "allow-edit-commands"))]
     /// This is to be returned on traits implementations where editing may be disabled
     #[error("Burst Engine has received a connectome edit request, but this feature is disabled! Ignoring!")]
@@ -103,6 +142,10 @@ impl<FIQ: FeagiIndexQuantization> BurstEngineCommandError<FIQ> {
     pub fn is_connectome_corrupted(&self) -> bool {
         match &self {
             BurstEngineCommandError::GeneralEngineFailure(_, c) => {*c}
+            BurstEngineCommandError::InvalidCorticalAreaIndex(i) => {false}
+
+            #[cfg(feature = "allow-edit-commands")]
+            BurstEngineCommandError::ConnectomeEditingError {error, .. } => {error.is_corrupted()}
 
             #[cfg(not(feature = "allow-edit-commands"))]
             BurstEngineCommandError::ConnectomeEditingNotAllowed => false
