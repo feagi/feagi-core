@@ -4,63 +4,51 @@ use std::time::{Duration, Instant};
 
 
 
-/// Holds data in regards to certain timings
+/// The burst loop's schedule
 pub(crate) struct NPUTimings {
-    burst_frequency: TargetFrequency,
-    visualization_frequency: TargetFrequency,
-    /// While paused, no bursts run and the worker only waits for commands
-    paused: bool,
     when_next_burst: Instant,
     when_next_visualization: Instant
-
 }
 
 impl NPUTimings {
 
-    pub fn new(burst_frequency: TargetFrequency, visualization_frequency: TargetFrequency, paused: bool) -> Self {
-        let when_next_burst = Instant::now() + burst_frequency.duration_between_ticks();
-        let when_next_visualization = Instant::now() + visualization_frequency.duration_between_ticks();
+    /// The first burst runs immediately and sends visualization
+    pub fn new() -> Self {
+        let now = Instant::now();
         Self {
-            burst_frequency,
-            visualization_frequency,
-            paused,
-            when_next_burst,
-            when_next_visualization
+            when_next_burst: now,
+            when_next_visualization: now
         }
     }
 
-    pub fn set_burst_frequency(&mut self, frequency: TargetFrequency) {
-        if let Some(next) = frequency.duration_between_ticks().checked_sub(self.burst_frequency.duration_between_ticks()) {
-            self.when_next_burst = Instant::now() + next;
-        }
-        self.burst_frequency = frequency;
+    /// Schedules the next burst one period after the previous one, so the rate does not drift. If
+    /// the previous tick ran over, schedules from now instead of bursting to catch up
+    pub fn schedule_next_burst(&mut self, burst_frequency: TargetFrequency) {
+        self.when_next_burst = (
+            self.when_next_burst
+                + burst_frequency.duration_between_ticks()).max(Instant::now());
     }
 
-    pub fn set_visualization_frequency(&mut self, frequency: TargetFrequency) {
-        if let Some(next) = frequency.duration_between_ticks().checked_sub(self.visualization_frequency.duration_between_ticks()) {
-            self.when_next_visualization = Instant::now() + next;
-        }
-        self.visualization_frequency = frequency;
+    /// Schedules the next burst one period from now. For after a pause, where catching up makes
+    /// doesnt sense
+    pub fn schedule_next_burst_from_now(&mut self, burst_frequency: TargetFrequency) {
+        self.when_next_burst = Instant::now() + burst_frequency.duration_between_ticks();
     }
 
-    pub fn set_paused(&mut self, pause: bool) {
-        if self.paused == pause {return}
-        if !pause {
-            self.when_next_burst = Instant::now();
-            self.when_next_visualization = Instant::now();
+    /// Returns true if visualization is due, and if so schedules the next one the same way as
+    /// bursts. Only checked once per burst, so it never runs faster than the burst rate
+    pub fn take_visualization_due(&mut self, visualization_frequency: TargetFrequency) -> bool {
+        let now = Instant::now();
+        if now < self.when_next_visualization {
+            return false;
         }
-        self.paused = pause
+        self.when_next_visualization = (self.when_next_visualization + visualization_frequency.duration_between_ticks()).max(now);
+        true
     }
 
-    /// Awaits until next burst. Returns bool fo if should visualize.
-    pub async fn wait_until_burst(&mut self) -> bool {
+    /// Waits until the scheduled burst
+    pub async fn wait_for_next_burst(&self) {
         wait_until(self.when_next_burst).await;
-        self.when_next_burst += self.burst_frequency.duration_between_ticks();
-        if Instant::now() < self.when_next_visualization {
-            self.when_next_visualization += self.visualization_frequency.duration_between_ticks();
-            return true;
-        }
-        return false;
     }
 
 }
