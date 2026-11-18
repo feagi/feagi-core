@@ -467,6 +467,7 @@ use crate::{
             crate::endpoints::input::SensorSnapshotResponse,
             crate::endpoints::input::SensorTapArea,
             crate::endpoints::input::SensorTapSample,
+            crate::endpoints::input::SensorSourceFrameStats,
 
             // Physiology
             crate::v1::PhysiologyResponse,

@@ -534,8 +534,6 @@ pub async fn post_amalgamation_destination(
     let genome_service = state.genome_service.as_ref();
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
     let mut skipped_existing: Vec<String> = Vec::new();
-    let mut cloned_region_member_ids: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
 
     // Get root region ID for IPU/OPU areas
     let root_region_id = connectome_service
@@ -543,6 +541,14 @@ pub async fn post_amalgamation_destination(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get root region ID: {}", e)))?;
 
+    // Pre-pass: which guest areas already exist on the host, and which may live inside the
+    // amalgamation region tree. IPU/OPU areas go to root; modulator driver areas cannot be
+    // created without their modulator instance (the handler imports no guest modulators), so
+    // they are skipped with a warning.
+    let mut existing_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut skipped_modulator_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    let mut tree_member_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for area in imported_genome.cortical_areas.values() {
         let cortical_id = area.cortical_id.as_base_64();
         let exists = connectome_service
@@ -555,7 +561,71 @@ pub async fn post_amalgamation_destination(
                 ))
             })?;
         if exists {
+            existing_ids.insert(cortical_id);
+            continue;
+        }
+        match area.cortical_id.as_cortical_type().map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to get cortical area type for {}: {}",
+                cortical_id, e
+            ))
+        })? {
+            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
+            | feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_) => {}
+            feagi_structures::genomic::cortical_area::CorticalAreaType::Modulator => {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Skipping guest modulator driver area {}: guest modulators are not imported",
+                    cortical_id
+                );
+                skipped_modulator_ids.insert(cortical_id);
+            }
+            _ => {
+                tree_member_ids.insert(cortical_id);
+            }
+        }
+    }
+
+    // Plan the guest region tree and create sub-regions (parent before child) before any area
+    // is created, so each area's `parent_region_id` already exists.
+    let region_plan = feagi_evolutionary::plan_amalgamation_regions(
+        &imported_genome,
+        &amalgamation_id,
+        (origin_x, origin_y, origin_z),
+        &tree_member_ids,
+    );
+    for spec in &region_plan.sub_regions {
+        connectome_service
+            .create_brain_region(feagi_services::types::CreateBrainRegionParams {
+                region_id: spec.region_id.clone(),
+                name: spec.name.clone(),
+                region_type: "Custom".to_string(),
+                parent_id: Some(spec.parent_region_id.clone()),
+                properties: Some(spec.properties.clone()),
+            })
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to create amalgamation sub-region '{}': {}",
+                    spec.name, e
+                ))
+            })?;
+    }
+    let created_sub_region_count = region_plan.sub_regions.len();
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Created {} guest sub-regions under region {}",
+        created_sub_region_count,
+        amalgamation_id
+    );
+
+    for area in imported_genome.cortical_areas.values() {
+        let cortical_id = area.cortical_id.as_base_64();
+        if existing_ids.contains(&cortical_id) {
             skipped_existing.push(cortical_id);
+            continue;
+        }
+        if skipped_modulator_ids.contains(&cortical_id) {
             continue;
         }
 
@@ -598,8 +668,13 @@ pub async fn post_amalgamation_destination(
                 }
             }
             _ => {
-                // Custom, Memory, Core areas go to amalgamation region
-                amalgamation_id.clone()
+                // Custom, Memory, Core areas go to their planned guest sub-region, or to the
+                // amalgamation region when the guest lists them in no region.
+                region_plan
+                    .area_region
+                    .get(&cortical_id)
+                    .cloned()
+                    .unwrap_or_else(|| amalgamation_id.clone())
             }
         };
 
@@ -611,9 +686,6 @@ pub async fn post_amalgamation_destination(
             "amalgamation_source".to_string(),
             serde_json::json!("amalgamation_by_payload"),
         );
-        if target_parent_region_id == amalgamation_id {
-            cloned_region_member_ids.insert(cortical_id.clone());
-        }
 
         to_create.push(feagi_services::types::CreateCorticalAreaParams {
             cortical_id,
@@ -701,7 +773,7 @@ pub async fn post_amalgamation_destination(
         .cortical_areas
         .keys()
         .map(|id| id.as_base_64())
-        .filter(|id| !skipped_existing.contains(id))
+        .filter(|id| !skipped_existing.contains(id) && !skipped_modulator_ids.contains(id))
         .collect();
 
     let mut required_morphologies: std::collections::HashSet<String> =
@@ -933,10 +1005,8 @@ pub async fn post_amalgamation_destination(
 
     // Copy the source circuit's declared input/output roles onto the new region.
     // Cross-region edges are stripped on export, so connectivity alone does not restore them.
-    let (mut designated_inputs, mut designated_outputs) =
-        feagi_evolutionary::designated_io_lists_for_cloned_circuit(&imported_genome);
-    designated_inputs.retain(|id| cloned_region_member_ids.contains(id));
-    designated_outputs.retain(|id| cloned_region_member_ids.contains(id));
+    let designated_inputs = region_plan.host_designated_inputs.clone();
+    let designated_outputs = region_plan.host_designated_outputs.clone();
     if !designated_inputs.is_empty() || !designated_outputs.is_empty() {
         let mut io_properties: HashMap<String, serde_json::Value> = HashMap::new();
         io_properties.insert(
@@ -1127,6 +1197,10 @@ pub async fn post_amalgamation_destination(
         (
             "skipped_morphology_existing_count".to_string(),
             serde_json::json!(skipped_morphology_count),
+        ),
+        (
+            "created_sub_region_count".to_string(),
+            serde_json::json!(created_sub_region_count),
         ),
         (
             "post_merge_brain_region_count".to_string(),

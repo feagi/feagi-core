@@ -364,6 +364,10 @@ pub trait RuntimeService: Send + Sync {
 
     /// Register motor subscriptions with per-agent rate limits.
     ///
+    /// Output is event-based: the agent gets a frame only when a subscribed area fired, plus one
+    /// trailing empty frame when firing stops. `rate_hz` caps frames per second; firing in skipped
+    /// bursts is merged into the next frame.
+    ///
     /// # Arguments
     /// * `agent_id` - Unique agent identifier
     /// * `cortical_ids` - List of cortical IDs to subscribe to

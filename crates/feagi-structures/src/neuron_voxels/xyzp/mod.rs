@@ -5,6 +5,7 @@ mod cortical_mapped_xyzp_neuron_voxels;
 /// Simple and fast access, but not very memory efficient
 mod neuron_voxel_xyzp;
 mod neuron_voxel_xyzp_arrays;
+pub mod merge;
 
 pub use cortical_mapped_xyzp_neuron_voxels::CorticalMappedXYZPNeuronVoxels;
 pub use neuron_voxel_xyzp::NeuronVoxelXYZP;

@@ -11,6 +11,7 @@ use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use feagi_npu_runtime::StdRuntime;
 use feagi_services::impls::ConnectomeServiceImpl;
 use feagi_services::traits::ConnectomeService;
+use feagi_services::types::MappingApplyMode;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
@@ -361,14 +362,17 @@ fn test_update_cortical_mapping_is_idempotent() {
         .unwrap();
     assert_eq!(first_count, 1);
 
-    let second_count = rt
-        .block_on(service.update_cortical_mapping(
+    // Resending identical rules is a no-op: nothing is rebuilt (InPlace) and the call reports
+    // the existing synapse count, not a freshly generated one.
+    let second = rt
+        .block_on(service.update_cortical_mapping_with_mode(
             src_id.as_base_64(),
             dst_id.as_base_64(),
             mapping_rules,
         ))
         .unwrap();
-    assert_eq!(second_count, 0);
+    assert_eq!(second.apply_mode, MappingApplyMode::InPlace);
+    assert_eq!(second.synapse_count, first_count);
 
     let manager = manager_arc.read();
     assert_eq!(manager.get_outgoing_synapse_count_in_area(&src_id), 1);

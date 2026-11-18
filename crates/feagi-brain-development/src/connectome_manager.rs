@@ -55,6 +55,10 @@ use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
 use feagi_state_manager::StateManager;
 
+/// Name of the generated non-root region that receives Custom/Memory areas found in root
+/// or in no region.
+pub const RECOVERED_AREAS_REGION_NAME: &str = "Recovered Areas";
+
 const DATA_HASH_SEED: u64 = 0;
 // JSON number precision (Godot) is limited to 53 bits; mask to keep hashes stable across transports.
 const HASH_SAFE_MASK: u64 = (1u64 << 53) - 1;
@@ -2184,7 +2188,7 @@ impl ConnectomeManager {
             return Ok(Some(region));
         }
         Err(BduError::InvalidArea(format!(
-            "Generated twin of {} for memory {} cannot join root; root is reserved for core, IPU, and OPU areas",
+            "Generated twin of {} for memory {} cannot join root; root is reserved for core, IPU, OPU, and modulator areas",
             upstream_area_id.as_base_64(),
             memory_area_id.as_base_64()
         )))
@@ -7316,7 +7320,6 @@ impl ConnectomeManager {
         }
         self.refresh_all_upstream_cortical_areas_from_mappings();
         self.rebuild_memory_twin_mappings()?;
-        self.rebind_memory_twin_mappings_to_npu()?;
         self.rebind_stdp_mappings_to_npu()?;
         #[cfg(feature = "plasticity")]
         self.reregister_memory_areas_with_plasticity()?;
@@ -7335,6 +7338,96 @@ impl ConnectomeManager {
         }
     }
 
+    /// Move Custom and Memory areas that sit in root, or in no region, into one
+    /// generated non-root region named [`RECOVERED_AREAS_REGION_NAME`].
+    ///
+    /// Root is reserved for core, IPU, OPU, and modulator areas, but a genome or
+    /// connectome can list others there. Both entry points that rebuild memory
+    /// twins (genome load and connectome import) call this first, so twins then
+    /// place normally. The region is created only when a stray exists and is
+    /// reused when already present. Generated twins are skipped: twin placement
+    /// owns them. Returns the number of areas moved.
+    pub(crate) fn relocate_stray_custom_memory_areas(&mut self) -> BduResult<usize> {
+        let Some(root_id) = self.get_root_region_id() else {
+            return Ok(0);
+        };
+        let mut from_root: Vec<CorticalID> = Vec::new();
+        let mut from_none: Vec<CorticalID> = Vec::new();
+        for (area_id, area) in &self.cortical_areas {
+            if Self::area_may_join_root(area) || area.properties.contains_key("memory_twin_for") {
+                continue;
+            }
+            match self.get_parent_region_id_for_area(area_id) {
+                Some(region) if region == root_id => from_root.push(*area_id),
+                Some(_) => {}
+                None => from_none.push(*area_id),
+            }
+        }
+        if from_root.is_empty() && from_none.is_empty() {
+            return Ok(0);
+        }
+        from_root.sort_by_key(|id| id.as_base_64());
+        from_none.sort_by_key(|id| id.as_base_64());
+
+        let existing = self
+            .brain_regions
+            .get_all_region_ids()
+            .into_iter()
+            .find(|id| {
+                id.as_str() != root_id.as_str()
+                    && self
+                        .brain_regions
+                        .get_region(id)
+                        .is_some_and(|region| region.name == RECOVERED_AREAS_REGION_NAME)
+            })
+            .cloned();
+        let target_id = match existing {
+            Some(id) => id,
+            None => {
+                let region = BrainRegion::new(
+                    feagi_structures::genomic::brain_regions::RegionID::new(),
+                    RECOVERED_AREAS_REGION_NAME.to_string(),
+                    feagi_structures::genomic::RegionType::Undefined,
+                )
+                .map_err(|e| BduError::InvalidArea(e.to_string()))?;
+                let id = region.region_id.to_string();
+                self.add_brain_region(region, Some(root_id.clone()))?;
+                id
+            }
+        };
+
+        for area_id in from_root.iter().chain(from_none.iter()) {
+            if let Some(root) = self.get_brain_region_mut(&root_id) {
+                root.remove_area(area_id);
+            }
+            if let Some(region) = self.get_brain_region_mut(&target_id) {
+                region.add_area(*area_id);
+            }
+            if let Some(area) = self.cortical_areas.get_mut(area_id) {
+                area.properties
+                    .insert("parent_region_id".to_string(), serde_json::json!(target_id));
+            }
+        }
+        self.refresh_brain_regions_hash();
+        if !from_root.is_empty() {
+            info!(
+                target: "feagi-bdu",
+                "Moved {} Custom/Memory areas from root into region '{}' (root is reserved for core, IPU, OPU and modulator areas).",
+                from_root.len(),
+                RECOVERED_AREAS_REGION_NAME
+            );
+        }
+        if !from_none.is_empty() {
+            info!(
+                target: "feagi-bdu",
+                "Placed {} Custom/Memory areas that had no region into region '{}'.",
+                from_none.len(),
+                RECOVERED_AREAS_REGION_NAME
+            );
+        }
+        Ok(from_root.len() + from_none.len())
+    }
+
     /// Rebuild `memory_twin_areas` from existing twins and episodic mappings.
     ///
     /// Connectome import copies twin cortical areas and the memory-to-twin rule but
@@ -7346,6 +7439,7 @@ impl ConnectomeManager {
     /// an episodic memory-to-twin mapping is already present. A legacy
     /// `memory_replay` rule is rewritten to `episodic_memory`.
     pub fn rebuild_memory_twin_mappings(&mut self) -> BduResult<usize> {
+        self.relocate_stray_custom_memory_areas()?;
         self.purge_classifier_auto_twins()?;
         let jobs = self.collect_memory_twin_rebuild_jobs()?;
         let mut restored = 0usize;
@@ -7370,6 +7464,9 @@ impl ConnectomeManager {
             self.refresh_cortical_mappings_hash();
         }
         self.rebuild_scan_twin_mappings()?;
+        // Register every indexed twin route with the NPU. Saved twins are only re-indexed above
+        // (no synapse regeneration), so without this replay to twins stays off after a load.
+        self.rebind_memory_twin_mappings_to_npu()?;
         Ok(restored)
     }
 
@@ -14247,8 +14344,13 @@ pub(crate) mod tests {
         manager.add_cortical_area(mem_area).unwrap();
         manager.add_cortical_area(twin_area).unwrap();
 
+        let synapses_before = manager.get_synapse_count();
         manager.rebuild_memory_twin_mappings().unwrap();
-        manager.rebind_memory_twin_mappings_to_npu().unwrap();
+        assert_eq!(
+            manager.get_synapse_count(),
+            synapses_before,
+            "rebinding a saved twin must not regenerate synapses"
+        );
 
         let indexed = manager
             .get_cortical_area(&mem_id)
@@ -14384,6 +14486,213 @@ pub(crate) mod tests {
                 .unwrap()
                 .contains_area(&missing_twin_id));
         }
+    }
+
+    // ---- Stray Custom/Memory area repair (root membership or no region) ----
+
+    fn stray_fixture(
+        stray_in_root: bool,
+    ) -> (
+        ConnectomeManager,
+        String,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+    ) {
+        use feagi_structures::genomic::brain_regions::RegionID;
+        use feagi_structures::genomic::cortical_area::{CustomCorticalType, MemoryCorticalType};
+        let mut manager = ConnectomeManager::new_for_testing();
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+        let root = BrainRegion::new(
+            RegionID::new(),
+            "root".to_string(),
+            crate::models::RegionType::Undefined,
+        )
+        .unwrap();
+        let root_id = root.region_id.to_string();
+        manager.add_brain_region(root, None).unwrap();
+
+        let up_id = CorticalID::try_from_bytes(b"cstr0001").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mstr0001").unwrap();
+        let ipu_id = CorticalID::try_from_bytes(b"cstr0002").unwrap();
+        let dims = CorticalAreaDimensions::new(1, 1, 1).unwrap();
+        let up = CorticalArea::new(
+            up_id,
+            0,
+            "upstream".to_string(),
+            dims,
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "memory".to_string(),
+            dims,
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        let mut up = up;
+        up.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ mem_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        manager.add_cortical_area(up).unwrap();
+        manager.add_cortical_area(mem).unwrap();
+        if stray_in_root {
+            let root = manager.get_brain_region_mut(&root_id).unwrap();
+            root.add_area(up_id);
+            root.add_area(mem_id);
+        }
+        (manager, root_id, up_id, mem_id, ipu_id)
+    }
+
+    fn assert_strays_repaired(manager: &ConnectomeManager, root_id: &str, ids: &[CorticalID]) {
+        let recovered: Vec<String> = manager
+            .get_brain_region_ids()
+            .into_iter()
+            .filter(|id| {
+                manager
+                    .get_brain_region(id)
+                    .is_some_and(|r| r.name == RECOVERED_AREAS_REGION_NAME)
+            })
+            .cloned()
+            .collect();
+        assert_eq!(recovered.len(), 1, "exactly one Recovered Areas region");
+        let region = manager.get_brain_region(&recovered[0]).unwrap();
+        assert_eq!(
+            manager
+                .get_brain_region_hierarchy()
+                .get_parent(&recovered[0])
+                .map(|p| p.to_string()),
+            Some(root_id.to_string())
+        );
+        for id in ids {
+            assert!(region.contains_area(id));
+            assert!(!manager.get_brain_region(root_id).unwrap().contains_area(id));
+        }
+    }
+
+    fn twin_of(manager: &ConnectomeManager, up: &CorticalID, mem: &CorticalID) -> CorticalID {
+        let twin = manager
+            .get_cortical_area(mem)
+            .and_then(|a| a.properties.get("memory_twin_areas"))
+            .and_then(|v| v.get(up.as_base_64()))
+            .and_then(|v| v.as_str())
+            .and_then(|s| CorticalID::try_from_base_64(s).ok())
+            .expect("twin must be indexed");
+        assert!(manager.has_cortical_area(&twin));
+        twin
+    }
+
+    #[test]
+    fn strays_in_root_are_moved_and_twin_places_on_rebuild() {
+        let (mut manager, root_id, up, mem, _) = stray_fixture(true);
+        manager.rebuild_memory_twin_mappings().expect("rebuild");
+        assert_strays_repaired(&manager, &root_id, &[up, mem]);
+        let twin = twin_of(&manager, &up, &mem);
+        let twin_region = manager.get_parent_region_id_for_area(&twin).unwrap();
+        assert_ne!(twin_region, root_id);
+    }
+
+    #[test]
+    fn strays_in_no_region_are_placed_and_twin_places_on_rebuild() {
+        let (mut manager, root_id, up, mem, _) = stray_fixture(false);
+        assert!(manager.get_parent_region_id_for_area(&mem).is_none());
+        manager.rebuild_memory_twin_mappings().expect("rebuild");
+        assert_strays_repaired(&manager, &root_id, &[up, mem]);
+        let twin = twin_of(&manager, &up, &mem);
+        assert_ne!(
+            manager.get_parent_region_id_for_area(&twin).unwrap(),
+            root_id
+        );
+    }
+
+    #[test]
+    fn stray_repair_survives_save_and_reload() {
+        use feagi_evolutionary::{
+            convert_hierarchical_to_flat, load_genome_from_json, GenomeMetadata, GenomeSignatures,
+            GenomeStats, PhysiologyConfig, RuntimeGenome,
+        };
+        let (mut manager, root_id, up, mem, _) = stray_fixture(true);
+        manager.rebuild_memory_twin_mappings().expect("rebuild");
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "stray-round-trip".to_string(),
+                genome_title: "stray".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(root_id.clone()),
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        for id in manager.get_cortical_area_ids() {
+            genome
+                .cortical_areas
+                .insert(*id, manager.get_cortical_area(id).unwrap().clone());
+        }
+        for region_id in manager.get_brain_region_ids() {
+            let mut region = manager.get_brain_region(region_id).unwrap().clone();
+            if let Some(parent) = manager.get_brain_region_hierarchy().get_parent(region_id) {
+                region.add_property("parent_region_id".to_string(), serde_json::json!(parent));
+            }
+            genome.brain_regions.insert(region_id.clone(), region);
+        }
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let loaded = load_genome_from_json(&flat.to_string()).unwrap();
+        let recovered = loaded
+            .brain_regions
+            .values()
+            .find(|r| r.name == RECOVERED_AREAS_REGION_NAME)
+            .expect("Recovered Areas must survive save and reload");
+        assert!(recovered.contains_area(&up) && recovered.contains_area(&mem));
+        for region in loaded.brain_regions.values() {
+            if region.name != RECOVERED_AREAS_REGION_NAME {
+                assert!(!region.contains_area(&up) && !region.contains_area(&mem));
+            }
+        }
+    }
+
+    #[test]
+    fn clean_hierarchy_gets_no_recovered_areas_region() {
+        let (mut manager, root_id, up, mem, _) = stray_fixture(false);
+        use feagi_structures::genomic::brain_regions::RegionID;
+        let circuit = BrainRegion::new(
+            RegionID::new(),
+            "circuit".to_string(),
+            crate::models::RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([up, mem]);
+        manager.add_brain_region(circuit, Some(root_id)).unwrap();
+        let before = manager.get_brain_region_ids().len();
+        manager.rebuild_memory_twin_mappings().expect("rebuild");
+        assert_eq!(manager.get_brain_region_ids().len(), before);
+        assert!(manager.get_brain_region_ids().into_iter().all(|id| manager
+            .get_brain_region(id)
+            .unwrap()
+            .name
+            != RECOVERED_AREAS_REGION_NAME));
     }
 
     #[test]

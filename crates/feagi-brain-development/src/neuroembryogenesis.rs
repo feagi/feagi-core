@@ -2015,6 +2015,257 @@ mod tests {
         );
     }
 
+    /// Loads a genome whose explicit root region holds the given stray placement, then
+    /// returns the manager and the ids (upstream, memory).
+    fn develop_genome_with_strays(
+        place_in_root: bool,
+        place_in_circuit: bool,
+    ) -> (Arc<RwLock<ConnectomeManager>>, CorticalID, CorticalID) {
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+        let runtime = feagi_npu_runtime::StdRuntime;
+        let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+        let npu = feagi_npu_burst_engine::RustNPU::new(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU");
+        let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "stray-load-test-npu",
+        ));
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu,
+        )));
+        let mut neuro = Neuroembryogenesis::new(manager.clone());
+        let mut genome =
+            create_genome_with_core_morphologies("stray_load".to_string(), "Stray".to_string());
+        let upstream_id = CorticalID::try_from_bytes(b"cupa0031").unwrap();
+        let memory_id = CorticalID::try_from_bytes(b"mmem0031").unwrap();
+        let mut upstream = CorticalArea::new(
+            upstream_id,
+            0,
+            "upstream".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        upstream.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ memory_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut memory = CorticalArea::new(
+            memory_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        genome.cortical_areas.insert(upstream_id, upstream);
+        genome.cortical_areas.insert(memory_id, memory);
+
+        let mut root = BrainRegion::new(
+            RegionID::new(),
+            ROOT_BRAIN_REGION_NAME.to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        if place_in_root {
+            root = root.with_areas([upstream_id, memory_id]);
+        }
+        let root_key = root.region_id.to_string();
+        genome.brain_regions.insert(root_key.clone(), root);
+        if place_in_circuit {
+            let mut circuit = BrainRegion::new(
+                RegionID::new(),
+                "circuit".to_string(),
+                RegionType::Undefined,
+            )
+            .unwrap()
+            .with_areas([upstream_id, memory_id]);
+            circuit.add_property("parent_region_id".to_string(), serde_json::json!(root_key));
+            genome
+                .brain_regions
+                .insert(circuit.region_id.to_string(), circuit);
+        }
+        neuro
+            .develop_from_genome(&genome)
+            .expect("load must repair strays instead of failing");
+        (manager, upstream_id, memory_id)
+    }
+
+    fn recovered_region_ids(manager: &Arc<RwLock<ConnectomeManager>>) -> Vec<String> {
+        let guard = manager.read();
+        guard
+            .get_brain_region_ids()
+            .into_iter()
+            .filter(|id| {
+                guard.get_brain_region(id).is_some_and(|r| {
+                    r.name == crate::connectome_manager::RECOVERED_AREAS_REGION_NAME
+                })
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn assert_stray_load_repaired(
+        manager: &Arc<RwLock<ConnectomeManager>>,
+        upstream_id: CorticalID,
+        memory_id: CorticalID,
+    ) {
+        let recovered = recovered_region_ids(manager);
+        assert_eq!(recovered.len(), 1);
+        let guard = manager.read();
+        let root_id = guard.get_root_region_id().unwrap();
+        let region = guard.get_brain_region(&recovered[0]).unwrap();
+        assert!(region.contains_area(&upstream_id) && region.contains_area(&memory_id));
+        let root = guard.get_brain_region(&root_id).unwrap();
+        assert!(!root.contains_area(&upstream_id) && !root.contains_area(&memory_id));
+        let twin_id = guard
+            .get_cortical_area(&memory_id)
+            .and_then(|area| area.properties.get("memory_twin_areas"))
+            .and_then(|value| value.get(upstream_id.as_base_64()))
+            .and_then(|value| value.as_str())
+            .and_then(|twin| CorticalID::try_from_base_64(twin).ok())
+            .expect("twin must be created");
+        let twin_region = guard.get_parent_region_id_for_area(&twin_id).unwrap();
+        assert_ne!(twin_region, root_id, "twin must not sit in root");
+    }
+
+    #[test]
+    fn genome_load_moves_custom_and_memory_areas_out_of_root() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (manager, up, mem) = develop_genome_with_strays(true, false);
+        assert_stray_load_repaired(&manager, up, mem);
+    }
+
+    #[test]
+    fn genome_load_places_custom_and_memory_areas_without_a_region() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (manager, up, mem) = develop_genome_with_strays(false, false);
+        assert_stray_load_repaired(&manager, up, mem);
+    }
+
+    #[test]
+    fn genome_load_of_clean_regions_creates_no_recovered_areas_region() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (manager, _, _) = develop_genome_with_strays(false, true);
+        assert!(recovered_region_ids(&manager).is_empty());
+    }
+
+    /// A genome with a saved memory twin must register the twin's replay route with the NPU on
+    /// load, without adding or regenerating anything: replay to twins is off without the route.
+    #[test]
+    fn genome_load_registers_saved_twin_route_with_npu() {
+        let _state_guard = crate::connectome_manager::tests::PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+
+        let runtime = feagi_npu_runtime::StdRuntime;
+        let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+        let npu = feagi_npu_burst_engine::RustNPU::new(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU");
+        let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "saved-twin-load-test-npu",
+        ));
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            npu.clone(),
+        )));
+        let mut neuro = Neuroembryogenesis::new(manager.clone());
+        let mut genome = create_genome_with_core_morphologies(
+            "saved_twin".to_string(),
+            "Saved Twin".to_string(),
+        );
+        let upstream_id = CorticalID::try_from_bytes(b"cupa0031").unwrap();
+        let memory_id = CorticalID::try_from_bytes(b"mmem0031").unwrap();
+        // Not the hash-derived twin id, as in a genome saved by an older build.
+        let twin_id = CorticalID::try_from_bytes(b"ctwin031").unwrap();
+        let lif = |id: CorticalID, name: &str| {
+            CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let mut upstream = lif(upstream_id, "upstream");
+        upstream.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ memory_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut memory = CorticalArea::new(
+            memory_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        memory.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ twin_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut twin = lif(twin_id, "upstream_twin");
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(upstream_id.as_base_64()),
+        );
+        genome.cortical_areas.insert(upstream_id, upstream);
+        genome.cortical_areas.insert(memory_id, memory);
+        genome.cortical_areas.insert(twin_id, twin);
+
+        neuro
+            .develop_from_genome(&genome)
+            .expect("development must succeed");
+
+        let (mem_idx, up_idx, twin_idx, area_count) = {
+            let guard = manager.read();
+            assert!(guard.has_cortical_area(&twin_id), "the saved twin is kept");
+            (
+                guard.get_cortical_idx(&memory_id).unwrap(),
+                guard.get_cortical_idx(&upstream_id).unwrap(),
+                guard.get_cortical_idx(&twin_id).unwrap(),
+                guard.get_cortical_area_ids().len(),
+            )
+        };
+        let route = npu
+            .lock()
+            .unwrap()
+            .get_memory_twin_mapping(mem_idx, up_idx)
+            .map(|(idx, _)| idx);
+        assert_eq!(
+            route,
+            Some(twin_idx),
+            "load must register the saved twin route"
+        );
+        assert_eq!(
+            area_count, 3,
+            "the saved twin is reused, no second twin is created"
+        );
+    }
+
     /// Genome load must refresh a reward-trained classifier's stored eligibility: the mapping
     /// rules only exist once synaptogenesis has run.
     #[test]

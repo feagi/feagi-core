@@ -128,6 +128,10 @@ pub struct MotorTapAgent {
     pub published: bool,
     pub last_error: String,
     pub subscribed_cortical_ids: Vec<String>,
+    /// Cumulative frames successfully published to this agent.
+    pub frames_published: u64,
+    /// Cumulative trailing empty ("output ended") frames among `frames_published`.
+    pub trailing_empty_frames: u64,
 }
 
 /// Read-only spike-cost / activity aggregate for a burst's tap snapshot.
@@ -272,6 +276,8 @@ pub async fn get_motor_snapshot_last(
             published: stats.published,
             last_error: stats.last_error,
             subscribed_cortical_ids: stats.subscribed_cortical_ids,
+            frames_published: stats.frames_published,
+            trailing_empty_frames: stats.trailing_empty_frames,
         })
         .collect();
     agents.sort_by(|a, b| a.agent_id.cmp(&b.agent_id));

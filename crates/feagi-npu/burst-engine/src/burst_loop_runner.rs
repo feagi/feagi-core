@@ -28,6 +28,9 @@ use crate::update_sim_timestep_from_hz;
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::merge::{
+    io_merge_mode_for_cortical_id, merge_area_voxels, IoMergeMode,
+};
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -1322,6 +1325,86 @@ fn encode_fire_data_to_xyzp(
     Ok(buffer)
 }
 
+/// Merge mode for a motor area from its base64 cortical id; the rule lives in
+/// `feagi_structures::neuron_voxels::xyzp::merge`. Unparseable ids use `Latest`.
+fn motor_merge_mode_for_cortical_id(cortical_id_base64: &str) -> IoMergeMode {
+    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(cortical_id_base64)
+    {
+        Ok(id) => io_merge_mode_for_cortical_id(&id),
+        Err(_) => IoMergeMode::Latest,
+    }
+}
+
+/// Fold one burst's firing for an area (`new`) into the firing already pending for it.
+fn merge_motor_area_firing(
+    pending: &mut RawFireQueueData,
+    new: RawFireQueueData,
+    mode: IoMergeMode,
+) {
+    if mode == IoMergeMode::Latest {
+        *pending = new;
+        return;
+    }
+    let RawFireQueueData {
+        neuron_ids,
+        coords_x,
+        coords_y,
+        coords_z,
+        potentials,
+        ..
+    } = pending;
+    merge_area_voxels(
+        (coords_x, coords_y, coords_z, potentials),
+        (&new.coords_x, &new.coords_y, &new.coords_z, &new.potentials),
+        mode,
+        |i| neuron_ids.push(new.neuron_ids.get(i).copied().unwrap_or(0)),
+    );
+}
+
+/// Per-agent motor publish state for event-based output.
+#[derive(Default)]
+struct MotorAgentState {
+    /// Firing collected since the last publish, per area (merged across skipped bursts).
+    pending: RawFireQueueSnapshot,
+    /// True when the last published frame carried firing (an empty frame is owed on silence).
+    last_published_firing: bool,
+}
+
+impl MotorAgentState {
+    /// Fold this burst's firing in. Areas merge by their IO data flag.
+    fn absorb(&mut self, fired: RawFireQueueSnapshot) {
+        for (area_idx, data) in fired {
+            match self.pending.get_mut(&area_idx) {
+                Some(existing) => {
+                    let mode = motor_merge_mode_for_cortical_id(&data.cortical_id);
+                    merge_motor_area_firing(existing, data, mode);
+                }
+                None => {
+                    self.pending.insert(area_idx, data);
+                }
+            }
+        }
+    }
+
+    /// What to send now: `Some(true)` a frame with firing, `Some(false)` the single trailing
+    /// empty frame, `None` nothing (silent and already told the receiver).
+    fn frame_to_send(&self) -> Option<bool> {
+        if !self.pending.is_empty() {
+            Some(true)
+        } else if self.last_published_firing {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Record a successful publish of the frame `frame_to_send` described.
+    fn mark_published(&mut self, carried_firing: bool) {
+        self.pending.clear();
+        self.last_published_firing = carried_firing;
+    }
+}
+
 /// Helper to get timestamp string with millisecond precision
 fn get_timestamp() -> String {
     let now = std::time::SystemTime::now();
@@ -1412,181 +1495,273 @@ fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
     Ok(out)
 }
 
+/// Keep every payload that met the burst deadline, in arrival order; drop stale ones.
+///
+/// Returns the fresh payloads and the number dropped as stale. Several frames from one
+/// source are all kept: they are merged per cortical area by encoding
+/// (`merge_decoded_sensory`), so a brief event in an earlier frame is not lost.
+#[cfg(test)]
 fn select_fresh_payloads_for_burst(
     burst_start: Instant,
     max_age: Duration,
     payloads: Vec<SensoryIngressPayload>,
-) -> (Vec<SensoryIngressPayload>, usize, usize) {
-    let mut dropped_stale_payloads: usize = 0;
-    let mut dropped_collapsed_payloads: usize = 0;
-    let mut latest_by_source: ahash::AHashMap<String, SensoryIngressPayload> =
-        ahash::AHashMap::new();
-    let mut latest_source_less_payload: Option<SensoryIngressPayload> = None;
+) -> (Vec<SensoryIngressPayload>, usize) {
+    let (fresh, stale_sources) =
+        select_fresh_payloads_with_stale_sources(burst_start, max_age, payloads);
+    (fresh, stale_sources.len())
+}
 
+/// Tally slot for `source` (`None` goes under the unknown bucket); clones the id only when new.
+fn tally_source<'a>(
+    tallies: &'a mut ahash::AHashMap<String, crate::runtime_taps::BurstSourceTally>,
+    source: Option<&str>,
+) -> &'a mut crate::runtime_taps::BurstSourceTally {
+    let id = source.unwrap_or(crate::runtime_taps::UNKNOWN_SOURCE);
+    if !tallies.contains_key(id) {
+        tallies.insert(id.to_string(), Default::default());
+    }
+    tallies.get_mut(id).expect("just inserted")
+}
+
+/// Same selection as [`select_fresh_payloads_for_burst`], but returns the source id of each
+/// stale payload (allocates only for the rare stale payload) for per-source frame stats.
+fn select_fresh_payloads_with_stale_sources(
+    burst_start: Instant,
+    max_age: Duration,
+    payloads: Vec<SensoryIngressPayload>,
+) -> (Vec<SensoryIngressPayload>, Vec<Option<String>>) {
+    let mut stale_sources: Vec<Option<String>> = Vec::new();
+    let mut fresh: Vec<SensoryIngressPayload> = Vec::with_capacity(payloads.len());
     for payload in payloads {
         let age = burst_start.saturating_duration_since(payload.received_at);
         if age > max_age {
-            dropped_stale_payloads = dropped_stale_payloads.saturating_add(1);
-            continue;
-        }
-
-        if let Some(source_id) = payload.source_id.clone() {
-            latest_by_source.insert(source_id, payload);
-        } else if latest_source_less_payload.replace(payload).is_some() {
-            dropped_collapsed_payloads = dropped_collapsed_payloads.saturating_add(1);
+            stale_sources.push(payload.source_id);
+        } else {
+            fresh.push(payload);
         }
     }
+    (fresh, stale_sources)
+}
 
-    let mut selected_payloads: Vec<SensoryIngressPayload> =
-        latest_by_source.into_values().collect();
-    if let Some(payload) = latest_source_less_payload {
-        selected_payloads.push(payload);
+/// Merge decoded frames (in arrival order) into one frame per cortical area, by the area's
+/// IO encoding: absolute or no flag keeps the latest frame's voxels, incremental sums
+/// potentials per voxel, boolean/event unions voxels. Areas in one frame pass through.
+fn merge_decoded_sensory(mut frames: Vec<SensoryXyzpDecoded>) -> SensoryXyzpDecoded {
+    if frames.len() <= 1 {
+        return frames.pop().unwrap_or_default();
     }
-    (
-        selected_payloads,
-        dropped_stale_payloads,
-        dropped_collapsed_payloads,
-    )
+    let mut merged: SensoryXyzpDecoded = Vec::new();
+    let mut at: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, usize> =
+        ahash::AHashMap::new();
+    for frame in frames {
+        for (cortical_id, xyzp) in frame {
+            match at.get(&cortical_id) {
+                None => {
+                    at.insert(cortical_id, merged.len());
+                    merged.push((cortical_id, xyzp));
+                }
+                Some(&idx) => {
+                    let mode = io_merge_mode_for_cortical_id(&cortical_id);
+                    let pending = &mut merged[idx].1;
+                    if mode == IoMergeMode::Latest {
+                        *pending = xyzp;
+                        continue;
+                    }
+                    let mut px: Vec<u32> = pending.iter().map(|v| v.0).collect();
+                    let mut py: Vec<u32> = pending.iter().map(|v| v.1).collect();
+                    let mut pz: Vec<u32> = pending.iter().map(|v| v.2).collect();
+                    let mut pp: Vec<f32> = pending.iter().map(|v| v.3).collect();
+                    let nx: Vec<u32> = xyzp.iter().map(|v| v.0).collect();
+                    let ny: Vec<u32> = xyzp.iter().map(|v| v.1).collect();
+                    let nz: Vec<u32> = xyzp.iter().map(|v| v.2).collect();
+                    let np: Vec<f32> = xyzp.iter().map(|v| v.3).collect();
+                    merge_area_voxels(
+                        (&mut px, &mut py, &mut pz, &mut pp),
+                        (&nx, &ny, &nz, &np),
+                        mode,
+                        |_| {},
+                    );
+                    *pending = (0..px.len())
+                        .map(|i| (px[i], py[i], pz[i], pp[i]))
+                        .collect();
+                }
+            }
+        }
+    }
+    merged
 }
 
 #[cfg(test)]
 mod sensory_ingest_tests {
-    use super::{select_fresh_payloads_for_burst, SensoryIngressPayload};
+    use super::{
+        decode_sensory_bytes, merge_decoded_sensory, select_fresh_payloads_for_burst,
+        SensoryIngressPayload, SensoryXyzpDecoded,
+    };
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, PercentageNeuronPositioning,
+    };
+    use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaConfigurationFlag};
+    use feagi_structures::neuron_voxels::xyzp::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    };
     use std::time::{Duration, Instant};
 
+    fn payload(b: u8, source: Option<&str>, received_at: Instant) -> SensoryIngressPayload {
+        SensoryIngressPayload {
+            bytes: vec![b],
+            source_id: source.map(str::to_string),
+            received_at,
+        }
+    }
+
+    fn io_id(flag: IOCorticalAreaConfigurationFlag) -> CorticalID {
+        flag.as_io_cortical_id(true, *b"tst", 0u16.into(), 0u8.into())
+    }
+
+    fn boolean_id() -> CorticalID {
+        io_id(IOCorticalAreaConfigurationFlag::Boolean)
+    }
+
+    fn percentage_id(frame: FrameChangeHandling) -> CorticalID {
+        io_id(IOCorticalAreaConfigurationFlag::Percentage(
+            frame,
+            PercentageNeuronPositioning::Linear,
+        ))
+    }
+
+    /// Encode one frame (single area) the way an agent sends it.
+    fn encode_frame(id: CorticalID, voxels: &[(u32, u32, u32, f32)]) -> Vec<u8> {
+        let mut arrays = NeuronVoxelXYZPArrays::new();
+        for (x, y, z, p) in voxels {
+            arrays.push_raw(*x, *y, *z, *p);
+        }
+        let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
+        mapped.insert(id, arrays);
+        let mut container = feagi_serialization::FeagiByteContainer::new_empty();
+        container
+            .overwrite_byte_data_with_single_struct_data(&mapped, 0)
+            .unwrap();
+        container.get_byte_ref().to_vec()
+    }
+
+    fn sorted(frame: &SensoryXyzpDecoded, id: &CorticalID) -> Vec<(u32, u32, u32, f32)> {
+        let mut v = frame
+            .iter()
+            .find(|(i, _)| i == id)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+        v.sort_by_key(|a| (a.0, a.1, a.2));
+        v
+    }
+
     #[test]
-    fn keeps_only_latest_payload_per_source() {
+    fn keeps_every_fresh_payload_in_arrival_order() {
         let now = Instant::now();
         let payloads = vec![
-            SensoryIngressPayload {
-                bytes: vec![1],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(2),
-            },
-            SensoryIngressPayload {
-                bytes: vec![2],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(1),
-            },
-            SensoryIngressPayload {
-                bytes: vec![3],
-                source_id: Some("agent-b".to_string()),
-                received_at: now - Duration::from_millis(1),
-            },
+            payload(1, Some("agent-a"), now - Duration::from_millis(2)),
+            payload(2, Some("agent-a"), now - Duration::from_millis(1)),
+            payload(3, Some("agent-b"), now - Duration::from_millis(1)),
         ];
-
-        let (selected, dropped, collapsed) =
+        let (selected, dropped) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 0);
-        assert_eq!(collapsed, 0);
-        assert_eq!(selected.len(), 2);
-
-        let mut by_source = std::collections::HashMap::new();
-        for payload in selected {
-            by_source.insert(payload.source_id.unwrap_or_default(), payload.bytes[0]);
-        }
-        assert_eq!(by_source.get("agent-a"), Some(&2));
-        assert_eq!(by_source.get("agent-b"), Some(&3));
+        let order: Vec<u8> = selected.iter().map(|p| p.bytes[0]).collect();
+        assert_eq!(order, vec![1, 2, 3]);
     }
 
     #[test]
     fn drops_stale_payloads_by_burst_deadline() {
         let now = Instant::now();
         let payloads = vec![
-            SensoryIngressPayload {
-                bytes: vec![1],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(50),
-            },
-            SensoryIngressPayload {
-                bytes: vec![2],
-                source_id: Some("agent-b".to_string()),
-                received_at: now - Duration::from_millis(2),
-            },
+            payload(1, Some("agent-a"), now - Duration::from_millis(50)),
+            payload(2, Some("agent-b"), now - Duration::from_millis(2)),
         ];
-
-        let (selected, dropped, collapsed) =
+        let (selected, dropped) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 1);
-        assert_eq!(collapsed, 0);
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].source_id.as_deref(), Some("agent-b"));
         assert_eq!(selected[0].bytes, vec![2]);
     }
 
     #[test]
-    fn interleaved_agents_remain_isolated_in_same_burst() {
+    fn source_less_payloads_are_all_kept() {
         let now = Instant::now();
         let payloads = vec![
-            SensoryIngressPayload {
-                bytes: vec![10],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(6),
-            },
-            SensoryIngressPayload {
-                bytes: vec![20],
-                source_id: Some("agent-b".to_string()),
-                received_at: now - Duration::from_millis(5),
-            },
-            SensoryIngressPayload {
-                bytes: vec![11],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(3),
-            },
-            SensoryIngressPayload {
-                bytes: vec![21],
-                source_id: Some("agent-b".to_string()),
-                received_at: now - Duration::from_millis(2),
-            },
-            SensoryIngressPayload {
-                bytes: vec![12],
-                source_id: Some("agent-a".to_string()),
-                received_at: now - Duration::from_millis(1),
-            },
+            payload(1, None, now - Duration::from_millis(3)),
+            payload(2, None, now - Duration::from_millis(2)),
+            payload(3, None, now - Duration::from_millis(1)),
         ];
-
-        let (selected, dropped, collapsed) =
+        let (selected, dropped) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 0);
-        assert_eq!(collapsed, 0);
-        assert_eq!(selected.len(), 2);
-
-        let mut by_source = std::collections::HashMap::new();
-        for payload in selected {
-            by_source.insert(payload.source_id.unwrap_or_default(), payload.bytes[0]);
-        }
-        assert_eq!(by_source.get("agent-a"), Some(&12));
-        assert_eq!(by_source.get("agent-b"), Some(&21));
+        assert_eq!(selected.len(), 3);
     }
 
     #[test]
-    fn source_less_payloads_are_coalesced_to_latest_only() {
-        let now = Instant::now();
-        let payloads = vec![
-            SensoryIngressPayload {
-                bytes: vec![1],
-                source_id: None,
-                received_at: now - Duration::from_millis(3),
-            },
-            SensoryIngressPayload {
-                bytes: vec![2],
-                source_id: None,
-                received_at: now - Duration::from_millis(2),
-            },
-            SensoryIngressPayload {
-                bytes: vec![3],
-                source_id: None,
-                received_at: now - Duration::from_millis(1),
-            },
-        ];
+    fn merge_single_frame_passes_through() {
+        let id = boolean_id();
+        let frame: SensoryXyzpDecoded = vec![(id, vec![(1, 2, 3, 4.0)])];
+        let out = merge_decoded_sensory(vec![frame.clone()]);
+        assert_eq!(out, frame);
+    }
 
-        let (selected, dropped, collapsed) =
+    #[test]
+    fn merge_absolute_keeps_latest_frame() {
+        let id = percentage_id(FrameChangeHandling::Absolute);
+        let out = merge_decoded_sensory(vec![
+            vec![(id, vec![(0, 0, 0, 1.0)])],
+            vec![(id, vec![(1, 0, 0, 2.0)])],
+        ]);
+        assert_eq!(sorted(&out, &id), vec![(1, 0, 0, 2.0)]);
+    }
+
+    #[test]
+    fn merge_incremental_sums_potentials() {
+        let id = percentage_id(FrameChangeHandling::Incremental);
+        let out = merge_decoded_sensory(vec![
+            vec![(id, vec![(0, 0, 0, 1.0)])],
+            vec![(id, vec![(0, 0, 0, 2.0), (1, 0, 0, 5.0)])],
+        ]);
+        assert_eq!(sorted(&out, &id), vec![(0, 0, 0, 3.0), (1, 0, 0, 5.0)]);
+    }
+
+    #[test]
+    fn merge_boolean_unions_and_other_areas_pass_through() {
+        let b = boolean_id();
+        let a = percentage_id(FrameChangeHandling::Absolute);
+        let out = merge_decoded_sensory(vec![
+            vec![(b, vec![(0, 0, 0, 1.0)]), (a, vec![(9, 9, 9, 9.0)])],
+            vec![(b, vec![(1, 0, 0, 1.0)])],
+        ]);
+        assert_eq!(sorted(&out, &b), vec![(0, 0, 0, 1.0), (1, 0, 0, 1.0)]);
+        assert_eq!(sorted(&out, &a), vec![(9, 9, 9, 9.0)]);
+    }
+
+    #[test]
+    fn brief_event_in_first_of_two_payloads_is_still_injected() {
+        // Two frames in one burst; only the first carries the boolean event.
+        let id = boolean_id();
+        let now = Instant::now();
+        let mk = |bytes: Vec<u8>, ms: u64| SensoryIngressPayload {
+            bytes,
+            source_id: Some("agent-a".to_string()),
+            received_at: now - Duration::from_millis(ms),
+        };
+        let payloads = vec![
+            mk(encode_frame(id, &[(4, 0, 0, 1.0)]), 2),
+            mk(encode_frame(id, &[]), 1),
+        ];
+        let (fresh, dropped) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 0);
-        assert_eq!(collapsed, 2);
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].source_id, None);
-        assert_eq!(selected[0].bytes, vec![3]);
+        let frames: Vec<SensoryXyzpDecoded> = fresh
+            .iter()
+            .filter_map(|p| decode_sensory_bytes(&p.bytes).ok())
+            .filter(|d| !d.is_empty())
+            .collect();
+        let merged = merge_decoded_sensory(frames);
+        assert_eq!(sorted(&merged, &id), vec![(4, 0, 0, 1.0)]);
     }
 }
 
@@ -1917,6 +2092,8 @@ fn burst_loop(
     // This avoids log spam during reconnect races while preserving automatic retry behavior.
     let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
     let mut missing_motor_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
+    // Event-based motor output state per agent (pending merged firing, trailing-frame flag).
+    let mut motor_agent_state: ahash::AHashMap<String, MotorAgentState> = ahash::AHashMap::new();
 
     // Gap-tracking statics (hoisted so a pause gap can be cleared on resume).
     static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -2019,12 +2196,14 @@ fn burst_loop(
         }
 
         // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock.
-        // Drain all currently available payloads, keep only the newest packet per source,
+        // Drain all currently available payloads, merge fresh ones per area by encoding,
         // and drop stale packets that missed the realtime burst deadline.
         let mut sensory_xyzp_batches: Vec<SensoryXyzpDecoded> = Vec::new();
         let mut dropped_stale_payloads: usize = 0;
-        let mut collapsed_payloads: usize = 0;
         let mut sequential_queue_dropped: usize = 0;
+        // Per-source frame tallies for the sensor tap (id cloned only for a new source).
+        let mut frame_tallies: ahash::AHashMap<String, crate::runtime_taps::BurstSourceTally> =
+            ahash::AHashMap::new();
         let burst_max_sensory_age = if current_frequency_hz > 0.0 {
             Duration::from_secs_f64(1.0 / current_frequency_hz)
         } else {
@@ -2048,6 +2227,10 @@ fn burst_loop(
                             ingest.carries_ordered_areas(payload.source_id.as_deref())
                         });
                     drained_payloads = others;
+                    for payload in &ordered {
+                        tally_source(&mut frame_tallies, payload.source_id.as_deref())
+                            .sequential += 1;
+                    }
                     for payload in ordered {
                         match decode_sensory_bytes(&payload.bytes) {
                             Ok(mut decoded) => {
@@ -2070,15 +2253,22 @@ fn burst_loop(
                     }
                 }
 
-                let (selected_payloads, dropped_count, collapsed_count) =
-                    select_fresh_payloads_for_burst(
-                        burst_start,
-                        burst_max_sensory_age,
-                        drained_payloads,
-                    );
-                dropped_stale_payloads = dropped_stale_payloads.saturating_add(dropped_count);
-                collapsed_payloads = collapsed_payloads.saturating_add(collapsed_count);
+                let (selected_payloads, stale_sources) = select_fresh_payloads_with_stale_sources(
+                    burst_start,
+                    burst_max_sensory_age,
+                    drained_payloads,
+                );
+                dropped_stale_payloads = dropped_stale_payloads.saturating_add(stale_sources.len());
+                for source in &stale_sources {
+                    tally_source(&mut frame_tallies, source.as_deref()).stale += 1;
+                }
+                for payload in &selected_payloads {
+                    tally_source(&mut frame_tallies, payload.source_id.as_deref()).fresh += 1;
+                }
 
+                // Decode every fresh payload, then merge per area by encoding so a brief
+                // event in an earlier frame is not replaced by a later one.
+                let mut decoded_frames: Vec<SensoryXyzpDecoded> = Vec::new();
                 for payload in selected_payloads {
                     match decode_sensory_bytes(&payload.bytes) {
                         Ok(mut decoded) => {
@@ -2089,7 +2279,7 @@ fn burst_loop(
                                 );
                             }
                             if !decoded.is_empty() {
-                                sensory_xyzp_batches.push(decoded);
+                                decoded_frames.push(decoded);
                             }
                         }
                         Err(e) => {
@@ -2101,8 +2291,18 @@ fn burst_loop(
                         }
                     }
                 }
+                let merged_frame = merge_decoded_sensory(decoded_frames);
+                if !merged_frame.is_empty() {
+                    sensory_xyzp_batches.push(merged_frame);
+                }
                 sensory_xyzp_batches.extend(ordered_remainders.into_values());
             }
+        }
+        if sensory_intake.is_some() {
+            crate::runtime_taps::BurstTaps::instance()
+                .sensor
+                .write()
+                .record_burst_frames(&frame_tallies);
         }
         // One frame per ordered (source, area) stream this burst, oldest first.
         if let Some(ingest) = sequential_ingest.as_mut() {
@@ -2135,12 +2335,6 @@ fn burst_loop(
                 "[SENSORY-INGEST] Dropped {} stale payloads (max_age={:.3}ms)",
                 dropped_stale_payloads,
                 burst_max_sensory_age.as_secs_f64() * 1000.0
-            );
-        }
-        if collapsed_payloads > 0 && burst_num % 120 == 0 {
-            warn!(
-                "[SENSORY-INGEST] Coalesced {} payloads to latest frame(s) in burst window",
-                collapsed_payloads
             );
         }
 
@@ -3060,7 +3254,7 @@ fn burst_loop(
             debug!("[BURST-LOOP] 🎮 MOTOR: Starting motor output generation (shared_fire_data available={})", shared_fire_data_opt.is_some());
 
             // Use shared fire data from above (Arc - zero cost!). A burst in which nothing fired has
-            // no fire queue sample; motor still publishes an (empty) frame per subscribed agent.
+            // no fire queue sample. Motor output is event-based: see `MotorAgentState`.
             {
                 let empty_fire_data: Arc<FireQueueSample> = Arc::new(ahash::AHashMap::new());
                 let fire_data_arc = shared_fire_data_opt.as_ref().unwrap_or(&empty_fire_data);
@@ -3242,6 +3436,8 @@ fn burst_loop(
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
                     let burst_hz = *frequency_hz.lock().unwrap();
 
+                    motor_agent_state.retain(|id, _| subscriptions.contains_key(id));
+
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
                         let rate_hz = motor_output_rates_hz
                             .read()
@@ -3251,8 +3447,9 @@ fn burst_loop(
 
                         // Gate on burst count: wall-clock gating dropped bursts that finished
                         // a little faster than the previous one when rate == burst rate.
+                        let previous_credit = motor_publish_credit.read().get(agent_id).copied();
                         let Some(credit) = crate::output_rate_gate::accrue_output_credit(
-                            motor_publish_credit.read().get(agent_id).copied(),
+                            previous_credit,
                             rate_hz,
                             burst_hz,
                         ) else {
@@ -3262,6 +3459,32 @@ fn burst_loop(
                             );
                             continue;
                         };
+
+                        let state = motor_agent_state.entry(agent_id.clone()).or_default();
+                        if previous_credit.is_none() {
+                            // Fresh registration: no history with this receiver.
+                            *state = MotorAgentState::default();
+                        }
+
+                        // Event-based output: collect what fired in this agent's subscribed areas.
+                        // Firing from bursts skipped by the rate cap stays pending and is merged.
+                        let fired: RawFireQueueSnapshot = motor_snapshot
+                            .iter()
+                            .filter(|(_, d)| subscribed_cortical_ids.contains(&d.cortical_id))
+                            .map(|(idx, d)| (*idx, d.clone()))
+                            .collect();
+                        state.absorb(fired);
+
+                        // Nothing to say (silent, receiver already told): publish nothing and
+                        // spend no credit; the credit stays capped at one whole output.
+                        let Some(carries_firing) = state.frame_to_send() else {
+                            motor_publish_credit.write().insert(
+                                agent_id.clone(),
+                                crate::output_rate_gate::remaining_output_credit(credit, false),
+                            );
+                            continue;
+                        };
+
                         if !crate::output_rate_gate::is_output_due(credit) {
                             motor_publish_credit
                                 .write()
@@ -3294,15 +3517,14 @@ fn burst_loop(
                         let mut tap_last_error: String = String::new();
 
                         let encode_start = Instant::now();
-                        // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
-                        // Every burst produces a frame for every subscribed agent, even when nothing
-                        // fired (empty XYZP struct), so lock-step receivers get one frame per burst.
+                        // Encode the pending firing, or the single trailing empty frame that
+                        // tells the receiver the output ended (`carries_firing == false`).
                         let motor_burst_id = (burst_num & 0xFFFF) as u16;
                         match encode_fire_data_to_xyzp(
-                            motor_snapshot.clone(),
+                            state.pending.clone(),
                             cortical_id_filter,
                             motor_burst_id,
-                            true,
+                            !carries_firing,
                         ) {
                             Ok(motor_bytes) => {
                                 debug!(
@@ -3310,9 +3532,9 @@ fn burst_loop(
                                     motor_bytes.len(),
                                     agent_id
                                 );
-                                // Never empty: an idle burst is an empty XYZP frame (see encoder).
                                 if motor_bytes.is_empty() {
                                     debug!("[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' - encoder returned no bytes", agent_id);
+                                    state.pending.clear();
                                     continue;
                                 }
 
@@ -3377,6 +3599,7 @@ fn burst_loop(
                                 }
 
                                 if published {
+                                    state.mark_published(carries_firing);
                                     missing_motor_agent_logged.remove(agent_id);
                                     motor_publish_credit.write().insert(
                                         agent_id.clone(),
@@ -3400,20 +3623,28 @@ fn burst_loop(
                         // Commit per-agent stats to the runtime motor tap. We do this even on
                         // failure so external tooling can see the byte count, error message,
                         // and timestamp of the last attempt.
-                        tap_per_agent.insert(
-                            agent_id.clone(),
-                            crate::runtime_taps::AgentPublishStats {
-                                burst_num,
-                                timestamp_ms: crate::runtime_taps::now_unix_ms(),
-                                byte_count: tap_byte_count,
-                                published: tap_published,
-                                last_error: tap_last_error,
-                                subscribed_cortical_ids: subscribed_cortical_ids
-                                    .iter()
-                                    .cloned()
-                                    .collect(),
-                            },
-                        );
+                        let mut agent_stats = crate::runtime_taps::AgentPublishStats {
+                            burst_num,
+                            timestamp_ms: crate::runtime_taps::now_unix_ms(),
+                            byte_count: tap_byte_count,
+                            published: tap_published,
+                            last_error: tap_last_error,
+                            subscribed_cortical_ids: subscribed_cortical_ids
+                                .iter()
+                                .cloned()
+                                .collect(),
+                            frames_published: 0,
+                            trailing_empty_frames: 0,
+                        };
+                        {
+                            let tap = crate::runtime_taps::BurstTaps::instance().motor.read();
+                            agent_stats.carry_counters_from(
+                                tap.per_agent.get(agent_id),
+                                tap_published,
+                                !carries_firing,
+                            );
+                        }
+                        tap_per_agent.insert(agent_id.clone(), agent_stats);
                     }
                     drop(subscriptions);
                 }
@@ -3851,6 +4082,117 @@ mod tests {
         );
     }
 
+    fn motor_area(cortical_id: &str, voxels: &[(u32, u32, u32, f32)]) -> RawFireQueueData {
+        RawFireQueueData {
+            cortical_area_idx: 1,
+            cortical_id: cortical_id.to_string(),
+            neuron_ids: (0..voxels.len() as u32).collect(),
+            coords_x: voxels.iter().map(|v| v.0).collect(),
+            coords_y: voxels.iter().map(|v| v.1).collect(),
+            coords_z: voxels.iter().map(|v| v.2).collect(),
+            potentials: voxels.iter().map(|v| v.3).collect(),
+        }
+    }
+
+    fn sorted_voxels(d: &RawFireQueueData) -> Vec<(u32, u32, u32, f32)> {
+        let mut v: Vec<_> = (0..d.coords_x.len())
+            .map(|i| (d.coords_x[i], d.coords_y[i], d.coords_z[i], d.potentials[i]))
+            .collect();
+        v.sort_by_key(|a| (a.0, a.1, a.2));
+        v
+    }
+
+    #[test]
+    fn test_motor_merge_absolute_keeps_latest() {
+        let mut pending = motor_area("x", &[(0, 0, 0, 1.0), (1, 0, 0, 2.0)]);
+        merge_motor_area_firing(
+            &mut pending,
+            motor_area("x", &[(2, 0, 0, 5.0)]),
+            IoMergeMode::Latest,
+        );
+        assert_eq!(sorted_voxels(&pending), vec![(2, 0, 0, 5.0)]);
+    }
+
+    #[test]
+    fn test_motor_merge_incremental_sums_per_voxel() {
+        let mut pending = motor_area("x", &[(0, 0, 0, 1.0), (1, 0, 0, 2.0)]);
+        merge_motor_area_firing(
+            &mut pending,
+            motor_area("x", &[(1, 0, 0, 3.0), (2, 0, 0, 4.0)]),
+            IoMergeMode::Sum,
+        );
+        assert_eq!(
+            sorted_voxels(&pending),
+            vec![(0, 0, 0, 1.0), (1, 0, 0, 5.0), (2, 0, 0, 4.0)]
+        );
+    }
+
+    #[test]
+    fn test_motor_merge_boolean_unions_with_max_potential() {
+        let mut pending = motor_area("x", &[(0, 0, 0, 1.0), (1, 0, 0, 9.0)]);
+        merge_motor_area_firing(
+            &mut pending,
+            motor_area("x", &[(1, 0, 0, 3.0), (2, 0, 0, 4.0)]),
+            IoMergeMode::Union,
+        );
+        assert_eq!(
+            sorted_voxels(&pending),
+            vec![(0, 0, 0, 1.0), (1, 0, 0, 9.0), (2, 0, 0, 4.0)]
+        );
+    }
+
+    #[test]
+    fn test_motor_merge_mode_without_io_flag_is_latest() {
+        assert_eq!(
+            motor_merge_mode_for_cortical_id("not-a-cortical-id"),
+            IoMergeMode::Latest
+        );
+    }
+
+    #[test]
+    fn test_motor_state_no_fire_publishes_nothing() {
+        let mut state = MotorAgentState::default();
+        for _ in 0..5 {
+            state.absorb(RawFireQueueSnapshot::new());
+            assert_eq!(state.frame_to_send(), None);
+        }
+    }
+
+    #[test]
+    fn test_motor_state_fire_then_silence_sends_one_trailing_empty_frame() {
+        let mut state = MotorAgentState::default();
+        let mut fired = RawFireQueueSnapshot::new();
+        fired.insert(1, motor_area("x", &[(0, 0, 0, 1.0)]));
+        state.absorb(fired);
+        assert_eq!(state.frame_to_send(), Some(true));
+        state.mark_published(true);
+
+        state.absorb(RawFireQueueSnapshot::new());
+        assert_eq!(state.frame_to_send(), Some(false));
+        state.mark_published(false);
+
+        for _ in 0..5 {
+            state.absorb(RawFireQueueSnapshot::new());
+            assert_eq!(state.frame_to_send(), None);
+        }
+    }
+
+    #[test]
+    fn test_motor_state_rate_capped_bursts_merge_until_published() {
+        let mut state = MotorAgentState::default();
+        for p in [1.0, 2.0] {
+            let mut fired = RawFireQueueSnapshot::new();
+            // No IO flag on this id: latest wins.
+            fired.insert(1, motor_area("x", &[(0, 0, 0, p)]));
+            state.absorb(fired);
+        }
+        assert_eq!(state.frame_to_send(), Some(true));
+        assert_eq!(sorted_voxels(&state.pending[&1]), vec![(0, 0, 0, 2.0)]);
+        // A silent burst before the due slot must not drop the pending firing.
+        state.absorb(RawFireQueueSnapshot::new());
+        assert_eq!(state.frame_to_send(), Some(true));
+    }
+
     #[test]
     fn test_empty_motor_frame_is_valid_empty_xyzp_with_burst_id() {
         use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
@@ -3859,12 +4201,13 @@ mod tests {
 
         let mut filter = ahash::AHashSet::new();
         filter.insert("omot00".to_string());
+        // The trailing "output ended" frame is an empty XYZP container.
         let bytes =
             encode_fire_data_to_xyzp(RawFireQueueSnapshot::new(), Some(&filter), 0x1234, true)
                 .unwrap();
         assert!(!bytes.is_empty());
 
-        // Same call without the emit flag keeps the old behavior (viz path).
+        // Without the emit flag nothing is produced (viz path, and silent motor bursts).
         assert!(
             encode_fire_data_to_xyzp(RawFireQueueSnapshot::new(), Some(&filter), 7, false)
                 .unwrap()
@@ -3893,9 +4236,7 @@ mod tests {
     }
 
     #[test]
-    fn test_motor_frame_published_every_burst_when_nothing_fires() {
-        use feagi_serialization::FeagiByteContainer;
-
+    fn test_motor_no_frame_published_when_nothing_fires() {
         struct NoViz;
         impl VisualizationPublisher for NoViz {
             fn publish_raw_fire_queue_for_agent(
@@ -3934,24 +4275,12 @@ mod tests {
         runner.stop();
 
         let bursts = runner.get_burst_count();
-        let frames = frames.lock().unwrap();
         assert!(bursts >= 10, "expected >= 10 bursts, got {bursts}");
-        assert!(
-            frames.len() as u64 + 2 >= bursts,
-            "frames {} vs bursts {}: a motor frame must be published every burst",
-            frames.len(),
-            bursts
+        assert_eq!(
+            frames.lock().unwrap().len(),
+            0,
+            "no motor frame may be published while nothing fires"
         );
-        let mut last_id: Option<u16> = None;
-        for bytes in frames.iter() {
-            let mut container = FeagiByteContainer::new_empty();
-            container.try_write_data_by_copy_and_verify(bytes).unwrap();
-            let id = container.get_increment_counter().unwrap();
-            if let Some(prev) = last_id {
-                assert_eq!(id, prev.wrapping_add(1), "burst ids must be consecutive");
-            }
-            last_id = Some(id);
-        }
     }
 
     #[test]

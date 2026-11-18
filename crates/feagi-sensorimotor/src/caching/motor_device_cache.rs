@@ -1040,6 +1040,30 @@ impl MotorDeviceCache {
         self.read_decoded_motor_snapshot_filtered(true)
     }
 
+    /// True when `channel` of the registered unit `(motor_unit, group)` received data on the
+    /// most recent decode tick (false when that tick carried nothing for it).
+    ///
+    /// Lets a caller tell "this tick fired" from "cached value from an earlier tick".
+    /// Errors when the unit is not registered or the channel is out of range.
+    pub fn motor_channel_updated_last_decode(
+        &self,
+        motor_unit: MotorCorticalUnit,
+        group: CorticalUnitIndex,
+        channel: u32,
+    ) -> Result<bool, FeagiDataError> {
+        let unit_cache = self.try_get_motor_channel_stream_caches(motor_unit, group)?;
+        if (channel as usize) >= unit_cache.channel_count_usize() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Channel {} is out of range for {} of cortical unit index {} ({} channels)!",
+                channel,
+                motor_unit,
+                group,
+                unit_cache.channel_count_usize()
+            )));
+        }
+        Ok(unit_cache.channel_updated_last_decode(channel as usize))
+    }
+
     fn read_decoded_motor_snapshot_filtered(&self, updated_only: bool) -> Vec<DecodedMotorValue> {
         let mut snapshot: Vec<DecodedMotorValue> = Vec::new();
         for ((motor_unit, cortical_unit_index), unit_cache) in
@@ -1448,5 +1472,52 @@ mod midi_output_cache_tests {
         let exported = definition.get_output_units_and_decoder_properties();
         let units = exported.get(&MotorCorticalUnit::MidiOutput).unwrap();
         assert_eq!(units[0].0.friendly_name.as_deref(), Some("Lead (1)"));
+    }
+}
+
+#[cfg(test)]
+mod channel_updated_last_decode_tests {
+    use super::*;
+    use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+
+    /// A decode carrying a firing voxel marks the channel updated; the next decode
+    /// without it clears the flag.
+    #[test]
+    fn misc_channel_flag_follows_the_last_decode() {
+        let handling = FrameChangeHandling::Absolute;
+        let dims = MiscDataDimensions::new(4, 1, 1).unwrap();
+        let channels = CorticalChannelCount::new(1).unwrap();
+        let unit = CorticalUnitIndex::from(0u16);
+        let mut cache = MotorDeviceCache::new();
+        cache
+            .misc_data_register(unit, channels, handling, dims)
+            .unwrap();
+
+        let id = MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+            handling, unit,
+        )[0];
+        let mut arrays = NeuronVoxelXYZPArrays::new();
+        arrays.push_raw(2, 0, 0, 1.0);
+        let mut fired = CorticalMappedXYZPNeuronVoxels::new();
+        fired.insert(id, arrays);
+        cache
+            .ingest_neuron_data_and_run_callbacks(fired, Instant::now())
+            .unwrap();
+        assert!(cache
+            .motor_channel_updated_last_decode(MotorCorticalUnit::MiscData, unit, 0)
+            .unwrap());
+
+        cache
+            .ingest_neuron_data_and_run_callbacks(
+                CorticalMappedXYZPNeuronVoxels::new(),
+                Instant::now(),
+            )
+            .unwrap();
+        assert!(!cache
+            .motor_channel_updated_last_decode(MotorCorticalUnit::MiscData, unit, 0)
+            .unwrap());
+        assert!(cache
+            .motor_channel_updated_last_decode(MotorCorticalUnit::MiscData, unit, 5)
+            .is_err());
     }
 }

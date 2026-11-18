@@ -61,6 +61,26 @@ pub struct AgentPublishStats {
     pub last_error: String,
     /// Cortical IDs the agent was subscribed to at publish time.
     pub subscribed_cortical_ids: Vec<String>,
+    /// Cumulative frames successfully published to this agent (ZMQ or SHM; each frame once).
+    pub frames_published: u64,
+    /// Cumulative trailing empty frames ("output ended") among `frames_published`.
+    pub trailing_empty_frames: u64,
+}
+
+impl AgentPublishStats {
+    /// Set the cumulative counters: the previous totals plus this attempt, counted only when
+    /// `published` (a failed attempt adds nothing). `trailing` marks an "output ended" frame.
+    pub fn carry_counters_from(
+        &mut self,
+        previous: Option<&AgentPublishStats>,
+        published: bool,
+        trailing: bool,
+    ) {
+        let (frames, trailing_total) =
+            previous.map_or((0, 0), |p| (p.frames_published, p.trailing_empty_frames));
+        self.frames_published = frames + u64::from(published);
+        self.trailing_empty_frames = trailing_total + u64::from(published && trailing);
+    }
 }
 
 /// Most recent motor output produced by the burst loop.
@@ -89,6 +109,80 @@ pub struct SensorInputTap {
     pub timestamp_ms: i64,
     /// Per-cortical-area decoded sensory input for the burst.
     pub areas: Vec<AreaActivity>,
+    /// Per-source frame-merge statistics, cumulative since FEAGI start (or the last
+    /// [`BurstTaps::clear`]). Keyed by source id; payloads without one use
+    /// [`UNKNOWN_SOURCE`]. Unlike `areas`, this is updated every burst.
+    pub frame_stats: AHashMap<String, SourceFrameStats>,
+}
+
+/// Bucket name for sensory payloads that carry no source id.
+pub const UNKNOWN_SOURCE: &str = "unknown";
+
+/// What one source delivered to one burst (built by the burst loop from borrowed ids).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BurstSourceTally {
+    /// Payloads that met the burst deadline and entered the merge path.
+    pub fresh: u32,
+    /// Payloads dropped because they missed the burst deadline.
+    pub stale: u32,
+    /// Payloads taken by the ordered/audio sequential path (not in the histogram).
+    pub sequential: u32,
+}
+
+/// How often FEAGI merged several sensory frames from one source into a single burst.
+///
+/// The histogram covers the newest-wins/merge path only (`fresh` payloads per burst). Frames
+/// taken by the ordered/audio sequential path are counted separately in
+/// `sequential_frames_received`; a source that has ever sent such frames is excluded from the
+/// histogram's zero bucket, because its frames are not expected on the merge path.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceFrameStats {
+    /// Bursts where this known source contributed no fresh frame.
+    pub bursts_with_0_frames: u64,
+    /// Bursts where it contributed exactly one fresh frame.
+    pub bursts_with_1_frame: u64,
+    /// Bursts where it contributed two or more fresh frames (merged into one).
+    pub bursts_with_2plus_frames: u64,
+    /// Largest number of fresh frames contributed to a single burst.
+    pub max_frames_in_one_burst: u32,
+    /// All payloads received from this source on the merge path (fresh + stale).
+    pub frames_received: u64,
+    /// Payloads dropped as stale.
+    pub frames_dropped_stale: u64,
+    /// Fresh frames contributed to the current (latest) burst.
+    pub current_burst_frames: u32,
+    /// Payloads taken by the ordered/audio sequential path (outside the histogram).
+    pub sequential_frames_received: u64,
+}
+
+impl SensorInputTap {
+    /// Fold one burst's per-source tallies into the cumulative statistics. Sources seen
+    /// before but absent from `tallies` get a zero-frame burst. Integer adds only.
+    pub fn record_burst_frames(&mut self, tallies: &AHashMap<String, BurstSourceTally>) {
+        for id in tallies.keys() {
+            if !self.frame_stats.contains_key(id.as_str()) {
+                self.frame_stats
+                    .insert(id.clone(), SourceFrameStats::default());
+            }
+        }
+        for (id, st) in self.frame_stats.iter_mut() {
+            let t = tallies.get(id.as_str()).copied().unwrap_or_default();
+            st.frames_received += u64::from(t.fresh) + u64::from(t.stale);
+            st.frames_dropped_stale += u64::from(t.stale);
+            st.sequential_frames_received += u64::from(t.sequential);
+            st.current_burst_frames = t.fresh;
+            st.max_frames_in_one_burst = st.max_frames_in_one_burst.max(t.fresh);
+            match t.fresh {
+                0 => {
+                    if st.sequential_frames_received == 0 {
+                        st.bursts_with_0_frames += 1;
+                    }
+                }
+                1 => st.bursts_with_1_frame += 1,
+                _ => st.bursts_with_2plus_frames += 1,
+            }
+        }
+    }
 }
 
 /// Read-only aggregate activity statistics derived from a single burst's tap snapshot.
@@ -266,6 +360,54 @@ mod tests {
     }
 
     #[test]
+    fn frame_stats_count_merge_zero_and_stale() {
+        let mut tap = SensorInputTap::default();
+        let burst = |fresh: u32, stale: u32| {
+            let mut m: AHashMap<String, BurstSourceTally> = AHashMap::new();
+            m.insert(
+                "src".to_string(),
+                BurstSourceTally {
+                    fresh,
+                    stale,
+                    sequential: 0,
+                },
+            );
+            m
+        };
+        tap.record_burst_frames(&burst(1, 0));
+        tap.record_burst_frames(&burst(2, 0));
+        tap.record_burst_frames(&AHashMap::new()); // known source, no frame
+        tap.record_burst_frames(&burst(0, 1)); // only a stale frame
+        let st = &tap.frame_stats["src"];
+        assert_eq!(st.bursts_with_1_frame, 1);
+        assert_eq!(st.bursts_with_2plus_frames, 1);
+        assert_eq!(st.bursts_with_0_frames, 2);
+        assert_eq!(st.max_frames_in_one_burst, 2);
+        assert_eq!(st.frames_received, 4);
+        assert_eq!(st.frames_dropped_stale, 1);
+        assert_eq!(st.current_burst_frames, 0);
+    }
+
+    #[test]
+    fn frame_stats_sequential_source_has_no_zero_bursts() {
+        let mut tap = SensorInputTap::default();
+        let mut m: AHashMap<String, BurstSourceTally> = AHashMap::new();
+        m.insert(
+            "aud".to_string(),
+            BurstSourceTally {
+                fresh: 0,
+                stale: 0,
+                sequential: 2,
+            },
+        );
+        tap.record_burst_frames(&m);
+        tap.record_burst_frames(&AHashMap::new());
+        let st = &tap.frame_stats["aud"];
+        assert_eq!(st.bursts_with_0_frames, 0);
+        assert_eq!(st.sequential_frames_received, 2);
+    }
+
+    #[test]
     fn instance_is_idempotent() {
         let a = BurstTaps::instance() as *const BurstTaps;
         let b = BurstTaps::instance() as *const BurstTaps;
@@ -300,6 +442,8 @@ mod tests {
                     published: true,
                     last_error: String::new(),
                     subscribed_cortical_ids: vec!["test01==".to_string()],
+                    frames_published: 5,
+                    trailing_empty_frames: 2,
                 },
             );
         }
@@ -311,6 +455,24 @@ mod tests {
         let agent = snap.per_agent.get("agent-1").expect("agent stats present");
         assert_eq!(agent.byte_count, 16);
         assert!(agent.published);
+        assert_eq!(agent.frames_published, 5);
+        assert_eq!(agent.trailing_empty_frames, 2);
+    }
+
+    #[test]
+    fn publish_counters_accumulate_across_commits() {
+        let mut previous = AgentPublishStats::default();
+        // (published, trailing) per commit: real frame, failed attempt, trailing frame.
+        for (published, trailing) in [(true, false), (false, false), (true, true)] {
+            let mut next = AgentPublishStats {
+                published,
+                ..AgentPublishStats::default()
+            };
+            next.carry_counters_from(Some(&previous), published, trailing);
+            previous = next;
+        }
+        assert_eq!(previous.frames_published, 2);
+        assert_eq!(previous.trailing_empty_frames, 1);
     }
 
     #[test]

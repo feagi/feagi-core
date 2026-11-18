@@ -66,7 +66,9 @@ pub mod validator;
 
 // Re-export commonly used types
 pub use amalgamation_remap::{
-    designated_io_lists_for_cloned_circuit, remap_guest_custom_memory_cortical_ids_for_amalgamation,
+    designated_io_lists_for_cloned_circuit, plan_amalgamation_regions,
+    remap_guest_custom_memory_cortical_ids_for_amalgamation, AmalgamationRegionPlan,
+    AmalgamationRegionSpec,
 };
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;

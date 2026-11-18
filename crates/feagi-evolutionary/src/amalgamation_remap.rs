@@ -204,6 +204,209 @@ pub fn designated_io_lists_for_cloned_circuit(
     )
 }
 
+/// One sub-region to create under the amalgamation host region.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AmalgamationRegionSpec {
+    /// Fresh region id (UUID string) for the new region.
+    pub region_id: String,
+    /// Guest region name.
+    pub name: String,
+    /// Parent region id: another planned region, or the host amalgamation region.
+    pub parent_region_id: String,
+    /// Guest region properties to carry over (coordinate offset, designated IO remapped and
+    /// filtered to imported areas). Never contains parent or membership keys.
+    pub properties: HashMap<String, Value>,
+}
+
+/// Region tree to build for an amalgamated guest genome.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AmalgamationRegionPlan {
+    /// Sub-regions in parent-before-child order.
+    pub sub_regions: Vec<AmalgamationRegionSpec>,
+    /// Imported area (base64 id) -> region id it joins. Areas absent here belong to the host
+    /// amalgamation region.
+    pub area_region: HashMap<String, String>,
+    /// Designated inputs for the host region (set only when exactly one guest top-level region
+    /// maps onto it).
+    pub host_designated_inputs: Vec<String>,
+    /// Designated outputs for the host region (same rule as inputs).
+    pub host_designated_outputs: Vec<String>,
+}
+
+fn guest_parent_id(region: &BrainRegion) -> Option<&str> {
+    region
+        .properties
+        .get("parent_region_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+}
+
+fn offset_coordinate_3d(value: Option<&Value>, origin: (i32, i32, i32)) -> Value {
+    let get = |i: usize| -> i64 {
+        value
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.get(i))
+            .and_then(|n| n.as_i64())
+            .unwrap_or(0)
+    };
+    serde_json::json!([
+        i64::from(origin.0).saturating_add(get(0)),
+        i64::from(origin.1).saturating_add(get(1)),
+        i64::from(origin.2).saturating_add(get(2)),
+    ])
+}
+
+fn filtered_io(region: &BrainRegion, key: &str, member_area_ids: &HashSet<String>) -> Vec<String> {
+    let mut list = json_string_list(region.properties.get(key));
+    list.retain(|id| member_area_ids.contains(id));
+    list
+}
+
+/// Plan the guest region tree for amalgamation. Pure: no I/O, no host state.
+///
+/// Call after [`remap_guest_custom_memory_cortical_ids_for_amalgamation`] so membership and IO
+/// lists already use the final area ids. `member_area_ids` are the imported areas (base64) that
+/// may live inside the amalgamation tree (the caller excludes IPU/OPU, modulator and
+/// already-present areas). Top-level rule (as in region export): the guest regions whose parent
+/// is the guest root (or that have no known parent) are the top level. Exactly one maps onto
+/// `host_region_id` (its designated IO is returned for the host region); several each become a
+/// child of the host region. Guest nesting is kept. Areas listed in no region are not in
+/// `area_region` and fall back to the host region.
+pub fn plan_amalgamation_regions(
+    genome: &RuntimeGenome,
+    host_region_id: &str,
+    origin: (i32, i32, i32),
+    member_area_ids: &HashSet<String>,
+) -> AmalgamationRegionPlan {
+    use feagi_structures::genomic::brain_regions::ROOT_BRAIN_REGION_NAME;
+
+    let regions = &genome.brain_regions;
+    let root_ids: HashSet<&str> = regions
+        .iter()
+        .filter(|(_, r)| r.name == ROOT_BRAIN_REGION_NAME)
+        .map(|(id, _)| id.as_str())
+        .collect();
+
+    // Children by parent, sorted by guest id for deterministic output.
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut top_level: Vec<&str> = Vec::new();
+    for (id, region) in regions {
+        if root_ids.contains(id.as_str()) {
+            continue;
+        }
+        match guest_parent_id(region) {
+            Some(p) if p != id && root_ids.contains(p) => top_level.push(id),
+            Some(p) if p != id && regions.contains_key(p) => {
+                children.entry(p).or_default().push(id)
+            }
+            _ => top_level.push(id),
+        }
+    }
+    top_level.sort_unstable();
+    for list in children.values_mut() {
+        list.sort_unstable();
+    }
+
+    let mut plan = AmalgamationRegionPlan::default();
+    // guest region id -> new region id (host id for the single top-level region).
+    let mut mapped: HashMap<&str, String> = HashMap::new();
+    // Breadth-first order from the top level keeps parents before children.
+    let mut queue: std::collections::VecDeque<&str> = top_level.iter().copied().collect();
+    let single_top = top_level.len() == 1;
+    let mut visited: HashSet<&str> = HashSet::new();
+
+    while let Some(gid) = queue.pop_front() {
+        if !visited.insert(gid) {
+            continue;
+        }
+        let region = &regions[gid];
+        let is_host = single_top && top_level[0] == gid;
+        if is_host {
+            mapped.insert(gid, host_region_id.to_string());
+            plan.host_designated_inputs = filtered_io(region, "designated_inputs", member_area_ids);
+            plan.host_designated_outputs =
+                filtered_io(region, "designated_outputs", member_area_ids);
+        } else {
+            let parent_region_id = match guest_parent_id(region) {
+                Some(p) if mapped.contains_key(p) => mapped[p].clone(),
+                _ => host_region_id.to_string(),
+            };
+            let new_id = feagi_structures::genomic::brain_regions::RegionID::new().to_string();
+            let mut properties: HashMap<String, Value> = HashMap::new();
+            for (k, v) in &region.properties {
+                match k.as_str() {
+                    "parent_region_id" | "areas" | "cortical_areas" | "regions"
+                    | "child_regions" | "coordinate_3d" | "inputs" | "outputs"
+                    | "designated_inputs" | "designated_outputs" => {}
+                    _ => {
+                        properties.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            properties.insert(
+                "coordinate_3d".to_string(),
+                offset_coordinate_3d(region.properties.get("coordinate_3d"), origin),
+            );
+            for key in ["designated_inputs", "designated_outputs"] {
+                let list = filtered_io(region, key, member_area_ids);
+                if !list.is_empty() {
+                    properties.insert(key.to_string(), serde_json::json!(list));
+                }
+            }
+            mapped.insert(gid, new_id.clone());
+            plan.sub_regions.push(AmalgamationRegionSpec {
+                region_id: new_id,
+                name: region.name.clone(),
+                parent_region_id,
+                properties,
+            });
+        }
+        if let Some(kids) = children.get(gid) {
+            queue.extend(kids.iter().copied());
+        }
+    }
+
+    // Area membership: guest region lists first (sorted for a stable pick when an area is listed
+    // twice), then the area's own `parent_region_id` property.
+    let mut guest_ids: Vec<&str> = mapped.keys().copied().collect();
+    guest_ids.sort_unstable();
+    for gid in guest_ids {
+        let target = &mapped[gid];
+        if target == host_region_id {
+            continue;
+        }
+        let mut members: Vec<String> = regions[gid]
+            .cortical_areas
+            .iter()
+            .map(|c| c.as_base_64())
+            .collect();
+        members.sort_unstable();
+        for m in members {
+            if member_area_ids.contains(&m) {
+                plan.area_region.entry(m).or_insert_with(|| target.clone());
+            }
+        }
+    }
+    for area in genome.cortical_areas.values() {
+        let b64 = area.cortical_id.as_base_64();
+        if !member_area_ids.contains(&b64) || plan.area_region.contains_key(&b64) {
+            continue;
+        }
+        if let Some(target) = area
+            .properties
+            .get("parent_region_id")
+            .and_then(|v| v.as_str())
+            .and_then(|p| mapped.get(p))
+        {
+            if target != host_region_id {
+                plan.area_region.insert(b64, target.clone());
+            }
+        }
+    }
+    plan
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,5 +582,343 @@ mod tests {
         assert_eq!(inputs_after, vec![new_b64.clone()]);
         assert!(outputs_after.is_empty());
         assert_ne!(inputs_after[0], old_b64);
+    }
+
+    fn plan_area(prefix: u8) -> CorticalArea {
+        let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];
+        bytes[0] = prefix;
+        random_bytes(&mut bytes[1..]);
+        let id = CorticalID::try_from_bytes(&bytes).expect("id");
+        let ty = if prefix == b'm' {
+            CorticalAreaType::Memory(
+                feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory,
+            )
+        } else {
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire)
+        };
+        CorticalArea::new(
+            id,
+            0,
+            "a".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
+            GenomeCoordinate3D::new(0, 0, 0),
+            ty,
+        )
+        .expect("area")
+    }
+
+    fn plan_genome(areas: Vec<CorticalArea>, regions: Vec<(String, BrainRegion)>) -> RuntimeGenome {
+        RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "t".to_string(),
+                genome_title: "t".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: areas.into_iter().map(|a| (a.cortical_id, a)).collect(),
+            brain_regions: regions.into_iter().collect(),
+            classifiers: HashMap::new(),
+            morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: String::new(),
+                blueprint: String::new(),
+                physiology: String::new(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        }
+    }
+
+    fn plan_region(
+        name: &str,
+        parent: Option<&str>,
+        areas: &[&CorticalArea],
+        props: Vec<(&str, Value)>,
+    ) -> (String, BrainRegion) {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        let rid = RegionID::new();
+        let mut p: HashMap<String, Value> = HashMap::new();
+        if let Some(par) = parent {
+            p.insert("parent_region_id".to_string(), serde_json::json!(par));
+        }
+        for (k, v) in props {
+            p.insert(k.to_string(), v);
+        }
+        let r = BrainRegion::new(rid, name.to_string(), RegionType::Undefined)
+            .expect("region")
+            .with_areas(areas.iter().map(|a| a.cortical_id))
+            .with_properties(p);
+        (rid.to_string(), r)
+    }
+
+    fn all_ids(areas: &[&CorticalArea]) -> HashSet<String> {
+        areas.iter().map(|a| a.cortical_id.as_base_64()).collect()
+    }
+
+    #[test]
+    fn plan_nested_regions_with_memory_area_and_ordering() {
+        use feagi_structures::genomic::brain_regions::{
+            BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
+        };
+        let c1 = plan_area(b'c');
+        let m1 = plan_area(b'm');
+        let root_id = RegionID::new().to_string();
+        let root = BrainRegion::new(
+            RegionID::from_string(&root_id).unwrap(),
+            ROOT_BRAIN_REGION_NAME.to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let (top_id, top) = plan_region("top", Some(&root_id), &[&c1], vec![]);
+        let (mid_id, mid) = plan_region(
+            "mid",
+            Some(&top_id),
+            &[&m1],
+            vec![("coordinate_3d", serde_json::json!([3, 4, 5]))],
+        );
+        let g = plan_genome(
+            vec![c1.clone(), m1.clone()],
+            vec![(root_id, root), (top_id, top), (mid_id, mid)],
+        );
+        let host = "host-region";
+        let plan = plan_amalgamation_regions(&g, host, (10, 20, 30), &all_ids(&[&c1, &m1]));
+        // single top-level maps onto host; one sub-region (mid) under host
+        assert_eq!(plan.sub_regions.len(), 1);
+        let sub = &plan.sub_regions[0];
+        assert_eq!(sub.name, "mid");
+        assert_eq!(sub.parent_region_id, host);
+        assert_eq!(
+            sub.properties["coordinate_3d"],
+            serde_json::json!([13, 24, 35])
+        );
+        assert_eq!(
+            plan.area_region[&m1.cortical_id.as_base_64()],
+            sub.region_id
+        );
+        assert!(!plan.area_region.contains_key(&c1.cortical_id.as_base_64()));
+    }
+
+    #[test]
+    fn plan_three_levels_parent_before_child() {
+        let a = plan_area(b'c');
+        let (t, top) = plan_region("t", None, &[], vec![]);
+        let (m, mid) = plan_region("m", Some(&t), &[], vec![]);
+        let (l, leaf) = plan_region("l", Some(&m), &[&a], vec![]);
+        let g = plan_genome(vec![a.clone()], vec![(l, leaf), (m, mid), (t, top)]);
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &all_ids(&[&a]));
+        let names: Vec<&str> = plan.sub_regions.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, vec!["m", "l"]);
+        assert_eq!(
+            plan.sub_regions[1].parent_region_id,
+            plan.sub_regions[0].region_id
+        );
+        assert_eq!(
+            plan.area_region[&a.cortical_id.as_base_64()],
+            plan.sub_regions[1].region_id
+        );
+    }
+
+    #[test]
+    fn plan_multiple_top_level_regions_become_children_of_host() {
+        let a = plan_area(b'c');
+        let b = plan_area(b'c');
+        let (id1, r1) = plan_region(
+            "one",
+            None,
+            &[&a],
+            vec![(
+                "designated_inputs",
+                serde_json::json!([a.cortical_id.as_base_64()]),
+            )],
+        );
+        let (id2, r2) = plan_region("two", None, &[&b], vec![]);
+        let g = plan_genome(vec![a.clone(), b.clone()], vec![(id1, r1), (id2, r2)]);
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &all_ids(&[&a, &b]));
+        assert_eq!(plan.sub_regions.len(), 2);
+        assert!(plan.sub_regions.iter().all(|s| s.parent_region_id == "h"));
+        assert!(plan.host_designated_inputs.is_empty());
+        let one = plan.sub_regions.iter().find(|s| s.name == "one").unwrap();
+        assert_eq!(
+            one.properties["designated_inputs"],
+            serde_json::json!([a.cortical_id.as_base_64()])
+        );
+        assert_eq!(plan.area_region[&a.cortical_id.as_base_64()], one.region_id);
+        assert_ne!(
+            plan.area_region[&a.cortical_id.as_base_64()],
+            plan.area_region[&b.cortical_id.as_base_64()]
+        );
+    }
+
+    #[test]
+    fn plan_area_in_no_region_falls_back_to_host() {
+        let a = plan_area(b'c');
+        let loose = plan_area(b'c');
+        let (id1, r1) = plan_region("one", None, &[&a], vec![]);
+        let (id2, r2) = plan_region("two", None, &[], vec![]);
+        let g = plan_genome(vec![a.clone(), loose.clone()], vec![(id1, r1), (id2, r2)]);
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &all_ids(&[&a, &loose]));
+        assert!(!plan
+            .area_region
+            .contains_key(&loose.cortical_id.as_base_64()));
+        assert!(plan.area_region.contains_key(&a.cortical_id.as_base_64()));
+    }
+
+    #[test]
+    fn plan_nested_designated_io_is_remapped_and_filtered() {
+        let a = plan_area(b'c');
+        let outside = plan_area(b'c');
+        let (t, top) = plan_region("t", None, &[], vec![]);
+        let (m, mid) = plan_region(
+            "m",
+            Some(&t),
+            &[&a],
+            vec![
+                (
+                    "designated_inputs",
+                    serde_json::json!([
+                        a.cortical_id.as_base_64(),
+                        outside.cortical_id.as_base_64()
+                    ]),
+                ),
+                (
+                    "designated_outputs",
+                    serde_json::json!([a.cortical_id.as_base_64()]),
+                ),
+            ],
+        );
+        let mut g = plan_genome(vec![a.clone(), outside.clone()], vec![(t, top), (m, mid)]);
+        // remap through the real remap so lists follow new ids
+        let mut host = HashSet::new();
+        host.insert(a.cortical_id.as_base_64());
+        let pairs = remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut g, &host).unwrap();
+        let new_a = pairs
+            .get(&a.cortical_id.as_base_64())
+            .cloned()
+            .expect("remapped");
+        let members: HashSet<String> = [new_a.clone()].into_iter().collect();
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &members);
+        let sub = &plan.sub_regions[0];
+        assert_eq!(
+            sub.properties["designated_inputs"],
+            serde_json::json!([new_a.clone()])
+        );
+        assert_eq!(
+            sub.properties["designated_outputs"],
+            serde_json::json!([new_a])
+        );
+    }
+
+    #[test]
+    fn plan_flat_single_region_maps_to_host_without_sub_regions() {
+        let a = plan_area(b'c');
+        let (id1, r1) = plan_region(
+            "only",
+            None,
+            &[&a],
+            vec![(
+                "designated_inputs",
+                serde_json::json!([a.cortical_id.as_base_64()]),
+            )],
+        );
+        let g = plan_genome(vec![a.clone()], vec![(id1, r1)]);
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &all_ids(&[&a]));
+        assert!(plan.sub_regions.is_empty());
+        assert!(plan.area_region.is_empty());
+        assert_eq!(
+            plan.host_designated_inputs,
+            vec![a.cortical_id.as_base_64()]
+        );
+    }
+
+    #[test]
+    fn plan_tree_survives_save_and_reload() {
+        use feagi_structures::genomic::brain_regions::{
+            BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
+        };
+        let a = plan_area(b'c');
+        let b = plan_area(b'm');
+        let (t, top) = plan_region("t", None, &[&a], vec![]);
+        let (m, mid) = plan_region("m", Some(&t), &[&b], vec![]);
+        let guest = plan_genome(vec![a.clone(), b.clone()], vec![(t, top), (m, mid)]);
+
+        // Host: root -> amalgamation region, then execute the plan as the API handler does.
+        let root_id = RegionID::new();
+        let host_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let host_key = host_id.to_string();
+        let root = BrainRegion::new(
+            root_id,
+            ROOT_BRAIN_REGION_NAME.to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let mut host_props = HashMap::new();
+        host_props.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_key.clone()),
+        );
+        let host_region = BrainRegion::new(host_id, "host".to_string(), RegionType::Undefined)
+            .unwrap()
+            .with_properties(host_props);
+        let members = all_ids(&[&a, &b]);
+        let plan = plan_amalgamation_regions(&guest, &host_key, (0, 0, 0), &members);
+        let mut regions: Vec<(String, BrainRegion)> =
+            vec![(root_key, root), (host_key.clone(), host_region)];
+        for spec in &plan.sub_regions {
+            let mut props = spec.properties.clone();
+            props.insert(
+                "parent_region_id".to_string(),
+                serde_json::json!(spec.parent_region_id),
+            );
+            let r = BrainRegion::new(
+                RegionID::from_string(&spec.region_id).unwrap(),
+                spec.name.clone(),
+                RegionType::Undefined,
+            )
+            .unwrap()
+            .with_properties(props);
+            regions.push((spec.region_id.clone(), r));
+        }
+        let mut host_areas = Vec::new();
+        for src in [&a, &b] {
+            let mut area = src.clone();
+            let target = plan
+                .area_region
+                .get(&src.cortical_id.as_base_64())
+                .cloned()
+                .unwrap_or_else(|| host_key.clone());
+            area.properties.insert(
+                "parent_region_id".to_string(),
+                serde_json::json!(target.clone()),
+            );
+            for (id, r) in regions.iter_mut() {
+                if *id == target {
+                    r.add_area(src.cortical_id);
+                }
+            }
+            host_areas.push(area);
+        }
+        let genome = plan_genome(host_areas, regions);
+
+        let json = crate::genome::runtime_saver::save_genome_to_json(&genome).expect("save");
+        let reloaded = crate::load_genome_from_json(&json).expect("reload");
+        let sub = &plan.sub_regions[0];
+        let r = reloaded
+            .brain_regions
+            .get(&sub.region_id)
+            .expect("sub-region persisted");
+        assert_eq!(r.name, "m");
+        assert_eq!(
+            r.properties
+                .get("parent_region_id")
+                .and_then(|v| v.as_str()),
+            Some(host_key.as_str())
+        );
+        assert!(r.contains_area(&b.cortical_id));
     }
 }

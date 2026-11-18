@@ -83,6 +83,24 @@ pub struct SensorTapArea {
     pub samples: Vec<SensorTapSample>,
 }
 
+/// Per-source count of how often several sensory frames were merged into one burst.
+/// Cumulative since FEAGI start. Histogram covers the merge path only; the ordered/audio
+/// sequential path is counted in `sequential_frames_received`.
+#[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
+pub struct SensorSourceFrameStats {
+    /// Source id; payloads without one are grouped under "unknown".
+    pub source_id: String,
+    pub bursts_with_0_frames: u64,
+    pub bursts_with_1_frame: u64,
+    pub bursts_with_2plus_frames: u64,
+    pub max_frames_in_one_burst: u32,
+    pub frames_received: u64,
+    pub frames_dropped_stale: u64,
+    /// Fresh frames this source contributed to the latest burst.
+    pub current_burst_frames: u32,
+    pub sequential_frames_received: u64,
+}
+
 /// Response payload for `GET /v1/input/sensor_snapshot/last`.
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
 pub struct SensorSnapshotResponse {
@@ -99,6 +117,8 @@ pub struct SensorSnapshotResponse {
     pub total_neurons: usize,
     /// Per-area sensory samples, ordered as decoded by the burst loop.
     pub areas: Vec<SensorTapArea>,
+    /// Per-source frame-merge statistics (sorted by source id).
+    pub frame_stats: Vec<SensorSourceFrameStats>,
 }
 
 /// Get the most recent sensory input decoded by the burst loop.
@@ -124,6 +144,22 @@ pub async fn get_sensor_snapshot_last(
 ) -> ApiResult<Json<SensorSnapshotResponse>> {
     let snap = feagi_npu_burst_engine::BurstTaps::instance().sensor_snapshot();
     let cortical_filter = query.get("cortical_id").cloned();
+    let mut frame_stats: Vec<SensorSourceFrameStats> = snap
+        .frame_stats
+        .iter()
+        .map(|(id, st)| SensorSourceFrameStats {
+            source_id: id.clone(),
+            bursts_with_0_frames: st.bursts_with_0_frames,
+            bursts_with_1_frame: st.bursts_with_1_frame,
+            bursts_with_2plus_frames: st.bursts_with_2plus_frames,
+            max_frames_in_one_burst: st.max_frames_in_one_burst,
+            frames_received: st.frames_received,
+            frames_dropped_stale: st.frames_dropped_stale,
+            current_burst_frames: st.current_burst_frames,
+            sequential_frames_received: st.sequential_frames_received,
+        })
+        .collect();
+    frame_stats.sort_by(|a, b| a.source_id.cmp(&b.source_id));
 
     let mut areas: Vec<SensorTapArea> = snap
         .areas
@@ -161,5 +197,6 @@ pub async fn get_sensor_snapshot_last(
         total_areas,
         total_neurons,
         areas,
+        frame_stats,
     }))
 }
