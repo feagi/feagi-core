@@ -1,7 +1,9 @@
+use std::fmt::Debug;
 use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathStaticElement;
 use serde::{Deserialize, Serialize};
 use base64::engine::general_purpose::URL_SAFE as BASE64_URL_SAFE;
 use base64::Engine;
+use serde::de::DeserializeOwned;
 use feagi_basis::feagi_id::base_64::FeagiIDBase64Error;
 use feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind;
 use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
@@ -230,7 +232,7 @@ pub trait CorticalIdentifierInnerEncoder: Sized {
     type ContextRequiredToEncode;
     
     /// What data itself can be encoded and decoded
-    type DecodableData;
+    type DecodableData: Clone + Debug + Serialize + DeserializeOwned;
 
     const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy;
 

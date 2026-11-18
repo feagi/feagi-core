@@ -3,6 +3,7 @@ pub mod processing;
 pub mod cortical_identifiers;
 
 use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGenerator, CTFoundationSubtypedKind};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::foundation::{CTFoundationSubtypedSpawningParameters, CTFoundationSubtypedStorage, CTFoundationSubtypedStorageOrGenerator};
@@ -45,7 +46,7 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
 
     /// The default storage OR generator for this given cortical type, enumed for the neuron model and quant
     #[cfg(feature = "alloc")]
-    type PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization>: Into<NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>>;
+    type PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization>: Into<NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>> + Serialize + DeserializeOwned;
 
     //region Default impls
 
@@ -69,6 +70,8 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
 
 /// Spawning Parameters specific to a given cortical type
 #[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct CorticalTypeAreaSpawningParameters<FIQ: FeagiIndexQuantization, CT: CorticalType> {
     pub(crate) cortical_id_generation_params: <CT::InnerCorticalIDGenerator as CorticalIdentifierInnerEncoder>::DecodableData,
     pub(crate) neurogenesis: CT::PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ>
@@ -122,6 +125,8 @@ pub enum CorticalTypedStorageOrGenerator<FIQ: FeagiIndexQuantization>
 }
 
 #[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CorticalTypedSpawningParameters<FIQ: FeagiIndexQuantization> {
     Foundation(CTFoundationSubtypedSpawningParameters<FIQ>),
     Processing(CTProcessingSubtypedSpawningParameters<FIQ>)

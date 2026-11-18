@@ -273,6 +273,8 @@ pub enum CTProcessingSubtypedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
 }
 
 #[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub enum CTProcessingSubtypedSpawningParameters<FIQ: FeagiIndexQuantization> {
     Interconnect(CorticalTypeAreaSpawningParameters<FIQ, CTProcessingInterconnect>)
 }
