@@ -43,11 +43,12 @@ macro_rules! create_step_and_result_enums {
     } => {
 
         paste::paste! {
-
+            
             pub enum ConnectomeReshapeStepEnum<FIQ: FeagiIndexQuantization> {
                 $($StepSpecificName([<ConnectomeReshapeStep $StepSpecificName>]$(<$Generic>)?),)+
             }
 
+            #[derive(Debug)]
             pub enum ConnectomeReshapeStepResultantEnum<FIQ: FeagiIndexQuantization> {
                 $($StepSpecificName([<ConnectomeReshapeResultant $StepSpecificName>]$(<$Generic>)?),)+
             }
@@ -96,17 +97,12 @@ pub trait ConnectomeReshapeStepHandler<FIQ: FeagiIndexQuantization, Reshape: Con
 // Generate `ConnectomeReshapeStepEnum`, `ConnectomeReshapeStepResultantEnum`, `ConnectomeReshapeStepEnumHandler`,
 // and the trait / conversion impls for each step. Append `<FIQ>` if the step structs are generic over FIQ.
 create_step_and_result_enums! {
-    Nothing,
     CorticalAreaAdd<FIQ>,
 }
 
 //region Steps
 
 //region Nothing
-
-pub struct ConnectomeReshapeStepNothing;
-
-pub struct ConnectomeReshapeResultantNothing;
 
 //endregion
 
@@ -118,6 +114,7 @@ pub struct ConnectomeReshapeStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
     pub cortical_area_neurogenesis: NMNeurogenesisStorageOrGenerator<FIQ>,
 }
 
+#[derive(Debug)]
 pub struct ConnectomeReshapeResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
     pub new_cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     pub visualization_start_index: NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>,
@@ -146,7 +143,7 @@ pub enum ConnectomeReshapeError<FIQ: FeagiIndexQuantization> {
     #[error("Unknown Failure. Connectome Corruption assumed")]
     UnknownFailure,
     #[error("Cortical area index {0} is invalid and cannot be selected for this operation")]
-    InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ>),
+    InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>),
     #[error("A computation exceeding possible quantized indexing limits was attempted!")]
     ExceedsIndexQuantization,
 }

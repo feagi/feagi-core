@@ -5,7 +5,7 @@
 
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
-use crate::connectome_reshaping::{ConnectomeReshapeStepEnum, ConnectomeReshapeStepResultantEnum};
+use crate::connectome_reshaping::{ConnectomeReshapeError, ConnectomeReshapeStepEnum, ConnectomeReshapeStepResultantEnum};
 
 //region Root Traits
 
@@ -29,7 +29,7 @@ pub trait ConnectomeEditHandler<FIQ: FeagiIndexQuantization, Command: Connectome
 //region Grouped via Enums
 
 pub trait ConnectomeEditEnumHandler<FIQ: FeagiIndexQuantization>:
-    Sized + ConnectomeEditHandler<FIQ, ConnectomeEditNothing>
+    Sized + ConnectomeEditHandler<FIQ, ConnectomeEditNothing<FIQ>>
 + ConnectomeEditHandler<FIQ, ConnectomeEditReshapeStep<FIQ>>
 {
     /// Has the burst engine run some edit
@@ -48,14 +48,14 @@ pub trait ConnectomeEditEnumHandler<FIQ: FeagiIndexQuantization>:
 
 /// Commands relevant to a specific burst engine as a passable enum
 pub enum ConnectomeEditEnum<FIQ: FeagiIndexQuantization> {
-    Nothing(ConnectomeEditNothing),
+    Nothing(ConnectomeEditNothing<FIQ>),
     // TODO more (in memory stuff)
     #[cfg(feature = "allow-reshape-edits")]
     EditConnectomeStep(ConnectomeEditReshapeStep<FIQ>),
 }
 
 pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
-    Nothing(ConnectomeEditResultantNothing),
+    Nothing(ConnectomeEditResultantNothing<FIQ>),
     #[cfg(feature = "allow-reshape-edits")]
     EditConnectomeStep(ConnectomeEditReshapeStepResultant<FIQ>),
 }
@@ -67,24 +67,25 @@ pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
 //region Nothing
 
 /// Does nothing. Effectively a placeholder for some things
-pub struct ConnectomeEditNothing;
+#[derive(Default)]
+pub struct ConnectomeEditNothing<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditNothing {
-    type Resultant = ConnectomeEditResultantNothing;
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditNothing<FIQ> {
+    type Resultant = ConnectomeEditResultantNothing<FIQ>;
 }
 
-impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditEnum<FIQ>> for ConnectomeEditNothing {
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditEnum<FIQ>> for ConnectomeEditNothing<FIQ> {
     fn into(self) -> ConnectomeEditEnum<FIQ> {
         ConnectomeEditEnum::Nothing(self)
     }
 }
 
 /// Response to a Nothing Command. No possible error
-pub struct ConnectomeEditResultantNothing;
+pub struct ConnectomeEditResultantNothing<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
 
-impl<FIQ: FeagiIndexQuantization> ConnectomeEditResultant<FIQ> for ConnectomeEditResultantNothing {}
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditResultant<FIQ> for ConnectomeEditResultantNothing<FIQ> {}
 
-impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditResultantEnum<FIQ>> for ConnectomeEditResultantNothing {
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditResultantEnum<FIQ>> for ConnectomeEditResultantNothing<FIQ> {
     fn into(self) -> ConnectomeEditResultantEnum<FIQ> {
         ConnectomeEditResultantEnum::Nothing(self)
     }
@@ -133,13 +134,13 @@ pub enum ConnectomeEditError<FIQ: FeagiIndexQuantization> {
     #[error("Burst Engine has failed! {0}")]
     GeneralEngineFailure(&'static str, bool), // second bool indicates if corrupt
     #[error("Cortical area index {0} is invalid and cannot be read for this operation")]
-    InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ>),
+    InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>),
 
     #[cfg(feature = "allow-reshape-edits")]
-    #[error(transparent)]
+    #[error("Error Reshaping")]
     ConnectomeReshapingError {
         completed_steps: Vec<ConnectomeReshapeStepResultantEnum<FIQ>>,
-        error: ConnectomeEditError<FIQ>,
+        error: ConnectomeReshapeError<FIQ>,
     },
     #[cfg(not(feature = "allow-reshape-edits"))]
     /// This is to be returned on traits implementations where editing may be disabled
