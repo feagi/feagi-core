@@ -1,4 +1,5 @@
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_burst::burst_basis::connectome_editing::{ConnectomeEditEnum, ConnectomeEditNothing};
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierInnerEncoder};
 use crate::basis::cortical_area::{CorticalType, CorticalTypedSpawningParameters};
@@ -163,10 +164,11 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
 }
 
 
-
-
 pub(crate) trait GenomeEditCommandStep<FIQ: FeagiIndexQuantization> {
-
+    
+    fn generate_connectome_edit_step(&self) -> ConnectomeEditEnum<FIQ> {
+        ConnectomeEditEnum::Nothing(ConnectomeEditNothing::new()) // by default, do nothing
+    }
 }
 
 pub(crate) enum GenomeEditCommandStepEnum<FIQ: FeagiIndexQuantization> {

@@ -72,6 +72,10 @@ pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
 #[derive(Default)]
 pub struct ConnectomeEditNothing<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
 
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditNothing<FIQ> {
+    pub fn new() -> Self { Self(core::marker::PhantomData) }
+}
+
 impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditNothing<FIQ> {
     type Resultant = ConnectomeEditResultantNothing<FIQ>;
 }

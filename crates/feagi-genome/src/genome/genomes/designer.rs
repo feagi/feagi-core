@@ -1,9 +1,10 @@
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use crate::genome::editing::genome_edit_commands::{GenomeEditCommands, GenomeEditRequestValidationError};
 use crate::genome::editing::genome_edit_requests::load_genome::GenomeEditRequestsLoadGenome;
-use crate::genome::genomes::brain_region::{BrainRegionSet, BrainRegionSetDesigner};
+use crate::genome::genomes::brain_region::{BrainRegionContextDesigner, BrainRegionSet, BrainRegionSetDesigner};
 use crate::genome::genomes::cortical_area::{CorticalAreaSet, CorticalAreaSetDesigner};
-
+use crate::genome::genomes::GenomePublicInterface;
 
 pub struct GenomeDesigner<FIQ: FeagiIndexQuantization>  {
     state: DesignerGenomeState,
@@ -15,16 +16,14 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization>  {
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
     
-    pub fn new_from_load_genome_sequence(sequence: GenomeEditRequestsLoadGenome<FIQ>, npu: ()) -> Result<Self, ()> {
-
+    pub fn new_from_load_genome_sequence(sequence: GenomeEditRequestsLoadGenome<FIQ>, npu: ()) -> Result<Self, GenomeEditRequestValidationError<FIQ>> {
+        
         let GenomeEditRequestsLoadGenome {
             genome_metadata,
             target_burst_rate,
             new_root_ids,
             steps
         } = sequence;
-
-
 
         let mut genome = GenomeDesigner {
             state: DesignerGenomeState::Paused,
@@ -33,25 +32,40 @@ impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
             neural_processor: npu
         };
 
+        // Verify request, build complete command list
+        let commands = GenomeEditCommands::validate_requests_into_commands(
+            &steps,
+            &genome
+        )?;
         
+        
+        
+        // TODO NPU communication
 
-        // TODO validate_genome_sequence_steps_and_build_connectome_steps
-        // TODO if connectome steps, interupt connectome, send sequence, get result
-        // TODO apply, resume
-
-
-
+        
         
         
         Ok(genome)
     }
 
-    fn validate_genome_sequence_steps_and_build_connectome_steps(steps: ()) -> Result<(), ()> {
-        Ok(())
-    }
+
     
     async fn send_verified_request_to_npu() -> Result<(), ()> {
         Ok(())
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> GenomePublicInterface<FIQ> for GenomeDesigner<FIQ> {
+    type BrainRegionSet = BrainRegionSetDesigner;
+    type BrainRegionContext = BrainRegionContextDesigner;
+    type CorticalAreaSet = CorticalAreaSetDesigner<FIQ>;
+
+    fn get_brain_region_set(&self) -> &Self::BrainRegionSet {
+        &self.brain_regions
+    }
+
+    fn get_cortical_area_set(&self) -> &Self::CorticalAreaSet {
+        &self.cortical_areas
     }
 }
 
