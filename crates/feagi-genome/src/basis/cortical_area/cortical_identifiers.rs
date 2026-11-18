@@ -241,6 +241,8 @@ pub trait CorticalIdentifierInnerEncoder: Sized {
         -> Result<(), CorticalIdentifierParseError>;
     
     fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError>;
+
+    fn encode_context(decodable: Self::DecodableData) -> CorticalIdentifierInner<Self>;
     
     /// Extract the decodable context
     fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData;
@@ -303,7 +305,7 @@ impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
     const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
         CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8); // Did you get the broom closet ending? The broom closet ending was my favorite!
 
-    fn encode_to_bytes(bytes: &mut [u8; 6], context: &mut Self::ContextRequiredToEncode) -> Result<(), CorticalIdentifierParseError> {
+    fn encode_to_bytes(bytes: &mut [u8; 6], _context: &mut Self::ContextRequiredToEncode) -> Result<(), CorticalIdentifierParseError> {
         *bytes = rand::random();
         Ok(())
     }
@@ -311,6 +313,11 @@ impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
     fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
         // Nothing to verify
         Ok(CorticalIdentifierInner{ bytes, _p: Default::default() })
+    }
+
+    fn encode_context(_decodable: Self::DecodableData) -> CorticalIdentifierInner<Self> {
+        let bytes: [u8; 6] = rand::random();
+        CorticalIdentifierInner{bytes, _p: Default::default()}
     }
 
     fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData {

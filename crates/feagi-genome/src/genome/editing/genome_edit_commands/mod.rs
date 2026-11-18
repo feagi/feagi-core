@@ -24,25 +24,24 @@ pub(crate) struct GenomeEditCommands<FIQ: FeagiIndexQuantization> {
 impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
 
     /// Iterates through requests, adding command(s) for each after validating that they are valid
-    pub fn validate_requests_into_commands<'a, StepEnum: GenomeEditStepEnum<FIQ>>(
-        requests: &impl Iterator<Item = &'a StepEnum>,
+    pub fn validate_requests_into_commands<'a, StepEnum>(
+        requests: impl IntoIterator<Item = &'a StepEnum>,
         genome: &impl GenomePublicInterface<FIQ>
-    ) -> Result<Self, GenomeEditRequestValidationError<FIQ>> {
+    ) -> Result<Self, GenomeEditRequestValidationError<FIQ>>
+    where
+        StepEnum: GenomeEditStepEnum<FIQ> + 'a,
+    {
 
         //region Sub Functions
 
         /// Given None is get the root, and a value is something we need to verify exists and get, get the parent brain region id
-        fn get_parent_region(id: Option<BrainRegionID>, genome: &impl GenomePublicInterface<FIQ>) -> Result<BrainRegionID, GenomeEditRequestValidationError<FIQ>> {
+        fn get_parent_region<FIQ: FeagiIndexQuantization>(id: Option<BrainRegionID>, genome: &impl GenomePublicInterface<FIQ>) -> Result<BrainRegionID, GenomeEditRequestValidationError<FIQ>> {
             match id {
-                Some(id) => {
-                    if genome.get_brain_region_context(&id).is_err() {
-                        // if its errored, it means it doesnt exist, which means our ID is fine!
-                        return Ok(id)
-                    } else {
-                        // if we found the ID, it already exists
-                        return Err(GenomeEditRequestValidationError::InvalidParentBrainRegion)
-                    }
-                }
+                Some(id) => match genome.get_brain_region_context(&id) {
+                    // The parent must already exist in the genome
+                    Ok(_) => Ok(id),
+                    Err(_) => Err(GenomeEditRequestValidationError::InvalidParentBrainRegion),
+                },
                 None => {
                     // Get the root
                     Ok(genome.get_root_region_container().get_root_id().clone())

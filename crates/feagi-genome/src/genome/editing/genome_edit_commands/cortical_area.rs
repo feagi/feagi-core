@@ -13,7 +13,7 @@ pub struct GenomeEditCommandStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
     pub cortical_identifier: CorticalIdentifier,
-    pub neurogenesis: CorticalTypedSpawningParameters<FIQ>, // TODO swap
+    pub neurogenesis: CorticalTypedSpawningParameters<FIQ>, // TODO swap to one that holds the cortical id (not cortical id generator) (perhaps making a generic works for holding that context?)
     pub parent_region: BrainRegionID
 }
 
