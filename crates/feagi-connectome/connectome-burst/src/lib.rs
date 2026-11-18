@@ -2,6 +2,9 @@
 //! toggled by a feature of the same name
 
 pub mod npu_workers;
+pub mod worker_commands;
+
+mod timing;
 
 #[cfg(feature = "burst-cpu")]
 /// Running the FEAGI neural model on the CPU. This module contains various engines to do that for

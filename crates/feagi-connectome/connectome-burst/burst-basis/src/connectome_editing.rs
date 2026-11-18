@@ -1,138 +1,128 @@
+//! Connectome Editing allows for changing the state of the connectome from the outside. This
+//! includes anything from just forcing firing some neurons to editing genome properties to 
+//! adding / removing cortical areas (these types of edits are considered "reshaping" and require
+//! the flag for this to be enabled and requires alloc).
+
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
-use connectome_basis::visualization::NeuronVisualizationVoxelByteIndex;
-use connectome_models::neuron_models::models::NMNeurogenesisStorageOrGenerator;
+use crate::connectome_reshaping::{ConnectomeReshapeStepEnum, ConnectomeReshapeStepResultantEnum};
 
-/// Implements `ConnectomeEditStep`, `ConnectomeEditStepResultant`, and the conversions into
-/// `ConnectomeEditStepEnum` / `ConnectomeEditStepResultantEnum` for a single step.
-/// The optional `<FIQ>` marks that the step and resultant structs are generic over FIQ
-macro_rules! _impl_connectome_edit_step_requirements {
-    {$StepSpecificName:ident $(<$Generic:ident>)?} => {
-        paste::paste! {
+//region Root Traits
 
-            impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for [<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)? {
-                type Resultant = [<ConnectomeEditResultant $StepSpecificName>]$(<$Generic>)?;
-            }
-
-            impl<FIQ: FeagiIndexQuantization> ConnectomeEditStepResultant<FIQ> for [<ConnectomeEditResultant $StepSpecificName>]$(<$Generic>)? {}
-
-            impl<FIQ: FeagiIndexQuantization> From<[<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)?> for ConnectomeEditStepEnum<FIQ> {
-                fn from(value: [<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)?) -> Self {
-                    ConnectomeEditStepEnum::$StepSpecificName(value)
-                }
-            }
-
-            impl<FIQ: FeagiIndexQuantization> From<[<ConnectomeEditResultant $StepSpecificName>]$(<$Generic>)?> for ConnectomeEditStepResultantEnum<FIQ> {
-                fn from(value: [<ConnectomeEditResultant $StepSpecificName>]$(<$Generic>)?) -> Self {
-                    ConnectomeEditStepResultantEnum::$StepSpecificName(value)
-                }
-            }
-        }
-    };
+/// Commands relevant to a specific burst engine
+pub trait ConnectomeEditStep<FIQ: FeagiIndexQuantization>: Sized + Into<ConnectomeEditEnum<FIQ>> {
+    /// What the response must be
+    type Resultant: ConnectomeEditResultant<FIQ>;
 }
 
-/// Creates ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization>,
-/// ConnectomeEditStepResultantEnum<FIQ: FeagiIndexQuantization>,
-/// ConnectomeEditStepEnumHandler<FIQ: FeagiIndexQuantization>
-macro_rules! create_step_and_result_enums {
-    {
-        $($StepSpecificName:ident $(<$Generic:ident>)?, )+
-    } => {
+/// A non-error response for a given edit
+pub trait ConnectomeEditResultant<FIQ: FeagiIndexQuantization>: Sized + Into<ConnectomeEditResultantEnum<FIQ>> {}
 
-        paste::paste! {
+/// Handling a specific edit to get a response or an error
+pub trait ConnectomeEditHandler<FIQ: FeagiIndexQuantization, Command: ConnectomeEditStep<FIQ>> {
+    /// Burst engine tries to process the request
+    async fn handle_edit(&mut self, edit: Command) -> Result<Command::Resultant, ConnectomeEditError<FIQ>>;
+}
 
-            pub enum ConnectomeEditStepEnum<FIQ: FeagiIndexQuantization> {
-                $($StepSpecificName([<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)?),)+
-            }
+//endregion
 
-            pub enum ConnectomeEditStepResultantEnum<FIQ: FeagiIndexQuantization> {
-                $($StepSpecificName([<ConnectomeEditResultant $StepSpecificName>]$(<$Generic>)?),)+
-            }
+//region Grouped via Enums
 
-            /// Implemented by burst engines that can handle every edit step
-            pub trait ConnectomeEditStepEnumHandler<FIQ: FeagiIndexQuantization>:
-            Sized
-            $(+ ConnectomeEditStepHandler<FIQ, [<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)?>)+
-            {
-                async fn handle_connectome_edit_step_enum(&mut self, step: ConnectomeEditStepEnum<FIQ>)
-                    -> Result<ConnectomeEditStepResultantEnum<FIQ>, ConnectomeEditError<FIQ>> {
+pub trait ConnectomeEditEnumHandler<FIQ: FeagiIndexQuantization>:
+    Sized + ConnectomeEditHandler<FIQ, ConnectomeEditNothing>
++ ConnectomeEditHandler<FIQ, ConnectomeEditReshapeStep<FIQ>>
+{
+    /// Has the burst engine run some edit
+    async fn handle_connectome_edit_enum(
+        &mut self,
+        edit: ConnectomeEditEnum<FIQ>,
+    ) -> Result<ConnectomeEditResultantEnum<FIQ>, ConnectomeEditError<FIQ>> {
+        match edit {
+            ConnectomeEditEnum::Nothing(a) => self.handle_edit(a),
 
-                    match step {
-                        $(
-                            ConnectomeEditStepEnum::$StepSpecificName(step) => {
-                                <Self as ConnectomeEditStepHandler<FIQ, [<ConnectomeEditStep $StepSpecificName>]$(<$Generic>)?>>
-                                    ::handle_edit(self, step).await.map(Into::into)
-                            }
-                        )+
-                    }
-                }
-            }
-
-            $( _impl_connectome_edit_step_requirements!($StepSpecificName $(<$Generic>)?); )+
-
+            #[cfg(feature = "allow-reshape-edits")]
+            ConnectomeEditEnum::EditConnectomeStep(a) => self.handle_edit(a),
         }
-
     }
 }
 
-/// Defines some sort of edit step for the connectome, and the result that should be returned
-pub trait ConnectomeEditStep<FIQ: FeagiIndexQuantization>: Sized + Into<ConnectomeEditStepEnum<FIQ>> {
-    /// What would be returned if everything went fine
-    type Resultant: ConnectomeEditStepResultant<FIQ>;
+/// Commands relevant to a specific burst engine as a passable enum
+pub enum ConnectomeEditEnum<FIQ: FeagiIndexQuantization> {
+    Nothing(ConnectomeEditNothing),
+    // TODO more (in memory stuff)
+    #[cfg(feature = "allow-reshape-edits")]
+    EditConnectomeStep(ConnectomeEditReshapeStep<FIQ>),
 }
 
-/// What an edit step returns
-pub trait ConnectomeEditStepResultant<FIQ: FeagiIndexQuantization>: Sized + Into<ConnectomeEditStepResultantEnum<FIQ>> {}
-
-/// A variant of this is implemented for every edit step on an editable burst engine
-pub trait ConnectomeEditStepHandler<FIQ: FeagiIndexQuantization, Edit: ConnectomeEditStep<FIQ>> {
-    /// Handle running the edit
-    async fn handle_edit(&mut self, step: Edit) -> Result<Edit::Resultant, ConnectomeEditError<FIQ>>;
+pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
+    Nothing(ConnectomeEditResultantNothing),
+    #[cfg(feature = "allow-reshape-edits")]
+    EditConnectomeStep(ConnectomeEditReshapeStepResultant<FIQ>),
 }
 
-// Generate `ConnectomeEditStepEnum`, `ConnectomeEditStepResultantEnum`, `ConnectomeEditStepEnumHandler`,
-// and the trait / conversion impls for each step. Append `<FIQ>` if the step structs are generic over FIQ.
-create_step_and_result_enums! {
-    Nothing,
-    CorticalAreaAdd<FIQ>,
-}
+//endregion
 
-//region Steps
+//region Edits and Resulants
 
 //region Nothing
 
-pub struct ConnectomeEditStepNothing;
+/// Does nothing. Effectively a placeholder for some things
+pub struct ConnectomeEditNothing;
 
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditNothing {
+    type Resultant = ConnectomeEditResultantNothing;
+}
+
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditEnum<FIQ>> for ConnectomeEditNothing {
+    fn into(self) -> ConnectomeEditEnum<FIQ> {
+        ConnectomeEditEnum::Nothing(self)
+    }
+}
+
+/// Response to a Nothing Command. No possible error
 pub struct ConnectomeEditResultantNothing;
 
-//endregion
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditResultant<FIQ> for ConnectomeEditResultantNothing {}
 
-//region Cortical Areas
-
-//region Add
-
-pub struct ConnectomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
-    pub cortical_area_neurogenesis: NMNeurogenesisStorageOrGenerator<FIQ>,
-}
-
-pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
-    pub new_cortical_index: CorticalAreaEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
-    pub visualization_start_index: NeuronVisualizationVoxelByteIndex<FIQ::NeuronIndexQuant>,
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditResultantEnum<FIQ>> for ConnectomeEditResultantNothing {
+    fn into(self) -> ConnectomeEditResultantEnum<FIQ> {
+        ConnectomeEditResultantEnum::Nothing(self)
+    }
 }
 
 //endregion
 
-// TODO DELETE
+// TODO Edit in place
 
-// TODO RESIZE
+// TODO Force Fire
 
-//endregion
+// TODO Probes
 
-//region Cortical Mappings
+//region Connectome Reshaping
 
-// TODO ADD
+// NOTE: ConnectomeReshapeStepEnum<FIQ> if from another mod, as is ConnectomeEditStepResultantEnum<FIQ
 
-// TODO DELETE
+type ConnectomeEditReshapeStep<FIQ: FeagiIndexQuantization> = ConnectomeReshapeStepEnum<FIQ>;
+
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditReshapeStep<FIQ> {
+    type Resultant = ConnectomeEditReshapeStepResultant<FIQ>;
+}
+
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditEnum<FIQ>> for ConnectomeEditReshapeStep<FIQ> {
+    fn into(self) -> ConnectomeEditEnum<FIQ> {
+        ConnectomeEditEnum::EditConnectomeStep(self)
+    }
+}
+
+type ConnectomeEditReshapeStepResultant<FIQ: FeagiIndexQuantization> = ConnectomeReshapeStepResultantEnum<FIQ>;
+
+impl<FIQ: FeagiIndexQuantization> ConnectomeEditResultant<FIQ> for ConnectomeReshapeStepResultantEnum<FIQ> {}
+
+impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditResultantEnum<FIQ>> for ConnectomeReshapeStepResultantEnum<FIQ> {
+    fn into(self) -> ConnectomeEditResultantEnum<FIQ> {
+        ConnectomeEditResultantEnum::EditConnectomeStep(self)
+    }
+}
 
 //endregion
 
@@ -140,20 +130,35 @@ pub struct ConnectomeEditResultantCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectomeEditError<FIQ: FeagiIndexQuantization> {
-    #[error("Unknown Failure. Connectome Corruption assumed")]
-    UnknownFailure,
-    #[error("Cortical area index {0} is invalid and cannot be selected for this operation")]
+    #[error("Burst Engine has failed! {0}")]
+    GeneralEngineFailure(&'static str, bool), // second bool indicates if corrupt
+    #[error("Cortical area index {0} is invalid and cannot be read for this operation")]
     InvalidCorticalAreaIndex(CorticalAreaEngineIndex<FIQ>),
-    #[error("A computation exceeding possible quantized indexing limits was attempted!")]
-    ExceedsIndexQuantization,
+
+    #[cfg(feature = "allow-reshape-edits")]
+    #[error(transparent)]
+    ConnectomeReshapingError {
+        completed_steps: Vec<ConnectomeReshapeStepResultantEnum<FIQ>>,
+        error: ConnectomeEditError<FIQ>,
+    },
+    #[cfg(not(feature = "allow-reshape-edits"))]
+    /// This is to be returned on traits implementations where editing may be disabled
+    #[error("Burst Engine has received a connectome edit request, but this feature is disabled! Ignoring!")]
+    ConnectomeEditingNotAllowed,
 }
 
 impl<FIQ: FeagiIndexQuantization> ConnectomeEditError<FIQ> {
-    pub fn is_corrupted(&self) -> bool {
+    /// Returns true if connectome is corrupted (IE not resumable)
+    pub fn is_connectome_corrupted(&self) -> bool {
         match &self {
-            ConnectomeEditError::UnknownFailure => true,
-            ConnectomeEditError::ExceedsIndexQuantization => true, // if this happens, something went VERY wrong
-            _ => false,
+            ConnectomeEditError::GeneralEngineFailure(_, c) => *c,
+            ConnectomeEditError::InvalidCorticalAreaIndex(i) => false,
+
+            #[cfg(feature = "allow-reshape-edits")]
+            ConnectomeEditError::ConnectomeReshapingError { error, .. } => error.is_corrupted(),
+
+            #[cfg(not(feature = "allow-reshape-edits"))]
+            ConnectomeEditError::ConnectomeEditingNotAllowed => false,
         }
     }
 }

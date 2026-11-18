@@ -23,7 +23,7 @@ alloc = [
 ]
 
 
-allow-edit-commands = [
+allow-reshape-edits = [
     "alloc"
 ]
 

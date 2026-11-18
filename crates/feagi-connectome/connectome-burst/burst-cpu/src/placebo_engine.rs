@@ -4,7 +4,7 @@
 use crate::NeuronProcessorSingleEngineVisualizationTransmitter;
 use burst_basis::burst_engine::{BurstEngine, BurstEngineIndex};
 use burst_basis::burst_engine_commands::EngineChangeCommandOtherError;
-use burst_basis::connectome_editing::{ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
+use burst_basis::connectome_reshaping::{ConnectomeEditResultantCorticalAreaAdd, ConnectomeEditResultantEnum, ConnectomeEditStepEnum};
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use connectome_basis::visualization::NeuronVisualizationVoxelByteIndex;

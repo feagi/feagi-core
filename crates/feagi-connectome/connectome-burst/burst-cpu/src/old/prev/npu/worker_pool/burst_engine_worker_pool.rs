@@ -64,7 +64,7 @@ pub fn composable_burst_engine_worker_pool<
                         // Failed to get NPU connection, exit
                         
                         for worker_transmitter in worker_command_transmitters {
-                            worker_transmitter.
+                            worker_transmitter
                         }
                         
                         break BurstEnginePoolConclusion {
