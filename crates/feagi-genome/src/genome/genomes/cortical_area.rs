@@ -6,6 +6,7 @@ use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::Cortical
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_basis::visualization::{CorticalAreaVisualizationContext, NeuronVisualizationVoxelByteIndex};
 use std::collections::{HashMap, HashSet};
+use feagi_connectome::connectome_burst::burst_basis::multi_engine::BurstEngineIndex;
 
 pub trait CorticalAreaSet<FIQ: FeagiIndexQuantization> {
     type GenomeContext: GenomeCorticalAreaContext;

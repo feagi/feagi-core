@@ -1,9 +1,9 @@
 pub mod brain_region;
 pub mod cortical_area;
 
-use crate::genome::editing::genome_edit_requests::steps::brain_region::GenomeEditStepBrainRegionAdd;
-use crate::genome::editing::genome_edit_requests::steps::cortical_area::GenomeEditStepCorticalAreaAdd;
 use crate::genome::editing::genome_edit_requests::GenomeEditSequenceIntensity;
+use crate::genome::editing::steps::brain_region::GenomeEditStepBrainRegionAdd;
+use crate::genome::editing::steps::cortical_area::GenomeEditStepCorticalAreaAdd;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -21,7 +21,7 @@ where
 
 
 pub trait GenomeEditStepEnum<FIQ: FeagiIndexQuantization>:
-Clone + Debug + Serialize + DeserializeOwned
+Clone + Debug + Serialize + DeserializeOwned + Into<GenomeEditStepEnumAny<FIQ>>
 {
     fn get_intensity(&self) -> GenomeEditSequenceIntensity;
 }
@@ -45,6 +45,8 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditStepEnum<FIQ> for GenomeEditStepEnum
 }
 
 
+
+
 /// Allows effectively any edit action, such as adding, removing, or changing properties
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "")]
@@ -58,6 +60,19 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditStepEnum<FIQ> for GenomeEditStepEnum
         match self {
             GenomeEditStepEnumAny::AddBrainRegion(_) => <GenomeEditStepBrainRegionAdd as GenomeEditStep<FIQ>>::INTENSITY,
             GenomeEditStepEnumAny::AddCorticalArea(_) => <GenomeEditStepCorticalAreaAdd<FIQ> as GenomeEditStep<FIQ>>::INTENSITY,
+        }
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> From<GenomeEditStepEnumAdditive<FIQ>> for GenomeEditStepEnumAny<FIQ> {
+    fn from(value: GenomeEditStepEnumAdditive<FIQ>) -> Self {
+        match value {
+            GenomeEditStepEnumAdditive::AddBrainRegion(a) => {
+                GenomeEditStepEnumAny::AddBrainRegion(a)
+            }
+            GenomeEditStepEnumAdditive::AddCorticalArea(a) => {
+                GenomeEditStepEnumAny::AddCorticalArea(a)
+            }
         }
     }
 }

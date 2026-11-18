@@ -4,6 +4,9 @@
 pub mod npu_workers;
 pub mod worker_commands;
 
+/// Allow access to burst basis // TODO restrict some aspects maybe?
+pub use burst_basis;
+
 mod timing;
 
 #[cfg(feature = "burst-cpu")]

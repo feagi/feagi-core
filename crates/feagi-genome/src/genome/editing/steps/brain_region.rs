@@ -1,6 +1,6 @@
 use crate::basis::brain_region::{BrainRegionID, BrainRegionIdAndAncestryConstructor};
-use crate::genome::editing::genome_edit_requests::steps::{GenomeEditStep, GenomeEditStepEnumAdditive, GenomeEditStepEnumAny};
 use crate::genome::editing::genome_edit_requests::GenomeEditSequenceIntensity;
+use crate::genome::editing::steps::{GenomeEditStep, GenomeEditStepEnumAdditive, GenomeEditStepEnumAny};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::{Deserialize, Serialize};

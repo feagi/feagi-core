@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
-use feagi_basis::target_frequency::TargetFrequency;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::basis::brain_region::BrainRegionIdAndAncestryConstructor;
 use crate::genome::editing::genome_edit_requests::{GenomeEditRequests, GenomeEditSequenceIntensity};
-use crate::genome::editing::genome_edit_requests::steps::GenomeEditStepEnumAdditive;
+use crate::genome::editing::steps::GenomeEditStepEnumAdditive;
 use crate::genome::genome_object::GenomeObjectMetadata;
+use feagi_basis::target_frequency::TargetFrequency;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use serde::{Deserialize, Serialize};
 
 
 /// A Genome Edit Sequence specific for loading a new genome. Will cause a genome reload.

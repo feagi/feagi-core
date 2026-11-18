@@ -1,5 +1,6 @@
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use crate::genome::editing::genome_edit_requests::load_genome::GenomeEditRequestsLoadGenome;
 use crate::genome::genomes::brain_region::{BrainRegionSet, BrainRegionSetDesigner};
 use crate::genome::genomes::cortical_area::{CorticalAreaSet, CorticalAreaSetDesigner};
 
@@ -14,18 +15,16 @@ pub struct GenomeDesigner<FIQ: FeagiIndexQuantization>  {
 
 impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
     
-    pub fn new_from_load_genome_sequence(sequence: GenomeEditSequence<FIQ, GenomeEditSequenceContextLoadGenome>, npu: ()) -> Result<Self, ()> {
+    pub fn new_from_load_genome_sequence(sequence: GenomeEditRequestsLoadGenome<FIQ>, npu: ()) -> Result<Self, ()> {
 
-        let GenomeEditSequence {
-            context,
+        let GenomeEditRequestsLoadGenome {
+            genome_metadata,
+            target_burst_rate,
+            new_root_ids,
             steps
         } = sequence;
 
-        let GenomeEditSequenceContextLoadGenome {
-            genome_metadata,
-            target_burst_rate,
-            new_root_ids
-        } = context;
+
 
         let mut genome = GenomeDesigner {
             state: DesignerGenomeState::Paused,
@@ -33,6 +32,8 @@ impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
             cortical_areas: CorticalAreaSetDesigner::new(),
             neural_processor: npu
         };
+
+        
 
         // TODO validate_genome_sequence_steps_and_build_connectome_steps
         // TODO if connectome steps, interupt connectome, send sequence, get result

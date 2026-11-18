@@ -127,10 +127,6 @@ impl BrainRegionSet for BrainRegionSetDesigner {
         metadata: GenomeObjectMetadata,
         positioning: GenomeObjectPositioning,
     ) -> Result<(), BrainRegionSetError> {
-        let parent = self
-            .get_brain_region_ref_mut(parent_id)
-            .ok_or_else(|| BrainRegionSetError::BrainRegionIDNotFound)?;
-
         let (id, ancestor_id) = ids.into_pair();
         if self.get_brain_region_ref(&id).is_some() {
             return Err(BrainRegionSetError::BrainRegionIDAlreadyExists);
@@ -138,6 +134,10 @@ impl BrainRegionSet for BrainRegionSetDesigner {
         if self.contains_ancestry_id(&ancestor_id) {
             return Err(BrainRegionSetError::BrainRegionAncestryIDAlreadyExists);
         }
+
+        let parent = self
+            .get_brain_region_ref_mut(parent_id)
+            .ok_or_else(|| BrainRegionSetError::BrainRegionIDNotFound)?;
 
         match parent {
             BrainRegionContainerRefMut::Root(reg) => {
@@ -234,14 +234,18 @@ impl BrainRegionGenomeContext for BrainRegionContextDesigner {}
 
 //region Hierarchy Context
 
-pub trait BrainRegionHierarchyContext: Clone {}
+pub trait BrainRegionHierarchyContext: Clone {
+    const IS_ROOT: bool;
+}
 
 #[derive(Clone)]
 pub struct BrainRegionHierarchyContextRoot {
     pub root_id: BrainRegionID,
 }
 
-impl BrainRegionHierarchyContext for BrainRegionHierarchyContextRoot {}
+impl BrainRegionHierarchyContext for BrainRegionHierarchyContextRoot {
+    const IS_ROOT: bool = true;
+}
 
 #[derive(Clone)]
 pub struct BrainRegionHierarchyContextInner {
@@ -249,7 +253,9 @@ pub struct BrainRegionHierarchyContextInner {
     pub positioning: GenomeObjectPositioning,
 }
 
-impl BrainRegionHierarchyContext for BrainRegionHierarchyContextInner {}
+impl BrainRegionHierarchyContext for BrainRegionHierarchyContextInner {
+    const IS_ROOT: bool = false;
+}
 
 //endregion
 
@@ -261,6 +267,7 @@ impl BrainRegionHierarchyContext for BrainRegionHierarchyContextInner {}
 pub trait BrainRegionContainerUniversal {
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID;
     fn get_metadata(&self) -> &GenomeObjectMetadata;
+    fn is_root_region(&self) -> bool;
 }
 
 /// Methods expected for any mut container type, all brain regions will have these mut methods
@@ -287,6 +294,7 @@ impl<CachingContext: BrainRegionGenomeContext, HierarchyContext: BrainRegionHier
     fn get_metadata(&self) -> &GenomeObjectMetadata {
         &self.metadata
     }
+    fn is_root_region(&self) -> bool { HierarchyContext::IS_ROOT }
 }
 
 impl<CachingContext: BrainRegionGenomeContext, HierarchyContext: BrainRegionHierarchyContext> BrainRegionContainerUniversalMut
@@ -359,6 +367,13 @@ impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal
             BrainRegionContainerRef::Inner(region) => region.get_metadata(),
         }
     }
+
+    fn is_root_region(&self) -> bool {
+        match self {
+            BrainRegionContainerRef::Root(_) => {true}
+            BrainRegionContainerRef::Inner(_) => {false}
+        }
+    }
 }
 
 pub enum BrainRegionContainerRefMut<'a, CachingContext: BrainRegionGenomeContext> {
@@ -378,6 +393,13 @@ impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal
         match self {
             BrainRegionContainerRefMut::Root(region) => region.get_metadata(),
             BrainRegionContainerRefMut::Inner(region) => region.get_metadata(),
+        }
+    }
+
+    fn is_root_region(&self) -> bool {
+        match self {
+            BrainRegionContainerRefMut::Root(_) => {true}
+            BrainRegionContainerRefMut::Inner(_) => {false}
         }
     }
 }

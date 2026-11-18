@@ -14,9 +14,11 @@ use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNe
 #[cfg(feature = "alloc")]
 use feagi_connectome::connectome_models::neuron_models::models::NMNeurogenesisStorageOrGenerator;
 use crate::basis::cortical_area::cortical_identifiers::{ CorticalIdentifierInnerEncoder};
+use crate::basis::cortical_area::foundation::power::CTFoundationPower;
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedGenerator, CTProcessingSubtypedKind};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedSpawningParameters, CTProcessingSubtypedStorage, CTProcessingSubtypedStorageOrGenerator};
+use crate::basis::cortical_area::processing::interconnect::CTProcessingInterconnect;
 //region Cortical Type
 
 /// A cortical type is a higher level description of a cortical area. It has a set layout, but
@@ -132,6 +134,15 @@ pub enum CorticalTypedSpawningParameters<FIQ: FeagiIndexQuantization> {
     Processing(CTProcessingSubtypedSpawningParameters<FIQ>)
 }
 
+impl<FIQ: FeagiIndexQuantization> CorticalTypedSpawningParameters<FIQ> {
+    pub fn get_allowed_regions(&self) -> CorticalAllowedRegions {
+        match &self {
+            CorticalTypedSpawningParameters::Foundation(_) => {CTFoundationPower::ALLOWED_REGIONS}
+            CorticalTypedSpawningParameters::Processing(_) => {CTProcessingInterconnect::ALLOWED_REGIONS}
+        }
+    }
+}
+
 
 //endregion
 
@@ -145,4 +156,20 @@ pub enum CorticalAllowedRegions {
     RootOnly,
     InnerOnly,
     RootOrInner, // look, its a bitset!
+}
+
+impl CorticalAllowedRegions {
+    pub fn is_root_allowed(&self) -> bool {
+        match &self {
+            CorticalAllowedRegions::InnerOnly => false,
+            _ => true
+        }
+    }
+
+    pub fn is_inner_allowed(&self) -> bool {
+        match &self {
+            CorticalAllowedRegions::RootOnly => false,
+            _ => true
+        }
+    }
 }
