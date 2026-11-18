@@ -4,17 +4,127 @@
 use crate::timing::std_impls::NPUTimings;
 use crate::worker_commands::{NeuralProcessingUnitRequest, NeuralProcessingUnitResultant};
 use burst_basis::connectome_editing::ConnectomeEditError;
-use burst_basis::multi_engine::SingleEngineIndexing;
-use burst_basis::visualization::BurstEngineVisualizationSupport;
+use burst_basis::multi_engine::{BurstEngineIndex, SingleEngineIndexing};
+use burst_basis::visualization::{AllocVisualizationReceiver, AllocVisualizationTransmitter, BurstEngineVisualizationSupport};
 use burst_basis::BurstEngine;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::FeagiResponderAlloc;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_processor::FeagiWorkerCommandProcessor;
 use feagi_basis::parallelism::feagi_worker::worker_internals::feagi_worker_command_router::FeagiWorkerCommandRouter;
 use feagi_basis::target_frequency::TargetFrequency;
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
+use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, WorkerStartError};
+use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_implementation::impl_std::FeagiStdThreadSpawner;
+
+/// How many commands can be in queue on this worker at one time
+const COMMAND_QUEUE_LENGTH: usize = 8;
+
+/// How many visualizations the visualization channel holds. One for the listener to read while the
+/// engine writes the other
+const VISUALIZATION_CHANNEL_SLOTS: usize = 2;
+
+/// Responsible for spawning a neuron processor running a single burst engine. The engine is
+/// initialized on the worker's own thread, so only its init parameters need to be `Send`
+pub struct NeuronProcessorSingleEngineWorkerBuilder<
+    FIQ: FeagiIndexQuantization,
+    VIS: BurstEngineVisualizationSupport,
+    Engine: BurstEngine<FIQ, VIS>
+> {
+    /// The rate the burst loop starts ticking at
+    pub initial_target_frequency: TargetFrequency,
+    /// The rate bursts start sending visualization at
+    pub initial_visualization_frequency: TargetFrequency,
+    /// What the burst engine is initialized from
+    pub engine_init_parameters: Engine::InitParameters,
+}
+
+// This is STD thread only for the time being
+impl<FIQ, VIS, Engine> FeagiWorkerBuilder<FeagiStdThreadSpawner> for NeuronProcessorSingleEngineWorkerBuilder<FIQ, VIS, Engine>
+where
+    FIQ: FeagiIndexQuantization,
+    VIS: BurstEngineVisualizationSupport,
+    Engine: BurstEngine<FIQ, VIS>
+{
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
+    /// The visualization transmitter from `spawn_related_channel_pairs`, handed to the engine
+    type BuildInputs = VIS::VisualizationTransmitter;
+    type BuildOutputs = ();
+    /// The visualization channel. The receiver goes to whatever listens to visualization
+    type RequiredChannelPairs = (
+        AllocVisualizationTransmitter<FIQ>,
+        AllocVisualizationReceiver<FIQ>,
+    );
+    type WorkerCommandHandler = SingleEngineWorkerProcessor<FIQ, VIS, Engine>;
+    type WorkerStartError = NeuronProcessorSingleEngineWorkerBuilderError<Engine::InitError>;
+
+
+    fn build_worker(
+        self,
+        spawner: &FeagiStdThreadSpawner,
+        inputs: Self::BuildInputs
+    ) -> Result<
+        (
+            FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend,
+                <Self::WorkerCommandHandler as FeagiWorkerCommandProcessor>::CustomRequest,
+                <Self::WorkerCommandHandler as FeagiWorkerCommandProcessor>::CustomResponse>,
+            Self::BuildOutputs
+        ),
+        WorkerStartError<Self::WorkerStartError>>
+    {
+        let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);
+        let (init_result_sender, init_result_receiver) = std::sync::mpsc::sync_channel(1);
+        let Self {
+            initial_target_frequency,
+            initial_visualization_frequency,
+            engine_init_parameters,
+        } = self;
+
+        let handle = spawner.spawn_worker(move || async move {
+            // Index will always be zero
+            let engine = match Engine::init_burst_engine(engine_init_parameters, BurstEngineIndex(0), inputs).await {
+                Ok(engine) => {
+                    // The builder only stops waiting by receiving, so this cannot fail
+                    let _ = init_result_sender.send(Ok(()));
+                    engine
+                }
+                Err(error) => {
+                    let _ = init_result_sender.send(Err(error));
+                    return;
+                }
+            };
+            let handler = SingleEngineWorkerProcessor::new(
+                engine,
+                initial_target_frequency,
+                initial_visualization_frequency,
+                false);
+            burst_loop(cmd_responder, handler).await
+        })?;
+
+        match init_result_receiver.recv() {
+            Ok(Ok(())) => Ok((FeagiWorker::new(cmd_requester, handle), ())),
+            Ok(Err(error)) => Err(WorkerStartError::WorkerError(NeuronProcessorSingleEngineWorkerBuilderError::EngineInit(
+                error,
+            ))),
+            // The thread exited (panicked) before reporting
+            Err(_) => Err(WorkerStartError::WorkerError(
+                NeuronProcessorSingleEngineWorkerBuilderError::WorkerExitedDuringInit,
+            )),
+        }
+    }
+
+    fn spawn_related_channel_pairs(&self) -> Self::RequiredChannelPairs {
+        FeagiChannelAllocBuilder::create_channels(VISUALIZATION_CHANNEL_SLOTS)
+    }
+}
+
+
+
+
+//region Processor
 
 /// The state of the single engine NPU that its commands act upon. Holds only settings; the burst
 /// loop owns the schedule and reads these each tick
@@ -38,7 +148,7 @@ where
     VIS: BurstEngineVisualizationSupport,
     Engine: BurstEngine<FIQ, VIS>,
 {
-    pub(crate) fn new(burst_engine: Engine, burst_frequency: TargetFrequency, visualization_frequency: TargetFrequency, paused: bool) -> Self {
+    fn new(burst_engine: Engine, burst_frequency: TargetFrequency, visualization_frequency: TargetFrequency, paused: bool) -> Self {
         Self {
             burst_frequency,
             visualization_frequency,
@@ -78,9 +188,9 @@ where
                 NeuralProcessingUnitResultant::Resumed
             }
             NeuralProcessingUnitRequest::ConnectomeEdit(i, edit) => {
-                self.paused = true; 
+                self.paused = true;
                 // NOTE: System will pause when edits are submitted, and must be unpaused after
-                                    
+
                 // index is irrelevant, just return it
                 NeuralProcessingUnitResultant::ConnectomeEdit(i, self.burst_engine.handle_connectome_edit_enum(edit).await)
             }
@@ -104,6 +214,17 @@ where
             }
         }
     }
+}
+
+//endregion
+
+/// Why the single engine neuron processor failed to start
+#[derive(Debug, thiserror::Error)]
+pub enum NeuronProcessorSingleEngineWorkerBuilderError<InitError: core::error::Error + 'static> {
+    #[error("Burst engine failed to init: {0}")]
+    EngineInit(#[source] InitError),
+    #[error("Worker exited before the burst engine finished initializing")]
+    WorkerExitedDuringInit,
 }
 
 /// The burst loop of a single engine NPU. Since theres only 1 engine, we just reuse the thread

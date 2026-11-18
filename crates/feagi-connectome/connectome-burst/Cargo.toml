@@ -46,5 +46,8 @@ burst-esp32 = { path = "burst-esp32", optional = true }
 # Sibling Crates
 connectome-basis = { path = "../connectome-basis", default-features = false }
 
+# External Crates
+thiserror = {workspace = true}
+
 [lints]
 workspace = true

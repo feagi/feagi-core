@@ -352,6 +352,7 @@ dependencies = [
  "burst-esp32",
  "connectome-basis",
  "feagi-basis",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

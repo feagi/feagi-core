@@ -104,7 +104,7 @@ where
     FIQ: FeagiIndexQuantization,
     VIS: BurstEngineVisualizationSupport
 {
-    async fn handle_edit(&mut self, edit: burst_basis::connectome_editing::ConnectomeEditReshapeStep<FIQ>) -> Result<burst_basis::connectome_editing::ConnectomeEditReshapeStep<FIQ>::Resultant, ConnectomeEditError<FIQ>> {
+    async fn handle_edit(&mut self, edit: burst_basis::connectome_editing::ConnectomeEditReshapeStep<FIQ>) -> Result<<burst_basis::connectome_editing::ConnectomeEditReshapeStep<FIQ> as burst_basis::connectome_editing::ConnectomeEditStep<FIQ>>::Resultant, ConnectomeEditError<FIQ>> {
         todo!()
     }
 }

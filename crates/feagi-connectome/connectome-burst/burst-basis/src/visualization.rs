@@ -9,7 +9,7 @@ pub trait BurstEngineVisualizationSupport: Send {
     const VISUALIZATION_SUPPORTED: bool;
 
     /// Define the transmitter to use (or none if no visualization)
-    type VisualizationTransmitter;
+    type VisualizationTransmitter: Send;
 }
 
 /// No visualization support possible on this burst engine
