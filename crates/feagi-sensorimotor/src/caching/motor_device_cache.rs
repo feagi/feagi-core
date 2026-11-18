@@ -1493,9 +1493,9 @@ mod channel_updated_last_decode_tests {
             .misc_data_register(unit, channels, handling, dims)
             .unwrap();
 
-        let id = MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-            handling, unit,
-        )[0];
+        let id =
+            MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(handling, unit)
+                [0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(2, 0, 0, 1.0);
         let mut fired = CorticalMappedXYZPNeuronVoxels::new();
