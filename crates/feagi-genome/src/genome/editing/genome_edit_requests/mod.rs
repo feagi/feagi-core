@@ -22,9 +22,10 @@ where
     
     /// Add a single step to the end of the list of requests of edits
     fn add_step(&mut self, step: impl Into<Self::EditStepEnum>);
-    
-    // TODO fn iterator to GenomeEditStep
-    
+
+    /// Iterate over the steps of this request, in the order they will be applied
+    fn iter_steps(&self) -> impl Iterator<Item = &Self::EditStepEnum>;
+
 }
 
 

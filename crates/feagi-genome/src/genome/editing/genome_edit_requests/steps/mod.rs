@@ -37,9 +37,9 @@ pub enum GenomeEditStepEnumAdditive<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditStepEnum<FIQ> for GenomeEditStepEnumAdditive<FIQ> {
     fn get_intensity(&self) -> GenomeEditSequenceIntensity {
-        match &self {
-            GenomeEditStepEnumAdditive::AddBrainRegion(a) => GenomeEditStepBrainRegionAdd::INTENSITY,
-            GenomeEditStepEnumAdditive::AddCorticalArea(a) => GenomeEditStepCorticalAreaAdd::INTENSITY,
+        match self {
+            GenomeEditStepEnumAdditive::AddBrainRegion(_) => <GenomeEditStepBrainRegionAdd as GenomeEditStep<FIQ>>::INTENSITY,
+            GenomeEditStepEnumAdditive::AddCorticalArea(_) => <GenomeEditStepCorticalAreaAdd<FIQ> as GenomeEditStep<FIQ>>::INTENSITY,
         }
     }
 }
@@ -55,9 +55,9 @@ pub enum GenomeEditStepEnumAny<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditStepEnum<FIQ> for GenomeEditStepEnumAny<FIQ> {
     fn get_intensity(&self) -> GenomeEditSequenceIntensity {
-        match &self {
-            GenomeEditStepEnumAny::AddBrainRegion(a) => GenomeEditStepBrainRegionAdd::INTENSITY,
-            GenomeEditStepEnumAny::AddCorticalArea(a) => GenomeEditStepCorticalAreaAdd::INTENSITY,
+        match self {
+            GenomeEditStepEnumAny::AddBrainRegion(_) => <GenomeEditStepBrainRegionAdd as GenomeEditStep<FIQ>>::INTENSITY,
+            GenomeEditStepEnumAny::AddCorticalArea(_) => <GenomeEditStepCorticalAreaAdd<FIQ> as GenomeEditStep<FIQ>>::INTENSITY,
         }
     }
 }

@@ -1,16 +1,13 @@
-use std::collections::{HashMap, HashSet};
 use crate::basis::brain_region::{BrainRegionAncestryID, BrainRegionID, BrainRegionIdAndAncestryConstructor};
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
+use std::collections::{HashMap, HashSet};
 
 /// Defines holding a brain region set of data
 pub trait BrainRegionSet: Sized {
     type BrainRegionContext: BrainRegionGenomeContext;
 
-    fn new_brain_region_set(
-        metadata: GenomeObjectMetadata,
-        ids: BrainRegionIdAndAncestryConstructor
-    ) -> Self;
+    fn new_brain_region_set(metadata: GenomeObjectMetadata, ids: BrainRegionIdAndAncestryConstructor) -> Self;
 
     fn contains_ancestry_id(&self, id: &BrainRegionAncestryID) -> bool;
 
@@ -18,34 +15,47 @@ pub trait BrainRegionSet: Sized {
 
     fn get_root_brain_region_container_mut(&mut self) -> &mut BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextRoot>;
 
+    fn get_inner_brain_region_container(
+        &self,
+        brain_region_id: &BrainRegionID,
+    ) -> Option<&BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>>;
 
-    fn get_inner_brain_region_container(&self, brain_region_id: &BrainRegionID) -> Option<&BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>>;
-
-    fn get_inner_brain_region_container_mut(&mut self, brain_region_id: &BrainRegionID) -> Option<&mut BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>>;
-
+    fn get_inner_brain_region_container_mut(
+        &mut self,
+        brain_region_id: &BrainRegionID,
+    ) -> Option<&mut BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>>;
 
     fn get_brain_region_ref(&self, brain_region_id: &BrainRegionID) -> Option<BrainRegionContainerRef<Self::BrainRegionContext>>;
 
     fn get_brain_region_ref_mut(&mut self, brain_region_id: &BrainRegionID) -> Option<BrainRegionContainerRefMut<Self::BrainRegionContext>>;
 
-    fn add_new_inner_brain_region(&mut self, ids: BrainRegionIdAndAncestryConstructor, parent_id: &BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> Result<(), BrainRegionSetError>;
+    fn add_new_inner_brain_region(
+        &mut self,
+        ids: BrainRegionIdAndAncestryConstructor,
+        parent_id: &BrainRegionID,
+        metadata: GenomeObjectMetadata,
+        positioning: GenomeObjectPositioning,
+    ) -> Result<(), BrainRegionSetError>;
 
     fn remove_inner_brain_region(&mut self, container_id: &BrainRegionID) -> Result<(), BrainRegionSetError>;
 
-    fn move_inner_brain_region(&mut self, moving: Self::BrainRegionContext,  from: &BrainRegionID, to: &BrainRegionID) -> Result<(), BrainRegionSetError>;
+    fn move_inner_brain_region(
+        &mut self,
+        moving: Self::BrainRegionContext,
+        from: &BrainRegionID,
+        to: &BrainRegionID,
+    ) -> Result<(), BrainRegionSetError>;
 
     fn add_cortical_area(&mut self, cortical_id: CorticalIdentifier, parent_id: &BrainRegionID) -> Result<(), BrainRegionSetError>;
 
-    fn move_cortical_area(&mut self, moving: Self::BrainRegionContext,  from: &BrainRegionID, to: &BrainRegionID) -> Result<(), BrainRegionSetError>;
+    fn move_cortical_area(&mut self, moving: Self::BrainRegionContext, from: &BrainRegionID, to: &BrainRegionID) -> Result<(), BrainRegionSetError>;
 }
-
 
 pub struct BrainRegionSetDesigner {
     root_brain_region: BrainRegionContainer<BrainRegionContextDesigner, BrainRegionHierarchyContextRoot>,
     inner_brain_regions: HashMap<BrainRegionID, BrainRegionContainer<BrainRegionContextDesigner, BrainRegionHierarchyContextInner>>,
-    contained_ancestry_ids: HashSet<BrainRegionAncestryID>
+    contained_ancestry_ids: HashSet<BrainRegionAncestryID>,
 }
-
 
 impl BrainRegionSet for BrainRegionSetDesigner {
     type BrainRegionContext = BrainRegionContextDesigner;
@@ -56,7 +66,7 @@ impl BrainRegionSet for BrainRegionSetDesigner {
         Self {
             root_brain_region,
             inner_brain_regions: Default::default(),
-            contained_ancestry_ids: Default::default()
+            contained_ancestry_ids: Default::default(),
         }
     }
 
@@ -72,70 +82,79 @@ impl BrainRegionSet for BrainRegionSetDesigner {
         &mut self.root_brain_region
     }
 
-    fn get_inner_brain_region_container(&self, brain_region_id: &BrainRegionID) -> Option<&BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>> {
+    fn get_inner_brain_region_container(
+        &self,
+        brain_region_id: &BrainRegionID,
+    ) -> Option<&BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>> {
         self.inner_brain_regions.get(brain_region_id)
     }
 
-    fn get_inner_brain_region_container_mut(&mut self, brain_region_id: &BrainRegionID) -> Option<&mut BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>> {
+    fn get_inner_brain_region_container_mut(
+        &mut self,
+        brain_region_id: &BrainRegionID,
+    ) -> Option<&mut BrainRegionContainer<Self::BrainRegionContext, BrainRegionHierarchyContextInner>> {
         self.inner_brain_regions.get_mut(brain_region_id)
     }
 
     fn get_brain_region_ref(&self, brain_region_id: &BrainRegionID) -> Option<BrainRegionContainerRef<Self::BrainRegionContext>> {
         if let Some(region) = self.inner_brain_regions.get(brain_region_id) {
-            return Some(BrainRegionContainerRef::Inner(region))
+            return Some(BrainRegionContainerRef::Inner(region));
         }
 
-        if brain_region_id == self.root_brain_region.get_root_id() { // check second since its only 1 region
-            return Some(BrainRegionContainerRef::Root(&self.root_brain_region))
+        if brain_region_id == self.root_brain_region.get_root_id() {
+            // check second since its only 1 region
+            return Some(BrainRegionContainerRef::Root(&self.root_brain_region));
         }
         None
     }
 
     fn get_brain_region_ref_mut(&mut self, brain_region_id: &BrainRegionID) -> Option<BrainRegionContainerRefMut<Self::BrainRegionContext>> {
         if let Some(region) = self.inner_brain_regions.get_mut(brain_region_id) {
-            return Some(BrainRegionContainerRefMut::Inner(region))
+            return Some(BrainRegionContainerRefMut::Inner(region));
         }
 
-        if brain_region_id == self.root_brain_region.get_root_id() { // check second since its only 1 region
-            return Some(BrainRegionContainerRefMut::Root(&mut self.root_brain_region))
+        if brain_region_id == self.root_brain_region.get_root_id() {
+            // check second since its only 1 region
+            return Some(BrainRegionContainerRefMut::Root(&mut self.root_brain_region));
         }
         None
     }
 
-    fn add_new_inner_brain_region(&mut self, ids: BrainRegionIdAndAncestryConstructor, parent_id: &BrainRegionID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning) -> Result<(), BrainRegionSetError> {
-        let parent = self.get_brain_region_ref_mut(parent_id).ok_or_else(
-            || {BrainRegionSetError::BrainRegionIDNotFound}
-        )?;
+    fn add_new_inner_brain_region(
+        &mut self,
+        ids: BrainRegionIdAndAncestryConstructor,
+        parent_id: &BrainRegionID,
+        metadata: GenomeObjectMetadata,
+        positioning: GenomeObjectPositioning,
+    ) -> Result<(), BrainRegionSetError> {
+        let parent = self
+            .get_brain_region_ref_mut(parent_id)
+            .ok_or_else(|| BrainRegionSetError::BrainRegionIDNotFound)?;
 
         let (id, ancestor_id) = ids.into_pair();
         if self.get_brain_region_ref(&id).is_some() {
-            return Err(BrainRegionSetError::BrainRegionIDAlreadyExists)
+            return Err(BrainRegionSetError::BrainRegionIDAlreadyExists);
         }
         if self.contains_ancestry_id(&ancestor_id) {
-            return Err(BrainRegionSetError::BrainRegionAncestryIDAlreadyExists)
+            return Err(BrainRegionSetError::BrainRegionAncestryIDAlreadyExists);
         }
 
         match parent {
             BrainRegionContainerRefMut::Root(reg) => {
                 if reg.context.contained_brain_regions.contains(&id) {
-                    return Err(BrainRegionSetError::BrainRegionIDAlreadyExists)
+                    return Err(BrainRegionSetError::BrainRegionIDAlreadyExists);
                 }
                 reg.context.contained_brain_regions.insert(id);
             }
             BrainRegionContainerRefMut::Inner(reg) => {
                 if reg.context.contained_brain_regions.contains(&id) {
-                    return Err(BrainRegionSetError::BrainRegionIDAlreadyExists)
+                    return Err(BrainRegionSetError::BrainRegionIDAlreadyExists);
                 }
                 reg.context.contained_brain_regions.insert(id);
             }
         }
 
-        let container = BrainRegionContainer::new_inner(
-            ancestor_id,
-            metadata,
-            positioning,
-            *parent_id
-        );
+        let container = BrainRegionContainer::new_inner(ancestor_id, metadata, positioning, *parent_id);
 
         self.inner_brain_regions.insert(id, container);
         self.contained_ancestry_ids.insert(ancestor_id);
@@ -146,26 +165,31 @@ impl BrainRegionSet for BrainRegionSetDesigner {
         todo!()
     }
 
-    fn move_inner_brain_region(&mut self, moving: Self::BrainRegionContext, from: &BrainRegionID, to: &BrainRegionID) -> Result<(), BrainRegionSetError> {
+    fn move_inner_brain_region(
+        &mut self,
+        moving: Self::BrainRegionContext,
+        from: &BrainRegionID,
+        to: &BrainRegionID,
+    ) -> Result<(), BrainRegionSetError> {
         todo!()
     }
 
     fn add_cortical_area(&mut self, cortical_id: CorticalIdentifier, parent_id: &BrainRegionID) -> Result<(), BrainRegionSetError> {
         // note: we check higher up that the cortical area already doesnt exist in general
-        let parent = self.get_brain_region_ref_mut(parent_id).ok_or_else(
-            || {BrainRegionSetError::BrainRegionIDNotFound}
-        )?;
+        let parent = self
+            .get_brain_region_ref_mut(parent_id)
+            .ok_or_else(|| BrainRegionSetError::BrainRegionIDNotFound)?;
 
         match parent {
             BrainRegionContainerRefMut::Root(reg) => {
                 if reg.context.contained_cortical_areas.contains(&cortical_id) {
-                    return Err(BrainRegionSetError::CorticalIDAlreadyExists)
+                    return Err(BrainRegionSetError::CorticalIDAlreadyExists);
                 }
                 reg.context.contained_cortical_areas.insert(cortical_id);
             }
             BrainRegionContainerRefMut::Inner(reg) => {
                 if reg.context.contained_cortical_areas.contains(&cortical_id) {
-                    return Err(BrainRegionSetError::CorticalIDAlreadyExists)
+                    return Err(BrainRegionSetError::CorticalIDAlreadyExists);
                 }
                 reg.context.contained_cortical_areas.insert(cortical_id);
             }
@@ -247,21 +271,16 @@ pub trait BrainRegionContainerUniversalMut: BrainRegionContainerUniversal {
 //region Container
 
 #[derive(Clone)]
-pub struct BrainRegionContainer<
-    BrainRegionContext: BrainRegionGenomeContext,
-    HierarchyContext: BrainRegionHierarchyContext
-
-> {
+pub struct BrainRegionContainer<BrainRegionContext: BrainRegionGenomeContext, HierarchyContext: BrainRegionHierarchyContext> {
     ancestor_id: BrainRegionAncestryID,
     metadata: GenomeObjectMetadata,
     hierarchy: HierarchyContext,
-    context: BrainRegionContext
+    context: BrainRegionContext,
 }
 
-impl<
-    CachingContext: BrainRegionGenomeContext,
-    HierarchyContext: BrainRegionHierarchyContext
-> BrainRegionContainerUniversal for BrainRegionContainer<CachingContext, HierarchyContext> {
+impl<CachingContext: BrainRegionGenomeContext, HierarchyContext: BrainRegionHierarchyContext> BrainRegionContainerUniversal
+    for BrainRegionContainer<CachingContext, HierarchyContext>
+{
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         &self.ancestor_id
     }
@@ -270,19 +289,16 @@ impl<
     }
 }
 
-impl<
-    CachingContext: BrainRegionGenomeContext,
-    HierarchyContext: BrainRegionHierarchyContext
-> BrainRegionContainerUniversalMut for BrainRegionContainer<CachingContext, HierarchyContext> {
+impl<CachingContext: BrainRegionGenomeContext, HierarchyContext: BrainRegionHierarchyContext> BrainRegionContainerUniversalMut
+    for BrainRegionContainer<CachingContext, HierarchyContext>
+{
     fn get_metadata_mut(&mut self) -> &mut GenomeObjectMetadata {
         &mut self.metadata
     }
 }
 
-impl<CachingContext: BrainRegionGenomeContext>
-BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot>
-{
-    pub fn new_root(ancestor_id: BrainRegionAncestryID, metadata: GenomeObjectMetadata, root_id: BrainRegionID, ) -> Self {
+impl<CachingContext: BrainRegionGenomeContext> BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot> {
+    pub fn new_root(ancestor_id: BrainRegionAncestryID, metadata: GenomeObjectMetadata, root_id: BrainRegionID) -> Self {
         Self {
             ancestor_id,
             metadata,
@@ -296,14 +312,17 @@ BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot>
     }
 }
 
-impl<CachingContext: BrainRegionGenomeContext>
-BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>
-{
-    pub fn new_inner(ancestor_id: BrainRegionAncestryID, metadata: GenomeObjectMetadata, positioning: GenomeObjectPositioning, parent_region: BrainRegionID) -> Self {
+impl<CachingContext: BrainRegionGenomeContext> BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner> {
+    pub fn new_inner(
+        ancestor_id: BrainRegionAncestryID,
+        metadata: GenomeObjectMetadata,
+        positioning: GenomeObjectPositioning,
+        parent_region: BrainRegionID,
+    ) -> Self {
         Self {
             ancestor_id,
             metadata,
-            hierarchy: BrainRegionHierarchyContextInner {parent_region, positioning },
+            hierarchy: BrainRegionHierarchyContextInner { parent_region, positioning },
             context: Default::default(),
         }
     }
@@ -321,48 +340,44 @@ BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>
 
 //region ContainerRef / Mut
 
-
 pub enum BrainRegionContainerRef<'a, CachingContext: BrainRegionGenomeContext> {
     Root(&'a BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot>),
-    Inner(&'a BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>)
+    Inner(&'a BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>),
 }
 
-impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal
-for BrainRegionContainerRef<'a, CachingContext> {
+impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal for BrainRegionContainerRef<'a, CachingContext> {
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         match self {
-            BrainRegionContainerRef::Root(region) => {region.get_ancestor_id()}
-            BrainRegionContainerRef::Inner(region) => {region.get_ancestor_id()}
+            BrainRegionContainerRef::Root(region) => region.get_ancestor_id(),
+            BrainRegionContainerRef::Inner(region) => region.get_ancestor_id(),
         }
     }
 
     fn get_metadata(&self) -> &GenomeObjectMetadata {
         match self {
-            BrainRegionContainerRef::Root(region) => {region.get_metadata()}
-            BrainRegionContainerRef::Inner(region) => {region.get_metadata()}
+            BrainRegionContainerRef::Root(region) => region.get_metadata(),
+            BrainRegionContainerRef::Inner(region) => region.get_metadata(),
         }
     }
 }
-
 
 pub enum BrainRegionContainerRefMut<'a, CachingContext: BrainRegionGenomeContext> {
     Root(&'a mut BrainRegionContainer<CachingContext, BrainRegionHierarchyContextRoot>),
-    Inner(&'a mut BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>)
+    Inner(&'a mut BrainRegionContainer<CachingContext, BrainRegionHierarchyContextInner>),
 }
 
-impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal
-for BrainRegionContainerRefMut<'a, CachingContext> {
+impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversal for BrainRegionContainerRefMut<'a, CachingContext> {
     fn get_ancestor_id(&self) -> &BrainRegionAncestryID {
         match self {
-            BrainRegionContainerRefMut::Root(region) => {region.get_ancestor_id()}
-            BrainRegionContainerRefMut::Inner(region) => {region.get_ancestor_id()}
+            BrainRegionContainerRefMut::Root(region) => region.get_ancestor_id(),
+            BrainRegionContainerRefMut::Inner(region) => region.get_ancestor_id(),
         }
     }
 
     fn get_metadata(&self) -> &GenomeObjectMetadata {
         match self {
-            BrainRegionContainerRefMut::Root(region) => {region.get_metadata()}
-            BrainRegionContainerRefMut::Inner(region) => {region.get_metadata()}
+            BrainRegionContainerRefMut::Root(region) => region.get_metadata(),
+            BrainRegionContainerRefMut::Inner(region) => region.get_metadata(),
         }
     }
 }
@@ -370,8 +385,8 @@ for BrainRegionContainerRefMut<'a, CachingContext> {
 impl<'a, CachingContext: BrainRegionGenomeContext> BrainRegionContainerUniversalMut for BrainRegionContainerRefMut<'a, CachingContext> {
     fn get_metadata_mut(&mut self) -> &mut GenomeObjectMetadata {
         match self {
-            BrainRegionContainerRefMut::Root(region) => { region.get_metadata_mut() }
-            BrainRegionContainerRefMut::Inner(region) => { region.get_metadata_mut() }
+            BrainRegionContainerRefMut::Root(region) => region.get_metadata_mut(),
+            BrainRegionContainerRefMut::Inner(region) => region.get_metadata_mut(),
         }
     }
 }
@@ -394,6 +409,5 @@ pub enum BrainRegionSetError {
     #[error("The given cortical area could not be found within the given brain region")]
     CorticalIDNotFound,
     #[error("The given cortical area already exists within the given brain region")]
-    CorticalIDAlreadyExists
-
+    CorticalIDAlreadyExists,
 }

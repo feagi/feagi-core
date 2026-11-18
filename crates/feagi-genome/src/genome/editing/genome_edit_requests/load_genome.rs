@@ -21,6 +21,9 @@ pub struct GenomeEditRequestsLoadGenome<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditRequestsLoadGenome<FIQ> {
 
+    //region Default Genome Reloads
+
+    // TODO potentially make this one private, we may not want to allow building void genomes but this is a good start point
     /// Builds a new request to reset to a void empty genome, with nothing but the root
     /// brain region. No Cortical areas, No Mappings, No Connectivity Rules
     pub fn request_reload_to_void_genome(
@@ -35,6 +38,10 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditRequestsLoadGenome<FIQ> {
             steps: vec![],
         }
     }
+
+    // TODO barebones, other setups?
+
+    //endregion
 
     pub fn genome_metadata(&self) -> &GenomeObjectMetadata {
         &self.genome_metadata
@@ -58,5 +65,9 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditRequests<FIQ> for GenomeEditRequests
 
     fn add_step(&mut self, step: impl Into<Self::EditStepEnum>) {
         self.steps.push(step.into())
+    }
+
+    fn iter_steps(&self) -> impl Iterator<Item = &Self::EditStepEnum> {
+        self.steps.iter()
     }
 }

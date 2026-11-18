@@ -71,7 +71,7 @@ pub(crate) trait GenomeInternalInterface<FIQ: FeagiIndexQuantization,>: GenomePu
     //region default impls
 
 
-    fn apply_confirmed_changes(&mut self, )
+    //fn apply_confirmed_changes(&mut self, )
 
     //endregion
 }

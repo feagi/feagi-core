@@ -1,33 +1,32 @@
-use std::collections::{HashMap, HashSet};
-use feagi_connectome::connectome_basis::engine::BurstEngineIndex;
-use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::connectome_basis::visualization::{CorticalAreaVisualizationContext, NeuronVisualizationVoxelByteIndex};
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::{CorticalTypedGenerator, CorticalTypedStorage, CorticalTypedStorageOrGenerator};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
+use feagi_connectome::connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_basis::visualization::{CorticalAreaVisualizationContext, NeuronVisualizationVoxelByteIndex};
+use std::collections::{HashMap, HashSet};
 
 pub trait CorticalAreaSet<FIQ: FeagiIndexQuantization> {
     type GenomeContext: GenomeCorticalAreaContext;
     type NeuronContext: StoredNeuronDataContext<FIQ>;
-    
+
     fn new() -> Self;
 
-    fn get_cortical_area(&self, cortical_id: &CorticalIdentifier)
-        -> Option<&CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>>;
+    fn get_cortical_area(&self, cortical_id: &CorticalIdentifier) -> Option<&CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>>;
 
-    fn get_cortical_area_mut(&mut self, cortical_id: &CorticalIdentifier)
-                         -> Option<&mut CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>>;
+    fn get_cortical_area_mut(
+        &mut self,
+        cortical_id: &CorticalIdentifier,
+    ) -> Option<&mut CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>>;
 }
 
 pub trait GenomeCorticalAreaContext {}
 
-
 //region Designer
 
 pub struct CorticalAreaSetDesigner<FIQ: FeagiIndexQuantization> {
-    areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ, GenomeCorticalAreaContextDesigner<FIQ>, CorticalTypedGenerator<FIQ> >>
+    areas: HashMap<CorticalIdentifier, CorticalAreaContainer<FIQ, GenomeCorticalAreaContextDesigner<FIQ>, CorticalTypedGenerator<FIQ>>>,
 }
 
 impl<FIQ: FeagiIndexQuantization> CorticalAreaSet<FIQ> for CorticalAreaSetDesigner<FIQ> {
@@ -35,20 +34,20 @@ impl<FIQ: FeagiIndexQuantization> CorticalAreaSet<FIQ> for CorticalAreaSetDesign
     type NeuronContext = CorticalTypedGenerator<FIQ>;
 
     fn new() -> Self {
-        Self {
-            areas: Default::default()
-        }
+        Self { areas: Default::default() }
     }
 
     fn get_cortical_area(&self, cortical_id: &CorticalIdentifier) -> Option<&CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>> {
         self.areas.get(cortical_id)
     }
 
-    fn get_cortical_area_mut(&mut self, cortical_id: &CorticalIdentifier) -> Option<&mut CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>> {
+    fn get_cortical_area_mut(
+        &mut self,
+        cortical_id: &CorticalIdentifier,
+    ) -> Option<&mut CorticalAreaContainer<FIQ, Self::GenomeContext, Self::NeuronContext>> {
         self.areas.get_mut(cortical_id)
     }
 }
-
 
 /// In the case of runtime, we will use memory to offer rapid lookups along with npu data caching
 pub struct GenomeCorticalAreaContextDesigner<FIQ: FeagiIndexQuantization> {
@@ -74,7 +73,6 @@ pub struct GenomeCorticalAreaContextStorage;
 
 impl GenomeCorticalAreaContext for GenomeCorticalAreaContextStorage {}
 
-
 //endregion
 
 //region Contexts
@@ -90,7 +88,6 @@ impl<FIQ: FeagiIndexQuantization> StoredNeuronDataContext<FIQ> for CorticalTyped
 
 //endregion
 
-
 #[derive(Debug)]
 pub struct CorticalAreaContainer<FIQ, CachingContext, NeuronDataContext>
 where
@@ -103,8 +100,5 @@ where
     parent_id: BrainRegionID,
     cortical_data: NeuronDataContext,
     caching: CachingContext,
-    _p: core::marker::PhantomData<FIQ>
+    _p: core::marker::PhantomData<FIQ>,
 }
-
-
-
