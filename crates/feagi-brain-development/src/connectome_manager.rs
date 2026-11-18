@@ -1163,6 +1163,10 @@ impl ConnectomeManager {
             exec.unregister_memory_area(area.cortical_idx);
         }
 
+        // A removed area must not stay listed as a member of any live brain region.
+        self.brain_regions.remove_cortical_area_id(cortical_id);
+        self.refresh_brain_regions_hash();
+
         // Remove from lookup maps
         self.cortical_id_to_idx.remove(cortical_id);
         self.cortical_idx_to_id.remove(&area.cortical_idx);
@@ -12301,6 +12305,77 @@ pub(crate) mod tests {
 
         assert_eq!(manager.get_brain_region_ids().len(), initial_count + 1);
         assert!(manager.get_brain_region(&region_id_str).is_some());
+    }
+
+    /// Removing an area must drop it from every live brain region that lists it, in the root
+    /// region and in a child region alike.
+    #[test]
+    fn remove_cortical_area_leaves_no_region_listing_it() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        let _state_guard = PREPARE_FOR_NEW_GENOME_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        ConnectomeManager::reset_for_testing();
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let make = |bytes: &[u8; 8], idx: u32| {
+            let id = CorticalID::try_from_bytes(bytes).unwrap();
+            let area = CorticalArea::new(
+                id,
+                idx,
+                "Region member".to_string(),
+                CorticalAreaDimensions::new(2, 2, 2).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap();
+            (id, area)
+        };
+        let (in_child, child_area) = make(b"cst_rmc1", 0);
+        let (in_root, root_area) = make(b"cst_rmr1", 0);
+        manager.add_cortical_area(child_area).unwrap();
+        manager.add_cortical_area(root_area).unwrap();
+        manager
+            .get_brain_region_mut(&child_key)
+            .unwrap()
+            .add_area(in_child);
+        manager
+            .get_brain_region_mut(&root_key)
+            .unwrap()
+            .add_area(in_root);
+
+        manager.remove_cortical_area(&in_child).unwrap();
+        manager.remove_cortical_area(&in_root).unwrap();
+
+        for key in [&root_key, &child_key] {
+            let region = manager.get_brain_region(key).unwrap();
+            assert!(
+                !region.contains_area(&in_child),
+                "region {key} lists child area"
+            );
+            assert!(
+                !region.contains_area(&in_root),
+                "region {key} lists root area"
+            );
+        }
     }
 
     #[test]

@@ -148,11 +148,134 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
         remap_region_io_lists(region, &b64_remap);
     }
 
-    for area in genome.cortical_areas.values_mut() {
-        remap_cortical_mapping_dst_keys(&mut area.properties, &b64_remap);
-    }
+    rewrite_area_references(genome, &b64_remap);
 
     Ok(b64_remap)
+}
+
+/// Area property keys whose string value is another area id (classifier assembly links).
+const AREA_ID_PROPERTY_KEYS: [&str; 3] = [
+    "classifier_class_memory_id",
+    "classifier_sample_memory_id",
+    "classifier_error_area_id",
+];
+
+fn remap_id(id: &mut String, b64_remap: &HashMap<String, String>) {
+    if let Some(new_id) = b64_remap.get(id.as_str()) {
+        *id = new_id.clone();
+    }
+}
+
+/// Apply an area-id remap (`old base64 -> new base64`) to every place a guest genome refers to
+/// an area by id other than the area key itself: `cortical_mapping_dst` destination keys, area
+/// properties that link classifier assembly areas and memory twins, adopted modulator drivers
+/// and classifier area fields.
+pub(crate) fn rewrite_area_references(
+    genome: &mut RuntimeGenome,
+    b64_remap: &HashMap<String, String>,
+) {
+    if b64_remap.is_empty() {
+        return;
+    }
+    for area in genome.cortical_areas.values_mut() {
+        remap_cortical_mapping_dst_keys(&mut area.properties, b64_remap);
+        for key in AREA_ID_PROPERTY_KEYS {
+            if let Some(Value::String(id)) = area.properties.get_mut(key) {
+                remap_id(id, b64_remap);
+            }
+        }
+        if let Some(Value::Object(twins)) = area.properties.get_mut("memory_twin_areas") {
+            let taken = std::mem::take(twins);
+            for (source, twin) in taken {
+                let new_source = b64_remap.get(&source).cloned().unwrap_or(source);
+                let new_twin = match twin {
+                    Value::String(id) => Value::String(b64_remap.get(&id).cloned().unwrap_or(id)),
+                    other => other,
+                };
+                twins.insert(new_source, new_twin);
+            }
+        }
+    }
+    for id in genome.modulators.ids() {
+        let Some(instance) = genome.modulators.get_mut(&id) else {
+            continue;
+        };
+        if let Some(new_id) = b64_remap
+            .get(&instance.driver_cortical_id.as_base_64())
+            .and_then(|new_id| CorticalID::try_from_base_64(new_id).ok())
+        {
+            instance.driver_cortical_id = new_id;
+        }
+    }
+    for classifier in genome.classifiers.values_mut() {
+        remap_classifier_area_fields(classifier, b64_remap);
+    }
+}
+
+/// Remap every area id a classifier record holds.
+pub(crate) fn remap_classifier_area_fields(
+    classifier: &mut feagi_structures::genomic::classifiers::Classifier,
+    b64_remap: &HashMap<String, String>,
+) {
+    remap_id(&mut classifier.sample_memory_id, b64_remap);
+    remap_id(&mut classifier.class_memory_id, b64_remap);
+    remap_id(&mut classifier.error_area_id, b64_remap);
+    remap_id(&mut classifier.correct_area_id, b64_remap);
+    for id in classifier.sample_area_ids.iter_mut() {
+        remap_id(id, b64_remap);
+    }
+    for binding in classifier.class_bindings.iter_mut() {
+        remap_id(&mut binding.class_area_id, b64_remap);
+        remap_id(&mut binding.class_output_area_id, b64_remap);
+    }
+    for id in [
+        &mut classifier.answer_feedback_area_id,
+        &mut classifier.learn_area_id,
+        &mut classifier.confidence_area_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        remap_id(id, b64_remap);
+    }
+}
+
+/// Re-key guest modulator driver areas after their instances were created in the host
+/// (`old base64 -> new base64`, including drivers of reused host modulators), and rewrite every
+/// reference to them (mapping destinations, classifier fields, region membership).
+pub fn apply_driver_remap(
+    genome: &mut RuntimeGenome,
+    driver_remap: &HashMap<String, String>,
+) -> Result<(), FeagiDataError> {
+    if driver_remap.is_empty() {
+        return Ok(());
+    }
+    let mut id_remap: HashMap<CorticalID, CorticalID> = HashMap::new();
+    for (old, new) in driver_remap {
+        id_remap.insert(
+            CorticalID::try_from_base_64(old)?,
+            CorticalID::try_from_base_64(new)?,
+        );
+    }
+    let mut new_areas: HashMap<CorticalID, CorticalArea> =
+        HashMap::with_capacity(genome.cortical_areas.len());
+    for (old_id, mut area) in std::mem::take(&mut genome.cortical_areas) {
+        let new_id = id_remap.get(&old_id).copied().unwrap_or(old_id);
+        area.cortical_id = new_id;
+        new_areas.insert(new_id, area);
+    }
+    genome.cortical_areas = new_areas;
+    for region in genome.brain_regions.values_mut() {
+        let members: Vec<CorticalID> = region.cortical_areas.drain().collect();
+        for cid in members {
+            region
+                .cortical_areas
+                .insert(id_remap.get(&cid).copied().unwrap_or(cid));
+        }
+        remap_region_io_lists(region, driver_remap);
+    }
+    rewrite_area_references(genome, driver_remap);
+    Ok(())
 }
 
 fn json_string_list(value: Option<&Value>) -> Vec<String> {
@@ -231,6 +354,9 @@ pub struct AmalgamationRegionPlan {
     pub host_designated_inputs: Vec<String>,
     /// Designated outputs for the host region (same rule as inputs).
     pub host_designated_outputs: Vec<String>,
+    /// Guest region id -> region id it became in the host (the host amalgamation region id
+    /// for the single top-level region). Guest regions outside the planned tree are absent.
+    pub region_map: HashMap<String, String>,
 }
 
 fn guest_parent_id(region: &BrainRegion) -> Option<&str> {
@@ -404,6 +530,10 @@ pub fn plan_amalgamation_regions(
             }
         }
     }
+    plan.region_map = mapped
+        .iter()
+        .map(|(guest, new)| ((*guest).to_string(), new.clone()))
+        .collect();
     plan
 }
 

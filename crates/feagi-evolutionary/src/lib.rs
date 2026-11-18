@@ -46,6 +46,7 @@ Licensed under the Apache License, Version 2.0
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
+mod amalgamation_modulators;
 mod amalgamation_remap;
 pub mod circuit;
 pub mod converter_flat;
@@ -65,8 +66,13 @@ pub mod units;
 pub mod validator;
 
 // Re-export commonly used types
+pub use amalgamation_modulators::{
+    apply_modulator_name_map, plan_amalgamation_classifiers, plan_amalgamation_modulators,
+    AmalgamationModulatorPlan, HostModulator, ModulatorCollisionPolicy, PlannedAdoptedModulator,
+    PlannedOwnedModulator,
+};
 pub use amalgamation_remap::{
-    designated_io_lists_for_cloned_circuit, plan_amalgamation_regions,
+    apply_driver_remap, designated_io_lists_for_cloned_circuit, plan_amalgamation_regions,
     remap_guest_custom_memory_cortical_ids_for_amalgamation, AmalgamationRegionPlan,
     AmalgamationRegionSpec,
 };

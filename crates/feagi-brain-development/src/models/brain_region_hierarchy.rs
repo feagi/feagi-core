@@ -388,6 +388,13 @@ impl BrainRegionHierarchy {
         }
     }
 
+    /// Remove a cortical area from every brain region that lists it.
+    pub fn remove_cortical_area_id(&mut self, id: &CorticalID) {
+        for region in self.regions.values_mut() {
+            region.cortical_areas.remove(id);
+        }
+    }
+
     /// Get the root region ID
     pub fn get_root_id(&self) -> Option<&String> {
         self.root_id.as_ref()

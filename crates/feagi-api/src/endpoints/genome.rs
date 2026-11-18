@@ -89,6 +89,7 @@ fn queue_amalgamation_from_genome_json_str(
 
     let pending = amalgamation::AmalgamationPending {
         summary: summary.clone(),
+        source: amalgamation::AmalgamationSource::ExternalGenome,
         genome_json,
     };
 
@@ -438,7 +439,7 @@ pub async fn post_amalgamation_destination(
         .ok_or_else(|| ApiError::invalid_input("brain_region_id required"))?
         .to_string();
 
-    // Resolve and consume the pending request.
+    // Resolve the pending request.
     let pending = {
         let lock = state.amalgamation_state.write();
         let Some(p) = lock.pending.as_ref() else {
@@ -453,38 +454,147 @@ pub async fn post_amalgamation_destination(
         p.clone()
     };
 
-    // 1) Create a new brain region to host the imported circuit.
-    // Note: ConnectomeServiceImpl shares the same RuntimeGenome Arc with GenomeServiceImpl, so
-    // persisting the region into the RuntimeGenome is required for subsequent cortical-area creation.
+    // One genome-changing operation at a time (as genome load and reset).
+    let _transition_lock = state.genome_transition_lock.try_write().map_err(|_| {
+        ApiError::conflict("Another genome transition is in progress; wait for it to finish")
+    })?;
+
+    let request = AmalgamationRequest {
+        amalgamation_id,
+        origin: (origin_x, origin_y, origin_z),
+        rewire_mode,
+        parent_region_id,
+    };
+    let mut created = AmalgamationCreated::default();
+    match apply_amalgamation(&state, &pending, &request, &mut created).await {
+        Ok(response) => Ok(Json(response)),
+        Err(mut error) => {
+            let failures = rollback_amalgamation(&state, &created).await;
+            if !failures.is_empty() {
+                error.message.push_str(&format!(
+                    " Rollback could not remove: {}.",
+                    failures.join("; ")
+                ));
+            }
+            // The request cannot be retried as it stands: clear it so the caller queues it again.
+            {
+                let mut lock = state.amalgamation_state.write();
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                lock.history.push(amalgamation::AmalgamationHistoryEntry {
+                    amalgamation_id: pending.summary.amalgamation_id.clone(),
+                    genome_title: pending.summary.genome_title.clone(),
+                    circuit_size: pending.summary.circuit_size,
+                    status: "cancelled".to_string(),
+                    timestamp_ms: now_ms,
+                });
+                lock.pending = None;
+            }
+            Err(error)
+        }
+    }
+}
+
+/// Confirmed destination of a pending amalgamation.
+struct AmalgamationRequest {
+    amalgamation_id: String,
+    origin: (i32, i32, i32),
+    rewire_mode: String,
+    parent_region_id: String,
+}
+
+/// What an amalgamation created, in creation order, so a failure can undo exactly that.
+#[derive(Default)]
+struct AmalgamationCreated {
+    regions: Vec<String>,
+    owned_modulators: Vec<String>,
+    areas: Vec<String>,
+    adopted_modulators: Vec<String>,
+    morphologies: Vec<String>,
+    classifiers: Vec<String>,
+}
+
+fn is_not_found(error: &feagi_services::ServiceError) -> bool {
+    matches!(error, feagi_services::ServiceError::NotFound { .. })
+}
+
+/// Undo `created` in reverse order. An item that is already gone (a classifier delete removes its
+/// areas and circuit region) counts as removed. Returns one line per item that could not be
+/// removed; each is also logged.
+async fn rollback_amalgamation(state: &ApiState, created: &AmalgamationCreated) -> Vec<String> {
+    let connectome = state.connectome_service.as_ref();
+    let genome = state.genome_service.as_ref();
+    let mut failures: Vec<String> = Vec::new();
+    let mut note = |what: String, error: feagi_services::ServiceError| {
+        if is_not_found(&error) {
+            return;
+        }
+        tracing::error!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Rollback could not remove {}: {}",
+            what,
+            error
+        );
+        failures.push(format!("{what} ({error})"));
+    };
+    for id in created.classifiers.iter().rev() {
+        if let Err(e) = connectome.delete_classifier(id).await {
+            note(format!("classifier {id}"), e);
+        }
+    }
+    for name in created.adopted_modulators.iter().rev() {
+        if let Err(e) = genome.delete_modulator(name, true).await {
+            note(format!("modulator '{name}'"), e);
+        }
+    }
+    for id in created.areas.iter().rev() {
+        if let Err(e) = connectome.delete_cortical_area(id).await {
+            note(format!("cortical area {id}"), e);
+        }
+    }
+    for id in created.morphologies.iter().rev() {
+        if let Err(e) = connectome.delete_morphology(id).await {
+            note(format!("morphology '{id}'"), e);
+        }
+    }
+    for name in created.owned_modulators.iter().rev() {
+        if let Err(e) = genome.delete_modulator(name, true).await {
+            note(format!("modulator '{name}'"), e);
+        }
+    }
+    for id in created.regions.iter().rev() {
+        if let Err(e) = connectome.delete_brain_region(id).await {
+            note(format!("brain region {id}"), e);
+        }
+    }
+    if !created.regions.is_empty() || !created.areas.is_empty() {
+        tracing::warn!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Rolled back after a failure: {} classifiers, {} areas, {} modulators, {} morphologies, {} regions",
+            created.classifiers.len(),
+            created.areas.len(),
+            created.owned_modulators.len() + created.adopted_modulators.len(),
+            created.morphologies.len(),
+            created.regions.len()
+        );
+    }
+    failures
+}
+
+/// Import the pending guest genome into the brain. Records everything it creates in `created`.
+async fn apply_amalgamation(
+    state: &ApiState,
+    pending: &amalgamation::AmalgamationPending,
+    request: &AmalgamationRequest,
+    created: &mut AmalgamationCreated,
+) -> Result<HashMap<String, serde_json::Value>, ApiError> {
+    let amalgamation_id = request.amalgamation_id.clone();
+    let (origin_x, origin_y, origin_z) = request.origin;
+    let rewire_mode = request.rewire_mode.clone();
+    let parent_region_id = request.parent_region_id.clone();
     let connectome_service = state.connectome_service.as_ref();
-
-    let mut region_properties: HashMap<String, serde_json::Value> = HashMap::new();
-    region_properties.insert(
-        "coordinate_3d".to_string(),
-        serde_json::json!([origin_x, origin_y, origin_z]),
-    );
-    region_properties.insert(
-        "amalgamation_id".to_string(),
-        serde_json::json!(pending.summary.amalgamation_id),
-    );
-    region_properties.insert(
-        "circuit_size".to_string(),
-        serde_json::json!(pending.summary.circuit_size),
-    );
-    region_properties.insert("rewire_mode".to_string(), serde_json::json!(rewire_mode));
-
-    connectome_service
-        .create_brain_region(feagi_services::types::CreateBrainRegionParams {
-            region_id: amalgamation_id.clone(),
-            name: pending.summary.genome_title.clone(),
-            region_type: "Custom".to_string(),
-            parent_id: Some(parent_region_id.clone()),
-            properties: Some(region_properties),
-        })
-        .await
-        .map_err(|e| {
-            ApiError::internal(format!("Failed to create amalgamation brain region: {}", e))
-        })?;
 
     // 2) Import cortical areas into that region.
     //
@@ -532,6 +642,67 @@ pub async fn post_amalgamation_destination(
     }
 
     let genome_service = state.genome_service.as_ref();
+
+    // Plan the guest modulators before anything is created: names, renames and reuse, and the
+    // validation that an adopted driver is free. A failure here leaves nothing to undo.
+    let host_modulators: HashMap<String, feagi_evolutionary::HostModulator> = genome_service
+        .list_modulators()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list modulators: {}", e)))?
+        .as_object()
+        .map(|object| {
+            object
+                .iter()
+                .filter_map(|(name, body)| {
+                    let kind = feagi_structures::genomic::ModulatorKind::parse(
+                        body.get("type")?.as_str()?,
+                    )
+                    .ok()?;
+                    Some((
+                        name.clone(),
+                        feagi_evolutionary::HostModulator {
+                            kind,
+                            driver_cortical_id: body
+                                .get("driver_cortical_id")?
+                                .as_str()?
+                                .to_string(),
+                        },
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let collision_policy = match pending.source {
+        amalgamation::AmalgamationSource::SameBrainClone => {
+            feagi_evolutionary::ModulatorCollisionPolicy::ReuseHost
+        }
+        amalgamation::AmalgamationSource::ExternalGenome => {
+            feagi_evolutionary::ModulatorCollisionPolicy::RenameGuest {
+                block_title: pending.summary.genome_title.clone(),
+            }
+        }
+    };
+    let modulator_plan = feagi_evolutionary::plan_amalgamation_modulators(
+        &imported_genome,
+        &host_modulators,
+        &host_cortical_ids,
+        &collision_policy,
+    )
+    .map_err(|e| {
+        ApiError::invalid_input(format!("Cannot import the circuit's modulators: {}", e))
+    })?;
+    feagi_evolutionary::apply_modulator_name_map(&mut imported_genome, &modulator_plan.name_map);
+    for notice in &modulator_plan.notices {
+        tracing::info!(target: "feagi-api", "🧬 [AMALGAMATION] {}", notice);
+    }
+    for orphan in &modulator_plan.orphan_driver_ids {
+        tracing::warn!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Skipping modulator driver area {}: the imported circuit has no modulator for it",
+            orphan
+        );
+    }
+
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
     let mut skipped_existing: Vec<String> = Vec::new();
 
@@ -542,15 +713,17 @@ pub async fn post_amalgamation_destination(
         .map_err(|e| ApiError::internal(format!("Failed to get root region ID: {}", e)))?;
 
     // Pre-pass: which guest areas already exist on the host, and which may live inside the
-    // amalgamation region tree. IPU/OPU areas go to root; modulator driver areas cannot be
-    // created without their modulator instance (the handler imports no guest modulators), so
-    // they are skipped with a warning.
+    // amalgamation region tree. IPU/OPU areas go to root. Modulator driver areas are never
+    // created here: the service creates an owned driver together with its modulator, and a
+    // reused modulator already has its driver.
     let mut existing_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut skipped_modulator_ids: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
     let mut tree_member_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for area in imported_genome.cortical_areas.values() {
         let cortical_id = area.cortical_id.as_base_64();
+        if area.cortical_id.is_modulator_driver() {
+            // A driver id can equal a host driver id (ids are serials), so test the type first.
+            continue;
+        }
         let exists = connectome_service
             .cortical_area_exists(&cortical_id)
             .await
@@ -572,14 +745,7 @@ pub async fn post_amalgamation_destination(
         })? {
             feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
             | feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_) => {}
-            feagi_structures::genomic::cortical_area::CorticalAreaType::Modulator => {
-                tracing::warn!(
-                    target: "feagi-api",
-                    "🧬 [AMALGAMATION] Skipping guest modulator driver area {}: guest modulators are not imported",
-                    cortical_id
-                );
-                skipped_modulator_ids.insert(cortical_id);
-            }
+            feagi_structures::genomic::cortical_area::CorticalAreaType::Modulator => {}
             _ => {
                 tree_member_ids.insert(cortical_id);
             }
@@ -594,6 +760,51 @@ pub async fn post_amalgamation_destination(
         (origin_x, origin_y, origin_z),
         &tree_member_ids,
     );
+    // Up-front validation of the classifiers (nothing is created yet). The final plan is made
+    // after the modulator drivers have their ids.
+    feagi_evolutionary::plan_amalgamation_classifiers(
+        &imported_genome,
+        &HashMap::new(),
+        &modulator_plan.name_map,
+        &region_plan.region_map,
+        &amalgamation_id,
+    )
+    .map_err(|e| {
+        ApiError::invalid_input(format!("Cannot import the circuit's classifiers: {}", e))
+    })?;
+
+    // 1) Create a new brain region to host the imported circuit. Nothing above changed the brain.
+    // Note: ConnectomeServiceImpl shares the same RuntimeGenome Arc with GenomeServiceImpl, so
+    // persisting the region into the RuntimeGenome is required for subsequent cortical-area creation.
+    let mut region_properties: HashMap<String, serde_json::Value> = HashMap::new();
+    region_properties.insert(
+        "coordinate_3d".to_string(),
+        serde_json::json!([origin_x, origin_y, origin_z]),
+    );
+    region_properties.insert(
+        "amalgamation_id".to_string(),
+        serde_json::json!(pending.summary.amalgamation_id),
+    );
+    region_properties.insert(
+        "circuit_size".to_string(),
+        serde_json::json!(pending.summary.circuit_size),
+    );
+    region_properties.insert("rewire_mode".to_string(), serde_json::json!(rewire_mode));
+
+    connectome_service
+        .create_brain_region(feagi_services::types::CreateBrainRegionParams {
+            region_id: amalgamation_id.clone(),
+            name: pending.summary.genome_title.clone(),
+            region_type: "Custom".to_string(),
+            parent_id: Some(parent_region_id.clone()),
+            properties: Some(region_properties),
+        })
+        .await
+        .map_err(|e| {
+            ApiError::internal(format!("Failed to create amalgamation brain region: {}", e))
+        })?;
+    created.regions.push(amalgamation_id.clone());
+
     for spec in &region_plan.sub_regions {
         connectome_service
             .create_brain_region(feagi_services::types::CreateBrainRegionParams {
@@ -610,6 +821,7 @@ pub async fn post_amalgamation_destination(
                     spec.name, e
                 ))
             })?;
+        created.regions.push(spec.region_id.clone());
     }
     let created_sub_region_count = region_plan.sub_regions.len();
     tracing::info!(
@@ -619,13 +831,61 @@ pub async fn post_amalgamation_destination(
         amalgamation_id
     );
 
+    // Own modulators: created through the service, which allocates each driver id (a guest
+    // driver id is a serial that can collide with a host one). Then every reference to a guest
+    // driver is rewritten through the resulting table.
+    let mut driver_remap: HashMap<String, String> = modulator_plan.reused_driver_remap.clone();
+    for owned in &modulator_plan.owned {
+        let body = genome_service
+            .create_modulator(owned.host_name.clone(), owned.write.clone())
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to create modulator '{}': {}",
+                    owned.host_name, e
+                ))
+            })?;
+        created.owned_modulators.push(owned.host_name.clone());
+        let new_driver = body
+            .get("driver_cortical_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                ApiError::internal(format!(
+                    "Modulator '{}' was created without a driver area id",
+                    owned.host_name
+                ))
+            })?
+            .to_string();
+        // The service creates a driver with default tuning; carry the guest's.
+        if !owned.driver_tuning.is_empty() {
+            if let Err(e) = genome_service
+                .update_cortical_area(&new_driver, owned.driver_tuning.clone())
+                .await
+            {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Modulator '{}' driver tuning was not copied: {}",
+                    owned.host_name,
+                    e
+                );
+            }
+        }
+        driver_remap.insert(owned.guest_driver_id.clone(), new_driver);
+    }
+    feagi_evolutionary::apply_driver_remap(&mut imported_genome, &driver_remap).map_err(|e| {
+        ApiError::internal(format!(
+            "Amalgamation modulator driver remapping failed: {}",
+            e
+        ))
+    })?;
+
     for area in imported_genome.cortical_areas.values() {
         let cortical_id = area.cortical_id.as_base_64();
         if existing_ids.contains(&cortical_id) {
             skipped_existing.push(cortical_id);
             continue;
         }
-        if skipped_modulator_ids.contains(&cortical_id) {
+        if area.cortical_id.is_modulator_driver() {
             continue;
         }
 
@@ -758,12 +1018,60 @@ pub async fn post_amalgamation_destination(
     }
 
     let imported_new_area_count = to_create.len();
+    // Area subscriptions (`modulators`) are stored with the area but only reach the burst engine
+    // through a modulator sync, which area creation does not run. Re-apply them below, once every
+    // modulator exists.
+    let area_subscriptions: Vec<(String, Vec<serde_json::Value>)> = to_create
+        .iter()
+        .filter_map(|params| {
+            let list = params
+                .properties
+                .as_ref()?
+                .get("modulators")?
+                .as_array()?
+                .clone();
+            (!list.is_empty()).then(|| (params.cortical_id.clone(), list))
+        })
+        .collect();
+    created
+        .areas
+        .extend(to_create.iter().map(|params| params.cortical_id.clone()));
     if !to_create.is_empty() {
         genome_service
             .create_cortical_areas(to_create)
             .await
             .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
     }
+
+    // Adopting modulators: their driver areas exist now.
+    for adopted in &modulator_plan.adopted {
+        genome_service
+            .create_modulator(adopted.host_name.clone(), adopted.write.clone())
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to create modulator '{}' on area {}: {}",
+                    adopted.host_name, adopted.driver_cortical_id, e
+                ))
+            })?;
+        created.adopted_modulators.push(adopted.host_name.clone());
+    }
+    for (area_id, list) in area_subscriptions {
+        genome_service
+            .update_cortical_area(
+                &area_id,
+                HashMap::from([("modulators".to_string(), serde_json::Value::Array(list))]),
+            )
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to subscribe imported area {} to its modulators: {}",
+                    area_id, e
+                ))
+            })?;
+    }
+    let imported_modulator_count =
+        created.owned_modulators.len() + created.adopted_modulators.len();
 
     // 3) Import morphologies used by the imported areas' cortical mappings.
     //
@@ -772,8 +1080,9 @@ pub async fn post_amalgamation_destination(
     let imported_area_ids: std::collections::HashSet<String> = imported_genome
         .cortical_areas
         .keys()
+        .filter(|id| !id.is_modulator_driver())
         .map(|id| id.as_base_64())
-        .filter(|id| !skipped_existing.contains(id) && !skipped_modulator_ids.contains(id))
+        .filter(|id| !skipped_existing.contains(id))
         .collect();
 
     let mut required_morphologies: std::collections::HashSet<String> =
@@ -850,6 +1159,7 @@ pub async fn post_amalgamation_destination(
                     "🧬 [AMALGAMATION] Imported morphology '{}'",
                     morphology_id
                 );
+                created.morphologies.push(morphology_id.clone());
                 imported_morphology_count += 1;
             }
             Err(e) => {
@@ -1001,6 +1311,33 @@ pub async fn post_amalgamation_destination(
             imported_new_area_count,
             skipped_existing.len()
         );
+    }
+
+    // 4b) Classifiers last: their areas, reward modulators and mappings exist now. Each gets a
+    // fresh id (the service overwrites a record with the same id). Area ids are already final in
+    // the guest genome, so no further area remap is passed.
+    let planned_classifiers = feagi_evolutionary::plan_amalgamation_classifiers(
+        &imported_genome,
+        &HashMap::new(),
+        &modulator_plan.name_map,
+        &region_plan.region_map,
+        &amalgamation_id,
+    )
+    .map_err(|e| ApiError::internal(format!("Cannot import the circuit's classifiers: {}", e)))?;
+    let imported_classifier_count = planned_classifiers.len();
+    for classifier in planned_classifiers {
+        let classifier_id = classifier.classifier_id.clone();
+        let classifier_name = classifier.name.clone();
+        connectome_service
+            .upsert_classifier(classifier)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to import classifier '{}': {}",
+                    classifier_name, e
+                ))
+            })?;
+        created.classifiers.push(classifier_id);
     }
 
     // Copy the source circuit's declared input/output roles onto the new region.
@@ -1157,7 +1494,7 @@ pub async fn post_amalgamation_destination(
         post_merge_cortical_area_total,
     );
 
-    Ok(Json(HashMap::from([
+    Ok(HashMap::from([
         (
             "message".to_string(),
             serde_json::Value::String("Amalgamation confirmed".to_string()),
@@ -1203,6 +1540,18 @@ pub async fn post_amalgamation_destination(
             serde_json::json!(created_sub_region_count),
         ),
         (
+            "modulator_notices".to_string(),
+            serde_json::json!(modulator_plan.notices),
+        ),
+        (
+            "imported_modulator_count".to_string(),
+            serde_json::json!(imported_modulator_count),
+        ),
+        (
+            "imported_classifier_count".to_string(),
+            serde_json::json!(imported_classifier_count),
+        ),
+        (
             "post_merge_brain_region_count".to_string(),
             serde_json::json!(post_merge_brain_region_count),
         ),
@@ -1210,7 +1559,7 @@ pub async fn post_amalgamation_destination(
             "post_merge_cortical_area_total".to_string(),
             serde_json::json!(post_merge_cortical_area_total),
         ),
-    ])))
+    ]))
 }
 
 /// Cancel a pending genome amalgamation operation.

@@ -33,10 +33,23 @@ pub struct AmalgamationPendingSummary {
     pub circuit_size: [i32; 3],
 }
 
+/// Where a pending amalgamation came from. Decides how a guest modulator whose name already
+/// exists in the brain is handled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmalgamationSource {
+    /// `/v1/region/clone`: the guest is a region of this same brain, so a modulator of the same
+    /// name is the same modulator and the host one is reused.
+    SameBrainClone,
+    /// A genome supplied from outside (Brain Hub block, payload, upload): a colliding modulator
+    /// is renamed so the imported block keeps its own.
+    ExternalGenome,
+}
+
 /// Internal stored pending amalgamation request.
 #[derive(Debug, Clone)]
 pub struct AmalgamationPending {
     pub summary: AmalgamationPendingSummary,
+    pub source: AmalgamationSource,
     /// Original genome JSON payload (as string) for deterministic replay on confirmation.
     pub genome_json: String,
 }

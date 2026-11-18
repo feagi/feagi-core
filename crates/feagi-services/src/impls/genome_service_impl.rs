@@ -7606,6 +7606,83 @@ mod tests {
         );
     }
 
+    /// Amalgamation creates imported areas through `create_cortical_areas`. Classifier-assembly
+    /// properties must survive it, and an area subscription stored by it binds only after a
+    /// later modulator sync (here the `update_cortical_area` re-apply the handler runs).
+    #[tokio::test]
+    async fn created_area_keeps_classifier_properties_and_binds_subscription_on_reapply() {
+        use crate::traits::GenomeService;
+        use crate::types::CreateCorticalAreaParams;
+
+        let (svc, npu, _area_id, _area_idx) = modulator_runtime_fixture();
+        let new_id =
+            feagi_structures::genomic::cortical_area::CorticalID::try_from_bytes(b"cnewsub1")
+                .unwrap();
+        let id = new_id.as_base_64();
+        let properties = std::collections::HashMap::from([
+            (
+                "classifier_role".to_string(),
+                serde_json::json!("sample_memory"),
+            ),
+            ("classifier_assembly".to_string(), serde_json::json!(true)),
+            ("modulators".to_string(), serde_json::json!(["damp"])),
+        ]);
+        svc.create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: id.clone(),
+            name: "imported".to_string(),
+            dimensions: (1, 1, 1),
+            position: (50, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(properties),
+        }])
+        .await
+        .expect("create imported area");
+        {
+            let genome = svc.get_current_genome_arc();
+            let genome = genome.read();
+            let props = &genome.as_ref().unwrap().cortical_areas[&new_id].properties;
+            assert_eq!(props["classifier_role"], "sample_memory");
+            assert_eq!(props["classifier_assembly"], true);
+            assert_eq!(props["modulators"], serde_json::json!(["damp"]));
+        }
+        let idx = svc.connectome.read().get_cortical_idx(&new_id).unwrap();
+        assert!(
+            npu.lock()
+                .unwrap()
+                .modulator_area_subscriptions(idx)
+                .is_empty(),
+            "create_cortical_areas does not bind area subscriptions"
+        );
+        svc.update_cortical_area(
+            &id,
+            std::collections::HashMap::from([(
+                "modulators".to_string(),
+                serde_json::json!(["damp"]),
+            )]),
+        )
+        .await
+        .expect("re-apply subscription");
+        assert_eq!(
+            npu.lock().unwrap().modulator_area_subscriptions(idx),
+            vec!["damp".to_string()]
+        );
+    }
+
     #[tokio::test]
     async fn update_cortical_area_rejects_unknown_and_synaptic_modulator_ids() {
         use crate::traits::GenomeService;

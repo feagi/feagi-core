@@ -40,6 +40,7 @@ fn queue_amalgamation_from_genome_json_str(
 
     let pending = amalgamation::AmalgamationPending {
         summary: summary.clone(),
+        source: amalgamation::AmalgamationSource::SameBrainClone,
         genome_json,
     };
 

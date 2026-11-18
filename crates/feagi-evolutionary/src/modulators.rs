@@ -283,7 +283,7 @@ pub fn driver_locked_property_names() -> &'static [&'static str] {
 }
 
 /// Request body shape shared by create and update. Serde is used by the API layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModulatorWrite {
     #[serde(rename = "type")]
     pub kind: String,
