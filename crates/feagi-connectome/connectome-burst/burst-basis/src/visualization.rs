@@ -3,13 +3,14 @@ use connectome_basis::visualization::BurstVisualizationData;
 use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{FeagiChannelBuilder, FeagiChannelTransmitter};
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 
-/// Used by a burst engine to indicate visualization support
-pub trait BurstEngineVisualizationSupport: Send {
+/// Used by a burst engine to indicate visualization support. Only a marker; it never crosses
+/// threads itself, but its transmitter is moved into whatever worker runs the engine
+pub trait BurstEngineVisualizationSupport {
     /// True if visualization is supported
     const VISUALIZATION_SUPPORTED: bool;
 
     /// Define the transmitter to use (or none if no visualization)
-    type VisualizationTransmitter: Send;
+    type VisualizationTransmitter: Send + 'static;
 }
 
 /// No visualization support possible on this burst engine
@@ -28,19 +29,14 @@ where
     FIQ: FeagiIndexQuantization,
     Tx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>
 {
-    _p: core::marker::PhantomData<(FIQ, Tx)>
+    _p: core::marker::PhantomData<fn() -> (FIQ, Tx)>
 }
-
-unsafe impl <FIQ, Tx> Send for BurstEngineVisualizationFull<FIQ, Tx>
-where
-    FIQ: FeagiIndexQuantization,
-    Tx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>> {}
 
 
 impl<FIQ, Tx> BurstEngineVisualizationSupport for BurstEngineVisualizationFull<FIQ, Tx>
 where
     FIQ: FeagiIndexQuantization,
-    Tx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>>
+    Tx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>> + Send + 'static
 {
     const VISUALIZATION_SUPPORTED: bool = true;
     type VisualizationTransmitter = Tx;

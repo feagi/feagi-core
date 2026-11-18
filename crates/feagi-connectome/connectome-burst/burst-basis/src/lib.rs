@@ -16,9 +16,9 @@ where
 // Vis TODO
 {
     /// Whatever is needed for the burst engine to init
-    type InitParameters: Send;
+    type InitParameters: Send + 'static;
     /// The error returned if the burst engine has an error initializing
-    type InitError: Send + core::fmt::Debug + core::error::Error;
+    type InitError: Send + 'static + core::error::Error;
     
 
     /// Init the burst engine, creating it in the process. The engine keeps
