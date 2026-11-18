@@ -19,7 +19,7 @@ mod cortical_area;
 /// Used internally, handles validating genome edit requests, adding missing steps, and sending
 /// edits to connectome
 pub(crate) struct GenomeEditCommands<FIQ: FeagiIndexQuantization> {
-    commands: Vec<GenomeEditCommandStepEnum<FIQ>>,
+    pub(crate) commands: Vec<GenomeEditCommandStepEnum<FIQ>>,
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {

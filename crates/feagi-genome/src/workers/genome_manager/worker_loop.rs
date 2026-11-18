@@ -1,4 +1,3 @@
-use crate::genome::genomes::designer::DesignerGenome;
 use crate::workers::genome_manager::requests::category_structs::GenomeManagerResponders;
 use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
 use crate::workers::genome_manager::response_processing::cortical_area::cortical_area_response;

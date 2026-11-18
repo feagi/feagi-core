@@ -4,7 +4,7 @@
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use connectome_basis::visualization::NeuronVisualizationVoxelByteIndex;
-use connectome_models::neuron_models::models::NMNeurogenesisStorageOrGenerator;
+use connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisStorageOrGenerator};
 
 /// Implements `ConnectomeReshapeStep`, `ConnectomeReshapeStepResultant`, and the conversions into
 /// `ConnectomeReshapeStepEnum` / `ConnectomeReshapeStepResultantEnum` for a single step.
@@ -111,7 +111,7 @@ create_step_and_result_enums! {
 //region Add
 
 pub struct ConnectomeReshapeStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
-    pub cortical_area_neurogenesis: NMNeurogenesisStorageOrGenerator<FIQ>,
+    pub cortical_area_neurogenesis: NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>,
 }
 
 #[derive(Debug)]
