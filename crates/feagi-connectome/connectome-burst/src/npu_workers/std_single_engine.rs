@@ -128,7 +128,7 @@ where
 
 /// The state of the single engine NPU that its commands act upon. Holds only settings; the burst
 /// loop owns the schedule and reads these each tick
-struct SingleEngineWorkerProcessor<FIQ, VIS, Engine>
+pub struct SingleEngineWorkerProcessor<FIQ, VIS, Engine>
 where
     FIQ: FeagiIndexQuantization,
     VIS: BurstEngineVisualizationSupport,
