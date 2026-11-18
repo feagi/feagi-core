@@ -31,6 +31,11 @@ rayon = [
     "dep:rayon"
 ]
 
+allow-reshape-edits = [
+    "alloc",
+    "burst-basis/allow-reshape-edits"
+]
+
 [dependencies]
 # Connectome Crates
 burst-basis = {path = "../burst-basis", default-features = false}

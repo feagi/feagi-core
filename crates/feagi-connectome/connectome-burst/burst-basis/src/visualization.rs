@@ -4,7 +4,7 @@ use feagi_basis::parallelism::feagi_channel::base_channels::base_channels::{Feag
 use feagi_basis::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 
 /// Used by a burst engine to indicate visualization support
-pub trait BurstEngineVisualizationSupport {
+pub trait BurstEngineVisualizationSupport: Send {
     /// True if visualization is supported
     const VISUALIZATION_SUPPORTED: bool;
 
@@ -30,6 +30,12 @@ where
 {
     _p: core::marker::PhantomData<(FIQ, Tx)>
 }
+
+unsafe impl <FIQ, Tx> Send for BurstEngineVisualizationFull<FIQ, Tx>
+where
+    FIQ: FeagiIndexQuantization,
+    Tx: FeagiChannelTransmitter<BurstVisualizationData<FIQ>> {}
+
 
 impl<FIQ, Tx> BurstEngineVisualizationSupport for BurstEngineVisualizationFull<FIQ, Tx>
 where

@@ -3,6 +3,7 @@
 //! adding / removing cortical areas (these types of edits are considered "reshaping" and require
 //! the flag for this to be enabled and requires alloc).
 
+use std::marker::PhantomData;
 use connectome_basis::neuron_model::wrapped_indexing::CorticalAreaEngineIndex;
 use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use crate::connectome_reshaping::{ConnectomeReshapeError, ConnectomeReshapeStepEnum, ConnectomeReshapeStepResultantEnum};
@@ -38,10 +39,10 @@ pub trait ConnectomeEditEnumHandler<FIQ: FeagiIndexQuantization>:
         edit: ConnectomeEditEnum<FIQ>,
     ) -> Result<ConnectomeEditResultantEnum<FIQ>, ConnectomeEditError<FIQ>> {
         match edit {
-            ConnectomeEditEnum::Nothing(a) => self.handle_edit(a),
+            ConnectomeEditEnum::Nothing(a) => Ok(self.handle_edit(a).await?.into()),
 
             #[cfg(feature = "allow-reshape-edits")]
-            ConnectomeEditEnum::EditConnectomeStep(a) => self.handle_edit(a),
+            ConnectomeEditEnum::EditConnectomeStep(a) => Ok(self.handle_edit(a).await?.into()),
         }
     }
 }
@@ -67,6 +68,7 @@ pub enum ConnectomeEditResultantEnum<FIQ: FeagiIndexQuantization> {
 //region Nothing
 
 /// Does nothing. Effectively a placeholder for some things
+
 #[derive(Default)]
 pub struct ConnectomeEditNothing<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
 
@@ -79,6 +81,8 @@ impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditEnum<FIQ>> for ConnectomeEd
         ConnectomeEditEnum::Nothing(self)
     }
 }
+
+
 
 /// Response to a Nothing Command. No possible error
 pub struct ConnectomeEditResultantNothing<FIQ: FeagiIndexQuantization>(core::marker::PhantomData<FIQ>);
@@ -103,7 +107,7 @@ impl<FIQ: FeagiIndexQuantization> Into<ConnectomeEditResultantEnum<FIQ>> for Con
 
 // NOTE: ConnectomeReshapeStepEnum<FIQ> if from another mod, as is ConnectomeEditStepResultantEnum<FIQ
 
-type ConnectomeEditReshapeStep<FIQ: FeagiIndexQuantization> = ConnectomeReshapeStepEnum<FIQ>;
+pub type ConnectomeEditReshapeStep<FIQ: FeagiIndexQuantization> = ConnectomeReshapeStepEnum<FIQ>;
 
 impl<FIQ: FeagiIndexQuantization> ConnectomeEditStep<FIQ> for ConnectomeEditReshapeStep<FIQ> {
     type Resultant = ConnectomeEditReshapeStepResultant<FIQ>;
