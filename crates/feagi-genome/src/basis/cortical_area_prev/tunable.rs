@@ -8,15 +8,7 @@ use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use feagi_basis::quantization::quantizable::{DataValueQuantizationError, QuantizedDecimalTrait};
 use feagi_connectome::connectome_basis::neuron_model::{NeurogenesisGeneratorUniformDefault, NeuronLayoutOf, NeuronLayoutTagVoxel, NeuronModelUniversalCorticalProperties};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::connectome_models::neuron_models::models::;
-use feagi_connectome::connectome_models::neuron_models::models::::{
-    self, NMFeagiAdvancedDataCorticalInternal, NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance,
-    NMFeagiAdvancedDataNeuronInternal, NMFeagiAdvancedTrait,
-};
-use feagi_connectome::connectome_models::neuron_models::models::::{
-    self, NMFeagiSimpleDataCorticalInternal, NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance,
-    NMFeagiSimpleDataNeuronInternal, NMFeagiSimpleTrait,
-};
+
 
 //region BrightnessAdjust
 

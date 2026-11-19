@@ -1,6 +1,7 @@
 use crate::neuron_models::models::kind::NMKind;
-use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NeuronModelEnumConversionError};
+use crate::neuron_models::models::{NMContainer, NMMember, NMModeled, NMNeurogenesisStorageOrGenerator, NeuronModelEnumConversionError};
 use connectome_basis::neuron_model::NeuronModel;
+use connectome_basis::quantization_levels::FeagiIndexQuantization;
 use quant_float_16::NMExclusivePowerQuantFloat16;
 use quant_bfloat_16::NMExclusivePowerQuantBFloat16;
 use quant_float_32::NMExclusivePowerQuantFloat32;

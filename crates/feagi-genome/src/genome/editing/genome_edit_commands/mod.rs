@@ -1,17 +1,18 @@
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use feagi_connectome::connectome_burst::burst_basis::connectome_editing::{ConnectomeEditEnum, ConnectomeEditNothing};
 use crate::basis::brain_region::BrainRegionID;
-use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierInnerEncoder};
-use crate::basis::cortical_area::{CorticalType, CorticalTypedSpawningParameters};
-use crate::basis::cortical_area::foundation::{CTFoundationSubtypedSpawningParameters, CorticalIdentifierFoundation};
+use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInnerEncoder;
+use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::foundation::power::CTFoundationPower;
-use crate::basis::cortical_area::processing::{CTProcessingSubtypedSpawningParameters, CorticalIdentifierProcessing};
+use crate::basis::cortical_area::foundation::{CTFoundationSubtypedSpawningParameters, CorticalIdentifierFoundation};
 use crate::basis::cortical_area::processing::interconnect::CTProcessingInterconnect;
+use crate::basis::cortical_area::processing::{CTProcessingSubtypedSpawningParameters, CorticalIdentifierProcessing};
+use crate::basis::cortical_area::{CorticalType, CorticalTypedSpawningParameters};
 use crate::genome::editing::genome_edit_commands::brain_region::GenomeEditCommandStepBrainRegionAdd;
 use crate::genome::editing::genome_edit_commands::cortical_area::GenomeEditCommandStepCorticalAreaAdd;
 use crate::genome::editing::steps::{GenomeEditStepEnum, GenomeEditStepEnumAny};
 use crate::genome::genomes::brain_region::BrainRegionContainerUniversal;
 use crate::genome::genomes::GenomePublicInterface;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use feagi_connectome::connectome_burst::burst_basis::connectome_editing::{ConnectomeEditEnum, ConnectomeEditNothing};
 
 mod brain_region;
 mod cortical_area;
@@ -111,7 +112,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
                             match st {
                                 CTFoundationSubtypedSpawningParameters::Power(ct) => {
                                     let params = ct.cortical_id_generation_params;
-                                    let cortical_id_inner = <CTFoundationPower as CorticalType>::InnerCorticalIDGenerator::encode_context(());
+                                    let cortical_id_inner = <CTFoundationPower as CorticalType>::InnerCorticalIDEncoder::encode_data(());
                                     CorticalIdentifier::Foundation(CorticalIdentifierFoundation::Power(cortical_id_inner))
                                 }
                             }
@@ -120,7 +121,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
                             match st {
                                 CTProcessingSubtypedSpawningParameters::Interconnect(ct) => {
                                     let params = ct.cortical_id_generation_params;
-                                    let cortical_id_inner = <CTProcessingInterconnect as CorticalType>::InnerCorticalIDGenerator::encode_context(());
+                                    let cortical_id_inner = <CTProcessingInterconnect as CorticalType>::InnerCorticalIDEncoder::encode_data(());
                                     CorticalIdentifier::Processing(CorticalIdentifierProcessing::Interconnect(cortical_id_inner))
                                 }
                             }
@@ -165,7 +166,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
 
 
 pub(crate) trait GenomeEditCommandStep<FIQ: FeagiIndexQuantization> {
-    
+
     fn generate_connectome_edit_step(&self) -> ConnectomeEditEnum<FIQ> {
         ConnectomeEditEnum::Nothing(ConnectomeEditNothing::new()) // by default, do nothing
     }

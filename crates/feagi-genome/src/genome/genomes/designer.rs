@@ -3,12 +3,10 @@ use feagi_basis::parallelism::feagi_worker::worker_internals::worker_spawner_imp
 use feagi_basis::target_frequency::TargetFrequency;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_burst::burst_basis::connectome_editing::{ConnectomeEditEnum, ConnectomeEditResultantEnum};
-use feagi_connectome::connectome_burst::burst_basis::multi_engine::{BurstEngineIndex, SingleEngineIndexing};
+use feagi_connectome::connectome_burst::burst_basis::multi_engine::{SingleEngineIndexing};
 use feagi_connectome::connectome_burst::worker_commands::{NeuralProcessingUnitRequest, NeuralProcessingUnitResultant};
-use crate::basis::brain_region::{BrainRegionID, BrainRegionIdAndAncestryConstructor};
 use crate::genome::editing::genome_edit_commands::{GenomeEditCommandStep, GenomeEditCommandStepEnum, GenomeEditCommands, GenomeEditRequestValidationError};
 use crate::genome::editing::genome_edit_requests::load_genome::GenomeEditRequestsLoadGenome;
-use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use crate::genome::genomes::brain_region::{BrainRegionContextDesigner, BrainRegionSet, BrainRegionSetDesigner};
 use crate::genome::genomes::cortical_area::{CorticalAreaSet, CorticalAreaSetDesigner};
 use crate::genome::genomes::GenomePublicInterface;
@@ -25,12 +23,8 @@ impl<FIQ: FeagiIndexQuantization> GenomeDesigner<FIQ>{
     
     pub async fn new_from_load_genome_sequence(
         sequence: GenomeEditRequestsLoadGenome<FIQ>,
-        npu: &mut FeagiWorker<
-            FeagiStdThreadSpawner,
-            (),
-            NeuralProcessingUnitRequest<FIQ, SingleEngineIndexing>,
-            NeuralProcessingUnitResultant<FIQ, SingleEngineIndexing>
-        >
+        npu: &mut FeagiWorker
+
     ) -> Result<Self, GenomeEditRequestValidationError<FIQ>> {
 
         let GenomeEditRequestsLoadGenome {

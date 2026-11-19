@@ -1,20 +1,22 @@
-use std::fmt::Debug;
-use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathStaticElement;
-use serde::{Deserialize, Serialize};
-use base64::engine::general_purpose::URL_SAFE as BASE64_URL_SAFE;
-use base64::Engine;
-use serde::de::DeserializeOwned;
-use feagi_basis::feagi_id::base_64::FeagiIDBase64Error;
-use feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind;
-use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
+pub mod inner;
+
+use crate::basis::cortical_area::cortical_identifiers::inner::{CorticalIdentifierInner, CorticalIdentifierInnerEncoder, CorticalIdentifierInnerParseError};
 use crate::basis::cortical_area::foundation::CorticalIdentifierFoundation;
 use crate::basis::cortical_area::processing::CorticalIdentifierProcessing;
-
+use base64::engine::general_purpose::URL_SAFE as BASE64_URL_SAFE;
+use base64::Engine;
+use feagi_basis::feagi_id::base_64::FeagiIDBase64Error;
+use feagi_basis::feagi_message::feagi_message_description::FeagiFieldKind;
+use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathStaticElement;
+use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use crate::basis::cortical_area::CorticalType;
 // TODO manual byte serialization / deserialization to enforce 8 byte limits, note that serde
 // ignores #[repr(C, u8)] overrides! So when bringing this down to 8 bytes we must do so manually
 
-
-pub trait CorticalIDEnum {}
+/// Denotes some form of Cortical Identifier, Genuine, Faux, or Maybe (either)
+pub trait CorticalIDType {}
 
 //region (Genuine) Cortical Identifier
 
@@ -25,42 +27,69 @@ pub type GenuineCorticalIdentifier = CorticalIdentifier;
 /// is the counterpart to a `FauxCorticalIdentifier`
 #[repr(C, u8)]
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum CorticalIdentifier { // Due Faux, the max is 127
+pub enum CorticalIdentifier {
+    // Due Faux, the max is 127
     Foundation(CorticalIdentifierFoundation) = 0,
     Processing(CorticalIdentifierProcessing) = 1,
 }
 
-impl CorticalIDEnum for CorticalIdentifier {}
+impl CorticalIDType for CorticalIdentifier {}
 
+impl CorticalIdentifier {
+    
+    /// Tries to create the Cortical Identifier given the Cortical Type, the internal data and any needed context.
+    pub fn try_new_id_from_data_and_context<CT: CorticalType>(
+        data: <CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContainedData,
+        context: &<CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContextRequiredToEncode,
+    ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
+    {
+        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_id_from_data_and_context::<CT>(data, context)
+    }
+
+    /// Try to init from bytes, after ensuring validity
+    pub fn try_new_id_from_bytes<CT: CorticalType>(
+        bytes: [u8; 6]
+    ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
+    {
+        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_id_from_bytes::<CT>(bytes)
+    }
+}
+
+// TODO can we minimize this? hide it maybe? Its effectively an inbetween step
+//region Bytes
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CorticalIdentifierBytes(pub(crate) [u8; 8]);
 
 impl CorticalIdentifierBytes {
-    pub fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError>
-    {
+    pub fn try_from_bytes(bytes: [u8; 8]) -> Result<Self, CorticalIdentifierParseError> {
         let decoded = Self::try_deserialize_from_bytes(bytes)?;
         Ok(Self::serialize_into_bytes(decoded)) // 0 cost return
     }
 
-    pub fn to_bytes(self) -> [u8; 8]
-    {
+    pub fn to_bytes(self) -> [u8; 8] {
         self.0
     }
 
     fn try_deserialize_from_bytes(bytes: [u8; 8]) -> Result<CorticalIdentifier, CorticalIdentifierParseError> {
         match bytes[0] {
-            0 => Ok(CorticalIdentifier::Foundation(CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes)?)),
-            1 => Ok(CorticalIdentifier::Processing(CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes)?)),
-            err => Err(CorticalIdentifierParseError::InvalidCorticalType(err))
+            0 => Ok(CorticalIdentifier::Foundation(
+                CorticalIdentifierFoundation::try_from_cortical_identifier_bytes(bytes)?,
+            )),
+            1 => Ok(CorticalIdentifier::Processing(
+                CorticalIdentifierProcessing::try_from_cortical_identifier_bytes(bytes)?,
+            )),
+            err => Err(CorticalIdentifierParseError::InvalidCorticalType(err)),
         }
     }
 
     fn serialize_into_bytes(identifier: CorticalIdentifier) -> CorticalIdentifierBytes {
         const _: () = assert!(core::mem::size_of::<CorticalIdentifier>() == 8); // compile time check
-        let arr: [u8; 8] = unsafe {core::mem::transmute(identifier)};
+        let arr: [u8; 8] = unsafe { core::mem::transmute(identifier) };
         CorticalIdentifierBytes(arr)
     }
 }
+
+//endregion
 
 //region Base 64
 
@@ -94,10 +123,15 @@ impl CorticalIdentifierBase64 {
 /// then validates them
 fn decode_identifier(text: &[u8]) -> Result<CorticalIdentifierBytes, CorticalIdentifierBase64Error> {
     if text.len() != TEXT_BYTE_COUNT {
-        return Err(FeagiIDBase64Error::WrongLength { actual: text.len(), expected: TEXT_BYTE_COUNT });
+        return Err(FeagiIDBase64Error::WrongLength {
+            actual: text.len(),
+            expected: TEXT_BYTE_COUNT,
+        });
     }
     let mut bytes = [0u8; 8];
-    let decoded_length = BASE64_URL_SAFE.decode_slice(text, &mut bytes).map_err(|_| FeagiIDBase64Error::InvalidEncoding)?;
+    let decoded_length = BASE64_URL_SAFE
+        .decode_slice(text, &mut bytes)
+        .map_err(|_| FeagiIDBase64Error::InvalidEncoding)?;
     // Text of the right length can still decode to fewer bytes, if it has more padding
     if decoded_length != bytes.len() {
         return Err(FeagiIDBase64Error::InvalidEncoding);
@@ -202,12 +236,13 @@ impl<'de> serde::Deserialize<'de> for CorticalIdentifierBase64 {
 /// odds of collision while still having something mappings can match against
 #[repr(C, u8)]
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum FauxCorticalIdentifier { // Note: Offset of 128 to maintain difference with Genuine
+pub enum FauxCorticalIdentifier {
+    // Note: Offset of 128 to maintain difference with Genuine
     Foundation(CorticalIdentifierFoundation) = 128 + 0,
     Processing(CorticalIdentifierProcessing) = 128 + 1,
 }
 
-impl CorticalIDEnum for FauxCorticalIdentifier {}
+impl CorticalIDType for FauxCorticalIdentifier {}
 
 //endregion
 
@@ -216,134 +251,19 @@ impl CorticalIDEnum for FauxCorticalIdentifier {}
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)] // No serde explicitly, due be being 9 bytes
 pub enum MaybeCorticalIdentifier {
     Genuine(CorticalIdentifier),
-    Faux(FauxCorticalIdentifier)
+    Faux(FauxCorticalIdentifier),
 }
 
-impl CorticalIDEnum for MaybeCorticalIdentifier {}
-
-//endregion
-
-//region Cortical Identifier Inner
-
-pub trait CorticalIdentifierInnerEncoder: Sized {
-    
-    /// Any additional systems needed to do the encoding. Is passed in as a mut reference to allow
-    /// variety when retrying
-    type ContextRequiredToEncode;
-    
-    /// What data itself can be encoded and decoded
-    type DecodableData: Clone + Debug + Serialize + DeserializeOwned;
-
-    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy;
-
-    /// Given the context, encode the Inner ID
-    fn encode_to_bytes(bytes: &mut [u8; 6], context: &mut Self::ContextRequiredToEncode)
-        -> Result<(), CorticalIdentifierParseError>;
-    
-    fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError>;
-
-    fn encode_context(decodable: Self::DecodableData) -> CorticalIdentifierInner<Self>;
-    
-    /// Extract the decodable context
-    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData;
-    
-    fn encode_to_bytes_new(data: Self::DecodableData, context: &mut Self::ContextRequiredToEncode)
-                           -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
-        let mut bytes = [0,0,0,0,0,0];
-        Self::encode_to_bytes(&mut bytes, context)?;
-        Ok(CorticalIdentifierInner{bytes, _p: Default::default()})
-    }
-    
-}
-
-#[derive(Clone, Copy, PartialEq, Hash, Debug, Eq)]
-pub struct CorticalIdentifierInner<Encoder: CorticalIdentifierInnerEncoder>{
-    bytes: [u8; 6],
-    _p: core::marker::PhantomData<Encoder>
-}
-
-impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
-    
-    pub fn try_new_from_bytes(bytes: [u8; 6]) -> Result<Self, CorticalIdentifierParseError> {
-        Encoder::try_decode_from_bytes(bytes)
-    }
-    
-    pub fn try_new_from_data_and_context(
-        data: Encoder::DecodableData,
-        context: &mut Encoder::ContextRequiredToEncode)
-        -> Result<Self, CorticalIdentifierParseError> {
-        Encoder::encode_to_bytes_new(data, context)
-    }
-}
-
-impl<Encoder: CorticalIdentifierInnerEncoder> Serialize for CorticalIdentifierInner<Encoder> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.bytes.serialize(serializer)
-    }
-}
-
-/// Deserializes through the encoder so the bytes are verified
-impl<'de, Encoder: CorticalIdentifierInnerEncoder> Deserialize<'de> for CorticalIdentifierInner<Encoder> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let bytes = <[u8; 6]>::deserialize(deserializer)?;
-        Encoder::try_decode_from_bytes(bytes).map_err(serde::de::Error::custom)
-    }
-}
-
-
-
-//endregion
-
-//region Random Cortical ID encoder
-/// Encodes to the 6 bytes at random. Retries up to eight times on collision. Used by many areas
-#[derive(Clone, Copy, PartialEq, Hash, Debug, Eq)]
-pub struct CorticalIdentifierInnerEncoderRandom;
-
-impl CorticalIdentifierInnerEncoder for CorticalIdentifierInnerEncoderRandom {
-    type ContextRequiredToEncode = ();
-    type DecodableData = ();
-    const COLLISION_RETRY_POLICY: CorticalIdentifierGeneratorCollisionPolicy =
-        CorticalIdentifierGeneratorCollisionPolicy::RetryNumberTimes(8); // Did you get the broom closet ending? The broom closet ending was my favorite!
-
-    fn encode_to_bytes(bytes: &mut [u8; 6], _context: &mut Self::ContextRequiredToEncode) -> Result<(), CorticalIdentifierParseError> {
-        *bytes = rand::random();
-        Ok(())
-    }
-
-    fn try_decode_from_bytes(bytes: [u8; 6]) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierParseError> {
-        // Nothing to verify
-        Ok(CorticalIdentifierInner{ bytes, _p: Default::default() })
-    }
-
-    fn encode_context(_decodable: Self::DecodableData) -> CorticalIdentifierInner<Self> {
-        let bytes: [u8; 6] = rand::random();
-        CorticalIdentifierInner{bytes, _p: Default::default()}
-    }
-
-    fn decode_context(inner: &CorticalIdentifierInner<Self>) -> &Self::DecodableData {
-        &() // nothing to get
-    }
-}
-
-/// If there is a collision with an ID in the genome, what should we do?
-pub enum CorticalIdentifierGeneratorCollisionPolicy {
-    /// Fail Immediately
-    Reject,
-    /// Retry up to this many times. Errors if we fail this many times
-    RetryNumberTimes(u8)
-}
-
+impl CorticalIDType for MaybeCorticalIdentifier {}
 
 //endregion
 
 #[derive(Debug, thiserror::Error)]
 pub enum CorticalIdentifierParseError {
+    #[error("Invalid inner parameters to encode! {0}")]
+    InvalidEncodingParameters(#[from] CorticalIdentifierInnerParseError),
     #[error("Decoded byte {0} corresponds to no known cortical type!")]
     InvalidCorticalType(u8),
     #[error("Decoded byte {0} corresponds to no known cortical subtype!")]
     InvalidCorticalSubtype(u8),
-    #[error("Invalid Inner Bytes! {0}")]
-    InvalidInnerByteDecoding(&'static str),
 }
-
-

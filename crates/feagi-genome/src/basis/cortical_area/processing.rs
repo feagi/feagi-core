@@ -1,28 +1,31 @@
-use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::{CorticalType};
-#[cfg(feature = "alloc")]
-use crate::basis::cortical_area::CorticalTypeAreaSpawningParameters;
-use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
-use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInner, CorticalIdentifierInnerEncoderRandom, CorticalIdentifierParseError};
+use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInner;
+use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInnerEncoderRandom, CorticalIdentifierParseError};
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnect, CTProcessingInterconnectNMModeledGenerator};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGenerator};
+#[cfg(feature = "alloc")]
+use crate::basis::cortical_area::CorticalTypeAreaSpawningParameters;
+use crate::basis::cortical_area::CorticalType;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use serde::{Deserialize, Serialize};
 
 
 //region Cortical Subtype
 
 /// Cortical areas for general processing, typically between inputs and outputs
 pub trait CorticalTypeProcessing: CorticalType<
-    InnerCorticalIDGenerator=CorticalIdentifierInnerEncoderRandom
+    InnerCorticalIDEncoder=CorticalIdentifierInnerEncoderRandom
     // Not locked to any specific layout
 >
 {}
 
 /// The most common cortical type for general processing between inputs and outputs
 pub mod interconnect {
-    use serde::{Deserialize, Serialize};
-    use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
+    use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierInnerEncoderRandom;
+    use crate::basis::cortical_area::processing::CorticalTypeProcessing;
+    use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
     use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
+    use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
     use feagi_connectome::connectome_basis::neuron_model::NeuronModel;
     use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
     use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::{NMFeagiAdvancedQuantKind, NMFeagiAdvancedQuanted};
@@ -31,9 +34,7 @@ pub mod interconnect {
     use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
     #[cfg(feature = "alloc")]
     use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
-    use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierInnerEncoderRandom;
-    use crate::basis::cortical_area::processing::CorticalTypeProcessing;
-    use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
+    use serde::{Deserialize, Serialize};
 
     //region CorticalType
 
@@ -58,12 +59,12 @@ pub mod interconnect {
         type NeuronLayout = NeuronLayoutTagVoxel;
 
         type NeuronLayoutRestrictor<FIQ: FeagiIndexQuantization> = NeuronLayoutRestrictorVoxelUnbound<FIQ>;
-        type InnerCorticalIDGenerator = CorticalIdentifierInnerEncoderRandom;
+        type InnerCorticalIDEncoder = CorticalIdentifierInnerEncoderRandom;
         const ALLOWED_REGIONS: CorticalAllowedRegions = CorticalAllowedRegions::InnerOnly;
 
-        type PossibleNeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledGenerator<FIQ>;
+        type NeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledGenerator<FIQ>;
         #[cfg(feature = "alloc")]
-        type PossibleNeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>;
+        type NeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>;
     }
 
     impl CorticalTypeProcessing for CTProcessingInterconnect {}
@@ -93,15 +94,15 @@ pub mod interconnect {
 
     // Neuron Model: Feagi Advanced
     pub mod feagi_advanced {
+        use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, CTProcessingInterconnectNMModeledGenerator, DEFAULT_DIMENSIONS};
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
         use feagi_connectome::connectome_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
         use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
         use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+        use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::quant_standard_32_bit::NMFeagiAdvancedQuantStandard32Bit;
+        use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuanted;
         use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::wrapped::Period;
         use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::{NMFeagiAdvancedDataCorticalProperties, NMFeagiAdvancedDataCorticalVariance, NMFeagiAdvancedDataNeuronInternal};
-        use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::NMFeagiAdvancedQuanted;
-        use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::quant_standard_32_bit::NMFeagiAdvancedQuantStandard32Bit;
-        use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, CTProcessingInterconnectNMModeledGenerator, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiAdvancedQuantStandard32Bit {
             fn spawn_neurogenesis_generator<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
@@ -143,15 +144,15 @@ pub mod interconnect {
 
     // Neuron Model: Feagi Simple
     pub mod feagi_simple {
+        use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, CTProcessingInterconnectNMModeledGenerator, DEFAULT_DIMENSIONS};
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
         use feagi_connectome::connectome_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
         use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
         use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+        use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::quant_standard_32_bit::NMFeagiSimpleQuantStandard32Bit;
+        use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuanted;
         use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::wrapped::Period;
         use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::{NMFeagiSimpleDataCorticalProperties, NMFeagiSimpleDataCorticalVariance, NMFeagiSimpleDataNeuronInternal};
-        use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::NMFeagiSimpleQuanted;
-        use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::quant_standard_32_bit::NMFeagiSimpleQuantStandard32Bit;
-        use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNM, CTProcessingInterconnectNMModeledGenerator, DEFAULT_DIMENSIONS};
 
         impl CTProcessingInterconnectNM for NMFeagiSimpleQuantStandard32Bit {
             fn spawn_neurogenesis_generator<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
@@ -292,7 +293,7 @@ pub enum CTProcessingSubtypedSpawningParameters<FIQ: FeagiIndexQuantization> {
 #[repr(C, u8)]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CorticalIdentifierProcessing {
-    Interconnect(CorticalIdentifierInner<<CTProcessingInterconnect as CorticalType>::InnerCorticalIDGenerator>)
+    Interconnect(CorticalIdentifierInner<<CTProcessingInterconnect as CorticalType>::InnerCorticalIDEncoder>)
 }
 
 impl CorticalIdentifierProcessing {
