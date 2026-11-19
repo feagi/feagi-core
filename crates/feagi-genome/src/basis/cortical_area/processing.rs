@@ -9,7 +9,9 @@ use crate::basis::cortical_area::CorticalType;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
-//region Cortical Subtype
+use crate::basis::cortical_area::cortical_identifiers::inner::random_byte_generator::CorticalIDInnerRNG;
+use crate::basis::cortical_area::spawning::{CorticalTypeSpawningRequest, CorticalTypeSpawningValidated};
+//region Cortical Subtypes
 
 /// Cortical areas for general processing, typically between inputs and outputs
 pub trait CorticalTypeProcessing: CorticalType<
@@ -43,7 +45,7 @@ pub mod interconnect {
     #[cfg(feature = "alloc")]
     use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::quant_standard_32_bit::NMFeagiSimpleQuantStandard32Bit;
     use serde::{Deserialize, Serialize};
-    use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
+    use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, FauxCorticalIdentifier};
     use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInner;
     use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
     use crate::basis::cortical_area::processing::CorticalIdentifierProcessing;
@@ -78,30 +80,30 @@ pub mod interconnect {
         type NeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>;
 
         fn wrap_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> CorticalIdentifier {
-            CorticalIdentifier::Processing(
-                CorticalIdentifierProcessing::Interconnect(
-                    inner
-                )
-            )
+            CorticalIdentifier::Processing(CorticalIdentifierProcessing::Interconnect(inner))
+        }
+
+        fn wrap_faux_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> FauxCorticalIdentifier {
+            FauxCorticalIdentifier::Processing(CorticalIdentifierProcessing::Interconnect(inner))
         }
 
         /// Storage is converted using this cortical type's default neuron internal data
         #[cfg(feature = "alloc")]
-        fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(sog: &Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>) -> Self::NeuronModelNeurogenesisGenerator<FIQ> {
-            match sog {
-                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiAdvanced(a) => {
-                    match a {
-                        NMFeagiAdvancedQuanted::Standard32Bit(b) => {
+        fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(neurogenesis_model_enum: &Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>) -> Self::NeuronModelNeurogenesisGenerator<FIQ> {
+            match neurogenesis_model_enum {
+                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiAdvanced(quant_enum) => {
+                    match quant_enum {
+                        NMFeagiAdvancedQuanted::Standard32Bit(storage_or_generator) => {
                             let defaults = NMFeagiAdvancedQuantStandard32Bit::spawn_neurogenesis_generator::<FIQ, Self::NeuronLayoutRestrictor<FIQ>>();
-                            NMFeagiAdvancedQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(b, defaults.neuron_internal)
+                            NMFeagiAdvancedQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(storage_or_generator, defaults.neuron_internal)
                         }
                     }
                 }
-                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiSimple(a) => {
-                    match a {
-                        NMFeagiSimpleQuanted::Standard32Bit(b) => {
+                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiSimple(quant_enum) => {
+                    match quant_enum {
+                        NMFeagiSimpleQuanted::Standard32Bit(storage_or_generator) => {
                             let defaults = NMFeagiSimpleQuantStandard32Bit::spawn_neurogenesis_generator::<FIQ, Self::NeuronLayoutRestrictor<FIQ>>();
-                            NMFeagiSimpleQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(b, defaults.neuron_internal)
+                            NMFeagiSimpleQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(storage_or_generator, defaults.neuron_internal)
                         }
                     }
                 }
@@ -352,16 +354,20 @@ pub enum CTProcessingSubtypedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub enum CTProcessingSubtypedSpawningParameters<FIQ: FeagiIndexQuantization> {
-    Interconnect(CorticalTypeAreaSpawningParameters<FIQ, CTProcessingInterconnect>)
+pub enum CTProcessingSubtypedSpawningRequest<FIQ: FeagiIndexQuantization> {
+    Interconnect(CorticalTypeSpawningRequest<FIQ, CTProcessingInterconnect>)
+}
+
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub(crate) enum CTProcessingSubtypedSpawningValidated<FIQ: FeagiIndexQuantization> {
+    Interconnect(CorticalTypeSpawningValidated<FIQ, CTProcessingInterconnect>)
 }
 
 //endregion
 
-
 // TODO this is very noisy in this file, yes, but these will be migrated to macros eventually
-
-
 
 
 //region CorticalIdentifier
@@ -390,6 +396,15 @@ impl CorticalIdentifierProcessing {
                 }
             }
         )
+    }
+
+    /// Rerolls the inner cortical ID RNG portion of the ID, keeping the same data
+    pub fn reroll_inner<RNG: CorticalIDInnerRNG>(self, rng: &RNG) -> Self {
+        match self {
+            CorticalIdentifierProcessing::Interconnect(inner) => {
+                CorticalIdentifierProcessing::Interconnect(inner.reroll_inner(rng))
+            }
+        }
     }
 }
 

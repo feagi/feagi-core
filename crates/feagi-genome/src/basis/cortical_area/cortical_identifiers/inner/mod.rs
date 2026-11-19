@@ -4,30 +4,26 @@ use crate::basis::cortical_area::cortical_identifiers::{CorticalIDType, Cortical
 use crate::basis::cortical_area::CorticalType;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use core::fmt::Debug;
+use core::hash::Hash;
+use crate::basis::cortical_area::cortical_identifiers::inner::random_byte_generator::CorticalIDInnerRNG;
 
 /// Defines how the CorticalIdentifierInner is encoded to bytes
-pub trait CorticalIdentifierInnerEncoder: Sized {
+pub trait CorticalIdentifierInnerEncoder: Sized + Clone + Debug + Hash{
+
     /// What data itself can be encoded and decoded
-    type ContainedData: Clone + Debug + Serialize + DeserializeOwned;
-
-    /// Any additional systems needed to do the encoding. Not data itself, could be
-    /// something like an RNG seed / function
-    type ContextRequiredToEncode;
-
-    /// In case of collision with an existing ID in the genome, how should we handle it?
-    const COLLISION_RETRY_POLICY: CorticalIdentifierCollisionPolicy;
-
+    type ContainedData: Clone + Debug + Serialize + DeserializeOwned + PartialEq;
+    
     /// Encode the encodable data of the inner ID
-    fn encode_data(
+    fn encode_data<RNG: CorticalIDInnerRNG>(
         data: Self::ContainedData,
-        context: &Self::ContextRequiredToEncode,
+        rng: &RNG,
     ) -> Result<CorticalIdentifierInner<Self>, CorticalIdentifierInnerParseError>;
 
     /// Extract the decodable data. Must never fail
     fn decode_data(inner: CorticalIdentifierInner<Self>) -> Self::ContainedData;
 
-    /// Validates that a set of bytes is of this generated type
+    /// Validates that a set of bytes is of this generated inner type
     fn validate_from_bytes(bytes: &[u8; 6]) -> Result<(), CorticalIdentifierInnerParseError>;
 }
 
@@ -40,11 +36,11 @@ pub struct CorticalIdentifierInner<Encoder: CorticalIdentifierInnerEncoder> {
 
 impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
     /// Try to init from internal data and any given context (systems, not data)
-    pub fn try_new_from_data_and_context(
+    pub fn try_new_from_data<RNG: CorticalIDInnerRNG>(
         data: Encoder::ContainedData,
-        context: &Encoder::ContextRequiredToEncode,
+        rng: &RNG,
     ) -> Result<Self, CorticalIdentifierInnerParseError> {
-        Encoder::encode_data(data, context)
+        Encoder::encode_data(data, rng)
     }
 
     /// Unwrap into whatever data this was encoding
@@ -70,18 +66,25 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
     pub fn copy_to_bytes(&self, target: &mut [u8; 6]) {
         *target = self.bytes.clone()
     }
-    
+
+    /// Rerolls the RNG portion
+    pub fn reroll_inner<RNG: CorticalIDInnerRNG>(self, rng: &RNG) -> Self {
+        let preserved = self.unwrap_as_data();
+        Self::try_new_from_data(preserved, rng).unwrap() // always safe
+    }
+
     //region Identifiers
 
     /// Try to init cortical identifier from internal data and any given context (systems, not data)
-    pub fn try_new_cortical_identifier_from_data_and_context<CT>(
+    pub fn try_new_cortical_identifier_from_data<CT, RNG>(
         data: Encoder::ContainedData,
-        context: &Encoder::ContextRequiredToEncode
+        rng: &RNG,
     ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
     where
-        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>,
+        RNG: CorticalIDInnerRNG
     {
-        let inner = Self::try_new_from_data_and_context(data, context)?;
+        let inner = Self::try_new_from_data(data, rng)?;
         Ok(CT::wrap_cortical_identifier_inner(inner))
     }
 
@@ -96,16 +99,17 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
         Ok(CT::wrap_cortical_identifier_inner(inner))
     }
 
-    
+
     /// Try to init faux cortical identifier from internal data and any given context (systems, not data)
-    fn try_new_faux_cortical_identifier_from_data_and_context<CT>(
+    fn try_new_faux_cortical_identifier_from_data<CT, RNG>(
         data: Encoder::ContainedData,
-        context: &Encoder::ContextRequiredToEncode
+        rng: &RNG,
     ) -> Result<FauxCorticalIdentifier, CorticalIdentifierParseError>
     where
-        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>,
+        RNG: CorticalIDInnerRNG
     {
-        let inner = Self::try_new_from_data_and_context(data, context)?;
+        let inner = Self::try_new_from_data(data, rng)?;
         Ok(CT::wrap_faux_cortical_identifier_inner(inner))
     }
 
@@ -119,7 +123,7 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
         let inner = Self::try_new_from_bytes(bytes)?;
         Ok(CT::wrap_faux_cortical_identifier_inner(inner))
     }
-    
+
     //endregion
 }
 
@@ -137,6 +141,7 @@ impl<'de, Encoder: CorticalIdentifierInnerEncoder> Deserialize<'de> for Cortical
     }
 }
 
+
 /// If there is a collision with an ID in the genome, what should we do?
 pub enum CorticalIdentifierCollisionPolicy {
     /// Fail Immediately
@@ -149,4 +154,28 @@ pub enum CorticalIdentifierCollisionPolicy {
 pub enum CorticalIdentifierInnerParseError {
     #[error("Invalid inner parameters to encode! {0}")]
     InvalidEncodingParameters(&'static str),
+}
+
+/// How RNG is handled
+pub mod random_byte_generator {
+
+    /// How RNG is produced
+    pub trait CorticalIDInnerRNG {
+        fn random_on_slice<const N: usize>(&self, bytes: &mut [u8; N]);
+    }
+
+    #[cfg(feature = "std")]
+    /// RNG using standard STD Rand
+    pub struct CorticalIDInnerRNGSTD;
+
+    #[cfg(feature = "std")]
+    impl CorticalIDInnerRNG for CorticalIDInnerRNGSTD {
+        fn random_on_slice<const N: usize>(&self, bytes: &mut [u8; N]) {
+            *bytes = rand::random()
+        }
+    }
+
+    // TODO embedded?
+
+
 }

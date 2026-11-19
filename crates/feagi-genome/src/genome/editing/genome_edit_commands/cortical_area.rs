@@ -5,9 +5,7 @@ use feagi_connectome::connectome_burst::burst_basis::connectome_reshaping::{Conn
 use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisStorageOrGenerator};
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
-use crate::basis::cortical_area::{CorticalTypeAreaSpawningParameters, CorticalTypedSpawningParameters};
-use crate::basis::cortical_area::foundation::CTFoundationSubtypedSpawningParameters;
-use crate::basis::cortical_area::processing::CTProcessingSubtypedSpawningParameters;
+use crate::basis::cortical_area::CorticalTypedSpawningValidated;
 use crate::genome::editing::genome_edit_commands::GenomeEditCommandStep;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 
@@ -17,9 +15,8 @@ use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning
 pub struct GenomeEditCommandStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
-    pub cortical_identifier: CorticalIdentifier,
-    pub neurogenesis: CorticalTypedSpawningParameters<FIQ>, // TODO swap to one that holds the cortical id (not cortical id generator) (perhaps making a generic works for holding that context?)
-    pub parent_region: BrainRegionID
+    pub parent_region: BrainRegionID,
+    pub spawner: CorticalTypedSpawningValidated<FIQ>
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditCommandStep<FIQ> for GenomeEditCommandStepCorticalAreaAdd<FIQ> {

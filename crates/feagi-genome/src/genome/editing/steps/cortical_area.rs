@@ -1,11 +1,11 @@
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::FauxCorticalIdentifier;
-use crate::basis::cortical_area::CorticalTypedSpawningParameters;
 use crate::genome::editing::genome_edit_requests::GenomeEditSequenceIntensity;
 use crate::genome::editing::steps::{GenomeEditStep, GenomeEditStepEnumAdditive, GenomeEditStepEnumAny};
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::{Deserialize, Serialize};
+use crate::basis::cortical_area::CorticalTypedSpawningRequest;
 
 /// The enum edit step for cortical areas for the load genome sequence type. Can only add cortical areas
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct GenomeEditStepCorticalAreaAdd<FIQ: FeagiIndexQuantization> {
     pub metadata: GenomeObjectMetadata,
     pub positioning: GenomeObjectPositioning,
-    pub faux_cortical_identifier: FauxCorticalIdentifier,
-    pub neurogenesis: CorticalTypedSpawningParameters<FIQ>,
-    pub parent_region: Option<BrainRegionID> 
+    pub parent_region: Option<BrainRegionID>,
+    pub spawner: CorticalTypedSpawningRequest<FIQ>,
+    
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEditStep<FIQ> for GenomeEditStepCorticalAreaAdd<FIQ> {

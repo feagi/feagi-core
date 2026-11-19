@@ -11,6 +11,7 @@ use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessageP
 use feagi_basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use crate::basis::cortical_area::cortical_identifiers::inner::random_byte_generator::CorticalIDInnerRNG;
 use crate::basis::cortical_area::CorticalType;
 // TODO manual byte serialization / deserialization to enforce 8 byte limits, note that serde
 // ignores #[repr(C, u8)] overrides! So when bringing this down to 8 bytes we must do so manually
@@ -37,13 +38,13 @@ impl CorticalIDType for CorticalIdentifier {}
 
 impl CorticalIdentifier {
     
-    /// Tries to create the Cortical Identifier given the Cortical Type, the internal data and any needed context.
-    pub fn try_new_id_from_data_and_context<CT: CorticalType>(
+    /// Tries to create the Cortical Identifier given the Cortical Type and the internal data
+    pub fn try_new_id_from_data_and_context<CT: CorticalType, RNG: CorticalIDInnerRNG>(
         data: <CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContainedData,
-        context: &<CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContextRequiredToEncode,
+        rng: &RNG,
     ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
     {
-        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_id_from_data_and_context::<CT>(data, context)
+        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_cortical_identifier_from_data::<CT, RNG>(data, rng)
     }
 
     /// Try to init from bytes, after ensuring validity
@@ -51,9 +52,17 @@ impl CorticalIdentifier {
         bytes: [u8; 6]
     ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
     {
-        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_id_from_bytes::<CT>(bytes)
+        CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_cortical_identifier_from_bytes::<CT>(bytes)
     }
 
+    /// Rerolls the inner cortical ID RNG portion of the ID, keeping the same data
+    pub fn reroll_inner<RNG: CorticalIDInnerRNG>(self, rng: &RNG) -> Self {
+        match self {
+            CorticalIdentifier::Foundation(f) => CorticalIdentifier::Foundation(f.reroll_inner(rng)),
+            CorticalIdentifier::Processing(p) => CorticalIdentifier::Processing(p.reroll_inner(rng)),
+        }
+    }
+    
     pub fn into_faux(self) -> FauxCorticalIdentifier {
         match self {
             CorticalIdentifier::Foundation(a) => FauxCorticalIdentifier::Foundation(a),
@@ -255,6 +264,14 @@ impl FauxCorticalIdentifier {
         match self {
             FauxCorticalIdentifier::Foundation(a) => CorticalIdentifier::Foundation(a),
             FauxCorticalIdentifier::Processing(a) => CorticalIdentifier::Processing(a),
+        }
+    }
+
+    /// Rerolls the inner cortical ID RNG portion of the ID, keeping the same data
+    pub fn reroll_inner<RNG: CorticalIDInnerRNG>(self, rng: &RNG) -> Self {
+        match self {
+            FauxCorticalIdentifier::Foundation(f) => FauxCorticalIdentifier::Foundation(f.reroll_inner(rng)),
+            FauxCorticalIdentifier::Processing(p) => FauxCorticalIdentifier::Processing(p.reroll_inner(rng)),
         }
     }
 }

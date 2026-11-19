@@ -7,6 +7,7 @@ use std::fmt::Debug;
 pub mod load_genome;
 pub mod amalgamate_genome;
 pub mod edit_genome;
+pub mod embodiment_joining;
 
 /// A serializable ordered list of requests to edit the Genome (and Connectome)
 pub trait GenomeEditRequests<FIQ>: Clone + Debug + Serialize + DeserializeOwned
