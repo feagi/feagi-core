@@ -1,23 +1,49 @@
 pub mod brain_region;
 pub mod cortical_area;
 
+
+use crate::genome::editing::genome_edit_requests::steps::cortical_area::GenomeEditStepCorticalAreaAdd;
 use crate::genome::editing::genome_edit_requests::GenomeEditSequenceIntensity;
-use crate::genome::editing::steps::brain_region::GenomeEditStepBrainRegionAdd;
-use crate::genome::editing::steps::cortical_area::GenomeEditStepCorticalAreaAdd;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-
+use feagi_connectome::connectome_burst::burst_basis::connectome_editing::ConnectomeEditEnum;
+use crate::genome::editing::genome_edit_commands::{GenomeEditCommandStepEnum};
+use crate::genome::editing::genome_edit_requests::steps::brain_region::GenomeEditStepBrainRegionAdd;
+use crate::genome::genomes::genome_editing::{GenomeEditCommandCollisionDetection, GenomeEditingError};
+use crate::genome::genomes::GenomePublicInterface;
 // TODO macros maybe? One for each enum and one for the types?
 
 /// A single edit step stored under `GenomeEditRequests`.
-pub trait GenomeEditStep<FIQ> : Clone + Debug + Serialize + DeserializeOwned
+pub trait GenomeEditStep<FIQ>: Clone + Debug + Serialize + DeserializeOwned
 where
     FIQ: FeagiIndexQuantization,
 {
     const INTENSITY: GenomeEditSequenceIntensity;
 }
+
+
+pub(crate) trait GenomeEditStepInternal<FIQ: FeagiIndexQuantization>: Clone + Debug + Serialize + DeserializeOwned {
+
+    /// Verify with Genome and building collider that this step is valid and add commands
+    fn verify_with_genome_and_collider_and_push_genome_commands(
+        self,
+        genome: &impl GenomePublicInterface<FIQ>,
+        collision: &mut GenomeEditCommandCollisionDetection,
+        genome_commands: &mut Vec<GenomeEditCommandStepEnum<FIQ>>
+    ) -> Result<(), GenomeEditingError>;
+
+    /// Verify with Genome and building collider that this step is valid and add commands for genome and connectome
+    fn verify_with_genome_and_collider_and_push_genome_and_connectome_commands(
+        self,
+        genome: &impl GenomePublicInterface<FIQ>,
+        collision: &mut GenomeEditCommandCollisionDetection,
+        genome_commands: &mut Vec<GenomeEditCommandStepEnum<FIQ>>,
+        connectome_commands: &mut Vec<ConnectomeEditEnum<FIQ>>
+    ) -> Result<(), GenomeEditingError>;
+}
+
 
 
 pub trait GenomeEditStepEnum<FIQ: FeagiIndexQuantization>:
@@ -31,7 +57,7 @@ Clone + Debug + Serialize + DeserializeOwned + Into<GenomeEditStepEnumAny<FIQ>>
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "")]
 pub enum GenomeEditStepEnumAdditive<FIQ: FeagiIndexQuantization> {
-    AddBrainRegion(GenomeEditStepBrainRegionAdd),
+    AddBrainRegion(GenomeEditStepBrainRegionAdd<Parent>),
     AddCorticalArea(GenomeEditStepCorticalAreaAdd<FIQ>)
 }
 
@@ -43,7 +69,6 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditStepEnum<FIQ> for GenomeEditStepEnum
         }
     }
 }
-
 
 
 

@@ -4,7 +4,6 @@ use feagi_connectome::connectome_burst::burst_basis::connectome_editing::Connect
 use feagi_connectome::connectome_burst::burst_basis::connectome_reshaping::{ConnectomeReshapeStepCorticalAreaAdd, ConnectomeReshapeStepEnum};
 use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisStorageOrGenerator};
 use crate::basis::brain_region::BrainRegionID;
-use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::CorticalTypedSpawningValidated;
 use crate::genome::editing::genome_edit_commands::GenomeEditCommandStep;
 use crate::genome::genome_object::{GenomeObjectMetadata, GenomeObjectPositioning};

@@ -3,13 +3,11 @@ pub mod foundation;
 pub mod processing;
 pub mod cortical_types;
 
-use crate::basis::cortical_area::foundation::power::CTFoundationPower;
 use crate::basis::cortical_area::foundation::{CTFoundationSubtypedGenerator, CTFoundationSubtypedKind, CTFoundationSubtypedSpawningRequest, CTFoundationSubtypedSpawningValidated};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::foundation::{
     CTFoundationSubtypedStorage, CTFoundationSubtypedStorageOrGenerator,
 };
-use crate::basis::cortical_area::processing::interconnect::CTProcessingInterconnect;
 use crate::basis::cortical_area::processing::{CTProcessingSubtypedGenerator, CTProcessingSubtypedKind, CTProcessingSubtypedSpawningRequest, CTProcessingSubtypedSpawningValidated};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::processing::{
@@ -186,7 +184,7 @@ pub mod spawning {
 
         }
     }
-    
+
     /// Once we know a cortical identifier is valid (no collision), we use this to store it for the next step
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(bound = "")]

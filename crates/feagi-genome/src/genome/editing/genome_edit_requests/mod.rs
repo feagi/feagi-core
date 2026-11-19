@@ -1,13 +1,14 @@
-use crate::genome::editing::steps::GenomeEditStepEnum;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
+use steps::GenomeEditStepEnum;
 
 pub mod load_genome;
 pub mod amalgamate_genome;
 pub mod edit_genome;
 pub mod embodiment_joining;
+pub mod steps;
 
 /// A serializable ordered list of requests to edit the Genome (and Connectome)
 pub trait GenomeEditRequests<FIQ>: Clone + Debug + Serialize + DeserializeOwned
@@ -25,8 +26,6 @@ where
 
     /// Iterate over the steps of this request, in the order they will be applied
     fn iter_steps(&self) -> impl Iterator<Item = &Self::EditStepEnum>;
-
-    
     
 }
 

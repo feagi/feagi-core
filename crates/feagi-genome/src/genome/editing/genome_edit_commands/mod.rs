@@ -1,25 +1,64 @@
+
+pub mod brain_region;
+
+
+use std::collections::HashSet;
+use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
+use crate::genome::editing::genome_edit_commands::brain_region::GenomeEditCommandStepBrainRegionAdd;
+
+pub trait GenomeEditCommandStep<FIQ: FeagiIndexQuantization>: {}
+
+pub enum GenomeEditCommandStepEnum<FIQ: FeagiIndexQuantization> {
+    BrainRegionAdd(GenomeEditCommandStepBrainRegionAdd),
+    
+}
+
+pub enum GenomeEditCommandAndConnectomeCommandStepsEnum<FIQ: FeagiIndexQuantization> {
+
+}
+
+/*
+use std::marker::PhantomData;
 use crate::basis::brain_region::BrainRegionID;
 use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInnerEncoder;
 use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
 use crate::basis::cortical_area::foundation::power::CTFoundationPower;
-use crate::basis::cortical_area::foundation::{CTFoundationSubtypedSpawningParameters, CorticalIdentifierFoundation};
+use crate::basis::cortical_area::foundation::{CorticalIdentifierFoundation};
 use crate::basis::cortical_area::processing::interconnect::CTProcessingInterconnect;
-use crate::basis::cortical_area::processing::{CTProcessingSubtypedSpawningParameters, CorticalIdentifierProcessing};
-use crate::basis::cortical_area::{CorticalType, CorticalTypedSpawningParameters};
+use crate::basis::cortical_area::processing::{CorticalIdentifierProcessing};
+use crate::basis::cortical_area::{CorticalType};
 use crate::genome::editing::genome_edit_commands::brain_region::GenomeEditCommandStepBrainRegionAdd;
 use crate::genome::editing::genome_edit_commands::cortical_area::GenomeEditCommandStepCorticalAreaAdd;
-use crate::genome::editing::steps::{GenomeEditStepEnum, GenomeEditStepEnumAny};
 use crate::genome::genomes::brain_region::BrainRegionContainerUniversal;
 use crate::genome::genomes::GenomePublicInterface;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use feagi_connectome::connectome_burst::burst_basis::connectome_editing::{ConnectomeEditEnum, ConnectomeEditNothing};
+use crate::genome::editing::genome_edit_requests::steps::GenomeEditStepEnum;
+
+
 
 mod brain_region;
 mod cortical_area;
 
+//region Mode
+
+pub trait GenomeEditCommandsMode<FIQ: FeagiIndexQuantization> {
+    
+}
+
+pub struct GenomeEditCommandsModeGenomeOnly<FIQ: FeagiIndexQuantization> {
+    _p: PhantomData<FIQ>
+}
+
+impl<FIQ: FeagiIndexQuantization> GenomeEditCommandsMode<FIQ> for GenomeEditCommandsModeGenomeOnly<FIQ> {}
+
+
+
+//endregion
+
 /// Used internally, handles validating genome edit requests, adding missing steps, and sending
 /// edits to connectome
-pub(crate) struct GenomeEditCommands<FIQ: FeagiIndexQuantization> {
+pub(crate) struct GenomeEditCommands<FIQ: FeagiIndexQuantization, GECM: GenomeEditCommandsMode<FIQ>> {
     pub(crate) commands: Vec<GenomeEditCommandStepEnum<FIQ>>,
 }
 
@@ -195,3 +234,5 @@ pub enum GenomeEditRequestValidationError<FIQ: FeagiIndexQuantization> {
     #[error("Disallowed Dimensions!")]
     CorticalAreaDimensionsInvalid(FIQ) // TODO make an actual thing
 }
+
+ */
