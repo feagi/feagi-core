@@ -51,8 +51,6 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
             }
         }
 
-
-
         //endregion
 
         let mut commands: Vec<GenomeEditCommandStepEnum<FIQ>> = vec![];
@@ -103,6 +101,13 @@ impl<FIQ: FeagiIndexQuantization> GenomeEditCommands<FIQ> {
                             }
                         }
                     }
+
+
+                    &a.
+
+
+
+
 
                     // TODO find a better / cleaner way to do this cortical ID stuff
                     // TODO check genome collision!

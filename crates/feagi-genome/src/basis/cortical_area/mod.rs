@@ -27,7 +27,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierParseError};
 use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInnerParseError;
-
+use crate::basis::cortical_area::spawning::{CorticalTypeAreaSpawningParameters, CorticalTypeSpawningContext};
 //region Cortical Type
 
 /// A cortical type is a higher level description of a cortical area. It has a set layout, but
@@ -50,7 +50,8 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
 
     /// The default generator for this given cortical type, enumed for the neuron model and quant
     type NeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization>: Into<NMModeled<NMNeurogenesisGenerator<FIQ>>>;
-    
+
+
     /// The default storage OR generator for this given cortical type, enumed for the neuron model and quant
     #[cfg(feature = "alloc")]
     type NeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization>: Into<NMModeled<NMNeurogenesisStorageOrGenerator<FIQ>>>
@@ -83,18 +84,6 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
     {
         CorticalIdentifier::try_new_id_from_bytes::<Self>(bytes)
     }
-    
-    /// Creates the spawning parameters specific to this cortical type
-    #[cfg(feature = "alloc")]
-    fn build_spawning_parameters<FIQ: FeagiIndexQuantization>(
-        cortical_id_generation_params: <Self::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContainedData,
-        neurogenesis: Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>,
-    ) -> CorticalTypeAreaSpawningParameters<FIQ, Self> {
-        CorticalTypeAreaSpawningParameters {
-            cortical_id_generation_params,
-            neurogenesis,
-        }
-    }
 
     /// Get what neuron model / quant is being used here but using the generic NMKind enum
     fn into_neuron_model_enum_generic(self) -> NMKind {
@@ -124,7 +113,7 @@ pub mod spawning {
     where
         FIQ: FeagiIndexQuantization,
         CT: CorticalType,
-        CTSC: CorticalTypeSpawningContext<FIQ, CT>
+        CTSC: CorticalTypeSpawningContext<FIQ>
     {
         pub context: CTSC,
         pub neurogenesis: CT::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>,
@@ -134,17 +123,18 @@ pub mod spawning {
     where
         FIQ: FeagiIndexQuantization,
         CT: CorticalType,
-        CTSC: CorticalTypeSpawningContext<FIQ, CT>
+        CTSC: CorticalTypeSpawningContext<FIQ>
     {
         /// Copies the contained neurogenesis and converts it into a generator (if it isnt already)
         pub fn copy_out_generator_for_genome(&self) -> CT::NeuronModelNeurogenesisGenerator<FIQ> {
             CT::copy_storage_or_generator_as_generator(&self.neurogenesis)
         }
     }
-
     
     /// Unites the different data types of different types / stages of cortical area spawning
-    pub trait CorticalTypeSpawningContext<FIQ, CT>: Clone + Debug + Serialize + DeserializeOwned {}
+    pub trait CorticalTypeSpawningContext<FIQ>: Clone + Debug + Serialize + DeserializeOwned {
+        type CT: CorticalType;
+    }
     
     /// Cortical typed spawning parameters at the request stage
     pub struct CorticalTypeSpawningContextRequest<CT: CorticalType> {
@@ -190,7 +180,7 @@ pub mod spawning {
 //region Cortical Type Spawning
 
 
-
+/*
 /// Spawning Parameters specific to a given cortical type
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +194,8 @@ pub struct CorticalTypeAreaSpawningParameters<FIQ: FeagiIndexQuantization, CT: C
 impl<FIQ: FeagiIndexQuantization, CT: CorticalType> CorticalTypeAreaSpawningParameters<FIQ, CT> {
     pub const REGION_ALLOWABILITY: CorticalAllowedRegions = CT::ALLOWED_REGIONS;
 }
+
+ */
 
 
 //endregion
@@ -244,12 +236,17 @@ pub enum CorticalTypedStorageOrGenerator<FIQ: FeagiIndexQuantization> {
     Processing(CTProcessingSubtypedStorageOrGenerator<FIQ>),
 }
 
+
+
+
 #[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "")]
-pub enum CorticalTypedSpawningParameters<FIQ: FeagiIndexQuantization> {
-    Foundation(CTFoundationSubtypedSpawningParameters<FIQ>),
-    Processing(CTProcessingSubtypedSpawningParameters<FIQ>),
+pub enum CorticalTypedSpawningParameters<FIQ: FeagiIndexQuantization, CTSC: CorticalTypeSpawningContext<FIQ>> {
+    Foundation(CorticalTypeAreaSpawningParameters<FIQ, CTSC, CTSC>)
+
+    //Foundation(CTFoundationSubtypedSpawningParameters<FIQ>),
+    //Processing(CTProcessingSubtypedSpawningParameters<FIQ>),
 }
 
 impl<FIQ: FeagiIndexQuantization> CorticalTypedSpawningParameters<FIQ> {
@@ -260,6 +257,10 @@ impl<FIQ: FeagiIndexQuantization> CorticalTypedSpawningParameters<FIQ> {
         }
     }
 }
+
+
+
+
 
 //endregion
 

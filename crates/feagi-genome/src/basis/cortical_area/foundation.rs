@@ -10,6 +10,7 @@ use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::Neur
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::{Deserialize, Serialize};
 use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
+
 //region Cortical Subtype
 
 /// These are the core cortical areas of FEAGI, that typically have some unique functionality
@@ -20,8 +21,6 @@ pub trait CorticalTypeFoundation: CorticalType<
     InnerCorticalIDEncoder=CorticalIdentifierInnerEncoderRandom
 >
 {}
-
-
 
 
 /// Fires every burst
@@ -355,9 +354,6 @@ pub enum CTFoundationSubtypedSpawningParameters<FIQ: FeagiIndexQuantization> {
 
 
 // TODO this is very noisy in this file, yes, but these will be migrated to macros eventually
-
-
-
 
 //region CorticalIdentifier
 
