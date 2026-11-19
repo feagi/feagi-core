@@ -32,8 +32,21 @@ pub mod interconnect {
     use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
     #[cfg(feature = "alloc")]
     use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::by_generator::NeurogenesisOtherDataForStorageOf;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_models::neuron_models::models::feagi_advanced::quantizations::quant_standard_32_bit::NMFeagiAdvancedQuantStandard32Bit;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_models::neuron_models::models::feagi_simple::quantizations::quant_standard_32_bit::NMFeagiSimpleQuantStandard32Bit;
     use serde::{Deserialize, Serialize};
+    use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
+    use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInner;
     use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
+    use crate::basis::cortical_area::processing::CorticalIdentifierProcessing;
     //region CorticalType
 
     /// Cortical Type for general processing. Each variant is a neuron model (and its quantization)
@@ -63,6 +76,37 @@ pub mod interconnect {
         type NeuronModelNeurogenesisGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledGenerator<FIQ>;
         #[cfg(feature = "alloc")]
         type NeuronModelNeuroGenesisStorageOrGenerator<FIQ: FeagiIndexQuantization> = CTProcessingInterconnectNMModeledStorageOrGenerator<FIQ>;
+
+        fn wrap_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> CorticalIdentifier {
+            CorticalIdentifier::Processing(
+                CorticalIdentifierProcessing::Interconnect(
+                    inner
+                )
+            )
+        }
+
+        /// Storage is converted using this cortical type's default neuron internal data
+        #[cfg(feature = "alloc")]
+        fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(sog: &Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>) -> Self::NeuronModelNeurogenesisGenerator<FIQ> {
+            match sog {
+                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiAdvanced(a) => {
+                    match a {
+                        NMFeagiAdvancedQuanted::Standard32Bit(b) => {
+                            let defaults = NMFeagiAdvancedQuantStandard32Bit::spawn_neurogenesis_generator::<FIQ, Self::NeuronLayoutRestrictor<FIQ>>();
+                            NMFeagiAdvancedQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(b, defaults.neuron_internal)
+                        }
+                    }
+                }
+                CTProcessingInterconnectNMModeledStorageOrGenerator::FeagiSimple(a) => {
+                    match a {
+                        NMFeagiSimpleQuanted::Standard32Bit(b) => {
+                            let defaults = NMFeagiSimpleQuantStandard32Bit::spawn_neurogenesis_generator::<FIQ, Self::NeuronLayoutRestrictor<FIQ>>();
+                            NMFeagiSimpleQuantStandard32Bit::copy_generator_from_storage_or_generator_wrapped(b, defaults.neuron_internal)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     impl CorticalTypeProcessing for CTProcessingInterconnect {}
@@ -80,11 +124,45 @@ pub mod interconnect {
             Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
         >() -> Self::NeurogenesisByGenerator<FIQ>;
 
+        /// Wraps a generator of this neuron model in this cortical type's enum. Per model, since
+        /// each neuron model is a different variant
+        fn wrap_generator<FIQ: FeagiIndexQuantization>(
+            generator: Self::NeurogenesisByGenerator<FIQ>
+        ) -> CTProcessingInterconnectNMModeledGenerator<FIQ>;
+
+        //region Default Impls
+
         /// [`Self::spawn_neurogenesis_generator`], wrapped in this cortical type's enum
         fn spawn_neurogenesis_generator_wrapped<
             FIQ: FeagiIndexQuantization,
             Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
-        >() -> CTProcessingInterconnectNMModeledGenerator<FIQ>;
+        >() -> CTProcessingInterconnectNMModeledGenerator<FIQ> {
+            Self::wrap_generator(Self::spawn_neurogenesis_generator::<FIQ, Res>())
+        }
+
+        /// [`NeurogenesisByStorage::to_generator`], wrapped in this cortical type's enum
+        #[cfg(feature = "alloc")]
+        fn spawn_neurogenesis_generator_from_storage_wrapped<
+            FIQ: FeagiIndexQuantization,
+        >(
+            storage: &NeurogenesisByStorage<FIQ, Self>,
+            other_data: NeurogenesisOtherDataForStorageOf<FIQ, Self>,
+        ) -> CTProcessingInterconnectNMModeledGenerator<FIQ> {
+            Self::wrap_generator(storage.to_generator(other_data))
+        }
+
+        /// [`NeurogenesisStorageOrGenerator::copy_as_generator`], wrapped in this cortical type's enum
+        #[cfg(feature = "alloc")]
+        fn copy_generator_from_storage_or_generator_wrapped<
+            FIQ: FeagiIndexQuantization
+        >(
+            storage_or_generator: &NeurogenesisStorageOrGenerator<FIQ, Self>,
+            other_data: NeurogenesisOtherDataForStorageOf<FIQ, Self>,
+        ) -> CTProcessingInterconnectNMModeledGenerator<FIQ> {
+            Self::wrap_generator(storage_or_generator.copy_as_generator(other_data))
+        }
+
+        //endregion
     }
 
     /// Default dimensions to use for this cortical type
@@ -133,9 +211,9 @@ pub mod interconnect {
                 }
             }
 
-            fn spawn_neurogenesis_generator_wrapped<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
+            fn wrap_generator<FIQ: FeagiIndexQuantization>(generator: Self::NeurogenesisByGenerator<FIQ>)
                 -> CTProcessingInterconnectNMModeledGenerator<FIQ> {
-                CTProcessingInterconnectNMModeledGenerator::FeagiAdvanced(NMFeagiAdvancedQuanted::Standard32Bit(Self::spawn_neurogenesis_generator::<FIQ, Res>()))
+                CTProcessingInterconnectNMModeledGenerator::FeagiAdvanced(NMFeagiAdvancedQuanted::Standard32Bit(generator))
             }
         }
     }
@@ -176,9 +254,9 @@ pub mod interconnect {
                 }
             }
 
-            fn spawn_neurogenesis_generator_wrapped<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
+            fn wrap_generator<FIQ: FeagiIndexQuantization>(generator: Self::NeurogenesisByGenerator<FIQ>)
                 -> CTProcessingInterconnectNMModeledGenerator<FIQ> {
-                CTProcessingInterconnectNMModeledGenerator::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(Self::spawn_neurogenesis_generator::<FIQ, Res>()))
+                CTProcessingInterconnectNMModeledGenerator::FeagiSimple(NMFeagiSimpleQuanted::Standard32Bit(generator))
             }
         }
     }
