@@ -1,6 +1,6 @@
 pub mod inner_random;
 
-use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierParseError};
+use crate::basis::cortical_area::cortical_identifiers::{CorticalIDType, CorticalIdentifier, CorticalIdentifierParseError, FauxCorticalIdentifier};
 use crate::basis::cortical_area::CorticalType;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -47,18 +47,6 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
         Encoder::encode_data(data, context)
     }
 
-    /// Try to init from internal data and any given context (systems, not data)
-    pub fn try_new_id_from_data_and_context<CT: CorticalType>(
-        data: Encoder::ContainedData,
-        context: &Encoder::ContextRequiredToEncode,
-    ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
-    where
-        CT: CorticalType<InnerCorticalIDEncoder = Encoder>,
-    {
-        let inner = Self::try_new_from_data_and_context(data, context)?;
-        Ok(CT::wrap_cortical_identifier_inner(inner))
-    }
-
     /// Unwrap into whatever data this was encoding
     pub fn unwrap_as_data(self) -> Encoder::ContainedData {
         Encoder::decode_data(self)
@@ -73,16 +61,6 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
         })
     }
 
-    /// Try to init from bytes, after ensuring validity
-    pub fn try_new_id_from_bytes<CT: CorticalType>(bytes: [u8; 6])
-        -> Result<CorticalIdentifier, CorticalIdentifierParseError>
-    where
-        CT: CorticalType<InnerCorticalIDEncoder = Encoder>,
-    {
-        let inner = Self::try_new_from_bytes(bytes)?;
-        Ok(CT::wrap_cortical_identifier_inner(inner))
-    }
-
     /// Unwrap self exposing inner bytes
     pub fn unwrap_as_bytes(self) -> [u8; 6] {
         self.bytes
@@ -92,6 +70,57 @@ impl<Encoder: CorticalIdentifierInnerEncoder> CorticalIdentifierInner<Encoder> {
     pub fn copy_to_bytes(&self, target: &mut [u8; 6]) {
         *target = self.bytes.clone()
     }
+    
+    //region Identifiers
+
+    /// Try to init cortical identifier from internal data and any given context (systems, not data)
+    pub fn try_new_cortical_identifier_from_data_and_context<CT>(
+        data: Encoder::ContainedData,
+        context: &Encoder::ContextRequiredToEncode
+    ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
+    where
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+    {
+        let inner = Self::try_new_from_data_and_context(data, context)?;
+        Ok(CT::wrap_cortical_identifier_inner(inner))
+    }
+
+    /// Try to init cortical identifier from bytes, after ensuring validity
+    pub fn try_new_cortical_identifier_from_bytes<CT>(
+        bytes: [u8; 6]
+    ) -> Result<CorticalIdentifier, CorticalIdentifierParseError>
+    where
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+    {
+        let inner = Self::try_new_from_bytes(bytes)?;
+        Ok(CT::wrap_cortical_identifier_inner(inner))
+    }
+
+    
+    /// Try to init faux cortical identifier from internal data and any given context (systems, not data)
+    fn try_new_faux_cortical_identifier_from_data_and_context<CT>(
+        data: Encoder::ContainedData,
+        context: &Encoder::ContextRequiredToEncode
+    ) -> Result<FauxCorticalIdentifier, CorticalIdentifierParseError>
+    where
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+    {
+        let inner = Self::try_new_from_data_and_context(data, context)?;
+        Ok(CT::wrap_faux_cortical_identifier_inner(inner))
+    }
+
+    /// Try to init faux cortical identifier from bytes, after ensuring validity
+    fn try_new_faux_cortical_identifier_from_bytes<CT>(
+        bytes: [u8; 6]
+    ) -> Result<FauxCorticalIdentifier, CorticalIdentifierParseError>
+    where
+        CT: CorticalType<InnerCorticalIDEncoder=Encoder>
+    {
+        let inner = Self::try_new_from_bytes(bytes)?;
+        Ok(CT::wrap_faux_cortical_identifier_inner(inner))
+    }
+    
+    //endregion
 }
 
 impl<Encoder: CorticalIdentifierInnerEncoder> Serialize for CorticalIdentifierInner<Encoder> {

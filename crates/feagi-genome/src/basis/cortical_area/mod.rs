@@ -25,7 +25,7 @@ use feagi_connectome::connectome_models::neuron_models::models::NMNeurogenesisSt
 use feagi_connectome::connectome_models::neuron_models::models::{NMModeled, NMNeurogenesisGenerator};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierParseError};
+use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifier, CorticalIdentifierParseError, FauxCorticalIdentifier};
 use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInnerParseError;
 use crate::basis::cortical_area::spawning::{CorticalTypeAreaSpawningParameters, CorticalTypeSpawningContext};
 //region Cortical Type
@@ -61,6 +61,8 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
     /// Given a relevant cortical ID Inner, wraps it for this cortical type
     fn wrap_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> CorticalIdentifier;
 
+    fn wrap_faux_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> FauxCorticalIdentifier;
+    
     /// Given a storage or generator, copies it and returns a generator (converts first if its a storage)
     #[cfg(feature = "alloc")]
     fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(
@@ -104,38 +106,79 @@ pub mod spawning {
     use serde::{Deserialize, Serialize};
     use std::fmt::Debug;
 
-
-
-    /// Spawning Parameters (of some context) specific to a given cortical type
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    #[serde(bound = "")]
-    pub struct CorticalTypeAreaSpawningParameters<FIQ, CT, CTSC>
+    pub trait CorticalTypeAreaSpawningParameters<FIQ, CT>
     where
         FIQ: FeagiIndexQuantization,
         CT: CorticalType,
-        CTSC: CorticalTypeSpawningContext<FIQ>
     {
-        pub context: CTSC,
-        pub neurogenesis: CT::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>,
+        
+        /// Copy out the neurogenesis method as a generator, converting it if needed
+        fn copy_neurogenesis_as_generator(&self) -> CT::NeuronModelNeurogenesisGenerator<FIQ>;
+        
+        /// Take the neurogenesis method as it is
+        fn take_neurogenesis(self) -> CT::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>;
+
+        /// What should we do if we have a collision with an existing ID in the genome
+        fn get_collision_policy() -> CorticalIdentifierCollisionPolicy {
+            <CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::COLLISION_RETRY_POLICY
+        }
     }
 
-    impl<FIQ, CT, CTSC> CorticalTypeAreaSpawningParameters<FIQ, CT, CTSC>
+    /// Cortical typed spawning parameters at the request stage
+    pub struct CorticalTypeSpawningRequest<FIQ, CT>
     where
         FIQ: FeagiIndexQuantization,
         CT: CorticalType,
-        CTSC: CorticalTypeSpawningContext<FIQ>
     {
-        /// Copies the contained neurogenesis and converts it into a generator (if it isnt already)
-        pub fn copy_out_generator_for_genome(&self) -> CT::NeuronModelNeurogenesisGenerator<FIQ> {
+        pub neurogenesis: CT::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>,
+        pub faux_cortical_identifier: FauxCorticalIdentifier, // TODO address me!
+        pub cortical_id_encoder_parameters: <CT::InnerCorticalIDEncoder as CorticalIdentifierInnerEncoder>::ContainedData,
+    }
+
+    impl<FIQ, CT> CorticalTypeSpawningRequest<FIQ, CT>
+    where
+        FIQ: FeagiIndexQuantization,
+        CT: CorticalType,
+    {
+        
+        
+        /// Copy out the neurogenesis method as a generator, converting it if needed
+        pub fn copy_neurogenesis_as_generator(&self) -> CT::NeuronModelNeurogenesisGenerator<FIQ> {
             CT::copy_storage_or_generator_as_generator(&self.neurogenesis)
+        }
+        
+        pub(crate) fn into_verified
+    }
+    
+    
+    
+    /// Once we know a cortical identifier is valid (no collision), we use this to store it for the next step
+    pub(crate) struct CorticalTypeSpawningValidated<FIQ, CT>
+    where
+        FIQ: FeagiIndexQuantization,
+        CT: CorticalType,
+    {
+        pub neurogenesis: CT::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>,
+        pub verified_cortical_identifier_inner: CorticalIdentifierInner<CT::InnerCorticalIDEncoder>
+    }
+    
+    impl<FIQ, CT> CorticalTypeSpawningValidated<FIQ, CT>
+    where
+        FIQ: FeagiIndexQuantization,
+        CT: CorticalType,
+    {
+
+        /// Consume self and export the cortical Identifier
+        pub fn export_cortical_identifier(self) -> CorticalIdentifier {
+            CT::wrap_cortical_identifier_inner(self.verified_cortical_identifier_inner)
         }
     }
     
-    /// Unites the different data types of different types / stages of cortical area spawning
-    pub trait CorticalTypeSpawningContext<FIQ>: Clone + Debug + Serialize + DeserializeOwned {
-        type CT: CorticalType;
-    }
     
+    
+
+
+
     /// Cortical typed spawning parameters at the request stage
     pub struct CorticalTypeSpawningContextRequest<CT: CorticalType> {
         pub faux_cortical_identifier: FauxCorticalIdentifier,
@@ -156,23 +199,8 @@ pub mod spawning {
         ) -> Result<CorticalIdentifierInner<CT::InnerCorticalIDEncoder>, CorticalIdentifierInnerParseError> {
             CorticalIdentifierInner::try_new_from_data_and_context(self.cortical_id_encoder_parameters.clone(), context)
         }
-        
+    }
 
-    }
-    
-    /// Once we know a cortical identifier is valid (no collision), we use this to store it for the next step
-    pub(crate) struct CorticalTypeSpawningContextValidated<CT: CorticalType> {
-        pub verified_cortical_identifier_inner: CorticalIdentifierInner<CT::InnerCorticalIDEncoder>
-    }
-    
-    impl <CT: CorticalType> CorticalTypeSpawningContextValidated<CT> {
-        
-        /// Consume self and export the cortical Identifier
-        pub fn export_cortical_identifier(self) -> CorticalIdentifier {
-            CT::wrap_cortical_identifier_inner(self.verified_cortical_identifier_inner)
-        }
-    }
-    
     
 }
 

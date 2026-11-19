@@ -15,8 +15,8 @@ use crate::basis::cortical_area::CorticalType;
 // TODO manual byte serialization / deserialization to enforce 8 byte limits, note that serde
 // ignores #[repr(C, u8)] overrides! So when bringing this down to 8 bytes we must do so manually
 
-/// Denotes some form of Cortical Identifier, Genuine, Faux, or Maybe (either)
-pub trait CorticalIDType {}
+/// Denotes some form of Cortical Identifier, Genuine, Faux, or Maybe (either), the outermost layer
+pub trait CorticalIDType: Sized {}
 
 //region (Genuine) Cortical Identifier
 
@@ -53,9 +53,17 @@ impl CorticalIdentifier {
     {
         CorticalIdentifierInner::<CT::InnerCorticalIDEncoder>::try_new_id_from_bytes::<CT>(bytes)
     }
-}
 
+    pub fn into_faux(self) -> FauxCorticalIdentifier {
+        match self {
+            CorticalIdentifier::Foundation(a) => FauxCorticalIdentifier::Foundation(a),
+            CorticalIdentifier::Processing(a) => FauxCorticalIdentifier::Processing(a),
+        }
+    }
+
+}
 // TODO can we minimize this? hide it maybe? Its effectively an inbetween step
+// TODO Actually keep it for now, some older impls (BV, NRS) make use of this.
 //region Bytes
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CorticalIdentifierBytes(pub(crate) [u8; 8]);
@@ -240,6 +248,15 @@ pub enum FauxCorticalIdentifier {
     // Note: Offset of 128 to maintain difference with Genuine
     Foundation(CorticalIdentifierFoundation) = 128 + 0,
     Processing(CorticalIdentifierProcessing) = 128 + 1,
+}
+
+impl FauxCorticalIdentifier {
+    pub fn into_genuine(self) -> CorticalIdentifier {
+        match self {
+            FauxCorticalIdentifier::Foundation(a) => CorticalIdentifier::Foundation(a),
+            FauxCorticalIdentifier::Processing(a) => CorticalIdentifier::Processing(a),
+        }
+    }
 }
 
 impl CorticalIDType for FauxCorticalIdentifier {}
