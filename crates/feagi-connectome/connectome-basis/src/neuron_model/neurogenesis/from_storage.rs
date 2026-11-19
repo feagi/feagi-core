@@ -1,6 +1,7 @@
 use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
 use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+use crate::neuron_model::neurogenesis::by_generator::{NeurogenesisByGenerator, NeurogenesisOtherDataForStorageOf};
 use crate::neuron_model::neurogenesis::NeurogenesisMethod;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayout, NeuronLayoutOf};
 use crate::neuron_model::neurogenesis::validation::NeurogenesisValidationError;
@@ -48,6 +49,11 @@ where
             cortical_variance,
             neuron_internal,
         }
+    }
+
+    /// Creates the generator of this neuron model from this storage, with the other data it needs
+    pub fn to_generator(&self, other_data: NeurogenesisOtherDataForStorageOf<FIQ, NM>) -> NM::NeurogenesisByGenerator<FIQ> {
+        <NM::NeurogenesisByGenerator<FIQ> as NeurogenesisByGenerator<FIQ, NM>>::new_from_storage(self, other_data)
     }
 }
 

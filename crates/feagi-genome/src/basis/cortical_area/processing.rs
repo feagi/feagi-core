@@ -1,5 +1,5 @@
 use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInner;
-use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierInnerEncoderRandom, CorticalIdentifierParseError};
+use crate::basis::cortical_area::cortical_identifiers::{CorticalIdentifierParseError};
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnect, CTProcessingInterconnectNMModeledGenerator};
 #[cfg(feature = "alloc")]
 use crate::basis::cortical_area::processing::interconnect::{CTProcessingInterconnectNMModeledStorage, CTProcessingInterconnectNMModeledStorageOrGenerator};
@@ -8,8 +8,7 @@ use crate::basis::cortical_area::CorticalTypeAreaSpawningParameters;
 use crate::basis::cortical_area::CorticalType;
 use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
 use serde::{Deserialize, Serialize};
-
-
+use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
 //region Cortical Subtype
 
 /// Cortical areas for general processing, typically between inputs and outputs
@@ -21,7 +20,6 @@ pub trait CorticalTypeProcessing: CorticalType<
 
 /// The most common cortical type for general processing between inputs and outputs
 pub mod interconnect {
-    use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifierInnerEncoderRandom;
     use crate::basis::cortical_area::processing::CorticalTypeProcessing;
     use crate::basis::cortical_area::{CorticalAllowedRegions, CorticalType};
     use feagi_connectome::connectome_basis::neuron_model::neuron_layout::voxel::{NeuronLayoutRestrictorVoxelUnbound, NeuronLayoutTagVoxel};
@@ -35,7 +33,7 @@ pub mod interconnect {
     #[cfg(feature = "alloc")]
     use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
     use serde::{Deserialize, Serialize};
-
+    use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
     //region CorticalType
 
     /// Cortical Type for general processing. Each variant is a neuron model (and its quantization)

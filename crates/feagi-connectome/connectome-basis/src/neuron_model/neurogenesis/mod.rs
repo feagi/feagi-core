@@ -1,10 +1,14 @@
 // Stored neuron data is heap allocated
+#[cfg(feature = "alloc")]
 pub mod from_storage;
 pub mod by_generator;
 pub mod scratch_variance_defaults;
 pub mod validation;
 
 use crate::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+#[cfg(feature = "alloc")]
+use crate::neuron_model::neurogenesis::by_generator::NeurogenesisOtherDataForStorageOf;
+#[cfg(feature = "alloc")]
 use crate::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
 use crate::neuron_model::neurogenesis::validation::NeurogenesisValidationError;
 use crate::neuron_model::neuron_layout::{CorticalLayoutContextOf, NeuronLayoutOf};
@@ -48,7 +52,8 @@ where
 }
 
 /// Either kind of saveable neurogenesis data of a cortical area
-/// 
+///
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, Serialize, ::serde::Deserialize)]
 #[serde(bound = "")]
 pub enum NeurogenesisStorageOrGenerator<FIQ, NM>
@@ -58,4 +63,19 @@ where
 {
     Storage(NeurogenesisByStorage<FIQ, NM>),
     Generator(NM::NeurogenesisByGenerator<FIQ>),
+}
+
+#[cfg(feature = "alloc")]
+impl<FIQ, NM> NeurogenesisStorageOrGenerator<FIQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NM: NeuronModel,
+{
+    /// Copies this as a generator. Storage is converted using `other_data`, a generator is cloned
+    pub fn copy_as_generator(&self, other_data: NeurogenesisOtherDataForStorageOf<FIQ, NM>) -> NM::NeurogenesisByGenerator<FIQ> {
+        match self {
+            Self::Storage(storage) => storage.to_generator(other_data),
+            Self::Generator(generator) => generator.clone(),
+        }
+    }
 }

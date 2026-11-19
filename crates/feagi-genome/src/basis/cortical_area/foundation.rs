@@ -37,6 +37,16 @@ pub mod power {
     #[cfg(feature = "alloc")]
     use feagi_connectome::connectome_models::neuron_models::models::{NMNeurogenesisStorage, NMNeurogenesisStorageOrGenerator};
     use serde::{Deserialize, Serialize};
+    use feagi_basis::neurons::CorticalAreaNeuronLocalIndex;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::by_generator::NeurogenesisOtherDataForStorageOf;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::NeurogenesisStorageOrGenerator;
+    #[cfg(feature = "alloc")]
+    use feagi_connectome::connectome_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
+    use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::NMExclusivePowerDataNeuronInternal;
+    use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_float_16::NMExclusivePowerQuantFloat16;
+    use feagi_connectome::connectome_models::neuron_models::neurogenesis_generator_uniform_defaults::NeurogenesisGeneratorUniformDefault;
     use crate::basis::cortical_area::cortical_identifiers::CorticalIdentifier;
     use crate::basis::cortical_area::cortical_identifiers::inner::CorticalIdentifierInner;
     use crate::basis::cortical_area::cortical_identifiers::inner::inner_random::CorticalIdentifierInnerEncoderRandom;
@@ -81,14 +91,23 @@ pub mod power {
             )
         }
 
+        #[cfg(feature = "alloc")]
         fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(sog: &Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>) -> Self::NeuronModelNeurogenesisGenerator<FIQ> {
             match sog {
                 CTFoundationPowerNMModeledStorageOrGenerator::ExclusivePower(a) => {
                     match a {
-                        NMExclusivePowerQuanted::Float16(_) => {}
-                        NMExclusivePowerQuanted::BFloat16(_) => {}
-                        NMExclusivePowerQuanted::Float32(_) => {}
-                        NMExclusivePowerQuanted::Float64(_) => {}
+                        NMExclusivePowerQuanted::Float16(b) => {
+                            CTFoundationPowerNM::copy_generator_from_storage_or_generator_wrapped(b, NMExclusivePowerDataNeuronInternal::new())
+                        }
+                        NMExclusivePowerQuanted::BFloat16(b) => {
+                            CTFoundationPowerNM::copy_generator_from_storage_or_generator_wrapped(b, NMExclusivePowerDataNeuronInternal::new())
+                        }
+                        NMExclusivePowerQuanted::Float32(b) => {
+                            CTFoundationPowerNM::copy_generator_from_storage_or_generator_wrapped(b, NMExclusivePowerDataNeuronInternal::new())
+                        }
+                        NMExclusivePowerQuanted::Float64(b) => {
+                            CTFoundationPowerNM::copy_generator_from_storage_or_generator_wrapped(b, NMExclusivePowerDataNeuronInternal::new())
+                        }
                     }
                 }
             }
@@ -104,12 +123,14 @@ pub mod power {
     /// The NMs / Quants allowed for this Cortical Type
     pub trait CTFoundationPowerNM: NMMember
     {
+
         /// Spawns the generator precursor, effectively the default parameters for creating a cortical area
         fn spawn_neurogenesis_generator<
             FIQ: FeagiIndexQuantization,
             Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>
         >() -> Self::NeurogenesisByGenerator<FIQ>;
 
+        //region Default Impls
         /// [`Self::spawn_neurogenesis_generator`], wrapped in this cortical type's enum
         fn spawn_neurogenesis_generator_wrapped<
             FIQ: FeagiIndexQuantization,
@@ -120,6 +141,36 @@ pub mod power {
             let generator = Self::spawn_neurogenesis_generator::<FIQ, Res>();
             CTFoundationPowerNMModeledGenerator::ExclusivePower(Self::wrap::<NMNeurogenesisGenerator<FIQ>>(generator))
         }
+
+        /// [`NeurogenesisByStorage::to_generator`], wrapped in this cortical type's enum
+        #[cfg(feature = "alloc")]
+        fn spawn_neurogenesis_generator_from_storage_wrapped<
+            FIQ: FeagiIndexQuantization,
+        >(
+            storage: &NeurogenesisByStorage<FIQ, Self>,
+            other_data: NeurogenesisOtherDataForStorageOf<FIQ, Self>,
+        ) -> CTFoundationPowerNMModeledGenerator<FIQ>
+        where Self: NMMember<Quanted<NMNeurogenesisGenerator<FIQ>> = NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>>
+        {
+            let generator = storage.to_generator(other_data);
+            CTFoundationPowerNMModeledGenerator::ExclusivePower(Self::wrap::<NMNeurogenesisGenerator<FIQ>>(generator))
+        }
+
+        /// [`NeurogenesisStorageOrGenerator::copy_as_generator`], wrapped in this cortical type's enum
+        #[cfg(feature = "alloc")]
+        fn copy_generator_from_storage_or_generator_wrapped<
+            FIQ: FeagiIndexQuantization
+        >(
+            storage_or_generator: &NeurogenesisStorageOrGenerator<FIQ, Self>,
+            other_data: NeurogenesisOtherDataForStorageOf<FIQ, Self>,
+        ) -> CTFoundationPowerNMModeledGenerator<FIQ>
+        where Self: NMMember<Quanted<NMNeurogenesisGenerator<FIQ>> = NMExclusivePowerQuanted<NMNeurogenesisGenerator<FIQ>>>
+        {
+            let generator = storage_or_generator.copy_as_generator(other_data);
+            CTFoundationPowerNMModeledGenerator::ExclusivePower(Self::wrap::<NMNeurogenesisGenerator<FIQ>>(generator))
+        }
+
+        //endregion
     }
 
     // Neuron Model: Exclusive Power
@@ -127,6 +178,8 @@ pub mod power {
         use crate::basis::cortical_area::foundation::power::CTFoundationPowerNM;
         use feagi_basis::neurons::{CorticalAreaNeuronPotential, DimensionalCorticalAreaDimensions};
         use feagi_connectome::connectome_basis::neuron_model::model_data::NeuronModelUniversalCorticalProperties;
+        use feagi_connectome::connectome_basis::neuron_model::neurogenesis::by_generator::NeurogenesisByGenerator;
+        use feagi_connectome::connectome_basis::neuron_model::neurogenesis::from_storage::NeurogenesisByStorage;
         use feagi_connectome::connectome_basis::neuron_model::neuron_layout::{NeuronLayoutOf, NeuronLayoutRestrictor};
         use feagi_connectome::connectome_basis::quantization_levels::FeagiIndexQuantization;
         use feagi_connectome::connectome_models::neuron_models::models::exclusive_power::quantizations::quant_bfloat_16::NMExclusivePowerQuantBFloat16;
@@ -175,6 +228,7 @@ pub mod power {
         }
 
         impl CTFoundationPowerNM for NMExclusivePowerQuantFloat32 {
+
             fn spawn_neurogenesis_generator<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
                 -> Self::NeurogenesisByGenerator<FIQ> {
                 Self::NeurogenesisByGenerator {
@@ -193,6 +247,7 @@ pub mod power {
         }
 
         impl CTFoundationPowerNM for NMExclusivePowerQuantFloat64 {
+
             fn spawn_neurogenesis_generator<FIQ: FeagiIndexQuantization, Res: NeuronLayoutRestrictor<FIQ, NeuronLayout=NeuronLayoutOf<FIQ, Self>>>()
                 -> Self::NeurogenesisByGenerator<FIQ> {
                 Self::NeurogenesisByGenerator {

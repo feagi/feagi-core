@@ -12,7 +12,6 @@ use neurogenesis::scratch_variance_defaults::NeurogenesisScratchVarianceDefaults
 //pub mod interfacing;
 pub mod model_data;
 pub mod neuron_layout;
-#[cfg(feature = "alloc")]
 pub mod neurogenesis;
 pub mod neuron_pattern;
 

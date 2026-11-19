@@ -61,6 +61,7 @@ pub trait CorticalType: Sized + Copy + Into<NMKind> {
     fn wrap_cortical_identifier_inner(inner: CorticalIdentifierInner<Self::InnerCorticalIDEncoder>) -> CorticalIdentifier;
 
     /// Given a storage or generator, copies it and returns a generator (converts first if its a storage)
+    #[cfg(feature = "alloc")]
     fn copy_storage_or_generator_as_generator<FIQ: FeagiIndexQuantization>(
         sog: &Self::NeuronModelNeuroGenesisStorageOrGenerator<FIQ>
     ) -> Self::NeuronModelNeurogenesisGenerator<FIQ>;
