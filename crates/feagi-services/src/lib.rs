@@ -129,6 +129,8 @@ pub use types::{
     CreateNeuronParams,
     CreateSynapseParams,
     GenomeInfo,
+    IoGroupMove,
+    IoGroupRename,
     LoadGenomeParams,
     NeuronInfo,
     RuntimeStatus,
@@ -138,7 +140,7 @@ pub use types::{
     ServiceResult,
     SynapseInfo,
     SystemHealth,
-    IoGroupMove, IoGroupRename, UpdateCorticalAreaParams,
+    UpdateCorticalAreaParams,
 };
 
 // Re-export cortical area helpers for adapter crates.

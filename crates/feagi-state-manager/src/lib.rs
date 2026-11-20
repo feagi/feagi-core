@@ -728,8 +728,14 @@ mod tests {
         ]);
         let at_a = state.get_cortical_area_stats("a").unwrap();
         let at_b = state.get_cortical_area_stats("b").unwrap();
-        assert_eq!((at_a.incoming_synapse_count, at_a.outgoing_synapse_count), (5, 6));
-        assert_eq!((at_b.incoming_synapse_count, at_b.outgoing_synapse_count), (3, 4));
+        assert_eq!(
+            (at_a.incoming_synapse_count, at_a.outgoing_synapse_count),
+            (5, 6)
+        );
+        assert_eq!(
+            (at_b.incoming_synapse_count, at_b.outgoing_synapse_count),
+            (3, 4)
+        );
         assert!(state.get_cortical_area_stats("z").is_none());
     }
 

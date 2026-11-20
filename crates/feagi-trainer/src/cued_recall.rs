@@ -557,8 +557,6 @@ pub fn verdict_for(recall: f64, t: &Thresholds) -> Verdict {
 
 // ---------------------------------------------------------------- phases
 
-/// Slot, robot patterns and human patterns pooled over its Learn repeats.
-type PooledSlot = (u32, Vec<Vec<u32>>, Vec<HumanPattern>);
 type HumanPattern = Vec<Vec<[u32; 3]>>;
 
 fn cue_voxel(p: &CuePort, bin: u32) -> Vec<[u32; 3]> {
@@ -798,8 +796,16 @@ pub fn run_check<B: CuedRecallBrain>(
         .count() as u32;
     let recall = f64::from(matched) / f64::from(n);
     let share = |c: u32| f64::from(c) / f64::from(n);
-    let recalled = mode_count(window.iter().filter_map(|f| joint_pattern(f, &ports.recall)));
-    let humans = mode_count(window.iter().filter_map(|f| human_pattern(f, &ports.human_state)));
+    let recalled = mode_count(
+        window
+            .iter()
+            .filter_map(|f| joint_pattern(f, &ports.recall)),
+    );
+    let humans = mode_count(
+        window
+            .iter()
+            .filter_map(|f| human_pattern(f, &ports.human_state)),
+    );
     Ok(CheckResult {
         slot,
         recall: Some(recall),
@@ -1016,7 +1022,9 @@ mod tests {
         assert_eq!(t.prepare, TimingS::default().prepare);
         assert!(TimingS::default().settle < TimingS::default().hold);
         let c = edit(|v| {
-            v.as_object_mut().unwrap().insert("timing_s".into(), serde_json::json!({}));
+            v.as_object_mut()
+                .unwrap()
+                .insert("timing_s".into(), serde_json::json!({}));
         });
         assert!(c.is_ok(), "{c:?}");
     }
@@ -1093,7 +1101,13 @@ mod tests {
         assert_eq!(a.robots, again.robots);
         assert!(matches!(
             &brain.log[log_len],
-            (_, CueAction::HoldRole { role: Role::Cue, .. })
+            (
+                _,
+                CueAction::HoldRole {
+                    role: Role::Cue,
+                    ..
+                }
+            )
         ));
         let b = run_learn_slot(&mut brain, &plan, 1).unwrap();
         let s = run_learn_finish(&mut brain, session, vec![(0, again), (1, b)]).unwrap();
@@ -1152,7 +1166,11 @@ mod tests {
         assert_eq!(r.verdict, Some(Verdict::NotLearned));
         // Recalled nothing in 24 of 30 bursts: the modal is the pose that did show, not the ref.
         assert!(r.robot_ref.is_some());
-        assert!(r.recalled_modal_share.map_or(true, |s| s <= 0.2 + 1e-9), "{:?}", r.recalled_modal_share);
+        assert!(
+            r.recalled_modal_share.is_none_or(|s| s <= 0.2 + 1e-9),
+            "{:?}",
+            r.recalled_modal_share
+        );
     }
 
     #[test]
