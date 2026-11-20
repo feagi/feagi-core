@@ -388,6 +388,25 @@ impl BrainRegionHierarchy {
         }
     }
 
+    /// Rename several cortical areas at once (simultaneous `old -> new` pairs, so ids may swap):
+    /// region membership and every region IO list (`inputs`, `outputs`, `designated_inputs`,
+    /// `designated_outputs`).
+    pub fn rename_cortical_areas(&mut self, id_remap: &HashMap<CorticalID, CorticalID>) {
+        let b64_remap: HashMap<String, String> = id_remap
+            .iter()
+            .map(|(old, new)| (old.as_base_64(), new.as_base_64()))
+            .collect();
+        for region in self.regions.values_mut() {
+            let members: Vec<CorticalID> = region.cortical_areas.drain().collect();
+            for member in members {
+                region
+                    .cortical_areas
+                    .insert(id_remap.get(&member).copied().unwrap_or(member));
+            }
+            feagi_evolutionary::remap_region_io_lists(region, &b64_remap);
+        }
+    }
+
     /// Remove a cortical area from every brain region that lists it.
     pub fn remove_cortical_area_id(&mut self, id: &CorticalID) {
         for region in self.regions.values_mut() {

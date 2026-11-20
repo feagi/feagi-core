@@ -97,6 +97,8 @@ wiremock = "0.6"
 assert-json-diff = "2.0"
 tokio-test = "0.4"
 feagi-npu-runtime = { version = "0.0.63", path = "../feagi-npu/runtime", features = ["std"] }
+# Real websocket registration for the agent-ownership HTTP test.
+feagi-agent = { version = "0.0.63", path = "../feagi-agent", default-features = false, features = ["agent-server", "agent-client", "agent-transport-websocket-std"] }
 
 [features]
 default = ["http", "services"]

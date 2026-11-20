@@ -73,8 +73,9 @@ pub use amalgamation_modulators::{
 };
 pub use amalgamation_remap::{
     apply_driver_remap, designated_io_lists_for_cloned_circuit, plan_amalgamation_regions,
-    remap_guest_custom_memory_cortical_ids_for_amalgamation, AmalgamationRegionPlan,
-    AmalgamationRegionSpec,
+    remap_classifier_area_fields, remap_guest_custom_memory_cortical_ids_for_amalgamation,
+    remap_region_io_lists, rename_runtime_genome_areas, rewrite_area_properties,
+    AmalgamationRegionPlan, AmalgamationRegionSpec,
 };
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;

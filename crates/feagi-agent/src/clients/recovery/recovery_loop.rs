@@ -119,7 +119,28 @@ pub fn run_recovery_tick_with_snapshot<S: RebuildableSession>(
         Ok(snapshot) => watcher.observe(snapshot),
         Err(_fetch_error) => watcher.observe_unreachable(),
     };
+    run_recovery_tick_with_events(
+        session,
+        policy,
+        health_events,
+        transport_send_failed,
+        not_registered,
+        now_ms,
+    )
+}
 
+/// Decision-and-rebuild core that takes health events already observed by the caller.
+///
+/// Used by drivers that have no health snapshot to give this tick (they pass an empty list)
+/// and by [`run_recovery_tick_with_snapshot`].
+pub fn run_recovery_tick_with_events<S: RebuildableSession>(
+    session: &mut S,
+    policy: &mut ReconnectPolicy,
+    health_events: Vec<HealthEvent>,
+    transport_send_failed: bool,
+    not_registered: bool,
+    now_ms: u64,
+) -> RecoveryTickReport {
     let mut triggers: Vec<RecoveryTrigger> = health_events
         .iter()
         .cloned()

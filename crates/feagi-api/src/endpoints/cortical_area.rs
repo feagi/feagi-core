@@ -1651,6 +1651,19 @@ pub async fn put_cortical_area(
     // Remove cortical_id from changes (it's not a property to update)
     request.remove("cortical_id");
 
+    // `requester_agent_id` is not an area property: it names the agent asking, for the
+    // ownership guard on a group move.
+    let requester_agent_id = request
+        .remove("requester_agent_id")
+        .and_then(|v| v.as_str().map(String::from));
+    if request.contains_key("group_id") {
+        crate::common::agent_registration::refuse_moves_used_by_other_agents(
+            &state,
+            std::slice::from_ref(&cortical_id),
+            requester_agent_id.as_deref(),
+        )?;
+    }
+
     // Call GenomeService with raw changes (it handles classification and routing)
     match genome_service
         .update_cortical_area(&cortical_id, request)
@@ -3599,6 +3612,64 @@ pub struct CloneCorticalAreaRequest {
     pub clone_cortical_mapping: bool,
 }
 
+/// Move IO cortical areas between group (unit) numbers, all or nothing.
+///
+/// Every source must exist and be an IO area, and every target id must be free once the batch's
+/// own sources are removed (so two areas may swap). Any failed check returns 409 and changes
+/// nothing. Neuron indices stay, so synapses, weights and learned state are kept; no synapse is
+/// regrown. Areas that a connected agent other than `requester_agent_id` feeds or reads are
+/// refused with 409.
+///
+/// FEAGI does not re-register agents. Sequence for a move: the agent stops sending, a checkpoint
+/// is taken, the areas move, the agent re-registers, the agent resumes.
+#[utoipa::path(
+    post,
+    path = "/v1/cortical_area/move_groups",
+    request_body = crate::v1::cortical_area_dtos::MoveGroupsRequest,
+    responses(
+        (status = 200, description = "Areas moved", body = crate::v1::cortical_area_dtos::MoveGroupsResponse),
+        (status = 400, description = "Malformed request"),
+        (status = 409, description = "A source is missing, a target is taken, or another connected agent uses an area; nothing changed")
+    ),
+    tag = "cortical_area"
+)]
+pub async fn post_move_groups(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::cortical_area_dtos::MoveGroupsRequest>,
+) -> ApiResult<Json<crate::v1::cortical_area_dtos::MoveGroupsResponse>> {
+    if request.moves.is_empty() {
+        return Err(ApiError::invalid_input("moves cannot be empty"));
+    }
+    let moved_ids: Vec<String> = request
+        .moves
+        .iter()
+        .map(|requested| requested.cortical_id.clone())
+        .collect();
+    crate::common::agent_registration::refuse_moves_used_by_other_agents(
+        &state,
+        &moved_ids,
+        request.requester_agent_id.as_deref(),
+    )?;
+    let moves: Vec<feagi_services::types::IoGroupMove> = request
+        .moves
+        .into_iter()
+        .map(|entry| feagi_services::types::IoGroupMove {
+            cortical_id: entry.cortical_id,
+            group_id: entry.group_id,
+        })
+        .collect();
+    let renamed = state.genome_service.as_ref().move_io_groups(moves).await?;
+    Ok(Json(crate::v1::cortical_area_dtos::MoveGroupsResponse {
+        moved: renamed
+            .into_iter()
+            .map(|r| crate::v1::cortical_area_dtos::MovedGroupArea {
+                old_id: r.old_id,
+                new_id: r.new_id,
+            })
+            .collect(),
+    }))
+}
+
 /// Update properties of multiple cortical areas in a single request. (Not yet implemented)
 #[utoipa::path(
     put,
@@ -3633,6 +3704,9 @@ pub async fn put_multi_cortical_area(
 
     // Remove cortical_id_list from changes (it's not a property to update)
     request.remove("cortical_id_list");
+    let requester_agent_id = request
+        .remove("requester_agent_id")
+        .and_then(|v| v.as_str().map(String::from));
 
     // Build shared properties (applies to all unless overridden per-id)
     let mut shared_properties = request.clone();
@@ -3640,17 +3714,80 @@ pub async fn put_multi_cortical_area(
         shared_properties.remove(cortical_id);
     }
 
-    // Update each cortical area, using per-id properties when provided
+    // Resolve every area's effective properties first, so a `group_id` change can be pulled out
+    // and applied as one all-or-nothing batch before any other per-area update.
+    let mut per_area_properties: Vec<(String, HashMap<String, serde_json::Value>)> =
+        Vec::with_capacity(cortical_ids.len());
+    let mut group_moves: Vec<feagi_services::types::IoGroupMove> = Vec::new();
     for cortical_id in &cortical_ids {
-        tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
         let mut properties = shared_properties.clone();
         if let Some(serde_json::Value::Object(per_id_map)) = request.get(cortical_id) {
             for (key, value) in per_id_map {
                 properties.insert(key.clone(), value.clone());
             }
         }
+        if let Some(raw) = properties.remove("group_id") {
+            let group_id = raw
+                .as_u64()
+                .or_else(|| {
+                    raw.as_f64()
+                        .filter(|v| v.fract() == 0.0 && *v >= 0.0)
+                        .map(|v| v as u64)
+                })
+                .or_else(|| {
+                    raw.as_str()
+                        .and_then(|text| text.trim().parse::<u64>().ok())
+                })
+                .and_then(|value| u16::try_from(value).ok())
+                .ok_or_else(|| {
+                    ApiError::invalid_input(format!(
+                        "group_id for {} must be an integer in 0..=65535",
+                        cortical_id
+                    ))
+                })?;
+            group_moves.push(feagi_services::types::IoGroupMove {
+                cortical_id: cortical_id.clone(),
+                group_id,
+            });
+        }
+        per_area_properties.push((cortical_id.clone(), properties));
+    }
+
+    let moved_ids: Vec<String> = group_moves.iter().map(|m| m.cortical_id.clone()).collect();
+    crate::common::agent_registration::refuse_moves_used_by_other_agents(
+        &state,
+        &moved_ids,
+        requester_agent_id.as_deref(),
+    )?;
+
+    // A move changes the area id; later updates address the area under its new id.
+    let mut renamed_to: HashMap<String, String> = HashMap::new();
+    if !group_moves.is_empty() {
+        let renamed = genome_service
+            .move_io_groups(group_moves)
+            .await
+            .map_err(|e| {
+                tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - group move refused, nothing changed: {}", e);
+                ApiError::from(e)
+            })?;
+        for entry in renamed {
+            renamed_to.insert(entry.old_id, entry.new_id);
+        }
+    }
+
+    // Update each cortical area, using per-id properties when provided
+    for (cortical_id, properties) in per_area_properties {
+        if properties.is_empty() {
+            continue;
+        }
+        let target_id = renamed_to
+            .get(&cortical_id)
+            .cloned()
+            .unwrap_or_else(|| cortical_id.clone());
+        tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", target_id);
+        let cortical_id = &cortical_id;
         match genome_service
-            .update_cortical_area(cortical_id, properties)
+            .update_cortical_area(&target_id, properties)
             .await
         {
             Ok(_) => {

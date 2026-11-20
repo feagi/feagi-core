@@ -171,6 +171,26 @@ impl StimulusScheduleStore {
         self.inner.lock().unwrap().schedules.clear();
     }
 
+    /// Re-key pending injections when areas change id (`(old, new)` pairs, applied together,
+    /// so swaps work). Entries keep their burst and voxels.
+    pub fn rename_areas(&self, renames: &[(CorticalID, CorticalID)]) {
+        if renames.is_empty() {
+            return;
+        }
+        let map: std::collections::HashMap<CorticalID, CorticalID> =
+            renames.iter().copied().collect();
+        let mut inner = self.inner.lock().unwrap();
+        for (_, s) in inner.schedules.iter_mut() {
+            for e in s.entries.iter_mut() {
+                for (id, _) in e.areas.iter_mut() {
+                    if let Some(new_id) = map.get(id) {
+                        *id = *new_id;
+                    }
+                }
+            }
+        }
+    }
+
     /// Drop every scheduled injection that targets `area` (area deleted). Entries left without
     /// areas are removed, and schedules left without entries are cancelled.
     pub fn clear_area(&self, area: &CorticalID) {
@@ -252,6 +272,23 @@ mod tests {
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].areas.len(), 1);
         assert_eq!(due[0].areas[0].0, b);
+    }
+
+    #[test]
+    fn rename_areas_rekeys_pending_entries_and_allows_swaps() {
+        let a = CorticalID::try_from_bytes(b"cstm0001").unwrap();
+        let b = CorticalID::try_from_bytes(b"cstm0002").unwrap();
+        let store = StimulusScheduleStore::new();
+        store
+            .add(vec![ScheduledStimulus {
+                burst: 4,
+                areas: vec![(a, vec![(0, 0, 0, 1.0)]), (b, vec![(1, 0, 0, 1.0)])],
+            }])
+            .unwrap();
+        store.rename_areas(&[(a, b), (b, a)]);
+        let due = store.take_due(10);
+        assert_eq!(due[0].areas[0], (b, vec![(0, 0, 0, 1.0)]));
+        assert_eq!(due[0].areas[1], (a, vec![(1, 0, 0, 1.0)]));
     }
 
     #[test]

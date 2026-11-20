@@ -35,7 +35,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -870,8 +870,9 @@ impl GenomeServiceImpl {
         // twins in their non-root region. Write that hierarchy back so a later
         // save does not resurrect the unloaded areas.
         {
-            let manager = self.connectome.read();
+            // Lock order (see `feagi_services::lock_order`): genome before connectome.
             let mut current_genome_guard = self.current_genome.write();
+            let manager = self.connectome.read();
             if let Some(ref mut genome) = *current_genome_guard {
                 sync_runtime_genome_from_connectome(genome, &manager);
             }
@@ -1403,6 +1404,28 @@ impl GenomeService for GenomeServiceImpl {
         Ok(created_areas)
     }
 
+    async fn move_io_groups(&self, moves: Vec<IoGroupMove>) -> ServiceResult<Vec<IoGroupRename>> {
+        let mut parsed: Vec<(CorticalID, u16)> = Vec::with_capacity(moves.len());
+        for requested in &moves {
+            let cortical_id =
+                CorticalID::try_from_base_64(&requested.cortical_id).map_err(|e| {
+                    ServiceError::InvalidInput(format!(
+                        "Invalid cortical ID '{}': {}",
+                        requested.cortical_id, e
+                    ))
+                })?;
+            parsed.push((cortical_id, requested.group_id));
+        }
+        let renamed = self.apply_io_group_moves(&parsed)?;
+        Ok(renamed
+            .into_iter()
+            .map(|(old_id, new_id)| IoGroupRename {
+                old_id: old_id.as_base_64(),
+                new_id: new_id.as_base_64(),
+            })
+            .collect())
+    }
+
     async fn update_cortical_area(
         &self,
         cortical_id: &str,
@@ -1566,9 +1589,7 @@ impl GenomeService for GenomeServiceImpl {
                 &effective_cortical_id_str,
                 &changes,
             )?;
-            effective_cortical_id = new_id;
             effective_cortical_id_str = new_id.as_base_64();
-            self.regenerate_mappings_for_area(&effective_cortical_id)?;
             changes.remove("group_id");
             if changes.is_empty() {
                 return self
@@ -3877,200 +3898,182 @@ impl GenomeServiceImpl {
             ));
         };
 
+        let renamed = self.apply_io_group_moves(&[(*cortical_id, new_group_id)])?;
+        let _ = cortical_id_str;
+        Ok(renamed
+            .first()
+            .map(|(_, new_id)| *new_id)
+            .unwrap_or(*cortical_id))
+    }
+
+    /// The cortical id an IO area takes when it moves to `new_group_id`. Only the unit index
+    /// changes; the unit identifier, data flag and sub-unit index stay.
+    fn io_id_for_group(cortical_id: &CorticalID, new_group_id: u16) -> ServiceResult<CorticalID> {
         let bytes = cortical_id.as_bytes();
         let is_input = bytes[0] == b'i';
         let is_output = bytes[0] == b'o';
         if !is_input && !is_output {
-            return Err(ServiceError::InvalidInput(
-                "Unit index updates only apply to IPU/OPU cortical areas".to_string(),
-            ));
+            return Err(ServiceError::Conflict(format!(
+                "Cortical area {} is not an IPU/OPU area; only IO areas have a group number",
+                cortical_id.as_base_64()
+            )));
         }
-
         let current_flag = cortical_id.extract_io_data_flag().map_err(|e| {
-            ServiceError::InvalidInput(format!(
+            ServiceError::Conflict(format!(
                 "Unable to decode IO configuration from cortical ID '{}': {}",
-                cortical_id_str, e
+                cortical_id.as_base_64(),
+                e
             ))
         })?;
-        let unit_identifier = [bytes[1], bytes[2], bytes[3]];
-        let cortical_subunit_index = cortical_id.io_cortical_sub_unit_index();
-        let cortical_unit_index = CorticalUnitIndex::from(new_group_id);
-        let computed_id = current_flag.as_io_cortical_id(
+        Ok(current_flag.as_io_cortical_id(
             is_input,
-            unit_identifier,
-            cortical_unit_index,
-            cortical_subunit_index,
-        );
+            [bytes[1], bytes[2], bytes[3]],
+            CorticalUnitIndex::from(new_group_id),
+            cortical_id.io_cortical_sub_unit_index(),
+        ))
+    }
 
-        let new_cortical_type = if is_input {
-            CorticalAreaType::BrainInput(current_flag)
-        } else {
-            CorticalAreaType::BrainOutput(current_flag)
-        };
+    /// Move IO cortical areas to new group (unit) numbers atomically.
+    ///
+    /// `moves` is `(cortical id, new group number)`. Returns `(old id, new id)` for every area
+    /// whose id changed. All checks run before any write: every source must exist (in the
+    /// connectome and, when a genome is loaded, in the genome store) and be an IO area, and every
+    /// new id must be free once the batch's own sources are removed, so two areas may swap groups.
+    /// A failed check returns `ServiceError::Conflict` and leaves the genome, the connectome and
+    /// the NPU untouched.
+    ///
+    /// Holds the genome and connectome write locks together (the NPU lock is taken inside the
+    /// connectome call). Neuron indices do not change, so synapses, weights, plasticity and
+    /// memory state stay; nothing is regrown. Every id-bearing reference follows the rename:
+    /// mapping destinations and rule fields, memory twins, region membership and IO lists,
+    /// classifier links, the NPU's id tables and the StateManager per-area stats.
+    ///
+    /// Why the old path passed `update_npu_registry=false` is not recorded in the code or its
+    /// history; the NPU re-key now happens here, in the same step, so that flag is not needed.
+    pub fn apply_io_group_moves(
+        &self,
+        moves: &[(CorticalID, u16)],
+    ) -> ServiceResult<Vec<(CorticalID, CorticalID)>> {
+        let mut seen: std::collections::HashSet<CorticalID> = std::collections::HashSet::new();
+        let mut planned: Vec<(CorticalID, CorticalID, u16)> = Vec::with_capacity(moves.len());
+        for (old_id, group) in moves {
+            if !seen.insert(*old_id) {
+                return Err(ServiceError::Conflict(format!(
+                    "Cortical area {} appears more than once in the request",
+                    old_id.as_base_64()
+                )));
+            }
+            planned.push((*old_id, Self::io_id_for_group(old_id, *group)?, *group));
+        }
+        let changed: Vec<(CorticalID, CorticalID)> = planned
+            .iter()
+            .filter(|(old_id, new_id, _)| old_id != new_id)
+            .map(|(old_id, new_id, _)| (*old_id, *new_id))
+            .collect();
 
-        if &computed_id == cortical_id {
-            if let Some(genome) = self.current_genome.write().as_mut() {
-                if let Some(area) = genome.cortical_areas.get_mut(cortical_id) {
-                    area.properties
-                        .insert("group_id".to_string(), serde_json::json!(new_group_id));
+        // Lock order (see `feagi_services::lock_order`): genome, then connectome (which takes the
+        // NPU and the state manager inside).
+        let mut genome_guard = self.current_genome.write();
+        let mut manager = self.connectome.write();
+
+        // Validate everything before the first write.
+        let renamed_sources: std::collections::HashSet<CorticalID> =
+            changed.iter().map(|(old_id, _)| *old_id).collect();
+        let mut targets: std::collections::HashSet<CorticalID> = std::collections::HashSet::new();
+        for (old_id, _, _) in &planned {
+            if manager.get_cortical_area(old_id).is_none() {
+                return Err(ServiceError::Conflict(format!(
+                    "Cortical area {} does not exist",
+                    old_id.as_base_64()
+                )));
+            }
+            if let Some(genome) = genome_guard.as_ref() {
+                if !genome.cortical_areas.contains_key(old_id) {
+                    return Err(ServiceError::Conflict(format!(
+                        "Cortical area {} is not in the genome",
+                        old_id.as_base_64()
+                    )));
                 }
             }
-            let mut manager = self.connectome.write();
-            if let Some(area) = manager.get_cortical_area_mut(cortical_id) {
-                area.properties
-                    .insert("group_id".to_string(), serde_json::json!(new_group_id));
+        }
+        for (old_id, new_id) in &changed {
+            if !targets.insert(*new_id) {
+                return Err(ServiceError::Conflict(format!(
+                    "Two areas would take id {}",
+                    new_id.as_base_64()
+                )));
             }
-            return Ok(*cortical_id);
+            let occupied = manager.get_cortical_area(new_id).is_some()
+                || genome_guard
+                    .as_ref()
+                    .is_some_and(|genome| genome.cortical_areas.contains_key(new_id));
+            if occupied && !renamed_sources.contains(new_id) {
+                return Err(ServiceError::Conflict(format!(
+                    "Group number of {} is taken: area {} already exists",
+                    old_id.as_base_64(),
+                    new_id.as_base_64()
+                )));
+            }
         }
 
         info!(
             target: "feagi-services",
-            "[UNIT-INDEX] Remapping cortical ID {} -> {}",
-            cortical_id.as_base_64(),
-            computed_id.as_base_64()
+            "[UNIT-INDEX] Moving {} IO area(s) to new group numbers",
+            changed.len()
         );
 
-        // Update RuntimeGenome if available
-        if let Some(genome) = self.current_genome.write().as_mut() {
-            let mut area = genome.cortical_areas.remove(cortical_id).ok_or_else(|| {
-                ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id.as_base_64(),
-                }
-            })?;
-            area.cortical_id = computed_id;
-            area.cortical_type = new_cortical_type;
-            area.properties
-                .insert("group_id".to_string(), serde_json::json!(new_group_id));
-            genome.cortical_areas.insert(computed_id, area);
-
-            for region in genome.brain_regions.values_mut() {
-                if region.cortical_areas.remove(cortical_id) {
-                    region.cortical_areas.insert(computed_id);
-                }
-            }
-
-            let old_id_str = cortical_id.as_base_64();
-            let new_id_str = computed_id.as_base_64();
-            for area in genome.cortical_areas.values_mut() {
-                if let Some(mapping) = area
-                    .properties
-                    .get_mut("cortical_mapping_dst")
-                    .and_then(|v| v.as_object_mut())
+        // Genome store first: it checks before it changes, and it is exactly undone by the
+        // inverse rename if the live connectome then refuses.
+        if let Some(genome) = genome_guard.as_mut() {
+            feagi_evolutionary::rename_runtime_genome_areas(genome, &changed)
+                .map_err(|e| ServiceError::Conflict(e.to_string()))?;
+        }
+        if let Err(error) = manager.rename_cortical_areas(&changed) {
+            if let Some(genome) = genome_guard.as_mut() {
+                let inverse: Vec<(CorticalID, CorticalID)> = changed
+                    .iter()
+                    .map(|(old_id, new_id)| (*new_id, *old_id))
+                    .collect();
+                if let Err(restore_error) =
+                    feagi_evolutionary::rename_runtime_genome_areas(genome, &inverse)
                 {
-                    if let Some(value) = mapping.remove(&old_id_str) {
-                        mapping.insert(new_id_str.clone(), value);
-                    }
+                    error!(
+                        target: "feagi-services",
+                        "[UNIT-INDEX] Failed to restore genome ids after a refused move: {}",
+                        restore_error
+                    );
                 }
             }
+            return Err(ServiceError::Conflict(error.to_string()));
         }
-
-        // Update ConnectomeManager (runtime only; keep NPU registry unchanged)
-        {
-            let mut manager = self.connectome.write();
-            manager.rename_cortical_area_id_with_options(
-                cortical_id,
-                computed_id,
-                new_cortical_type,
-                false,
-            )?;
-            if let Some(area) = manager.get_cortical_area_mut(&computed_id) {
+        // Pending scheduled stimuli follow their areas. Lock order: genome, connectome, burst
+        // runner handle, then the schedule store's own (leaf) mutex; the burst loop takes only
+        // the NPU and that leaf. A held sensor frame (one burst long) is not re-keyed: the loop
+        // drops it when the hold-enabled set is refreshed below.
+        if let Some(ref burst_runner) = self.burst_runner {
+            burst_runner
+                .read()
+                .stimulus_schedules()
+                .rename_areas(&changed);
+        }
+        for (_, new_id, group) in &planned {
+            if let Some(genome) = genome_guard.as_mut() {
+                if let Some(area) = genome.cortical_areas.get_mut(new_id) {
+                    area.properties
+                        .insert("group_id".to_string(), serde_json::json!(group));
+                }
+            }
+            if let Some(area) = manager.get_cortical_area_mut(new_id) {
                 area.properties
-                    .insert("group_id".to_string(), serde_json::json!(new_group_id));
+                    .insert("group_id".to_string(), serde_json::json!(group));
             }
         }
+        drop(manager);
+        drop(genome_guard);
 
         // Refresh burst runner cache to propagate updated cortical_id mapping.
         self.refresh_burst_runner_cache();
-
-        Ok(computed_id)
-    }
-
-    /// Regenerate incoming/outgoing synapses for a cortical area without rebuilding neurons.
-    fn regenerate_mappings_for_area(&self, cortical_id: &CorticalID) -> ServiceResult<()> {
-        let mut manager = self.connectome.write();
-        let cortical_id_str = cortical_id.as_base_64();
-
-        let outgoing_targets = {
-            let Some(area) = manager.get_cortical_area(cortical_id) else {
-                return Err(ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id_str.clone(),
-                });
-            };
-            let mut targets = Vec::new();
-            if let Some(mapping) = area
-                .properties
-                .get("cortical_mapping_dst")
-                .and_then(|v| v.as_object())
-            {
-                for key in mapping.keys() {
-                    match CorticalID::try_from_base_64(key) {
-                        Ok(dst_id) => targets.push(dst_id),
-                        Err(err) => warn!(
-                            target: "feagi-services",
-                            "Invalid cortical_mapping_dst ID '{}': {}",
-                            key,
-                            err
-                        ),
-                    }
-                }
-            }
-            targets
-        };
-
-        let incoming_sources = {
-            let mut sources = Vec::new();
-            for src_id in manager.get_all_cortical_ids() {
-                if src_id == *cortical_id {
-                    continue;
-                }
-                let Some(src_area) = manager.get_cortical_area(&src_id) else {
-                    continue;
-                };
-                if let Some(mapping) = src_area
-                    .properties
-                    .get("cortical_mapping_dst")
-                    .and_then(|v| v.as_object())
-                {
-                    if mapping.contains_key(&cortical_id_str) {
-                        sources.push(src_id);
-                    }
-                }
-            }
-            sources
-        };
-
-        for dst_id in outgoing_targets {
-            if dst_id == *cortical_id {
-                continue;
-            }
-            manager
-                .regenerate_synapses_for_mapping(cortical_id, &dst_id)
-                .map_err(|e| {
-                    ServiceError::Backend(format!(
-                        "Failed to regenerate outgoing synapses {} -> {}: {}",
-                        cortical_id.as_base_64(),
-                        dst_id.as_base_64(),
-                        e
-                    ))
-                })?;
-        }
-
-        for src_id in incoming_sources {
-            manager
-                .regenerate_synapses_for_mapping(&src_id, cortical_id)
-                .map_err(|e| {
-                    ServiceError::Backend(format!(
-                        "Failed to regenerate incoming synapses {} -> {}: {}",
-                        src_id.as_base_64(),
-                        cortical_id.as_base_64(),
-                        e
-                    ))
-                })?;
-        }
-
-        Ok(())
+        Ok(changed)
     }
 
     /// Fastest path: Update only metadata without affecting neurons/synapses
@@ -4455,7 +4458,6 @@ impl GenomeServiceImpl {
         if changes.contains_key("group_id") && changes.len() == 1 {
             let new_id =
                 self.apply_unit_index_update(&_cortical_id_typed, cortical_id, &changes)?;
-            self.regenerate_mappings_for_area(&new_id)?;
             return self.get_cortical_area_info(&new_id.as_base_64()).await;
         }
 

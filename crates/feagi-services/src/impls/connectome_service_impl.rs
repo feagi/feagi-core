@@ -697,6 +697,8 @@ impl ConnectomeServiceImpl {
                 None,
             );
         }
+        // Lock order (see `feagi_services::lock_order`): genome before connectome.
+        let genome = self.current_genome.read();
         let manager = self.connectome.read();
         for id in &dropped {
             manager
@@ -706,7 +708,6 @@ impl ConnectomeServiceImpl {
         if manager.get_npu().is_none() {
             return Ok(());
         }
-        let genome = self.current_genome.read();
         let Some(genome) = genome.as_ref() else {
             return Ok(());
         };
@@ -719,11 +720,12 @@ impl ConnectomeServiceImpl {
     /// homeostatic leak areas into the NPU after a full snapshot apply (no-op without an NPU or genome).
     #[cfg(feature = "connectome-io")]
     fn sync_modulators_after_full_import(&self) -> ServiceResult<()> {
+        // Lock order (see `feagi_services::lock_order`): genome before connectome.
+        let genome = self.current_genome.read();
         let manager = self.connectome.read();
         if manager.get_npu().is_none() {
             return Ok(());
         }
-        let genome = self.current_genome.read();
         let Some(genome) = genome.as_ref() else {
             return Ok(());
         };
@@ -1263,6 +1265,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         }
         self.drop_modulators_adopting(&cortical_id_typed)?;
         let (sibling_owned_ids, detached_scans) = {
+            // Lock order (see `feagi_services::lock_order`): genome before connectome.
+            let mut genome_guard = self.current_genome.write();
             let mut manager = self.connectome.write();
             let owning = manager.classifiers_owning_area(&deleted_id_base64);
             let mut siblings = Vec::new();
@@ -1307,7 +1311,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
             manager.clear_classifier_inputs_for_area(&deleted_id_base64);
-            if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(genome) = genome_guard.as_mut() {
                 genome.classifiers = manager.list_classifiers();
             }
             (siblings, detached_scans)

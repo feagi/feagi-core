@@ -102,6 +102,23 @@ impl GenomeService for RecordingGenomeService {
         Ok(info)
     }
 
+    async fn move_io_groups(&self, moves: Vec<IoGroupMove>) -> ServiceResult<Vec<IoGroupRename>> {
+        let old_ids: Vec<&str> = moves.iter().map(|m| m.cortical_id.as_str()).collect();
+        let before = areas_snapshot(self.reads.as_ref(), &old_ids).await;
+        let renamed = self.inner.move_io_groups(moves.clone()).await?;
+        let new_ids: Vec<&str> = renamed.iter().map(|r| r.new_id.as_str()).collect();
+        let after = areas_snapshot(self.reads.as_ref(), &new_ids).await;
+        if !renamed.is_empty() {
+            self.ledger.record(
+                GenomeChangeOperation::MoveIoGroups { moves },
+                before,
+                after,
+                &current_change_context(),
+            );
+        }
+        Ok(renamed)
+    }
+
     async fn create_cortical_areas(
         &self,
         params: Vec<CreateCorticalAreaParams>,

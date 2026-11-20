@@ -7,7 +7,7 @@
 //! operation payload mirrors the service call that produced it, so an entry can be
 //! replayed verbatim on another FEAGI instance through the same service layer.
 
-use crate::types::{CreateBrainRegionParams, CreateCorticalAreaParams};
+use crate::types::{CreateBrainRegionParams, CreateCorticalAreaParams, IoGroupMove};
 use feagi_structures::genomic::classifiers::Classifier;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -97,6 +97,10 @@ pub enum GenomeChangeOperation {
     DeleteCorticalArea {
         cortical_id: String,
     },
+    /// An atomic batch of IO area group (unit) number moves.
+    MoveIoGroups {
+        moves: Vec<IoGroupMove>,
+    },
     CreateBrainRegion {
         params: Box<CreateBrainRegionParams>,
     },
@@ -177,6 +181,10 @@ impl GenomeChangeOperation {
             | Self::DeleteCorticalArea { cortical_id } => {
                 vec![ChangeTarget::new(K::CorticalArea, cortical_id.clone())]
             }
+            Self::MoveIoGroups { moves } => moves
+                .iter()
+                .map(|m| ChangeTarget::new(K::CorticalArea, m.cortical_id.clone()))
+                .collect(),
             Self::CreateBrainRegion { params } => {
                 vec![ChangeTarget::new(K::BrainRegion, params.region_id.clone())]
             }

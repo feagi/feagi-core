@@ -89,6 +89,7 @@ async fn dispatch(
         Op::DeleteCorticalArea { cortical_id } => {
             connectome.delete_cortical_area(&cortical_id).await
         }
+        Op::MoveIoGroups { moves } => genome.move_io_groups(moves).await.map(drop),
         Op::CreateBrainRegion { params } => connectome.create_brain_region(*params).await.map(drop),
         Op::UpdateBrainRegion {
             region_id,

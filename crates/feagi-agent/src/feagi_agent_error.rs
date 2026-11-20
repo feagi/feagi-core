@@ -20,8 +20,19 @@ pub enum FeagiAgentError {
     UnableToSendData(String),
     /// Something went wrong with the server network socket and it should be restarted
     SocketFailure(String),
+    /// The agent has no live FEAGI session: FEAGI ended it (for example a genome load
+    /// deregisters every agent) or the link was lost. Nothing can be sent until the agent
+    /// registers again; the recovery supervisor does that. The text says how it was noticed.
+    NotRegistered(String),
     /// Other/uncategorized error
     Other(String),
+}
+
+impl FeagiAgentError {
+    /// True for the typed "no live session" error, the cross-SDK signal to re-register.
+    pub fn is_not_registered(&self) -> bool {
+        matches!(self, FeagiAgentError::NotRegistered(_))
+    }
 }
 
 impl Display for FeagiAgentError {
@@ -48,6 +59,9 @@ impl Display for FeagiAgentError {
             }
             FeagiAgentError::SocketFailure(msg) => {
                 write!(f, "FeagiAgentError: Socket failure: {}", msg)
+            }
+            FeagiAgentError::NotRegistered(msg) => {
+                write!(f, "FeagiAgentError: Not registered: {}", msg)
             }
             FeagiAgentError::Other(msg) => {
                 write!(f, "FeagiAgentError: {}", msg)

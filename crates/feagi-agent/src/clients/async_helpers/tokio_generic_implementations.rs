@@ -22,6 +22,10 @@ use feagi_io::FeagiNetworkError;
 use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
 use feagi_sensorimotor::ConnectorCache;
 
+use crate::clients::recovery::{
+    RebuildableSession, SessionRecoveryState, SessionSupervisor, SupervisedSession,
+    SupervisedTickReport,
+};
 use crate::clients::{
     NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
     SessionTimingConfig,
@@ -165,6 +169,11 @@ pub struct TokioEmbodimentAgent {
     capped_sensory_frame_count: u64,
     busy_drop_streak: BusyDropStreak,
     last_motor_burst_id: Option<u16>,
+    /// Set when the command/control link failed while the session was live (the FEAGI side may
+    /// not know). Cleared by the next registration.
+    control_lost: bool,
+    /// State reported while not registered, written by the recovery supervisor.
+    recovery_state: SessionRecoveryState,
 }
 
 impl TokioEmbodimentAgent {
@@ -199,6 +208,8 @@ impl TokioEmbodimentAgent {
             capped_sensory_frame_count: 0,
             busy_drop_streak: BusyDropStreak::default(),
             last_motor_burst_id: None,
+            control_lost: false,
+            recovery_state: SessionRecoveryState::Reconnecting,
         }
     }
 
@@ -290,6 +301,131 @@ impl TokioEmbodimentAgent {
         &mut self.embodiment
     }
 
+    /// True while FEAGI knows this session: registered, data channels active, and no command/
+    /// control failure seen since. False after FEAGI ended the session (a genome load does) or
+    /// the link was lost, until the agent registers again.
+    pub fn is_registered(&self) -> bool {
+        *self.sm.phase() == SessionPhase::Active && !self.control_lost
+    }
+
+    /// Session state for callers and UIs: `Registered` while [`Self::is_registered`], otherwise
+    /// what the recovery supervisor last reported (`Reconnecting` until it reports
+    /// `CannotReach`; an agent that never connected is `Reconnecting`).
+    pub fn session_state(&self) -> SessionRecoveryState {
+        if self.is_registered() {
+            SessionRecoveryState::Registered
+        } else {
+            self.recovery_state
+        }
+    }
+
+    /// One supervised tick: progress the session, and when it is not registered re-register
+    /// (with the same descriptor, capabilities and device registrations) as `supervisor`
+    /// decides. `now_ms` is a monotonic millisecond clock; use [`Self::supervised_tick`] for
+    /// this agent's own clock.
+    ///
+    /// A re-registration blocks the calling thread for up to the supervisor's
+    /// `rebuild_timeout_ms`; call from a thread that may block (`spawn_blocking` under Tokio).
+    pub fn supervised_tick_at(
+        &mut self,
+        supervisor: &mut SessionSupervisor,
+        now_ms: u64,
+    ) -> SupervisedTickReport {
+        supervisor.tick(self, now_ms)
+    }
+
+    /// [`Self::supervised_tick_at`] on this agent's own clock.
+    pub fn supervised_tick(&mut self, supervisor: &mut SessionSupervisor) -> SupervisedTickReport {
+        let now_ms = self.now_ms();
+        self.supervised_tick_at(supervisor, now_ms)
+    }
+
+    /// Like [`Self::supervised_tick_at`], with the driver's health snapshot for this tick, so
+    /// FEAGI restarts and genome loads that no message announced still cause a re-registration
+    /// when the supervisor's policy enables those triggers.
+    pub fn supervised_tick_with_health(
+        &mut self,
+        supervisor: &mut SessionSupervisor,
+        health: Result<crate::clients::recovery::HealthSnapshot, FeagiAgentError>,
+        now_ms: u64,
+    ) -> SupervisedTickReport {
+        supervisor.tick_with_health(self, Some(health), now_ms)
+    }
+
+    /// Tear down the current session and register again, waiting at most `timeout_ms`.
+    ///
+    /// The agent keeps what it needs: the descriptor, auth token and capabilities (state
+    /// machine), and the device registrations (the connector cache, re-sent after registration).
+    /// Blocks the calling thread (sleeps `poll_interval` between polls).
+    pub fn rebuild_with_timeout(
+        &mut self,
+        reason: &str,
+        timeout_ms: u64,
+    ) -> Result<(), FeagiAgentError> {
+        tracing::info!(target: "feagi_agent", "re-registering: {reason}");
+        // A session FEAGI may still know gets a bounded deregistration first, so the new one is
+        // not refused as AlreadyRegistered. FEAGI already ended it when status is NotRegistered.
+        if !self.control_lost
+            && matches!(
+                self.control.registration_status(),
+                crate::clients::AgentRegistrationStatus::Registered(_, _)
+            )
+        {
+            if let Err(e) = self
+                .request_deregistration_and_disconnect(Some(reason.to_string()), Some(timeout_ms))
+            {
+                tracing::debug!(target: "feagi_agent", "pre-rebuild deregistration: {e}");
+            }
+        }
+        let _ = self.force_disconnect_transports();
+        self.control.reset_connection();
+        self.sensor_pusher = None;
+        self.motor_subscriber = None;
+        self.min_sensory_send_interval = None;
+        self.last_sensor_payload_sent_at = None;
+        self.capped_sensory_frame_count = 0;
+        self.busy_drop_streak = BusyDropStreak::default();
+        self.last_motor_burst_id = None;
+        self.control_lost = false;
+
+        let start_ms = self.now_ms();
+        let mut pending_actions = self.sm.start_connect(start_ms);
+        loop {
+            self.execute_actions(&pending_actions)?;
+            pending_actions = self.poll_and_step()?;
+            match self.sm.phase() {
+                SessionPhase::Active => {
+                    self.apply_sensory_rate_negotiation_blocking()?;
+                    self.send_agent_configuration_details()?;
+                    return Ok(());
+                }
+                SessionPhase::Failed => {
+                    return Err(FeagiAgentError::ConnectionFailed(
+                        self.sm.last_error().unwrap_or("session failed").to_string(),
+                    ));
+                }
+                _ => {}
+            }
+            if self.now_ms().saturating_sub(start_ms) >= timeout_ms {
+                return Err(FeagiAgentError::ConnectionFailed(
+                    "re-registration timed out".to_string(),
+                ));
+            }
+            std::thread::sleep(self.driver.poll_interval);
+        }
+    }
+
+    fn not_registered_error(&self) -> FeagiAgentError {
+        FeagiAgentError::NotRegistered(match self.sm.phase() {
+            SessionPhase::Failed => format!(
+                "session failed: {}",
+                self.sm.last_error().unwrap_or("unknown")
+            ),
+            _ if self.control_lost => "command/control link lost".to_string(),
+            _ => "FEAGI ended this session".to_string(),
+        })
+    }
+
     /// Send current device registrations over command/control after successful registration.
     ///
     /// FEAGI server uses this configuration payload to auto-create missing cortical areas.
@@ -334,9 +470,16 @@ impl TokioEmbodimentAgent {
     }
 
     /// Drive one tick of session maintenance (poll + step + execute actions).
+    ///
+    /// Returns [`FeagiAgentError::NotRegistered`] when the session is not live (FEAGI ended it
+    /// or the link was lost). A supervised tick turns that into a re-registration.
     pub fn tick(&mut self) -> Result<(), FeagiAgentError> {
         let actions = self.poll_and_step()?;
         self.execute_actions(&actions)?;
+        if self.control_lost || matches!(self.sm.phase(), SessionPhase::Idle | SessionPhase::Failed)
+        {
+            return Err(self.not_registered_error());
+        }
         Ok(())
     }
 
@@ -350,14 +493,14 @@ impl TokioEmbodimentAgent {
         // Progress session maintenance (heartbeat, channel state, etc.) deterministically.
         self.tick()?;
 
+        let Some(session_id) = self.sm.session_id() else {
+            return Err(self.not_registered_error());
+        };
         let Some(pusher) = self.sensor_pusher.as_mut() else {
             return Err(FeagiAgentError::ConnectionFailed(
                 "No sensory channel active".to_string(),
             ));
         };
-        let session_id = self.sm.session_id().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No session id available".to_string())
-        })?;
 
         match pusher.poll() {
             FeagiEndpointState::ActiveWaiting => {}
@@ -595,11 +738,20 @@ impl TokioEmbodimentAgent {
     fn poll_and_step(&mut self) -> Result<Vec<SessionAction>, FeagiAgentError> {
         let mut events: Vec<SessionEvent> = Vec::new();
 
-        if let Ok((state, message)) = self.control.poll_for_messages() {
-            events.push(SessionEvent::ControlObserved {
-                state: state.clone(),
-                message,
-            });
+        let was_active = *self.sm.phase() == SessionPhase::Active;
+        match self.control.poll_for_messages() {
+            Ok((state, message)) => {
+                events.push(SessionEvent::ControlObserved {
+                    state: state.clone(),
+                    message,
+                });
+            }
+            Err(FeagiAgentError::ConnectionFailed(detail)) if was_active => {
+                // The command/control socket failed under a live session: it is lost.
+                tracing::warn!(target: "feagi_agent", "command/control link lost: {detail}");
+                self.control_lost = true;
+            }
+            Err(_) => {}
         }
 
         let sensor_state = self
@@ -970,6 +1122,38 @@ impl TokioEmbodimentAgent {
         })?;
         let updated_rate_hz = Self::parse_effective_rate_hz_from_health(&health_after_json)?;
         Ok(updated_rate_hz)
+    }
+}
+
+impl RebuildableSession for TokioEmbodimentAgent {
+    /// Re-register with the kept descriptor, capabilities and device registrations. Needs
+    /// `driver.timing.registration_deadline_ms` as the bound; use
+    /// [`TokioEmbodimentAgent::rebuild_with_timeout`] to pass one.
+    fn rebuild(&mut self, reason: &str) -> Result<(), FeagiAgentError> {
+        let Some(timeout_ms) = self.driver.timing.registration_deadline_ms else {
+            return Err(FeagiAgentError::Other(
+                "rebuild needs timing.registration_deadline_ms (no unbounded waits)".to_string(),
+            ));
+        };
+        self.rebuild_with_timeout(reason, timeout_ms)
+    }
+}
+
+impl SupervisedSession for TokioEmbodimentAgent {
+    fn is_registered(&self) -> bool {
+        TokioEmbodimentAgent::is_registered(self)
+    }
+
+    fn poll_session(&mut self) -> Result<(), FeagiAgentError> {
+        self.tick()
+    }
+
+    fn rebuild_session(&mut self, reason: &str, timeout_ms: u64) -> Result<(), FeagiAgentError> {
+        self.rebuild_with_timeout(reason, timeout_ms)
+    }
+
+    fn note_recovery_state(&mut self, state: SessionRecoveryState) {
+        self.recovery_state = state;
     }
 }
 

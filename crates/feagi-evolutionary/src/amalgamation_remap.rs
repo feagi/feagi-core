@@ -47,7 +47,9 @@ fn allocate_unique_typed_id(
     ))
 }
 
-fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, String>) {
+/// Rewrite the base64 area ids in a region's `inputs`, `outputs`, `designated_inputs` and
+/// `designated_outputs` property lists.
+pub fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, String>) {
     for key in [
         "inputs",
         "outputs",
@@ -70,6 +72,13 @@ fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, S
     }
 }
 
+/// Mapping-rule fields that hold another area's base64 id.
+const RULE_AREA_ID_KEYS: [&str; 3] = [
+    "gate_source_area",
+    "reward_source_area",
+    "punishment_source_area",
+];
+
 fn remap_cortical_mapping_dst_keys(
     properties: &mut HashMap<String, Value>,
     b64_remap: &HashMap<String, String>,
@@ -79,8 +88,18 @@ fn remap_cortical_mapping_dst_keys(
     };
     let taken = std::mem::take(dstmap);
     let mut new_map = serde_json::Map::new();
-    for (k, v) in taken {
+    for (k, mut v) in taken {
         let nk = b64_remap.get(&k).cloned().unwrap_or(k);
+        if let Value::Array(rules) = &mut v {
+            for rule in rules.iter_mut() {
+                let Value::Object(rule) = rule else { continue };
+                for key in RULE_AREA_ID_KEYS {
+                    if let Some(Value::String(id)) = rule.get_mut(key) {
+                        remap_id(id, b64_remap);
+                    }
+                }
+            }
+        }
         new_map.insert(nk, v);
     }
     properties.insert("cortical_mapping_dst".to_string(), Value::Object(new_map));
@@ -166,6 +185,112 @@ fn remap_id(id: &mut String, b64_remap: &HashMap<String, String>) {
     }
 }
 
+/// Rewrite every area id held inside one area's properties (`old base64 -> new base64`):
+/// `cortical_mapping_dst` destination keys and the `*_source_area` fields of their rules,
+/// classifier assembly links, and the memory-twin properties (`memory_twin_areas` keys and
+/// values, `memory_twin_of`, `memory_twin_for`).
+///
+/// This is the one place that knows which area properties carry area ids; the genome store and
+/// the live connectome both call it.
+pub fn rewrite_area_properties(
+    properties: &mut HashMap<String, Value>,
+    b64_remap: &HashMap<String, String>,
+) {
+    if b64_remap.is_empty() {
+        return;
+    }
+    remap_cortical_mapping_dst_keys(properties, b64_remap);
+    for key in AREA_ID_PROPERTY_KEYS
+        .iter()
+        .chain(["memory_twin_of", "memory_twin_for"].iter())
+    {
+        if let Some(Value::String(id)) = properties.get_mut(*key) {
+            remap_id(id, b64_remap);
+        }
+    }
+    if let Some(Value::Object(twins)) = properties.get_mut("memory_twin_areas") {
+        let taken = std::mem::take(twins);
+        for (source, twin) in taken {
+            let new_source = b64_remap.get(&source).cloned().unwrap_or(source);
+            let new_twin = match twin {
+                Value::String(id) => Value::String(b64_remap.get(&id).cloned().unwrap_or(id)),
+                other => other,
+            };
+            twins.insert(new_source, new_twin);
+        }
+    }
+}
+
+/// Rename areas in a genome in place: area keys, `cortical_id` fields, region membership and
+/// region IO lists, and every id-bearing property (see [`rewrite_area_properties`]), classifier
+/// fields and modulator drivers. `renames` is a set of simultaneous `(old, new)` pairs, so a swap
+/// of two ids is allowed. Neuron data is not touched.
+///
+/// Fails, leaving the genome unchanged, when an old id is missing, a new id repeats, or a new id
+/// is taken by an area that is not itself renamed.
+pub fn rename_runtime_genome_areas(
+    genome: &mut RuntimeGenome,
+    renames: &[(CorticalID, CorticalID)],
+) -> Result<(), FeagiDataError> {
+    let id_remap: HashMap<CorticalID, CorticalID> = renames.iter().copied().collect();
+    if id_remap.len() != renames.len() {
+        return Err(FeagiDataError::BadParameters(
+            "rename lists the same source area twice".into(),
+        ));
+    }
+    let mut targets: HashSet<CorticalID> = HashSet::new();
+    for (old, new) in renames {
+        if !genome.cortical_areas.contains_key(old) {
+            return Err(FeagiDataError::BadParameters(format!(
+                "cortical area {} does not exist",
+                old.as_base_64()
+            )));
+        }
+        if !targets.insert(*new) {
+            return Err(FeagiDataError::BadParameters(format!(
+                "target id {} is used twice",
+                new.as_base_64()
+            )));
+        }
+        if genome.cortical_areas.contains_key(new) && !id_remap.contains_key(new) {
+            return Err(FeagiDataError::BadParameters(format!(
+                "target id {} is already taken",
+                new.as_base_64()
+            )));
+        }
+    }
+    let b64_remap: HashMap<String, String> = renames
+        .iter()
+        .filter(|(old, new)| old != new)
+        .map(|(old, new)| (old.as_base_64(), new.as_base_64()))
+        .collect();
+    if b64_remap.is_empty() {
+        return Ok(());
+    }
+    // Phase 1 removes every renamed area, phase 2 inserts them under the new ids.
+    let mut moved: Vec<CorticalArea> = Vec::with_capacity(renames.len());
+    for (old, new) in renames {
+        if let Some(mut area) = genome.cortical_areas.remove(old) {
+            area.cortical_id = *new;
+            moved.push(area);
+        }
+    }
+    for area in moved {
+        genome.cortical_areas.insert(area.cortical_id, area);
+    }
+    for region in genome.brain_regions.values_mut() {
+        let members: Vec<CorticalID> = region.cortical_areas.drain().collect();
+        for cid in members {
+            region
+                .cortical_areas
+                .insert(id_remap.get(&cid).copied().unwrap_or(cid));
+        }
+        remap_region_io_lists(region, &b64_remap);
+    }
+    rewrite_area_references(genome, &b64_remap);
+    Ok(())
+}
+
 /// Apply an area-id remap (`old base64 -> new base64`) to every place a guest genome refers to
 /// an area by id other than the area key itself: `cortical_mapping_dst` destination keys, area
 /// properties that link classifier assembly areas and memory twins, adopted modulator drivers
@@ -178,23 +303,7 @@ pub(crate) fn rewrite_area_references(
         return;
     }
     for area in genome.cortical_areas.values_mut() {
-        remap_cortical_mapping_dst_keys(&mut area.properties, b64_remap);
-        for key in AREA_ID_PROPERTY_KEYS {
-            if let Some(Value::String(id)) = area.properties.get_mut(key) {
-                remap_id(id, b64_remap);
-            }
-        }
-        if let Some(Value::Object(twins)) = area.properties.get_mut("memory_twin_areas") {
-            let taken = std::mem::take(twins);
-            for (source, twin) in taken {
-                let new_source = b64_remap.get(&source).cloned().unwrap_or(source);
-                let new_twin = match twin {
-                    Value::String(id) => Value::String(b64_remap.get(&id).cloned().unwrap_or(id)),
-                    other => other,
-                };
-                twins.insert(new_source, new_twin);
-            }
-        }
+        rewrite_area_properties(&mut area.properties, b64_remap);
     }
     for id in genome.modulators.ids() {
         let Some(instance) = genome.modulators.get_mut(&id) else {
@@ -213,7 +322,7 @@ pub(crate) fn rewrite_area_references(
 }
 
 /// Remap every area id a classifier record holds.
-pub(crate) fn remap_classifier_area_fields(
+pub fn remap_classifier_area_fields(
     classifier: &mut feagi_structures::genomic::classifiers::Classifier,
     b64_remap: &HashMap<String, String>,
 ) {
@@ -1050,5 +1159,143 @@ mod tests {
             Some(host_key.as_str())
         );
         assert!(r.contains_area(&b.cortical_id));
+    }
+}
+
+#[cfg(test)]
+mod rename_runtime_genome_areas_tests {
+    use super::*;
+    use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry};
+    use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalAreaDimensions, IOCorticalAreaConfigurationFlag,
+    };
+
+    fn io(group: u16) -> CorticalID {
+        IOCorticalAreaConfigurationFlag::Boolean.as_io_cortical_id(
+            true,
+            *b"tst",
+            group.into(),
+            0u8.into(),
+        )
+    }
+
+    fn area(id: CorticalID) -> CorticalArea {
+        CorticalArea::new(
+            id,
+            0,
+            "a".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap()
+    }
+
+    fn genome() -> RuntimeGenome {
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "g".to_string(),
+                genome_title: "g".to_string(),
+                genome_description: String::new(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: Default::default(),
+            signatures: GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let (a, b) = (io(1), io(2));
+        let mut first = area(a);
+        first.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ b.as_base_64(): [{ "gate_source_area": a.as_base_64() }] }),
+        );
+        first.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(b.as_base_64()),
+        );
+        genome.cortical_areas.insert(a, first);
+        genome.cortical_areas.insert(b, area(b));
+        let mut region =
+            BrainRegion::new(RegionID::new(), "r".to_string(), RegionType::Undefined).unwrap();
+        region.cortical_areas.insert(a);
+        region.properties.insert(
+            "designated_inputs".to_string(),
+            serde_json::json!([a.as_base_64()]),
+        );
+        genome.brain_regions.insert("r".to_string(), region);
+        genome
+    }
+
+    #[test]
+    fn occupied_target_leaves_the_genome_unchanged() {
+        let mut g = genome();
+        let snapshot = |g: &RuntimeGenome| {
+            let mut areas: Vec<(String, String)> = g
+                .cortical_areas
+                .iter()
+                .map(|(id, a)| {
+                    (
+                        id.as_base_64(),
+                        format!(
+                            "{:?}",
+                            a.properties
+                                .iter()
+                                .collect::<std::collections::BTreeMap<_, _>>()
+                        ),
+                    )
+                })
+                .collect();
+            areas.sort();
+            (
+                areas,
+                format!(
+                    "{:?}",
+                    g.brain_regions["r"]
+                        .properties
+                        .iter()
+                        .collect::<std::collections::BTreeMap<_, _>>()
+                ),
+            )
+        };
+        let before = snapshot(&g);
+        assert!(rename_runtime_genome_areas(&mut g, &[(io(1), io(2))]).is_err());
+        assert_eq!(before, snapshot(&g));
+    }
+
+    #[test]
+    fn swap_rekeys_areas_and_every_reference() {
+        let mut g = genome();
+        rename_runtime_genome_areas(&mut g, &[(io(1), io(2)), (io(2), io(1))]).unwrap();
+        // The area that carried the references is now at io(2); they point at the swapped ids.
+        let moved = &g.cortical_areas[&io(2)];
+        assert_eq!(moved.cortical_id, io(2));
+        assert_eq!(
+            moved.properties["memory_twin_of"],
+            serde_json::json!(io(1).as_base_64())
+        );
+        assert_eq!(
+            moved.properties["cortical_mapping_dst"][io(1).as_base_64()][0]["gate_source_area"],
+            serde_json::json!(io(2).as_base_64())
+        );
+        let region = &g.brain_regions["r"];
+        assert!(region.cortical_areas.contains(&io(2)) && !region.cortical_areas.contains(&io(1)));
+        assert_eq!(
+            region.properties["designated_inputs"],
+            serde_json::json!([io(2).as_base_64()])
+        );
     }
 }

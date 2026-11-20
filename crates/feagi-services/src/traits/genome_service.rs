@@ -105,6 +105,22 @@ pub trait GenomeService: Send + Sync {
         changes: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<CorticalAreaInfo>;
 
+    /// Move IO cortical areas to new group (unit) numbers as one atomic batch.
+    ///
+    /// Every source must exist and be an IO area, and every new id must be free once the
+    /// batch's own sources are removed (a swap is allowed). Any failed check changes nothing.
+    /// Neuron indices stay, so synapses, weights and learned state are kept. Returns the id
+    /// change of each area that moved. Agents that feed or read a moved area must re-register.
+    ///
+    /// # Errors
+    /// * `ServiceError::Conflict` - a source is missing or not an IO area, or a target is taken
+    /// * `ServiceError::InvalidInput` - a cortical id is malformed
+    async fn move_io_groups(&self, _moves: Vec<IoGroupMove>) -> ServiceResult<Vec<IoGroupRename>> {
+        Err(crate::types::ServiceError::NotImplemented(
+            "move_io_groups".to_string(),
+        ))
+    }
+
     /// Create new cortical areas and add them to the genome
     ///
     /// ARCHITECTURE: This is the proper entry point for creating new cortical areas.

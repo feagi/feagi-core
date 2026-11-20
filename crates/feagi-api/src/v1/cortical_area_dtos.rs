@@ -243,6 +243,39 @@ pub struct CreateCorticalAreaRequest {
     pub plasticity_constant: f64,
 }
 
+/// One IO area to move to another group (unit) number.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MoveGroupEntry {
+    /// Cortical id (base64) of the IO area to move.
+    pub cortical_id: String,
+    /// Group (unit) number the area takes.
+    pub group_id: u16,
+}
+
+/// Atomic batch move of IO areas between group (unit) numbers.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MoveGroupsRequest {
+    /// Areas to move. Targets may be taken by areas that move away in the same batch (swaps).
+    pub moves: Vec<MoveGroupEntry>,
+    /// Session id of the agent making the request. Areas that a connected agent other than this
+    /// one feeds or reads are refused with 409; areas of the named agent may be moved.
+    #[serde(default)]
+    pub requester_agent_id: Option<String>,
+}
+
+/// The id change of one moved IO area.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MovedGroupArea {
+    pub old_id: String,
+    pub new_id: String,
+}
+
+/// Areas whose id changed.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MoveGroupsResponse {
+    pub moved: Vec<MovedGroupArea>,
+}
+
 /// Update cortical area request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UpdateCorticalAreaRequest {

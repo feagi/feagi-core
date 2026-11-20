@@ -3784,6 +3784,55 @@ impl<
         }
     }
 
+    /// Rename cortical areas without touching neurons, synapses or any learned state.
+    ///
+    /// `renames` are simultaneous `(old id, new id)` pairs (a swap is allowed). Re-keys the
+    /// index-to-name map that sensory injection resolves ids through, the neuron-to-area map
+    /// and the per-area PSP flag maps. Fails before changing anything when a new id is already
+    /// registered to an area that is not itself renamed. Areas not registered in the name map
+    /// are skipped there (injection could not reach them either). The inverse rename (swap each
+    /// pair) restores the previous state.
+    pub fn rename_cortical_areas(
+        &mut self,
+        renames: &[(CorticalID, CorticalID)],
+    ) -> std::result::Result<(), String> {
+        let remap: AHashMap<CorticalID, CorticalID> = renames.iter().copied().collect();
+        if remap.len() != renames.len() {
+            return Err("rename lists the same source area twice".to_string());
+        }
+        let b64_remap: AHashMap<String, String> = renames
+            .iter()
+            .map(|(old, new)| (old.as_base_64(), new.as_base_64()))
+            .collect();
+        {
+            let names = self.area_id_to_name.read().unwrap();
+            for name in names.values() {
+                if b64_remap.contains_key(name) {
+                    continue;
+                }
+                if b64_remap.values().any(|new_name| new_name == name) {
+                    return Err(format!(
+                        "cortical id {} is already registered to another area",
+                        name
+                    ));
+                }
+            }
+        }
+        {
+            let mut names = self.area_id_to_name.write().unwrap();
+            for name in names.values_mut() {
+                if let Some(new_name) = b64_remap.get(name.as_str()) {
+                    *name = new_name.clone();
+                }
+            }
+        }
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .rename_cortical_areas(&remap);
+        Ok(())
+    }
+
     /// Get the cortical area name for a given area_id
     /// Returns None if the area_id is not registered
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
@@ -10514,6 +10563,50 @@ mod tests {
         assert_eq!(npu.count_genome_synapses_within_areas(&[]), 0);
         // A duplicated index in the set does not double count.
         assert_eq!(npu.count_genome_synapses_within_areas(&[10, 10, 20]), 4);
+    }
+
+    #[test]
+    fn rename_cortical_areas_rekeys_name_map_neuron_map_and_flags() {
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let a = CorticalID::try_from_bytes(b"cren0001").unwrap();
+        let b = CorticalID::try_from_bytes(b"cren0002").unwrap();
+        let free = CorticalID::try_from_bytes(b"cren0003").unwrap();
+        npu.register_cortical_area(20, a.as_base_64());
+        npu.register_cortical_area(21, b.as_base_64());
+        npu.register_dynamic_neuron_mapping(50_000_000, a);
+        npu.register_dynamic_neuron_mapping(50_000_001, b);
+        npu.set_postsynaptic_current_flag(a, 0.25);
+        npu.set_mp_driven_psp_flag(b, true);
+
+        // A new id taken by an area that is not renamed is refused and changes nothing.
+        assert!(npu.rename_cortical_areas(&[(a, b)]).is_err());
+        assert_eq!(npu.get_cortical_area_name(20), Some(a.as_base_64()));
+
+        // Swap: both entries follow their area.
+        npu.rename_cortical_areas(&[(a, b), (b, a)]).unwrap();
+        assert_eq!(npu.get_cortical_area_name(20), Some(b.as_base_64()));
+        assert_eq!(npu.get_cortical_area_name(21), Some(a.as_base_64()));
+        assert_eq!(npu.get_cortical_area_id(&b.as_base_64()), Some(20));
+        {
+            let engine = npu.propagation_engine.read().unwrap();
+            assert_eq!(engine.neuron_to_area[&NeuronId(50_000_000)], b);
+            assert_eq!(engine.neuron_to_area[&NeuronId(50_000_001)], a);
+            assert_eq!(engine.area_postsynaptic_current.get(&b), Some(&0.25));
+            assert_eq!(engine.area_mp_driven_psp.get(&a), Some(&true));
+            assert!(!engine.area_postsynaptic_current.contains_key(&a));
+        }
+
+        // Move to a free id, then back with the inverse.
+        npu.rename_cortical_areas(&[(b, free)]).unwrap();
+        assert_eq!(npu.get_cortical_area_id(&free.as_base_64()), Some(20));
+        assert_eq!(npu.get_cortical_area_id(&b.as_base_64()), None);
+        npu.rename_cortical_areas(&[(free, b)]).unwrap();
+        assert_eq!(npu.get_cortical_area_id(&b.as_base_64()), Some(20));
     }
 
     #[test]

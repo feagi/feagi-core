@@ -97,6 +97,7 @@ pub mod connectome;
 pub mod genome;
 #[cfg(feature = "std")]
 pub mod impls;
+pub mod lock_order;
 #[cfg(feature = "plasticity")]
 pub mod plasticity_runtime;
 pub mod traits;
@@ -137,7 +138,7 @@ pub use types::{
     ServiceResult,
     SynapseInfo,
     SystemHealth,
-    UpdateCorticalAreaParams,
+    IoGroupMove, IoGroupRename, UpdateCorticalAreaParams,
 };
 
 // Re-export cortical area helpers for adapter crates.

@@ -386,6 +386,33 @@ impl SynapticPropagationEngine {
         self.neuron_to_area = mapping;
     }
 
+    /// Re-key every area-id keyed table as one simultaneous step (`old id -> new id`): the
+    /// neuron-to-area map and the four per-area flag maps. Entries of areas that are not renamed
+    /// are untouched, and ids may swap.
+    pub fn rename_cortical_areas(&mut self, remap: &AHashMap<CorticalID, CorticalID>) {
+        if remap.is_empty() {
+            return;
+        }
+        for area in self.neuron_to_area.values_mut() {
+            if let Some(new_id) = remap.get(area) {
+                *area = *new_id;
+            }
+        }
+        fn rekey<V>(map: &mut AHashMap<CorticalID, V>, remap: &AHashMap<CorticalID, CorticalID>) {
+            let taken: Vec<(CorticalID, V)> = remap
+                .iter()
+                .filter_map(|(old_id, new_id)| map.remove(old_id).map(|v| (*new_id, v)))
+                .collect();
+            for (new_id, value) in taken {
+                map.insert(new_id, value);
+            }
+        }
+        rekey(&mut self.area_mp_driven_psp, remap);
+        rekey(&mut self.area_psp_uniform_distribution, remap);
+        rekey(&mut self.area_postsynaptic_current, remap);
+        rekey(&mut self.area_degeneration, remap);
+    }
+
     /// Set the mp_driven_psp flags for cortical areas
     /// When enabled for an area, PSP will be dynamically set from source neuron's membrane potential
     pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {

@@ -1299,6 +1299,126 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Rename several cortical areas at once without touching neurons or synapses.
+    ///
+    /// `renames` are simultaneous `(old, new)` pairs, so two areas may swap ids. Every old id must
+    /// exist, every new id must be distinct and free once the batch's own sources are removed.
+    /// All checks (and the NPU's own check) run before anything changes, so an error leaves the
+    /// connectome and the NPU as they were. The cortical index of each area stays, so synapses,
+    /// weights, plasticity and memory state are kept.
+    ///
+    /// Re-keys the area, index and count maps, brain-region membership and IO lists, every
+    /// area property that carries an area id (mapping destinations and rule fields, memory
+    /// twins, classifier links), classifier records, the per-area stats in the StateManager and
+    /// the NPU's id tables (`DynamicNPU::rename_cortical_areas`).
+    pub fn rename_cortical_areas(&mut self, renames: &[(CorticalID, CorticalID)]) -> BduResult<()> {
+        let id_remap: HashMap<CorticalID, CorticalID> = renames.iter().copied().collect();
+        if id_remap.len() != renames.len() {
+            return Err(BduError::InvalidArea(
+                "rename lists the same source area twice".to_string(),
+            ));
+        }
+        let mut targets: HashSet<CorticalID> = HashSet::new();
+        for (old_id, new_id) in renames {
+            if !self.cortical_areas.contains_key(old_id) {
+                return Err(BduError::InvalidArea(format!(
+                    "Cortical area {} does not exist",
+                    old_id
+                )));
+            }
+            if !targets.insert(*new_id) {
+                return Err(BduError::InvalidArea(format!(
+                    "Target id {} is used twice",
+                    new_id
+                )));
+            }
+            if self.cortical_areas.contains_key(new_id) && !id_remap.contains_key(new_id) {
+                return Err(BduError::InvalidArea(format!(
+                    "Cortical area {} already exists",
+                    new_id
+                )));
+            }
+        }
+        let changed: Vec<(CorticalID, CorticalID)> = renames
+            .iter()
+            .filter(|(old_id, new_id)| old_id != new_id)
+            .copied()
+            .collect();
+        if changed.is_empty() {
+            return Ok(());
+        }
+        let id_remap: HashMap<CorticalID, CorticalID> = changed.iter().copied().collect();
+        let b64_remap: HashMap<String, String> = changed
+            .iter()
+            .map(|(old_id, new_id)| (old_id.as_base_64(), new_id.as_base_64()))
+            .collect();
+
+        // The NPU checks before it changes anything, so a failure here leaves everything as it was.
+        if let Some(npu) = &self.npu {
+            let mut npu_lock = npu.lock().map_err(|e| {
+                BduError::Internal(format!("Failed to lock NPU for area rename: {}", e))
+            })?;
+            npu_lock
+                .rename_cortical_areas(&changed)
+                .map_err(BduError::InvalidArea)?;
+        }
+
+        // Phase 1: take every renamed area out. Phase 2: put each back under its new id.
+        let mut moved: Vec<(u32, CorticalArea)> = Vec::with_capacity(changed.len());
+        for (old_id, new_id) in &changed {
+            if let Some(mut area) = self.cortical_areas.remove(old_id) {
+                let cortical_idx = area.cortical_idx;
+                area.cortical_id = *new_id;
+                self.cortical_id_to_idx.remove(old_id);
+                moved.push((cortical_idx, area));
+            }
+        }
+        for (cortical_idx, area) in moved {
+            let new_id = area.cortical_id;
+            self.cortical_id_to_idx.insert(new_id, cortical_idx);
+            self.cortical_idx_to_id.insert(cortical_idx, new_id);
+            self.cortical_areas.insert(new_id, area);
+        }
+
+        // Per-area count caches follow the area.
+        {
+            let mut neuron_cache = self.cached_neuron_counts_per_area.write();
+            let taken: Vec<_> = changed
+                .iter()
+                .filter_map(|(old_id, new_id)| neuron_cache.remove(old_id).map(|v| (*new_id, v)))
+                .collect();
+            neuron_cache.extend(taken);
+            let mut synapse_cache = self.cached_synapse_counts_per_area.write();
+            let taken: Vec<_> = changed
+                .iter()
+                .filter_map(|(old_id, new_id)| synapse_cache.remove(old_id).map(|v| (*new_id, v)))
+                .collect();
+            synapse_cache.extend(taken);
+        }
+
+        self.brain_regions.rename_cortical_areas(&id_remap);
+        for area in self.cortical_areas.values_mut() {
+            feagi_evolutionary::rewrite_area_properties(&mut area.properties, &b64_remap);
+        }
+        for classifier in self.classifiers.values_mut() {
+            feagi_evolutionary::remap_classifier_area_fields(classifier, &b64_remap);
+        }
+
+        let stats_renames: Vec<(String, String)> = b64_remap
+            .iter()
+            .map(|(old, new)| (old.clone(), new.clone()))
+            .collect();
+        StateManager::instance()
+            .read()
+            .rename_cortical_area_stats(&stats_renames);
+
+        self.refresh_cortical_area_hashes(true, true);
+        self.refresh_brain_regions_hash();
+        self.refresh_cortical_mappings_hash();
+        self.refresh_classifiers_hash();
+        Ok(())
+    }
+
     /// Get a cortical area by ID
     pub fn get_cortical_area(&self, cortical_id: &CorticalID) -> Option<&CorticalArea> {
         self.cortical_areas.get(cortical_id)

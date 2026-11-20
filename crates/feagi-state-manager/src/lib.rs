@@ -198,6 +198,19 @@ impl CorticalAreaStatsRegistry {
         self.stats.write().clear();
     }
 
+    /// Re-key entries as one simultaneous step: every old key is taken out before any new key
+    /// goes in, so a swap of two ids keeps each area's counters. Ids without an entry are skipped.
+    fn rename_areas(&self, renames: &[(String, String)]) {
+        let mut stats = self.stats.write();
+        let taken: Vec<(String, CorticalAreaStats)> = renames
+            .iter()
+            .filter_map(|(old, new)| stats.remove(old).map(|entry| (new.clone(), entry)))
+            .collect();
+        for (new, entry) in taken {
+            stats.insert(new, entry);
+        }
+    }
+
     fn set_neuron_count(&self, cortical_id: &str, count: usize) {
         let mut stats = self.stats.write();
         let entry = stats
@@ -547,6 +560,12 @@ impl StateManager {
         self.cortical_area_stats.reset_area(cortical_id);
     }
 
+    /// Re-key per-area neuron/synapse counters when areas change id (`(old, new)` pairs, applied
+    /// together). The counts stay with the area.
+    pub fn rename_cortical_area_stats(&self, renames: &[(String, String)]) {
+        self.cortical_area_stats.rename_areas(renames);
+    }
+
     /// Drop every cortical area stats entry (used when the whole brain is replaced).
     pub fn clear_cortical_area_stats(&self) {
         self.cortical_area_stats.clear_all();
@@ -694,6 +713,25 @@ impl StateManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn rename_cortical_area_stats_keeps_counts_with_the_area_and_allows_swaps() {
+        let state = StateManager::new().unwrap();
+        state.set_cortical_area_synapse_counts("a", 3, 4);
+        state.set_cortical_area_synapse_counts("b", 5, 6);
+
+        state.rename_cortical_area_stats(&[
+            ("a".to_string(), "b".to_string()),
+            ("b".to_string(), "a".to_string()),
+            ("missing".to_string(), "z".to_string()),
+        ]);
+        let at_a = state.get_cortical_area_stats("a").unwrap();
+        let at_b = state.get_cortical_area_stats("b").unwrap();
+        assert_eq!((at_a.incoming_synapse_count, at_a.outgoing_synapse_count), (5, 6));
+        assert_eq!((at_b.incoming_synapse_count, at_b.outgoing_synapse_count), (3, 4));
+        assert!(state.get_cortical_area_stats("z").is_none());
+    }
 
     #[test]
     fn test_state_manager_creation() {

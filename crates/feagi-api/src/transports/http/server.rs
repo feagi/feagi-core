@@ -627,6 +627,10 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_clone),
         )
         .route(
+            "/cortical_area/move_groups",
+            axum::routing::post(cortical_area::post_move_groups),
+        )
+        .route(
             "/cortical_area/multi/cortical_area",
             put(cortical_area::put_multi_cortical_area)
                 .delete(cortical_area::delete_multi_cortical_area),

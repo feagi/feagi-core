@@ -151,6 +151,7 @@ use crate::{
         crate::endpoints::cortical_area::delete_cortical_area,
         crate::endpoints::cortical_area::post_custom_cortical_area,
         crate::endpoints::cortical_area::post_clone,
+        crate::endpoints::cortical_area::post_move_groups,
         crate::endpoints::cortical_area::put_multi_cortical_area,
         crate::endpoints::cortical_area::delete_multi_cortical_area,
         crate::endpoints::cortical_area::put_coord_2d,
@@ -613,6 +614,10 @@ use crate::{
             CorticalAreaListResponse,
             CreateCorticalAreaRequest,
             UpdateCorticalAreaRequest,
+            crate::v1::cortical_area_dtos::MoveGroupsRequest,
+            crate::v1::cortical_area_dtos::MoveGroupEntry,
+            crate::v1::cortical_area_dtos::MoveGroupsResponse,
+            crate::v1::cortical_area_dtos::MovedGroupArea,
             Coordinates3D,
             Dimensions3D,
 

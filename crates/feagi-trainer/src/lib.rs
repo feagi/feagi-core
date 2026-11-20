@@ -16,6 +16,7 @@ pub mod balance_recovery;
 pub mod binding;
 pub mod contracts;
 pub mod control;
+pub mod cued_recall;
 pub mod error;
 pub mod executor;
 pub mod executor_stream;

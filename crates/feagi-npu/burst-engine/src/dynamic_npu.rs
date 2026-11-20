@@ -1771,6 +1771,17 @@ where
         dispatch!(self, get_power_amount())
     }
 
+    /// Rename cortical areas in place (see `RustNPU::rename_cortical_areas`).
+    pub fn rename_cortical_areas(
+        &mut self,
+        renames: &[(
+            feagi_structures::genomic::cortical_area::CorticalID,
+            feagi_structures::genomic::cortical_area::CorticalID,
+        )],
+    ) -> std::result::Result<(), String> {
+        dispatch_mut!(self, rename_cortical_areas(renames))
+    }
+
     pub fn neuron_count(&self) -> usize {
         dispatch!(self, get_neuron_count())
     }

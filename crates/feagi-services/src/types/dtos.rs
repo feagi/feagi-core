@@ -417,6 +417,22 @@ pub struct CreateCorticalAreaParams {
     pub properties: Option<HashMap<String, serde_json::Value>>,
 }
 
+/// One IO area to move to another group (unit) number.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IoGroupMove {
+    /// Cortical id (base64) of the IO area to move.
+    pub cortical_id: String,
+    /// Group (unit) number the area takes.
+    pub group_id: u16,
+}
+
+/// The id change of one moved IO area.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IoGroupRename {
+    pub old_id: String,
+    pub new_id: String,
+}
+
 /// Parameters for updating a cortical area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCorticalAreaParams {

@@ -126,6 +126,15 @@ impl CommandControlAgent {
         self.send_message(heartbeat_message, 0)
     }
 
+    /// Drop the command/control socket and forget the registered state.
+    ///
+    /// Used when a session is rebuilt: the next [`Self::request_connect`] opens a fresh socket
+    /// on the same endpoint, so a socket left half-open by the lost session cannot block it.
+    pub fn reset_connection(&mut self) {
+        self.requester = None;
+        self.registration_status = AgentRegistrationStatus::NotRegistered;
+    }
+
     /// Request transport disconnect for command/control requester.
     ///
     /// This is a best-effort disconnect primitive used by higher-level shutdown

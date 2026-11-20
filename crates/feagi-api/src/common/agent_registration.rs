@@ -2269,6 +2269,128 @@ fn sync_connectome_cortical_ids_to_npu() {
     }
 }
 
+/// One connected agent as the ownership check sees it.
+pub struct AgentRegistrationView<'a> {
+    /// Every id the agent answers to (its session id, and the id bound to its descriptor).
+    pub agent_ids: Vec<String>,
+    /// Name used in refusal messages.
+    pub label: String,
+    /// The agent's device registrations (the same blob area auto-create derives areas from).
+    pub registrations: &'a Value,
+}
+
+/// Cortical ids (base64) of the IO areas that connected agents other than `requester` feed or
+/// read, each with the labels of those agents.
+///
+/// An agent owns the areas its device registrations derive: sensory units are the areas it
+/// feeds and motor units the areas it reads. Registrations that cannot be parsed own nothing.
+/// When no agent owns an area, it is absent from the result and may be moved by anyone.
+pub fn areas_used_by_other_agents(
+    agents: &[AgentRegistrationView<'_>],
+    requester: Option<&str>,
+) -> HashMap<String, Vec<String>> {
+    let mut owners: HashMap<String, Vec<String>> = HashMap::new();
+    for agent in agents {
+        if let Some(requester) = requester {
+            if agent.agent_ids.iter().any(|id| id == requester) {
+                continue;
+            }
+        }
+        let mut ids: HashSet<String> = HashSet::new();
+        if let Ok(sensory) =
+            derive_sensory_cortical_ids_from_device_registrations(agent.registrations)
+        {
+            ids.extend(sensory);
+        }
+        if let Ok(motor) = derive_motor_cortical_ids_from_device_registrations(agent.registrations)
+        {
+            ids.extend(motor);
+        }
+        for id in ids {
+            owners.entry(id).or_default().push(agent.label.clone());
+        }
+    }
+    owners
+}
+
+/// [`areas_used_by_other_agents`] over the agents connected to this FEAGI. Without the
+/// `feagi-agent` feature or an agent handler no agent is connected, so nothing is owned.
+pub fn connected_agents_using_areas(
+    state: &ApiState,
+    requester: Option<&str>,
+) -> HashMap<String, Vec<String>> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        let Some(handler) = state.agent_handler.as_ref() else {
+            return HashMap::new();
+        };
+        let Ok(guard) = handler.lock() else {
+            return HashMap::new();
+        };
+        let by_agent = guard.get_device_registrations_by_agent_store();
+        let by_descriptor = guard.get_device_registrations_by_descriptor_store();
+        let descriptor_sessions = guard.get_descriptor_session_ids();
+        let mut views: Vec<AgentRegistrationView<'_>> = Vec::new();
+        for (session_id, (descriptor, _)) in guard.get_all_registered_agents() {
+            // Auto-create prefers the descriptor-scoped store, so ownership does too.
+            let Some(registrations) = by_descriptor
+                .get(descriptor)
+                .or_else(|| by_agent.get(session_id))
+            else {
+                continue;
+            };
+            let mut agent_ids = vec![session_id.to_base64()];
+            if let Some(bound) = descriptor_sessions.get(descriptor) {
+                agent_ids.push(bound.clone());
+            }
+            views.push(AgentRegistrationView {
+                agent_ids,
+                label: descriptor.agent_name().to_string(),
+                registrations,
+            });
+        }
+        areas_used_by_other_agents(&views, requester)
+    }
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        let _ = (state, requester);
+        HashMap::new()
+    }
+}
+
+/// The one ownership guard for every route that moves IO areas between groups
+/// (`POST /v1/cortical_area/move_groups`, and `group_id` changes on
+/// `PUT /v1/cortical_area/cortical_area` and `PUT /v1/cortical_area/multi/cortical_area`).
+///
+/// Returns 409 (`area_used_by_other_agent`) when any of `moved_ids` is fed or read by a connected
+/// agent other than `requester`. `requester` is the optional `requester_agent_id` field of the
+/// JSON request body, read the same way by all three routes; no header is used.
+pub fn refuse_moves_used_by_other_agents(
+    state: &ApiState,
+    moved_ids: &[String],
+    requester: Option<&str>,
+) -> Result<(), ApiError> {
+    if moved_ids.is_empty() {
+        return Ok(());
+    }
+    let used = connected_agents_using_areas(state, requester);
+    let blocked: Vec<String> = moved_ids
+        .iter()
+        .filter_map(|id| {
+            used.get(id)
+                .map(|agents| format!("{} (used by {})", id, agents.join(", ")))
+        })
+        .collect();
+    if blocked.is_empty() {
+        return Ok(());
+    }
+    Err(ApiError::conflict(format!(
+        "Refusing to move areas used by other connected agents: {}",
+        blocked.join("; ")
+    ))
+    .with_error_code("area_used_by_other_agent"))
+}
+
 pub fn derive_motor_cortical_ids_from_device_registrations(
     device_registrations: &serde_json::Value,
 ) -> Result<HashSet<String>, String> {
@@ -3547,5 +3669,87 @@ mod servo_encoder_registration_helpers_tests {
             super::declared_sensory_hold(&json!({"sensory_hold_last_frame": "yes"})),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod area_ownership_tests {
+    use super::{areas_used_by_other_agents, AgentRegistrationView};
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, PercentageNeuronPositioning,
+    };
+    use feagi_structures::genomic::SensoryCorticalUnit;
+    use serde_json::json;
+
+    fn servo_registration(group: u16) -> serde_json::Value {
+        json!({
+            "input_units_and_encoder_properties": {
+                "Servo": [[
+                    {
+                        "cortical_unit_index": group,
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Incremental",
+                            "percentage_neuron_positioning": "Linear"
+                        },
+                        "device_grouping": [
+                            { "friendly_name": "a", "device_properties": { "bundle_id": "b" } }
+                        ]
+                    },
+                    {}
+                ]]
+            }
+        })
+    }
+
+    fn servo_area(group: u16) -> String {
+        SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalUnitIndex::from(group),
+        )[0]
+        .as_base_64()
+    }
+
+    #[test]
+    fn another_agents_area_is_refused_and_the_owner_passes() {
+        let owner_registration = servo_registration(60);
+        let other_registration = servo_registration(61);
+        let agents = [
+            AgentRegistrationView {
+                agent_ids: vec!["owner-session".to_string()],
+                label: "owner".to_string(),
+                registrations: &owner_registration,
+            },
+            AgentRegistrationView {
+                agent_ids: vec!["other-session".to_string()],
+                label: "other".to_string(),
+                registrations: &other_registration,
+            },
+        ];
+
+        // No requester: both agents' areas are in use.
+        let used = areas_used_by_other_agents(&agents, None);
+        assert_eq!(used.get(&servo_area(60)), Some(&vec!["owner".to_string()]));
+        assert_eq!(used.get(&servo_area(61)), Some(&vec!["other".to_string()]));
+
+        // The owner asks: its own area passes, the other agent's stays refused.
+        let used = areas_used_by_other_agents(&agents, Some("owner-session"));
+        assert!(!used.contains_key(&servo_area(60)));
+        assert!(used.contains_key(&servo_area(61)));
+
+        // An area no agent registers is free for anyone.
+        assert!(!used.contains_key(&servo_area(99)));
+    }
+
+    #[test]
+    fn unparseable_registrations_own_nothing() {
+        let junk = json!({ "input_units_and_encoder_properties": { "NotAUnit": [] } });
+        let agents = [AgentRegistrationView {
+            agent_ids: vec!["x".to_string()],
+            label: "x".to_string(),
+            registrations: &junk,
+        }];
+        assert!(areas_used_by_other_agents(&agents, None).is_empty());
     }
 }

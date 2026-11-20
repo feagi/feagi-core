@@ -11,6 +11,8 @@
 //! - [`reconnect_policy`]: pure logic, events -> decision.
 //! - [`session`]: binding-friendly trait that concrete sessions implement.
 //! - [`recovery_loop`]: composer that ties watcher + policy + session.
+//! - [`supervisor`]: keeps a session registered: fast attempts through the policy, then slow
+//!   retries forever.
 //! - [`health_fetch`]: HTTP helpers (Tokio feature) for snapshot retrieval.
 //!
 //! # Cross-SDK contract
@@ -44,6 +46,7 @@
 pub mod health_watcher;
 pub mod reconnect_policy;
 pub mod session;
+pub mod supervisor;
 
 #[cfg(feature = "agent-client-asynchelper-tokio")]
 pub mod health_fetch;
@@ -54,8 +57,14 @@ pub use health_watcher::{HealthEvent, HealthSnapshot, HealthWatcher};
 pub use reconnect_policy::{
     ReconnectDecision, ReconnectPolicy, ReconnectPolicyConfig, RecoveryTrigger,
 };
-pub use recovery_loop::{run_recovery_tick_with_snapshot, RecoveryTickReport};
+pub use recovery_loop::{
+    run_recovery_tick_with_events, run_recovery_tick_with_snapshot, RecoveryTickReport,
+};
 pub use session::RebuildableSession;
+pub use supervisor::{
+    SessionRecoveryState, SessionSupervisor, SupervisedSession, SupervisedTickReport,
+    SupervisorConfig, DEFAULT_SLOW_RETRY_INTERVAL_MS,
+};
 
 #[cfg(feature = "agent-client-asynchelper-tokio")]
 pub use health_fetch::{fetch_health_snapshot_blocking, HealthFetchConfig};
