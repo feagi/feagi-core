@@ -13,6 +13,7 @@ use std::collections::HashSet;
 
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::{BduError, BduResult};
+use feagi_structures::genomic::brain_regions::{PortEncoding, PortEncodingSource};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::BrainRegion;
 
@@ -82,6 +83,102 @@ pub fn merged_designated_lists(
     }
 
     Ok((inputs, outputs))
+}
+
+/// One author change to a designated port's encoding: `Some` sets an author entry, `None` clears it.
+pub type PortEncodingChange = (CorticalID, Option<PortEncoding>);
+
+/// Parse the `port_encoding` part of a region PATCH into author changes.
+///
+/// The PATCH value is a delta, not the whole map: `{ "<area id, base64>": <entry> | null }`.
+/// An object entry (`kind`, `signed`, `frame`, `positioning`; absent means null) sets an author
+/// entry; `null` clears the area's author entry. Returns an empty list when the PATCH has no
+/// `port_encoding`.
+pub fn parse_port_encoding_patch(
+    patch: &std::collections::HashMap<String, serde_json::Value>,
+) -> BduResult<Vec<PortEncodingChange>> {
+    let Some(value) = patch.get(feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY) else {
+        return Ok(Vec::new());
+    };
+    let object = value.as_object().ok_or_else(|| {
+        BduError::InvalidArea(
+            "port_encoding must be a JSON object keyed by designated area id".to_string(),
+        )
+    })?;
+    let mut changes = Vec::with_capacity(object.len());
+    for (area_id, entry) in object {
+        let id = CorticalID::try_from_base_64(area_id).map_err(|e| {
+            BduError::InvalidArea(format!(
+                "port_encoding key '{area_id}' is not a base64 cortical id: {e}"
+            ))
+        })?;
+        let parsed = if entry.is_null() {
+            None
+        } else {
+            Some(PortEncoding::from_author_value(entry).map_err(|e| {
+                BduError::InvalidArea(format!("port_encoding entry for {area_id}: {e}"))
+            })?)
+        };
+        changes.push((id, parsed));
+    }
+    Ok(changes)
+}
+
+/// Parse stored-form `port_encoding` entries (each with a `source`) keyed by base64 area id.
+pub fn parse_stored_port_encoding(
+    entries: &serde_json::Map<String, serde_json::Value>,
+) -> BduResult<std::collections::BTreeMap<String, PortEncoding>> {
+    feagi_structures::genomic::brain_regions::parse_port_encoding(&serde_json::Value::Object(
+        entries.clone(),
+    ))
+    .map_err(|e| BduError::InvalidArea(format!("Invalid port_encoding: {e}")))
+}
+
+/// A set (not a clear) must name a port that is designated after the same PATCH.
+pub fn validate_port_encoding_changes(
+    region: &BrainRegion,
+    changes: &[PortEncodingChange],
+    merged_inputs: &[CorticalID],
+    merged_outputs: &[CorticalID],
+) -> BduResult<()> {
+    for (id, entry) in changes {
+        if entry.is_some() && !merged_inputs.iter().chain(merged_outputs).any(|d| d == id) {
+            return Err(BduError::RegionIoPolicyViolation(format!(
+                "Cannot set port_encoding for area {}: it is not a designated input or output of brain region {}",
+                id.as_base_64(),
+                region.region_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Apply author changes to the region's stored `port_encoding`: a set stores an `author` entry,
+/// a clear removes the entry only when its source is `author` (wiring entries are not the author's).
+pub fn apply_port_encoding_changes(
+    region: &mut BrainRegion,
+    changes: &[PortEncodingChange],
+) -> BduResult<()> {
+    let mut entries = feagi_structures::genomic::brain_regions::region_port_encoding(region)
+        .map_err(|e| BduError::InvalidArea(format!("Stored port_encoding is invalid: {e}")))?;
+    for (id, entry) in changes {
+        let key = id.as_base_64();
+        match entry {
+            Some(author) => {
+                entries.insert(key, author.clone());
+            }
+            None => {
+                if entries
+                    .get(&key)
+                    .is_some_and(|stored| stored.source == PortEncodingSource::Author)
+                {
+                    entries.remove(&key);
+                }
+            }
+        }
+    }
+    feagi_structures::genomic::brain_regions::set_region_port_encoding(region, &entries);
+    Ok(())
 }
 
 /// Reject duplicate ids across input and output designation.

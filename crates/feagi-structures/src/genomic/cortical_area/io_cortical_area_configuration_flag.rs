@@ -295,6 +295,65 @@ impl IOCorticalAreaConfigurationFlag {
     }
 }
 
+/// Label text for an area that has no value for a flag-derived field.
+pub const NOT_APPLICABLE_LABEL: &str = "Not Applicable";
+
+impl IOCorticalAreaConfigurationFlag {
+    /// Signedness label shown for the flag (for example `"Percentage Signed"`).
+    pub const fn signage_label(&self) -> &'static str {
+        match self {
+            Self::SignedPercentage(..)
+            | Self::SignedPercentage2D(..)
+            | Self::SignedPercentage3D(..)
+            | Self::SignedPercentage4D(..) => "Percentage Signed",
+            Self::Percentage(..)
+            | Self::Percentage2D(..)
+            | Self::Percentage3D(..)
+            | Self::Percentage4D(..) => "Percentage Unsigned",
+            Self::CartesianPlane(..) => "Cartesian Plane",
+            Self::Misc(..) => "Misc",
+            Self::PoseEstimation(..) => "Pose Estimation",
+            Self::Boolean => "Boolean",
+        }
+    }
+
+    /// Frame-handling ("behavior") label for the flag; `"Not Applicable"` for `Boolean`.
+    pub const fn behavior_label(&self) -> &'static str {
+        match self {
+            Self::Boolean => NOT_APPLICABLE_LABEL,
+            Self::CartesianPlane(frame)
+            | Self::Misc(frame)
+            | Self::PoseEstimation(frame, _)
+            | Self::Percentage(frame, _)
+            | Self::Percentage2D(frame, _)
+            | Self::Percentage3D(frame, _)
+            | Self::Percentage4D(frame, _)
+            | Self::SignedPercentage(frame, _)
+            | Self::SignedPercentage2D(frame, _)
+            | Self::SignedPercentage3D(frame, _)
+            | Self::SignedPercentage4D(frame, _) => frame.label(),
+        }
+    }
+
+    /// Neuron-positioning ("coding type") label for the flag; `"Not Applicable"` for variants
+    /// that carry no positioning.
+    pub const fn coding_type_label(&self) -> &'static str {
+        match self {
+            Self::Percentage(_, positioning)
+            | Self::Percentage2D(_, positioning)
+            | Self::Percentage3D(_, positioning)
+            | Self::Percentage4D(_, positioning)
+            | Self::SignedPercentage(_, positioning)
+            | Self::SignedPercentage2D(_, positioning)
+            | Self::SignedPercentage3D(_, positioning)
+            | Self::SignedPercentage4D(_, positioning) => positioning.label(),
+            Self::CartesianPlane(_) | Self::Misc(_) | Self::PoseEstimation(..) | Self::Boolean => {
+                NOT_APPLICABLE_LABEL
+            }
+        }
+    }
+}
+
 impl From<&IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBitmask {
     fn from(data_type: &IOCorticalAreaConfigurationFlag) -> Self {
         data_type.to_data_type_configuration_flag()
@@ -363,6 +422,14 @@ pub enum PercentageNeuronPositioning {
 }
 
 impl PercentageNeuronPositioning {
+    /// Wire/display label (`"Linear"` or `"Fractional"`), the same text as `Display`.
+    pub const fn label(self) -> &'static str {
+        match self {
+            PercentageNeuronPositioning::Linear => "Linear",
+            PercentageNeuronPositioning::Fractional => "Fractional",
+        }
+    }
+
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<PercentageNeuronPositioning, FeagiDataError> {
@@ -442,6 +509,14 @@ pub enum FrameChangeHandling {
 }
 
 impl FrameChangeHandling {
+    /// Wire/display label (`"Absolute"` or `"Incremental"`), the same text as `Display`.
+    pub const fn label(self) -> &'static str {
+        match self {
+            FrameChangeHandling::Absolute => "Absolute",
+            FrameChangeHandling::Incremental => "Incremental",
+        }
+    }
+
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<FrameChangeHandling, FeagiDataError> {

@@ -14,10 +14,11 @@
 //!    and `cortical_mapping_dst` keys on other areas) are removed with it.
 //! 3. Brain-region membership and IO lists (`cortical_areas`, `inputs`,
 //!    `outputs`, `designated_inputs`, `designated_outputs`) lose entries that
-//!    reference no defined area.
+//!    reference no defined area. So does the `port_encoding` map, keyed by area id.
 
 use std::collections::HashSet;
 
+use feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY;
 use serde_json::{Map, Value};
 
 use super::{NormalizationDiagnostics, Normalizer};
@@ -232,6 +233,28 @@ fn prune_area_lists(
             false
         });
     }
+    prune_port_encoding(holder, region_id, label_prefix, defined, diag);
+}
+
+/// Drop `port_encoding` entries whose key names no defined area.
+fn prune_port_encoding(
+    holder: &mut Map<String, Value>,
+    region_id: &str,
+    label_prefix: &str,
+    defined: &HashSet<String>,
+    diag: &mut NormalizationDiagnostics,
+) {
+    let Some(Value::Object(entries)) = holder.get_mut(PORT_ENCODING_KEY) else {
+        return;
+    };
+    for id in sorted_keys(entries) {
+        if !defined.contains(&canonical_id(&id)) {
+            entries.remove(&id);
+            diag.record(format!(
+                "brain region {region_id}: pruned {label_prefix}{PORT_ENCODING_KEY} entry {id} (no defined area)"
+            ));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -406,5 +429,38 @@ mod tests {
             genome["brain_regions"]["root"]["cortical_areas"],
             json!(["anything"])
         );
+    }
+
+    #[test]
+    fn port_encoding_entries_without_a_defined_area_are_pruned() {
+        let entry = json!({
+            "kind": "Boolean", "signed": false, "frame": null, "positioning": null,
+            "source": "wiring"
+        });
+        let mut genome = json!({
+            "blueprint": { "area_a": {} },
+            "brain_regions": {
+                "root": {
+                    "port_encoding": { "area_a": entry.clone(), "gone_pp": entry.clone() },
+                    "properties": {
+                        "port_encoding": { "area_a": entry.clone(), "gone_qq": entry.clone() }
+                    }
+                }
+            }
+        });
+        let diag = V7Normalizer::new().normalize(&mut genome).unwrap();
+        let root = &genome["brain_regions"]["root"];
+        assert_eq!(root["port_encoding"], json!({ "area_a": entry }));
+        assert_eq!(
+            root["properties"]["port_encoding"],
+            json!({ "area_a": entry })
+        );
+        for id in ["gone_pp", "gone_qq"] {
+            assert!(
+                diag.transformations.iter().any(|t| t.contains(id)),
+                "{id} must be listed"
+            );
+        }
+        assert_eq!(diag.transformations.len(), 2);
     }
 }

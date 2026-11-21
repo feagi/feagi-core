@@ -680,3 +680,62 @@ async fn pending_scheduled_stimuli_follow_a_moved_area() {
     assert_eq!(ids.iter().filter(|id| **id == new_src).count(), 2);
     assert_eq!(ids.iter().filter(|id| **id == rig.other).count(), 1);
 }
+
+/// A designated port that is itself an IO area carries a `port_encoding` entry keyed by its id;
+/// moving the area re-keys the entry in the live region and in the genome store.
+#[tokio::test]
+async fn move_remaps_port_encoding_keys_in_live_region_and_genome() {
+    use feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY;
+
+    let _guard = TEST_LOCK.lock().await;
+    let rig = rig();
+    let old = rig.src.as_base_64();
+    let new_id = io_id(true, b"tst", 7);
+    let new = new_id.as_base_64();
+
+    // `src` is a designated input and an IPU: the recompute derives its entry from its own flag.
+    // Mirror that into the genome store, as the service write-back does.
+    rig.connectome
+        .write()
+        .recompute_brain_region_io_registry()
+        .unwrap();
+    let entry = {
+        let manager = rig.connectome.read();
+        let live = manager.get_brain_region(&rig.region_id).unwrap();
+        live.properties
+            .get(PORT_ENCODING_KEY)
+            .cloned()
+            .expect("entry derived for the designated IPU")
+    };
+    assert_eq!(entry[&old]["kind"], "Boolean");
+    {
+        let genome = rig.svc.get_current_genome_arc();
+        let mut genome = genome.write();
+        genome
+            .as_mut()
+            .unwrap()
+            .brain_regions
+            .get_mut(&rig.region_id)
+            .unwrap()
+            .properties
+            .insert(PORT_ENCODING_KEY.to_string(), entry.clone());
+    }
+
+    rig.svc.move_io_groups(vec![mv(&rig.src, 7)]).await.unwrap();
+
+    let expected = serde_json::json!({ new.clone(): entry[&old].clone() });
+    let manager = rig.connectome.read();
+    assert_eq!(
+        manager.get_brain_region(&rig.region_id).unwrap().properties[PORT_ENCODING_KEY],
+        expected,
+        "live region keys follow the move"
+    );
+    drop(manager);
+    let genome = rig.svc.get_current_genome_arc();
+    let genome = genome.read();
+    assert_eq!(
+        genome.as_ref().unwrap().brain_regions[&rig.region_id].properties[PORT_ENCODING_KEY],
+        expected,
+        "genome region keys follow the move"
+    );
+}

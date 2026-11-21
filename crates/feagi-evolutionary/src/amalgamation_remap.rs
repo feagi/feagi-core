@@ -14,6 +14,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::random::random_bytes;
 use crate::runtime::RuntimeGenome;
+use feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY;
 use feagi_structures::genomic::cortical_area::CorticalArea;
 use feagi_structures::genomic::cortical_area::CorticalAreaType;
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -48,8 +49,15 @@ fn allocate_unique_typed_id(
 }
 
 /// Rewrite the base64 area ids in a region's `inputs`, `outputs`, `designated_inputs` and
-/// `designated_outputs` property lists.
+/// `designated_outputs` property lists, and the keys of its `port_encoding` map.
 pub fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, String>) {
+    if let Some(Value::Object(entries)) = region.properties.get_mut(PORT_ENCODING_KEY) {
+        let taken = std::mem::take(entries);
+        for (area_id, entry) in taken {
+            let new_id = b64_remap.get(&area_id).cloned().unwrap_or(area_id);
+            entries.insert(new_id, entry);
+        }
+    }
     for key in [
         "inputs",
         "outputs",
@@ -463,6 +471,9 @@ pub struct AmalgamationRegionPlan {
     pub host_designated_inputs: Vec<String>,
     /// Designated outputs for the host region (same rule as inputs).
     pub host_designated_outputs: Vec<String>,
+    /// `port_encoding` entries for the host region's designated ports (same rule as inputs);
+    /// empty when none.
+    pub host_port_encoding: serde_json::Map<String, Value>,
     /// Guest region id -> region id it became in the host (the host amalgamation region id
     /// for the single top-level region). Guest regions outside the planned tree are absent.
     pub region_map: HashMap<String, String>,
@@ -496,6 +507,23 @@ fn filtered_io(region: &BrainRegion, key: &str, member_area_ids: &HashSet<String
     let mut list = json_string_list(region.properties.get(key));
     list.retain(|id| member_area_ids.contains(id));
     list
+}
+
+/// The region's `port_encoding` entries kept for the imported designated ports: the key must be
+/// one of `designated` (already filtered to imported areas). Keys are already remapped.
+fn filtered_port_encoding(
+    region: &BrainRegion,
+    designated: &[&[String]],
+) -> serde_json::Map<String, Value> {
+    let mut kept = serde_json::Map::new();
+    if let Some(Value::Object(entries)) = region.properties.get(PORT_ENCODING_KEY) {
+        for (area_id, entry) in entries {
+            if designated.iter().any(|list| list.contains(area_id)) {
+                kept.insert(area_id.clone(), entry.clone());
+            }
+        }
+    }
+    kept
 }
 
 /// Plan the guest region tree for amalgamation. Pure: no I/O, no host state.
@@ -562,6 +590,13 @@ pub fn plan_amalgamation_regions(
             plan.host_designated_inputs = filtered_io(region, "designated_inputs", member_area_ids);
             plan.host_designated_outputs =
                 filtered_io(region, "designated_outputs", member_area_ids);
+            plan.host_port_encoding = filtered_port_encoding(
+                region,
+                &[
+                    plan.host_designated_inputs.as_slice(),
+                    plan.host_designated_outputs.as_slice(),
+                ],
+            );
         } else {
             let parent_region_id = match guest_parent_id(region) {
                 Some(p) if mapped.contains_key(p) => mapped[p].clone(),
@@ -573,7 +608,7 @@ pub fn plan_amalgamation_regions(
                 match k.as_str() {
                     "parent_region_id" | "areas" | "cortical_areas" | "regions"
                     | "child_regions" | "coordinate_3d" | "inputs" | "outputs"
-                    | "designated_inputs" | "designated_outputs" => {}
+                    | "designated_inputs" | "designated_outputs" | PORT_ENCODING_KEY => {}
                     _ => {
                         properties.insert(k.clone(), v.clone());
                     }
@@ -583,11 +618,22 @@ pub fn plan_amalgamation_regions(
                 "coordinate_3d".to_string(),
                 offset_coordinate_3d(region.properties.get("coordinate_3d"), origin),
             );
-            for key in ["designated_inputs", "designated_outputs"] {
-                let list = filtered_io(region, key, member_area_ids);
+            let designated_inputs = filtered_io(region, "designated_inputs", member_area_ids);
+            let designated_outputs = filtered_io(region, "designated_outputs", member_area_ids);
+            let port_encoding = filtered_port_encoding(
+                region,
+                &[designated_inputs.as_slice(), designated_outputs.as_slice()],
+            );
+            for (key, list) in [
+                ("designated_inputs", designated_inputs),
+                ("designated_outputs", designated_outputs),
+            ] {
                 if !list.is_empty() {
                     properties.insert(key.to_string(), serde_json::json!(list));
                 }
+            }
+            if !port_encoding.is_empty() {
+                properties.insert(PORT_ENCODING_KEY.to_string(), Value::Object(port_encoding));
             }
             mapped.insert(gid, new_id.clone());
             plan.sub_regions.push(AmalgamationRegionSpec {
@@ -1159,6 +1205,99 @@ mod tests {
             Some(host_key.as_str())
         );
         assert!(r.contains_area(&b.cortical_id));
+    }
+
+    fn wiring_entry() -> Value {
+        serde_json::json!({
+            "kind": "Boolean", "signed": false, "frame": null, "positioning": null,
+            "source": "wiring"
+        })
+    }
+
+    #[test]
+    fn remap_region_io_lists_remaps_port_encoding_keys() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        let mut region =
+            BrainRegion::new(RegionID::new(), "r".to_string(), RegionType::Undefined).unwrap();
+        region.properties.insert(
+            PORT_ENCODING_KEY.to_string(),
+            serde_json::json!({"old_a": wiring_entry(), "kept_b": wiring_entry()}),
+        );
+        let remap: HashMap<String, String> = [("old_a".to_string(), "new_a".to_string())].into();
+        remap_region_io_lists(&mut region, &remap);
+        assert_eq!(
+            region.properties[PORT_ENCODING_KEY],
+            serde_json::json!({"new_a": wiring_entry(), "kept_b": wiring_entry()})
+        );
+    }
+
+    #[test]
+    fn amalgamation_remaps_port_encoding_keys_and_plan_carries_them() {
+        let a = plan_area(b'c');
+        let outside = plan_area(b'c');
+        let (t, top) = plan_region("t", None, &[], vec![]);
+        let (m, mid) = plan_region(
+            "m",
+            Some(&t),
+            &[&a],
+            vec![
+                (
+                    "designated_inputs",
+                    serde_json::json!([a.cortical_id.as_base_64()]),
+                ),
+                (
+                    PORT_ENCODING_KEY,
+                    serde_json::json!({
+                        a.cortical_id.as_base_64(): wiring_entry(),
+                        outside.cortical_id.as_base_64(): wiring_entry(),
+                    }),
+                ),
+            ],
+        );
+        let mut g = plan_genome(vec![a.clone(), outside.clone()], vec![(t, top), (m, mid)]);
+        let mut host = HashSet::new();
+        host.insert(a.cortical_id.as_base_64());
+        let pairs = remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut g, &host).unwrap();
+        let new_a = pairs[&a.cortical_id.as_base_64()].clone();
+        let members: HashSet<String> = [new_a.clone()].into_iter().collect();
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &members);
+        // Sub-region copy: key remapped, entry for the non-imported area dropped.
+        assert_eq!(
+            plan.sub_regions[0].properties[PORT_ENCODING_KEY],
+            serde_json::json!({ new_a.clone(): wiring_entry() })
+        );
+    }
+
+    #[test]
+    fn plan_host_region_carries_port_encoding_of_its_designated_ports() {
+        let a = plan_area(b'c');
+        let b = plan_area(b'c');
+        let (id1, r1) = plan_region(
+            "only",
+            None,
+            &[&a, &b],
+            vec![
+                (
+                    "designated_inputs",
+                    serde_json::json!([a.cortical_id.as_base_64()]),
+                ),
+                (
+                    PORT_ENCODING_KEY,
+                    serde_json::json!({
+                        a.cortical_id.as_base_64(): wiring_entry(),
+                        b.cortical_id.as_base_64(): wiring_entry(),
+                    }),
+                ),
+            ],
+        );
+        let g = plan_genome(vec![a.clone(), b.clone()], vec![(id1, r1)]);
+        let plan = plan_amalgamation_regions(&g, "h", (0, 0, 0), &all_ids(&[&a, &b]));
+        // Only the designated port keeps an entry.
+        assert_eq!(plan.host_port_encoding.len(), 1);
+        assert_eq!(
+            plan.host_port_encoding[&a.cortical_id.as_base_64()],
+            wiring_entry()
+        );
     }
 }
 

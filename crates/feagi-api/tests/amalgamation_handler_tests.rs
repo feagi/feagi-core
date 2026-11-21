@@ -1222,3 +1222,83 @@ async fn deleted_modulator_driver_leaves_no_stale_root_member() {
         .collect();
     assert!(stale.is_empty(), "stale root members {stale:?}");
 }
+
+/// A guest region's designated ports carry `port_encoding` entries. After the import the host
+/// region holds both, under the new (remapped) area ids, each with its own source, in the live
+/// region and in the saved genome.
+#[tokio::test]
+async fn port_encoding_arrives_on_the_host_region_with_sources_and_remapped_keys() {
+    let brain = build_host(1_000_000).await;
+    let port_in = cortical_id(b'c', b'a');
+    let port_out = cortical_id(b'c', b'b');
+    let mut guest = empty_guest();
+    add_area(&mut guest, guest_area(port_in, "port_in", custom_kind(), 0));
+    add_area(
+        &mut guest,
+        guest_area(port_out, "port_out", custom_kind(), 4),
+    );
+    let root = add_guest_root(&mut guest, &[]);
+    let circuit = add_region(&mut guest, "circuit", Some(&root), &[&port_in, &port_out]);
+    let wiring = json!({
+        "kind": "Percentage", "signed": false, "frame": "Absolute",
+        "positioning": "Linear", "source": "wiring"
+    });
+    let author = json!({
+        "kind": "SignedPercentage", "signed": true, "frame": null,
+        "positioning": "Fractional", "source": "author"
+    });
+    {
+        let region = guest
+            .brain_regions
+            .get_mut(&circuit)
+            .expect("guest circuit");
+        region.properties.insert(
+            "designated_inputs".to_string(),
+            json!([port_in.as_base_64()]),
+        );
+        region.properties.insert(
+            "designated_outputs".to_string(),
+            json!([port_out.as_base_64()]),
+        );
+        region.properties.insert(
+            "port_encoding".to_string(),
+            json!({ port_in.as_base_64(): wiring.clone(), port_out.as_base_64(): author.clone() }),
+        );
+    }
+
+    let (amalgamation_id, result) = brain
+        .augment(&guest, AmalgamationSource::ExternalGenome)
+        .await;
+    result.expect("augment succeeds");
+
+    // Guest custom ids are remapped on import; the entries follow the new ids.
+    let new_in = brain.area_id("port_in").await;
+    let new_out = brain.area_id("port_out").await;
+    assert_ne!(new_in, port_in.as_base_64());
+    let expected = json!({ new_in.clone(): wiring, new_out.clone(): author });
+
+    let host = brain
+        .state
+        .connectome_service
+        .get_brain_region(&amalgamation_id)
+        .await
+        .unwrap();
+    assert_eq!(host.properties["port_encoding"], expected, "live region");
+
+    let saved = brain
+        .state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .unwrap();
+    let saved: Value = serde_json::from_str(&saved).unwrap();
+    let saved_region = &saved["brain_regions"][&amalgamation_id];
+    let saved_encoding = saved_region
+        .get("port_encoding")
+        .or_else(|| saved_region["properties"].get("port_encoding"))
+        .expect("saved genome keeps port_encoding");
+    assert_eq!(*saved_encoding, expected, "saved genome");
+}

@@ -1344,6 +1344,7 @@ async fn apply_amalgamation(
     // Cross-region edges are stripped on export, so connectivity alone does not restore them.
     let designated_inputs = region_plan.host_designated_inputs.clone();
     let designated_outputs = region_plan.host_designated_outputs.clone();
+    let port_encoding = region_plan.host_port_encoding.clone();
     if !designated_inputs.is_empty() || !designated_outputs.is_empty() {
         let mut io_properties: HashMap<String, serde_json::Value> = HashMap::new();
         io_properties.insert(
@@ -1364,6 +1365,20 @@ async fn apply_amalgamation(
                 amalgamation_id,
                 error
             );
+        } else if !port_encoding.is_empty() {
+            // Internal import path: entries keep their source (`wiring` stays `wiring`, `author`
+            // stays `author`). The public region update would store every entry as `author`.
+            if let Err(error) = connectome_service
+                .import_region_port_encoding(&amalgamation_id, port_encoding)
+                .await
+            {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "Amalgamation created region {} but could not copy its port encoding: {}",
+                    amalgamation_id,
+                    error
+                );
+            }
         }
     }
 
@@ -1470,6 +1485,7 @@ async fn apply_amalgamation(
             "outputs": region.properties.get("outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
             "designated_inputs": region.properties.get("designated_inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
             "designated_outputs": region.properties.get("designated_outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "port_encoding": crate::endpoints::region::port_encoding_json(&region.properties, &region.cortical_areas),
         }));
     }
 

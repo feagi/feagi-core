@@ -681,6 +681,28 @@ mod tests {
     }
 
     #[test]
+    fn subset_keeps_port_encoding_on_the_exported_region() {
+        let (mut g, _parent_key, child_key) = runtime_parent_and_child();
+        let entry = serde_json::json!({
+            "kind": "Boolean", "signed": false, "frame": null, "positioning": null,
+            "source": "author"
+        });
+        g.brain_regions
+            .get_mut(&child_key)
+            .unwrap()
+            .properties
+            .insert(
+                "port_encoding".to_string(),
+                serde_json::json!({ "AAAAAAAAAAA=": entry.clone() }),
+            );
+        let sub = subset_runtime_genome_for_region_branch(&g, &child_key, |_| 0).expect("subset");
+        assert_eq!(
+            sub.brain_regions[&child_key].properties["port_encoding"],
+            serde_json::json!({ "AAAAAAAAAAA=": entry })
+        );
+    }
+
+    #[test]
     fn subset_named_root_is_not_double_wrapped() {
         let root_id = RegionID::new();
         let child_id = RegionID::new();

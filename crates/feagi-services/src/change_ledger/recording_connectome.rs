@@ -351,6 +351,17 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(())
     }
 
+    async fn import_region_port_encoding(
+        &self,
+        region_id: &str,
+        entries: serde_json::Map<String, serde_json::Value>,
+    ) -> ServiceResult<()> {
+        // Part of region import, which is not a replayable ledger operation.
+        self.inner
+            .import_region_port_encoding(region_id, entries)
+            .await
+    }
+
     async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>> {
         self.inner.list_classifiers().await
     }

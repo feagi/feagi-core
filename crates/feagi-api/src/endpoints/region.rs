@@ -8,7 +8,7 @@ use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
 use feagi_services::types::CreateBrainRegionParams;
-use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_structures::genomic::brain_regions::{RegionID, PORT_ENCODING_KEY};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -82,10 +82,16 @@ fn queue_amalgamation_from_genome_json_str(
 ///     "inputs": [],
 ///     "outputs": [],
 ///     "designated_inputs": [],
-///     "designated_outputs": []
+///     "designated_outputs": [],
+///     "port_encoding": {}
 ///   }
 /// }
 /// ```
+///
+/// `port_encoding` maps each designated port's area id (base64) to what the port carries:
+/// `{ "kind": str|null, "signed": bool|null, "frame": str|null, "positioning": str|null,
+/// "source": "wiring"|"author" }`. `wiring` entries are derived by FEAGI from the IPU/OPU areas
+/// wired to the port; `author` entries were set through `PUT /v1/region/region`.
 #[utoipa::path(
     get,
     path = "/v1/region/regions_members",
@@ -231,6 +237,7 @@ pub async fn get_regions_members(
                         "outputs": outputs,
                         "designated_inputs": designated_inputs,
                         "designated_outputs": designated_outputs,
+                        "port_encoding": port_encoding_json(&region.properties, &region.cortical_areas),
                         "classifier_circuit": region
                             .properties
                             .get("classifier_circuit")
@@ -389,7 +396,54 @@ pub async fn post_region(
 }
 
 /// PUT /v1/region/region
-#[utoipa::path(put, path = "/v1/region/region", tag = "region")]
+///
+/// Update a brain region. `region_id` is required; every other key is a property to change
+/// (`title`, `description`, `coordinate_2d`, `coordinate_3d`, `designated_inputs`,
+/// `designated_outputs`, `port_encoding`, ...).
+///
+/// `port_encoding` sets or clears author entries for designated ports. It is a delta keyed by
+/// area id (base64), not the whole map; ports not named keep their entry:
+///
+/// * An object entry (`kind`, `signed`, `frame`, `positioning`; an absent field is `null`) stores
+///   an entry with `source: "author"`. `kind` is one of `Boolean`, `Percentage`, `Percentage2D`,
+///   `Percentage3D`, `Percentage4D`, `SignedPercentage`, `SignedPercentage2D`,
+///   `SignedPercentage3D`, `SignedPercentage4D`, `CartesianPlane`, `Misc`, `PoseEstimation`;
+///   `frame` is `Absolute` or `Incremental`; `positioning` is `Linear` or `Fractional`; `signed`
+///   is a boolean. `source` is assigned by the server and is rejected in the request.
+/// * `null` clears the area's author entry; FEAGI then derives the entry from the port's wiring
+///   again. A `wiring` entry or a missing entry is left as it is.
+///
+/// The area must be a designated input or output of the region after the same request, else 409.
+/// An unknown field, a value outside the vocabulary or a key that is not a cortical id is 400.
+/// An author entry is never overwritten by wiring. Undesignating the area, or removing it from
+/// the region, drops its entry.
+#[utoipa::path(
+    put,
+    path = "/v1/region/region",
+    tag = "region",
+    request_body(
+        content = HashMap<String, serde_json::Value>,
+        description = "region_id plus the properties to update; see the endpoint description for port_encoding",
+        example = json!({
+            "region_id": "00000000-0000-0000-0000-000000000000",
+            "port_encoding": {
+                "X19fcG93ZXI=": {
+                    "kind": "SignedPercentage",
+                    "signed": true,
+                    "frame": "Absolute",
+                    "positioning": "Fractional"
+                },
+                "X19fcGFpbl8=": null
+            }
+        })
+    ),
+    responses(
+        (status = 200, description = "Brain region updated", body = HashMap<String, String>),
+        (status = 400, description = "Invalid input, including an invalid port_encoding entry"),
+        (status = 404, description = "Region not found"),
+        (status = 409, description = "port_encoding set for an area that is not a designated port of the region")
+    )
+)]
 pub async fn put_region(
     State(state): State<ApiState>,
     Json(mut request): Json<HashMap<String, serde_json::Value>>,
@@ -739,6 +793,10 @@ pub async fn get_region_detail(
         "parent_region_id".to_string(),
         serde_json::json!(region.parent_id),
     );
+    response.insert(
+        PORT_ENCODING_KEY.to_string(),
+        port_encoding_json(&region.properties, &region.cortical_areas),
+    );
 
     Ok(Json(response))
 }
@@ -783,6 +841,26 @@ pub async fn put_change_cortical_area_region(
     )])))
 }
 
+/// The region's `port_encoding` for a read response: `{ "<area id>": { kind, signed, frame,
+/// positioning, source } }`, limited to current members of the region. `{}` when it has none.
+pub(crate) fn port_encoding_json(
+    properties: &HashMap<String, serde_json::Value>,
+    members: &[String],
+) -> serde_json::Value {
+    let entries: serde_json::Map<String, serde_json::Value> = properties
+        .get(PORT_ENCODING_KEY)
+        .and_then(|value| value.as_object())
+        .map(|object| {
+            object
+                .iter()
+                .filter(|(area_id, _)| members.contains(area_id))
+                .map(|(area_id, entry)| (area_id.clone(), entry.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    serde_json::Value::Object(entries)
+}
+
 /// Plain-text region purpose from genome `properties.description`.
 /// Missing, null, or non-string values are an empty string (no invented text).
 fn region_description_from_properties(properties: &HashMap<String, serde_json::Value>) -> String {
@@ -795,8 +873,33 @@ fn region_description_from_properties(properties: &HashMap<String, serde_json::V
 
 #[cfg(test)]
 mod tests {
-    use super::region_description_from_properties;
+    use super::{port_encoding_json, region_description_from_properties};
     use std::collections::HashMap;
+
+    #[test]
+    fn port_encoding_json_is_empty_object_when_absent() {
+        assert_eq!(
+            port_encoding_json(&HashMap::new(), &["area_a".to_string()]),
+            serde_json::json!({})
+        );
+    }
+
+    #[test]
+    fn port_encoding_json_keeps_only_member_areas() {
+        let entry = serde_json::json!({
+            "kind": "Boolean", "signed": false, "frame": null, "positioning": null,
+            "source": "wiring"
+        });
+        let mut properties = HashMap::new();
+        properties.insert(
+            "port_encoding".to_string(),
+            serde_json::json!({ "area_a": entry.clone(), "gone_b": entry.clone() }),
+        );
+        assert_eq!(
+            port_encoding_json(&properties, &["area_a".to_string()]),
+            serde_json::json!({ "area_a": entry })
+        );
+    }
 
     #[test]
     fn description_from_string_property() {

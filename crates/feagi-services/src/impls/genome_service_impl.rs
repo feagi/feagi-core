@@ -39,37 +39,6 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
-fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
-    match frame {
-        FrameChangeHandling::Absolute => "Absolute",
-        FrameChangeHandling::Incremental => "Incremental",
-    }
-}
-
-fn positioning_label(positioning: PercentageNeuronPositioning) -> &'static str {
-    match positioning {
-        PercentageNeuronPositioning::Linear => "Linear",
-        PercentageNeuronPositioning::Fractional => "Fractional",
-    }
-}
-
-fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::SignedPercentage(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(..) => "Percentage Signed",
-        IOCorticalAreaConfigurationFlag::Percentage(..)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(..)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(..)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
-        IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
-        IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
-        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
-        IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
-    }
-}
-
 /// Merge default template and memory properties into provided values.
 /// Existing values always override defaults.
 fn merge_memory_area_properties(
@@ -175,25 +144,6 @@ fn validate_mp_encoding_update(
     feagi_evolutionary::validate_memory_mp_properties(&merged).map_err(ServiceError::InvalidInput)
 }
 
-fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
-        IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
-        | IOCorticalAreaConfigurationFlag::Misc(frame)
-        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => {
-            frame_handling_label(*frame)
-        }
-    }
-}
-
 fn resolve_non_overlapping_position(
     requested_position: (i32, i32, i32),
     area_width: usize,
@@ -225,25 +175,6 @@ fn resolve_non_overlapping_position(
     }
     occupied_positions.insert(candidate);
     Ok(candidate)
-}
-
-fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::Percentage(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, positioning) => {
-            positioning_label(*positioning)
-        }
-        IOCorticalAreaConfigurationFlag::CartesianPlane(..)
-        | IOCorticalAreaConfigurationFlag::Misc(..)
-        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
-        | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
-    }
 }
 
 fn io_unit_reference_from_cortical_id(cortical_id: &CorticalID) -> Option<[u8; 3]> {
@@ -293,13 +224,13 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
             return None;
         }
     };
-    signage_options.push(signage_label_from_flag(&io_flag).to_string());
+    signage_options.push(io_flag.signage_label().to_string());
 
     let supports_frame_handling = !matches!(io_flag, IOCorticalAreaConfigurationFlag::Boolean);
     if supports_frame_handling {
         if let Some(frames) = allowed_frames {
             for frame in frames {
-                behavior_options.push(frame_handling_label(*frame).to_string());
+                behavior_options.push(frame.label().to_string());
             }
         } else {
             behavior_options.push("Absolute".to_string());
@@ -5373,13 +5304,13 @@ impl GenomeServiceImpl {
             };
             let coding_signage = io_flag
                 .as_ref()
-                .map(|flag| signage_label_from_flag(flag).to_string());
+                .map(|flag| flag.signage_label().to_string());
             let coding_behavior = io_flag
                 .as_ref()
-                .map(|flag| behavior_label_from_flag(flag).to_string());
+                .map(|flag| flag.behavior_label().to_string());
             let coding_type = io_flag
                 .as_ref()
-                .map(|flag| coding_type_label_from_flag(flag).to_string());
+                .map(|flag| flag.coding_type_label().to_string());
             let coding_options = if is_io_area {
                 io_coding_options_for_unit(&cortical_id_typed)
             } else {
@@ -5594,13 +5525,13 @@ impl GenomeServiceImpl {
         };
         let coding_signage = io_flag
             .as_ref()
-            .map(|flag| signage_label_from_flag(flag).to_string());
+            .map(|flag| flag.signage_label().to_string());
         let coding_behavior = io_flag
             .as_ref()
-            .map(|flag| behavior_label_from_flag(flag).to_string());
+            .map(|flag| flag.behavior_label().to_string());
         let coding_type = io_flag
             .as_ref()
-            .map(|flag| coding_type_label_from_flag(flag).to_string());
+            .map(|flag| flag.coding_type_label().to_string());
         let coding_options = if is_io_area {
             io_coding_options_for_unit(&cortical_id_typed)
         } else {
@@ -5812,13 +5743,13 @@ impl GenomeServiceImpl {
         };
         let coding_signage = io_flag
             .as_ref()
-            .map(|flag| signage_label_from_flag(flag).to_string());
+            .map(|flag| flag.signage_label().to_string());
         let coding_behavior = io_flag
             .as_ref()
-            .map(|flag| behavior_label_from_flag(flag).to_string());
+            .map(|flag| flag.behavior_label().to_string());
         let coding_type = io_flag
             .as_ref()
-            .map(|flag| coding_type_label_from_flag(flag).to_string());
+            .map(|flag| flag.coding_type_label().to_string());
         let coding_options = if is_io_area {
             io_coding_options_for_unit(&cortical_id_typed)
         } else {

@@ -31,7 +31,7 @@ Licensed under the Apache License, Version 2.0
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -45,6 +45,10 @@ use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAre
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
+use feagi_structures::genomic::brain_regions::{
+    decode_io_area, region_port_encoding, set_region_port_encoding, IoAreaDecode, IoPortSide,
+    PortEncoding, PortEncodingSource, PORT_ENCODING_KEY,
+};
 use feagi_structures::genomic::cortical_area::{
     default_psp_uniform_distribution, CorticalAreaType, CorticalID, CustomCorticalType,
     PSP_UNIFORM_DISTRIBUTION_KEY,
@@ -209,6 +213,15 @@ type NeuronData = (
     u16,
     bool,
 );
+
+/// True when a `cortical_mapping_dst` value carries at least one rule.
+fn mapping_has_rules(rules: &serde_json::Value) -> bool {
+    match rules {
+        serde_json::Value::Array(items) => !items.is_empty(),
+        serde_json::Value::Object(map) => !map.is_empty(),
+        _ => false,
+    }
+}
 
 fn rule_modulator_ids(rule_obj: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
     rule_obj
@@ -1598,7 +1611,10 @@ impl ConnectomeManager {
 
         // Union in declared interface lists so export/import and pre-wired regions show IO without edges.
         // Ids that are no longer region members are dropped from the stored designated lists too.
+        let ipu_sources = self.ipu_sources_by_destination();
         let mut pruned_designated: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
+        let mut port_encoding_by_region: HashMap<String, BTreeMap<String, PortEncoding>> =
+            HashMap::new();
         for rid in &region_ids {
             let Some(region) = self.brain_regions.get_region(rid) else {
                 continue;
@@ -1640,6 +1656,10 @@ impl ConnectomeManager {
             }
             kept_in.sort();
             kept_out.sort();
+            port_encoding_by_region.insert(
+                rid.clone(),
+                self.derive_region_port_encoding(rid, region, &kept_in, &kept_out, &ipu_sources)?,
+            );
             pruned_designated.insert(rid.clone(), (kept_in, kept_out));
         }
 
@@ -1682,6 +1702,10 @@ impl ConnectomeManager {
                     .insert("outputs".to_string(), serde_json::json!(outputs.clone()));
             }
 
+            if let Some(entries) = port_encoding_by_region.remove(&rid) {
+                set_region_port_encoding(region, &entries);
+            }
+
             if let Some((kept_in, kept_out)) = pruned_designated.remove(&rid) {
                 if region
                     .properties
@@ -1709,6 +1733,145 @@ impl ConnectomeManager {
         self.refresh_brain_regions_hash();
 
         Ok(computed)
+    }
+
+    /// IPU areas with a mapping that carries rules, indexed by destination (base64): the sensory
+    /// sources wired directly to each area.
+    fn ipu_sources_by_destination(&self) -> HashMap<String, Vec<CorticalID>> {
+        let mut sources: HashMap<String, Vec<CorticalID>> = HashMap::new();
+        for (src_id, src_area) in &self.cortical_areas {
+            if src_id.as_bytes()[0] != b'i' {
+                continue;
+            }
+            let Some(dstmap) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+            for (dst_b64, rules) in dstmap {
+                if mapping_has_rules(rules) {
+                    sources.entry(dst_b64.clone()).or_default().push(*src_id);
+                }
+            }
+        }
+        sources
+    }
+
+    /// The region's `port_encoding` after this recompute: stored entries of areas that are still
+    /// designated, with `wiring` entries re-derived (see [`Self::derive_port_encoding_from_wiring`]).
+    /// An `author` entry is never touched.
+    fn derive_region_port_encoding(
+        &self,
+        region_id: &str,
+        region: &BrainRegion,
+        designated_inputs: &[String],
+        designated_outputs: &[String],
+        ipu_sources: &HashMap<String, Vec<CorticalID>>,
+    ) -> BduResult<BTreeMap<String, PortEncoding>> {
+        let mut entries = region_port_encoding(region).map_err(|e| {
+            BduError::InvalidArea(format!(
+                "Unable to recompute port_encoding of region '{region_id}': {e}"
+            ))
+        })?;
+        let designated: HashSet<&String> = designated_inputs
+            .iter()
+            .chain(designated_outputs.iter())
+            .collect();
+        entries.retain(|area_id, _| designated.contains(area_id));
+        for (ports, is_input) in [(designated_inputs, true), (designated_outputs, false)] {
+            for port_b64 in ports {
+                let is_author = entries
+                    .get(port_b64)
+                    .is_some_and(|entry| entry.source == PortEncodingSource::Author);
+                if is_author {
+                    continue;
+                }
+                let port_id = CorticalID::try_from_base_64(port_b64).map_err(|e| {
+                    BduError::InvalidArea(format!(
+                        "Unable to recompute port_encoding: invalid designated id '{port_b64}': {e}"
+                    ))
+                })?;
+                if let Some(derived) = self.derive_port_encoding_from_wiring(
+                    region_id,
+                    &port_id,
+                    is_input,
+                    ipu_sources,
+                ) {
+                    entries.insert(port_b64.clone(), derived);
+                }
+            }
+        }
+        Ok(entries)
+    }
+
+    /// Port encoding of one designated port, or `None` to keep the stored entry unchanged.
+    ///
+    /// * The port is itself an IPU/OPU area: its own flags.
+    /// * Otherwise the IO areas wired directly across the region boundary (IPU to a designated
+    ///   input, designated output to OPU, mappings with rules only): each field the peers agree
+    ///   on is kept, a field they disagree on is unknown.
+    /// * No such peer, or a peer whose flag cannot be decoded: `None` (region export strips
+    ///   cross-region mappings, so a stored entry must outlive a missing peer).
+    fn derive_port_encoding_from_wiring(
+        &self,
+        region_id: &str,
+        port_id: &CorticalID,
+        is_input: bool,
+        ipu_sources: &HashMap<String, Vec<CorticalID>>,
+    ) -> Option<PortEncoding> {
+        match decode_io_area(port_id) {
+            IoAreaDecode::Fields(_, fields) => {
+                return Some(PortEncoding::from_flag_fields(&fields))
+            }
+            IoAreaDecode::Refused(_) => return None,
+            IoAreaDecode::NotIo => {}
+        }
+        let (wanted, peers): (IoPortSide, Vec<CorticalID>) = if is_input {
+            (
+                IoPortSide::Input,
+                ipu_sources
+                    .get(&port_id.as_base_64())
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        } else {
+            let destinations = self
+                .cortical_areas
+                .get(port_id)
+                .and_then(|area| area.properties.get("cortical_mapping_dst"))
+                .and_then(|v| v.as_object())
+                .map(|dstmap| {
+                    dstmap
+                        .iter()
+                        .filter(|(_, rules)| mapping_has_rules(rules))
+                        .filter_map(|(dst_b64, _)| CorticalID::try_from_base_64(dst_b64).ok())
+                        .collect()
+                })
+                .unwrap_or_default();
+            (IoPortSide::Output, destinations)
+        };
+        let mut fields = Vec::new();
+        for peer in peers {
+            // Only areas outside the port's own region count as wired across its boundary.
+            if self
+                .brain_regions
+                .find_region_containing_area(&peer)
+                .as_deref()
+                == Some(region_id)
+            {
+                continue;
+            }
+            match decode_io_area(&peer) {
+                IoAreaDecode::Fields(side, peer_fields) if side == wanted => {
+                    fields.push(peer_fields)
+                }
+                IoAreaDecode::Refused(side) if side == wanted => return None,
+                _ => {}
+            }
+        }
+        PortEncoding::from_peer_fields(&fields)
     }
 
     /// Get the root brain region ID (region with no parent)
@@ -10929,6 +11092,47 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Import stored `port_encoding` entries onto a region, keeping each entry's `source`.
+    ///
+    /// Internal path for region import (amalgamation); the public region update only stores
+    /// `author` entries. Every key must be a designated port of the region, else
+    /// `RegionIoPolicyViolation`. Imported entries replace the region's entry for the same area.
+    /// The recompute that follows re-derives `wiring` entries from the current wiring and leaves
+    /// `author` entries alone.
+    pub fn import_brain_region_port_encoding(
+        &mut self,
+        region_id: &str,
+        entries: &serde_json::Map<String, serde_json::Value>,
+    ) -> BduResult<BrainRegionIoRegistry> {
+        let imported = crate::region_io_designation::parse_stored_port_encoding(entries)?;
+        let region = self.brain_regions.get_region(region_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Brain region {} not found", region_id))
+        })?;
+        let (inputs, outputs) = crate::region_io_designation::merged_designated_lists(
+            region,
+            &std::collections::HashMap::new(),
+        )?;
+        for area_id in imported.keys() {
+            let id = CorticalID::try_from_base_64(area_id)?;
+            if !inputs.iter().chain(outputs.iter()).any(|d| *d == id) {
+                return Err(BduError::RegionIoPolicyViolation(format!(
+                    "Cannot import port_encoding for area {area_id}: it is not a designated input or output of brain region {region_id}"
+                )));
+            }
+        }
+        let region = self
+            .brain_regions
+            .get_region_mut(region_id)
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!("Brain region {} not found", region_id))
+            })?;
+        let mut stored = region_port_encoding(region)
+            .map_err(|e| BduError::InvalidArea(format!("Stored port_encoding is invalid: {e}")))?;
+        stored.extend(imported);
+        set_region_port_encoding(region, &stored);
+        self.recompute_brain_region_io_registry()
+    }
+
     /// Update brain region properties with generic property map
     ///
     /// Supports updating any brain region property including coordinates, title, description, etc.
@@ -10949,13 +11153,14 @@ impl ConnectomeManager {
     ) -> BduResult<Option<BrainRegionIoRegistry>> {
         use tracing::{debug, info};
 
+        let port_encoding_changes =
+            crate::region_io_designation::parse_port_encoding_patch(&properties)?;
         let should_recompute_io = properties
             .contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
-            || properties.contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY);
-
-        if properties.contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
             || properties.contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY)
-        {
+            || properties.contains_key(PORT_ENCODING_KEY);
+
+        if should_recompute_io {
             let region_snapshot = self
                 .brain_regions
                 .get_region(region_id)
@@ -10973,6 +11178,12 @@ impl ConnectomeManager {
                 &merged_in,
                 &merged_out,
             )?;
+            crate::region_io_designation::validate_port_encoding_changes(
+                &region_snapshot,
+                &port_encoding_changes,
+                &merged_in,
+                &merged_out,
+            )?;
         }
 
         let region = self
@@ -10982,8 +11193,12 @@ impl ConnectomeManager {
                 BduError::InvalidArea(format!("Brain region {} not found", region_id))
             })?;
 
+        crate::region_io_designation::apply_port_encoding_changes(region, &port_encoding_changes)?;
+
         for (key, value) in properties {
             match key.as_str() {
+                // Author changes to `port_encoding` were applied above as a delta.
+                PORT_ENCODING_KEY => {}
                 // BV (FEAGIRequests.edit_region_object) sends `region_title`; other clients use `title` / `name`.
                 "title" | "name" | "region_title" => {
                     if let Some(name) = value.as_str() {

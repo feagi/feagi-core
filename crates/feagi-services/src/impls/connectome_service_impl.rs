@@ -18,9 +18,6 @@ use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
@@ -206,6 +203,8 @@ fn classifier_areas_allowed_in_region(
     accepted
 }
 
+/// Copy the live region's `designated_inputs`, `designated_outputs` and `port_encoding` into the
+/// RuntimeGenome copy of the region.
 fn copy_live_designated_io(
     manager: &ConnectomeManager,
     region: &mut feagi_structures::genomic::BrainRegion,
@@ -214,7 +213,11 @@ fn copy_live_designated_io(
     let Some(live) = manager.get_brain_region(region_id) else {
         return;
     };
-    for key in ["designated_inputs", "designated_outputs"] {
+    for key in [
+        "designated_inputs",
+        "designated_outputs",
+        feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY,
+    ] {
         match live.properties.get(key) {
             Some(value) => {
                 region.properties.insert(key.to_string(), value.clone());
@@ -226,52 +229,23 @@ fn copy_live_designated_io(
     }
 }
 
-fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
-    match frame {
-        FrameChangeHandling::Absolute => "Absolute",
-        FrameChangeHandling::Incremental => "Incremental",
-    }
-}
-
-fn positioning_label(positioning: PercentageNeuronPositioning) -> &'static str {
-    match positioning {
-        PercentageNeuronPositioning::Linear => "Linear",
-        PercentageNeuronPositioning::Fractional => "Fractional",
-    }
-}
-
-fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::SignedPercentage(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(..)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(..) => "Percentage Signed",
-        IOCorticalAreaConfigurationFlag::Percentage(..)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(..)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(..)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
-        IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
-        IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
-        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
-        IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
-    }
-}
-
-fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
-        IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
-        | IOCorticalAreaConfigurationFlag::Misc(frame)
-        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => {
-            frame_handling_label(*frame)
+/// Copy only the live region's `port_encoding` into the RuntimeGenome copy of the region (for
+/// paths whose genome write-back does not touch the designated lists).
+fn copy_live_port_encoding(
+    manager: &ConnectomeManager,
+    region: &mut feagi_structures::genomic::BrainRegion,
+    region_id: &str,
+) {
+    let Some(live) = manager.get_brain_region(region_id) else {
+        return;
+    };
+    let key = feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY;
+    match live.properties.get(key) {
+        Some(value) => {
+            region.properties.insert(key.to_string(), value.clone());
+        }
+        None => {
+            region.properties.remove(key);
         }
     }
 }
@@ -307,25 +281,6 @@ fn resolve_non_overlapping_position(
     }
     occupied_positions.insert(candidate);
     Ok(candidate)
-}
-
-fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
-    match flag {
-        IOCorticalAreaConfigurationFlag::Percentage(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage2D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage3D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::Percentage4D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage2D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage3D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, positioning) => {
-            positioning_label(*positioning)
-        }
-        IOCorticalAreaConfigurationFlag::CartesianPlane(_)
-        | IOCorticalAreaConfigurationFlag::Misc(_)
-        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
-        | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
-    }
 }
 
 fn io_unit_reference_from_cortical_id(cortical_id: &CorticalID) -> Option<[u8; 3]> {
@@ -375,13 +330,13 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
             return None;
         }
     };
-    signage_options.push(signage_label_from_flag(&io_flag).to_string());
+    signage_options.push(io_flag.signage_label().to_string());
 
     let supports_frame_handling = !matches!(io_flag, IOCorticalAreaConfigurationFlag::Boolean);
     if supports_frame_handling {
         if let Some(frames) = allowed_frames {
             for frame in frames {
-                behavior_options.push(frame_handling_label(*frame).to_string());
+                behavior_options.push(frame.label().to_string());
             }
         } else {
             behavior_options.push("Absolute".to_string());
@@ -1598,6 +1553,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     }
                 }
             }
+            {
+                let manager = self.connectome.read();
+                for (region_id, region) in genome.brain_regions.iter_mut() {
+                    copy_live_port_encoding(&manager, region, region_id);
+                }
+            }
 
             if removed {
                 info!(
@@ -1727,13 +1688,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         };
         let coding_signage = io_flag
             .as_ref()
-            .map(|flag| signage_label_from_flag(flag).to_string());
+            .map(|flag| flag.signage_label().to_string());
         let coding_behavior = io_flag
             .as_ref()
-            .map(|flag| behavior_label_from_flag(flag).to_string());
+            .map(|flag| flag.behavior_label().to_string());
         let coding_type = io_flag
             .as_ref()
-            .map(|flag| coding_type_label_from_flag(flag).to_string());
+            .map(|flag| flag.coding_type_label().to_string());
         let coding_options = if is_io_area {
             io_coding_options_for_unit(&cortical_id_typed)
         } else {
@@ -2490,6 +2451,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     }
                 }
             }
+            {
+                let manager = self.connectome.read();
+                for (rid, region) in genome.brain_regions.iter_mut() {
+                    copy_live_port_encoding(&manager, region, rid);
+                }
+            }
         } else {
             warn!(
                 target: "feagi-services",
@@ -2521,10 +2488,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
                             region.name = name.to_string();
                         }
                     }
+                    // A `port_encoding` PATCH is a delta; the live region holds the merged map
+                    // and is copied below.
+                    if k == feagi_structures::genomic::brain_regions::PORT_ENCODING_KEY {
+                        continue;
+                    }
                     region.properties.insert(k.clone(), v.clone());
                 }
             }
             if let Some(registry) = io_registry {
+                let manager = self.connectome.read();
                 for (rid, (inputs, outputs)) in registry {
                     if let Some(gr) = genome.brain_regions.get_mut(&rid) {
                         if inputs.is_empty() {
@@ -2539,6 +2512,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                             gr.properties
                                 .insert("outputs".to_string(), serde_json::json!(outputs));
                         }
+                        copy_live_port_encoding(&manager, gr, &rid);
                     } else {
                         warn!(
                             target: "feagi-services",
@@ -3697,6 +3671,27 @@ impl ConnectomeService for ConnectomeServiceImpl {
             genome
                 .classifiers
                 .insert(classifier.classifier_id.clone(), classifier);
+        }
+        Ok(())
+    }
+
+    async fn import_region_port_encoding(
+        &self,
+        region_id: &str,
+        entries: serde_json::Map<String, serde_json::Value>,
+    ) -> ServiceResult<()> {
+        let registry = self
+            .connectome
+            .write()
+            .import_brain_region_port_encoding(region_id, &entries)
+            .map_err(ServiceError::from)?;
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            let manager = self.connectome.read();
+            for rid in registry.keys() {
+                if let Some(region) = genome.brain_regions.get_mut(rid) {
+                    copy_live_port_encoding(&manager, region, rid);
+                }
+            }
         }
         Ok(())
     }

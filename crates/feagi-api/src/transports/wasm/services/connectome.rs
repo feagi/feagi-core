@@ -505,6 +505,16 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn import_region_port_encoding(
+        &self,
+        _region_id: &str,
+        _entries: serde_json::Map<String, serde_json::Value>,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>> {
         Ok(self
             .genome

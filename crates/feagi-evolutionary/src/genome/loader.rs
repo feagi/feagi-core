@@ -522,4 +522,57 @@ mod tests {
             "load_genome_with_report must not turn validator output into Err"
         );
     }
+
+    /// Save then reload keeps `port_encoding` (both `wiring` and `author` entries).
+    #[test]
+    fn save_then_load_round_trips_port_encoding() {
+        use crate::genome::runtime_saver::save_genome_to_json;
+        use feagi_structures::genomic::brain_regions::{region_port_encoding, PortEncodingSource};
+
+        let power = string_to_cortical_id("_power").unwrap().as_base_64();
+        let death = string_to_cortical_id("_death").unwrap().as_base_64();
+        let json = serde_json::json!({
+            "genome_id": "t-port",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {"cortical_name": "Power", "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0], "cortical_type": "CORE"},
+                "_death": {"cortical_name": "Death", "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0], "cortical_type": "CORE"}
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "cortical_areas": ["_power", "_death"],
+                    "designated_inputs": ["_power"],
+                    "designated_outputs": ["_death"],
+                    "port_encoding": {
+                        "_power": {"kind": "Percentage", "signed": false, "frame": "Absolute",
+                            "positioning": "Linear", "source": "wiring"},
+                        "_death": {"kind": null, "signed": null, "frame": "Incremental",
+                            "positioning": null, "source": "author"}
+                    }
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        })
+        .to_string();
+        let first = load_genome_from_json(&json).unwrap();
+        let saved = save_genome_to_json(&first).unwrap();
+        let second = load_genome_from_json(&saved).unwrap();
+        let region = second.brain_regions.values().next().unwrap();
+        let entries = region_port_encoding(region).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[&power].kind.as_deref(), Some("Percentage"));
+        assert_eq!(entries[&power].source, PortEncodingSource::Wiring);
+        assert_eq!(entries[&death].kind, None);
+        assert_eq!(entries[&death].frame.as_deref(), Some("Incremental"));
+        assert_eq!(entries[&death].source, PortEncodingSource::Author);
+    }
 }

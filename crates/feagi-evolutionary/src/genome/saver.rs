@@ -310,4 +310,54 @@ mod tests {
         assert_eq!(area.dimensions.width, 10);
         assert_eq!(area.position, (5, 5, 5).into());
     }
+
+    #[test]
+    fn save_writes_port_encoding_and_parse_reads_it_back() {
+        use crate::genome::parser::GenomeParser;
+        use feagi_structures::genomic::brain_regions::{region_port_encoding, PORT_ENCODING_KEY};
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+
+        let power = CoreCorticalType::Power.to_cortical_id();
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(
+            power,
+            CorticalArea::new(
+                power,
+                0,
+                "Power".to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            )
+            .unwrap(),
+        );
+        let entry = serde_json::json!({
+            "kind": "Boolean", "signed": false, "frame": null, "positioning": null,
+            "source": "author"
+        });
+        let mut region =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+        region.add_area(power);
+        region.add_property(
+            PORT_ENCODING_KEY.to_string(),
+            serde_json::json!({ power.as_base_64(): entry.clone() }),
+        );
+        let mut brain_regions = HashMap::new();
+        brain_regions.insert("root".to_string(), (region, None));
+
+        #[allow(deprecated)]
+        let json = GenomeSaver::save_to_json(&cortical_areas, &brain_regions, None, None).unwrap();
+        let saved: Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            saved["brain_regions"]["root"][PORT_ENCODING_KEY],
+            serde_json::json!({ power.as_base_64(): entry })
+        );
+        let reloaded = GenomeParser::parse(&json).unwrap();
+        let (reloaded_region, _) = &reloaded.brain_regions[0];
+        let entries = region_port_encoding(reloaded_region).unwrap();
+        assert_eq!(
+            entries[&power.as_base_64()].kind.as_deref(),
+            Some("Boolean")
+        );
+    }
 }

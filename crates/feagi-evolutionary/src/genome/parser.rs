@@ -42,12 +42,16 @@ Licensed under the Apache License, Version 2.0
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tracing::warn;
 
 use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::types::{EvoError, EvoResult};
-use feagi_structures::genomic::brain_regions::RegionID;
+#[cfg(test)]
+use feagi_structures::genomic::brain_regions::{region_port_encoding, PortEncodingSource};
+use feagi_structures::genomic::brain_regions::{
+    set_region_port_encoding, PortEncoding, RegionID, PORT_ENCODING_KEY,
+};
 use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::{
@@ -198,6 +202,8 @@ pub struct RawBrainRegion {
     /// Declared interface lists (persisted from RuntimeGenome / PUT region).
     pub designated_inputs: Option<Vec<String>>,
     pub designated_outputs: Option<Vec<String>>,
+    /// What each designated port carries: `{ "<area id>": { kind, signed, frame, positioning, source } }`.
+    pub port_encoding: Option<Value>,
     pub signature: Option<String>,
     /// v3 `serde_json::to_value(BrainRegion)` nests `inputs` / `designated_*` under `properties`.
     pub properties: Option<HashMap<String, Value>>,
@@ -400,6 +406,38 @@ impl GenomeParser {
                 region.add_property((*key).to_string(), serde_json::json!(out));
             }
         }
+    }
+
+    /// Validate the region's `port_encoding` property and rewrite its keys as base64 cortical ids.
+    ///
+    /// The map may arrive at the top level of the region or nested under `properties`. A key that
+    /// is not a cortical id, an unknown field, a value outside the datasheet vocabulary, or an
+    /// entry without a valid `source` fails the load.
+    fn normalize_port_encoding(region: &mut BrainRegion, region_id_str: &str) -> EvoResult<()> {
+        let Some(value) = region.get_property(PORT_ENCODING_KEY) else {
+            return Ok(());
+        };
+        let raw = value.as_object().ok_or_else(|| {
+            EvoError::InvalidRegion(format!(
+                "Brain region '{region_id_str}': port_encoding must be a JSON object keyed by area id"
+            ))
+        })?;
+        let mut entries: BTreeMap<String, PortEncoding> = BTreeMap::new();
+        for (key, entry) in raw {
+            let area_id = string_to_cortical_id(key)?.as_base_64();
+            let parsed = PortEncoding::from_stored_value(entry).map_err(|e| {
+                EvoError::InvalidRegion(format!(
+                    "Brain region '{region_id_str}': port_encoding entry '{key}': {e}"
+                ))
+            })?;
+            if entries.insert(area_id, parsed).is_some() {
+                return Err(EvoError::InvalidRegion(format!(
+                    "Brain region '{region_id_str}': port_encoding lists area '{key}' twice"
+                )));
+            }
+        }
+        set_region_port_encoding(region, &entries);
+        Ok(())
     }
 
     /// Parse a genome JSON string into a ParsedGenome
@@ -901,6 +939,10 @@ impl GenomeParser {
                     "designated_outputs",
                 ],
             );
+            if let Some(port_encoding) = &raw_region.port_encoding {
+                region.add_property(PORT_ENCODING_KEY.to_string(), port_encoding.clone());
+            }
+            Self::normalize_port_encoding(&mut region, region_id_str)?;
 
             // Store parent_id for hierarchy construction
             let parent_id = raw_region.parent_region_id.clone();
@@ -1547,5 +1589,79 @@ mod tests {
         }"#;
         let error = GenomeParser::parse(json).expect_err("error_area_id is required");
         assert!(error.to_string().contains("error_area_id"), "{error}");
+    }
+
+    fn port_encoding_genome(region_body: &str) -> String {
+        format!(
+            r#"{{
+            "version": "3.0",
+            "blueprint": {{
+                "_power": {{
+                    "cortical_name": "Core",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }}
+            }},
+            "brain_regions": {{
+                "550e8400-e29b-41d4-a716-446655440000": {{
+                    "name": "Sub",
+                    "cortical_areas": ["_power"],
+                    {region_body}
+                }}
+            }}
+        }}"#
+        )
+    }
+
+    const POWER_B64: &str = "X19fcG93ZXI=";
+    const WIRING_ENTRY: &str = r#"{"kind": "Percentage", "signed": false, "frame": "Absolute", "positioning": "Linear", "source": "wiring"}"#;
+
+    #[test]
+    fn parse_keeps_top_level_port_encoding_and_normalizes_keys_to_base64() {
+        let json = port_encoding_genome(&format!(
+            r#""designated_inputs": ["_power"], "port_encoding": {{"_power": {WIRING_ENTRY}}}"#
+        ));
+        let parsed = GenomeParser::parse(&json).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        let entries = region_port_encoding(region).unwrap();
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[POWER_B64];
+        assert_eq!(entry.kind.as_deref(), Some("Percentage"));
+        assert_eq!(entry.signed, Some(false));
+        assert_eq!(entry.source, PortEncodingSource::Wiring);
+    }
+
+    #[test]
+    fn parse_keeps_port_encoding_nested_under_properties() {
+        let json = port_encoding_genome(&format!(
+            r#""properties": {{"designated_inputs": ["_power"], "port_encoding": {{"{POWER_B64}": {WIRING_ENTRY}}}}}"#
+        ));
+        let parsed = GenomeParser::parse(&json).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        assert_eq!(region_port_encoding(region).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn parse_rejects_port_encoding_outside_the_vocabulary() {
+        for entry in [
+            r#"{"kind": "Wobbly", "source": "wiring"}"#,
+            r#"{"frame": "Sideways", "source": "author"}"#,
+            r#"{"positioning": "Diagonal", "source": "author"}"#,
+            r#"{"signed": "yes", "source": "author"}"#,
+            r#"{"kind": "Boolean", "source": "robot"}"#,
+            r#"{"kind": "Boolean"}"#,
+        ] {
+            let json = port_encoding_genome(&format!(
+                r#""designated_inputs": ["_power"], "port_encoding": {{"_power": {entry}}}"#
+            ));
+            assert!(GenomeParser::parse(&json).is_err(), "{entry}");
+        }
+    }
+
+    #[test]
+    fn parse_rejects_a_port_encoding_that_is_not_an_object() {
+        let json = port_encoding_genome(r#""port_encoding": []"#);
+        assert!(GenomeParser::parse(&json).is_err());
     }
 }

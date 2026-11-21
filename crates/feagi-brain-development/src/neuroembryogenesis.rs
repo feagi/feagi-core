@@ -967,6 +967,10 @@ impl Neuroembryogenesis {
                 "  Loaded {} classifier assemblies from genome",
                 genome.classifiers.len()
             );
+
+            // Derive region IO (including each designated port's `port_encoding`) from the loaded
+            // regions and mappings, the same pass every later mapping or membership change runs.
+            manager.recompute_brain_region_io_registry()?;
         } // Lock released
 
         self.update_stage(DevelopmentStage::Corticogenesis, 100);

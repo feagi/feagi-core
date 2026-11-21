@@ -8,7 +8,13 @@ Represents a hierarchical grouping of cortical areas with functional significanc
 Moved from feagi-core/crates/feagi-bdu/src/models/brain_region.rs
 */
 
+mod port_encoding;
 mod region_id;
+pub use port_encoding::{
+    decode_io_area, parse_port_encoding, port_encoding_to_value, region_port_encoding,
+    set_region_port_encoding, IoAreaDecode, IoPortSide, PortEncoding, PortEncodingSource,
+    PORT_ENCODING_KEY, PORT_FRAMES, PORT_KINDS, PORT_POSITIONINGS,
+};
 pub use region_id::RegionID;
 
 /// Canonical display name of the genome tree root. Brain Visualizer and

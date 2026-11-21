@@ -72,6 +72,61 @@ pub struct BrainRegionDetail {
     pub properties: serde_json::Value,
 }
 
+/// One designated port's encoding, as returned under `port_encoding` by region reads.
+///
+/// Keyed by the designated area id (base64). `null` means unknown.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "kind": "SignedPercentage",
+    "signed": true,
+    "frame": "Absolute",
+    "positioning": "Fractional",
+    "source": "wiring"
+}))]
+pub struct RegionPortEncodingEntry {
+    /// One of Boolean, Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage,
+    /// SignedPercentage2D, SignedPercentage3D, SignedPercentage4D, CartesianPlane, Misc,
+    /// PoseEstimation.
+    pub kind: Option<String>,
+
+    /// Whether the port carries signed values.
+    pub signed: Option<bool>,
+
+    /// Absolute or Incremental.
+    pub frame: Option<String>,
+
+    /// Linear or Fractional.
+    pub positioning: Option<String>,
+
+    /// `wiring`: derived by FEAGI from the IPU/OPU areas wired to the port. `author`: set through
+    /// `PUT /v1/region/region`.
+    pub source: String,
+}
+
+/// An author entry in the `port_encoding` delta of `PUT /v1/region/region`.
+///
+/// An absent field is `null`. `source` is not accepted: the server stores `author`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "kind": "SignedPercentage",
+    "signed": true,
+    "frame": "Absolute",
+    "positioning": "Fractional"
+}))]
+pub struct RegionPortEncodingAuthorEntry {
+    /// Same vocabulary as [`RegionPortEncodingEntry::kind`].
+    pub kind: Option<String>,
+
+    /// Whether the port carries signed values.
+    pub signed: Option<bool>,
+
+    /// Absolute or Incremental.
+    pub frame: Option<String>,
+
+    /// Linear or Fractional.
+    pub positioning: Option<String>,
+}
+
 /// Create brain region request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateBrainRegionRequest {

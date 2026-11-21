@@ -622,6 +622,8 @@ use crate::{
             Dimensions3D,
 
             // Brain Regions
+            crate::v1::brain_region_dtos::RegionPortEncodingEntry,
+            crate::v1::brain_region_dtos::RegionPortEncodingAuthorEntry,
             BrainRegionSummary,
             BrainRegionDetail,
             BrainRegionListResponse,
@@ -757,6 +759,28 @@ mod tests {
         assert!(components
             .schemas
             .contains_key("MemoryNeuronDetailResponse"));
+    }
+
+    #[test]
+    fn test_openapi_documents_region_port_encoding() {
+        let openapi = ApiDoc::openapi();
+        let json = serde_json::to_value(&openapi).expect("serialize openapi");
+
+        let schemas = &json["components"]["schemas"];
+        assert!(schemas.get("RegionPortEncodingEntry").is_some());
+        assert!(schemas.get("RegionPortEncodingAuthorEntry").is_some());
+
+        let put = &json["paths"]["/v1/region/region"]["put"];
+        assert!(
+            put["requestBody"]["content"]["application/json"]["example"]["port_encoding"]
+                .is_object(),
+            "PUT /v1/region/region must document the port_encoding request. Got: {put}"
+        );
+        let description = put["description"].as_str().unwrap_or_default();
+        assert!(description.contains("port_encoding"));
+        for status in ["400", "404", "409"] {
+            assert!(put["responses"].get(status).is_some(), "missing {status}");
+        }
     }
 
     #[test]

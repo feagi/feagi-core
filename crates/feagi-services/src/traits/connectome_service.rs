@@ -479,6 +479,18 @@ pub trait ConnectomeService: Send + Sync {
         classifier: feagi_structures::genomic::classifiers::Classifier,
     ) -> ServiceResult<()>;
 
+    /// Import stored `port_encoding` entries onto a region, keeping each entry's `source`.
+    ///
+    /// Service-level only (region import); the public region update stores `author` entries
+    /// alone. Keys must be designated ports of the region (`Conflict` otherwise). The live
+    /// region and the RuntimeGenome both receive the entries, and `wiring` entries are then
+    /// re-derived from the current wiring like after any other change.
+    async fn import_region_port_encoding(
+        &self,
+        region_id: &str,
+        entries: serde_json::Map<String, serde_json::Value>,
+    ) -> ServiceResult<()>;
+
     async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>>;
 
     async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo>;
