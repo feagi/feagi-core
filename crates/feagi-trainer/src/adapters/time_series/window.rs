@@ -11,7 +11,19 @@ use crate::contracts::DatasetVersionId;
 use crate::error::TrainerError;
 use std::collections::BTreeMap;
 
+/// Per-episode scaling inputs and the running count of samples skipped for a flat range.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct EpisodeScale {
+    /// Min/max of the episode's configured streams (used by `MinMaxPerEpisode`).
+    pub episode_range: Option<(f64, f64)>,
+    /// Samples left out because the range used to scale them was flat (zero span).
+    pub flat_skips: u64,
+}
+
 /// Cuts one event-centered sample from an episode.
+///
+/// A sample whose normalization range is flat (zero span) is left out and counted in
+/// `scale.flat_skips`; it is never an error.
 pub fn window_event(
     episode: &AnalogEpisode,
     event: &AnalogEvent,
@@ -19,6 +31,7 @@ pub fn window_event(
     config: &TimeSeriesPackageConfig,
     dataset_version_id: &DatasetVersionId,
     source_uri: &str,
+    scale: &mut EpisodeScale,
 ) -> Result<Option<IRSample>, TrainerError> {
     let class_id = match class_id_for_label(&event.label, &config.class_labels) {
         Some(id) => id,
@@ -75,13 +88,18 @@ pub fn window_event(
         })?;
         let slice = &series[start as usize..=end_inclusive as usize];
         let resampled = resample_linear(slice, config.window.feature_count as usize)?;
-        let normalized = normalize_window(
+        let Some(normalized) = normalize_window(
             &resampled,
             config.normalize,
             config.dataset_unit_range,
+            scale.episode_range,
             episode,
             event,
-        )?;
+        )?
+        else {
+            scale.flat_skips += 1;
+            return Ok(None);
+        };
         let shifted = apply_amplitude_offset(&normalized, config.amplitude_offset)
             .map_err(TrainerError::Config)?;
         channel_series.push(shifted);
@@ -131,6 +149,31 @@ pub fn window_event(
     }))
 }
 
+/// Raw `(min, max)` over the resampled window of every configured stream (the per-window range).
+/// Only meaningful for an event whose window fits; callers use it after `window_event` has cut it.
+pub(crate) fn raw_window_range(
+    episode: &AnalogEpisode,
+    event_sample_index: u64,
+    config: &TimeSeriesPackageConfig,
+) -> Result<(f64, f64), TrainerError> {
+    let start = (event_sample_index - config.window.pre_samples) as usize;
+    let end = (event_sample_index + config.window.post_samples) as usize;
+    let mut min = f64::INFINITY;
+    let mut max = f64::NEG_INFINITY;
+    for stream_id in &config.window.stream_ids {
+        let series = episode.streams.get(stream_id).ok_or_else(|| {
+            TrainerError::Parse(format!("window stream '{stream_id}' is not in the corpus"))
+        })?;
+        let resampled =
+            resample_linear(&series[start..=end], config.window.feature_count as usize)?;
+        for value in resampled {
+            min = min.min(value);
+            max = max.max(value);
+        }
+    }
+    Ok((min, max))
+}
+
 pub(crate) fn class_id_for_label(label: &str, class_labels: &[String]) -> Option<u32> {
     class_labels
         .iter()
@@ -145,7 +188,10 @@ fn edge_error(episode: &AnalogEpisode, event: &AnalogEvent) -> TrainerError {
     ))
 }
 
-fn resample_linear(values: &[f32], feature_count: usize) -> Result<Vec<f64>, TrainerError> {
+pub(crate) fn resample_linear(
+    values: &[f32],
+    feature_count: usize,
+) -> Result<Vec<f64>, TrainerError> {
     if values.is_empty() {
         return Err(TrainerError::Parse(
             "cannot resample an empty analog window".to_string(),
@@ -184,44 +230,39 @@ fn require_finite(
     Ok(())
 }
 
+/// Scales one window. `Ok(None)` means the range it would use is flat (zero span), so the
+/// window cannot be scaled and is skipped by the caller.
 fn normalize_window(
     values: &[f64],
     mode: TimeSeriesNormalize,
     dataset_range: Option<(f64, f64)>,
+    episode_range: Option<(f64, f64)>,
     episode: &AnalogEpisode,
     event: &AnalogEvent,
-) -> Result<Vec<f64>, TrainerError> {
+) -> Result<Option<Vec<f64>>, TrainerError> {
     require_finite(values, episode, event)?;
-    match mode {
-        TimeSeriesNormalize::None => Ok(values.to_vec()),
-        TimeSeriesNormalize::MinMaxDataset => {
-            let (min, max) = dataset_range.ok_or_else(|| {
-                TrainerError::Config(
-                    "min_max_dataset requires the recording range before encoding".to_string(),
-                )
-            })?;
-            let span = max - min;
-            if span == 0.0 {
-                return Err(TrainerError::Parse(format!(
-                    "episode '{}': recording range is zero; population coding needs a span",
-                    episode.episode_id
-                )));
-            }
-            Ok(values.iter().map(|value| (value - min) / span).collect())
-        }
-        TimeSeriesNormalize::MinMaxPerWindow | TimeSeriesNormalize::MinMaxPerEpisode => {
-            let min = values.iter().copied().fold(f64::INFINITY, f64::min);
-            let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let span = max - min;
-            if span == 0.0 {
-                return Err(TrainerError::Parse(format!(
-                    "episode '{}': constant window at sample {} cannot be min-max normalized",
-                    episode.episode_id, event.sample_index
-                )));
-            }
-            Ok(values.iter().map(|v| (v - min) / span).collect())
-        }
+    let (min, max) = match mode {
+        TimeSeriesNormalize::None => return Ok(Some(values.to_vec())),
+        TimeSeriesNormalize::MinMaxDataset => dataset_range.ok_or_else(|| {
+            TrainerError::Config(
+                "min_max_dataset requires the recording range before encoding".to_string(),
+            )
+        })?,
+        TimeSeriesNormalize::MinMaxPerEpisode => episode_range.ok_or_else(|| {
+            TrainerError::Config(
+                "min_max_per_episode requires the episode range before encoding".to_string(),
+            )
+        })?,
+        TimeSeriesNormalize::MinMaxPerWindow => (
+            values.iter().copied().fold(f64::INFINITY, f64::min),
+            values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        ),
+    };
+    let span = max - min;
+    if span == 0.0 {
+        return Ok(None);
     }
+    Ok(Some(values.iter().map(|v| (v - min) / span).collect()))
 }
 
 #[cfg(test)]
@@ -284,6 +325,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window")
         .expect("kept");
@@ -309,6 +351,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window")
         .expect("kept");
@@ -331,6 +374,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window")
         .expect("kept");
@@ -365,6 +409,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window");
         assert!(sample.is_none());
@@ -384,6 +429,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .unwrap_err();
         assert!(err.to_string().contains("sample 77"));
@@ -402,27 +448,108 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window");
         assert!(sample.is_none());
     }
 
-    #[test]
-    fn constant_window_is_an_error() {
-        let cfg = config();
+    fn two_window_episode() -> AnalogEpisode {
         let mut ep = episode();
-        ep.streams
-            .insert("lead_0".to_string(), vec![1.0, 1.0, 1.0, 1.0, 1.0]);
-        let err = window_event(
-            &ep,
-            &ep.events[0],
-            0,
-            &cfg,
+        // Window around event 2 spans 1..=3 (range 0..2 after shift), window around event 6
+        // spans values 10..=30.
+        ep.streams.insert(
+            "lead_0".to_string(),
+            vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 20.0, 30.0, 40.0, 50.0],
+        );
+        ep.events = vec![
+            AnalogEvent {
+                sample_index: 2,
+                label: "N".to_string(),
+            },
+            AnalogEvent {
+                sample_index: 7,
+                label: "N".to_string(),
+            },
+        ];
+        ep
+    }
+
+    fn run_event(
+        cfg: &TimeSeriesPackageConfig,
+        ep: &AnalogEpisode,
+        idx: usize,
+        scale: &mut EpisodeScale,
+    ) -> Option<Vec<f64>> {
+        window_event(
+            ep,
+            &ep.events[idx],
+            idx,
+            cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            scale,
         )
-        .unwrap_err();
-        assert!(matches!(err, TrainerError::Parse(_)));
+        .expect("window")
+        .map(|sample| match sample.payload {
+            Payload::TimeSeries { samples, .. } => samples,
+            other => panic!("unexpected payload {other:?}"),
+        })
+    }
+
+    #[test]
+    fn per_episode_scales_by_the_episode_range_not_the_window() {
+        let ep = two_window_episode();
+        let mut per_window = config();
+        per_window.normalize = TimeSeriesNormalize::MinMaxPerWindow;
+        let mut per_episode = config();
+        per_episode.normalize = TimeSeriesNormalize::MinMaxPerEpisode;
+        let mut scale = EpisodeScale {
+            episode_range: Some((0.0, 50.0)),
+            flat_skips: 0,
+        };
+        for idx in 0..2 {
+            let window = run_event(&per_window, &ep, idx, &mut scale).expect("kept");
+            let by_episode = run_event(&per_episode, &ep, idx, &mut scale).expect("kept");
+            assert_eq!(window, vec![0.0, 0.5, 1.0]);
+            assert_ne!(window, by_episode);
+        }
+        let first = run_event(&per_episode, &ep, 0, &mut scale).expect("kept");
+        assert_eq!(first, vec![0.02, 0.04, 0.06]);
+        let second = run_event(&per_episode, &ep, 1, &mut scale).expect("kept");
+        assert_eq!(second, vec![0.4, 0.6, 0.8]);
+        assert_eq!(scale.flat_skips, 0);
+    }
+
+    #[test]
+    fn flat_window_is_skipped_and_counted_while_others_are_kept() {
+        let cfg = config();
+        let mut ep = two_window_episode();
+        ep.streams.insert(
+            "lead_0".to_string(),
+            vec![1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        );
+        let mut scale = EpisodeScale::default();
+        assert!(run_event(&cfg, &ep, 0, &mut scale).is_none());
+        assert_eq!(scale.flat_skips, 1);
+        let kept = run_event(&cfg, &ep, 1, &mut scale).expect("kept");
+        assert_eq!(kept, vec![0.0, 0.5, 1.0]);
+        assert_eq!(scale.flat_skips, 1);
+    }
+
+    #[test]
+    fn flat_episode_under_per_episode_is_skipped_and_counted() {
+        let mut cfg = config();
+        cfg.normalize = TimeSeriesNormalize::MinMaxPerEpisode;
+        let mut ep = two_window_episode();
+        ep.streams.insert("lead_0".to_string(), vec![3.0; 10]);
+        let mut scale = EpisodeScale {
+            episode_range: Some((3.0, 3.0)),
+            flat_skips: 0,
+        };
+        assert!(run_event(&cfg, &ep, 0, &mut scale).is_none());
+        assert!(run_event(&cfg, &ep, 1, &mut scale).is_none());
+        assert_eq!(scale.flat_skips, 2);
     }
 
     #[test]
@@ -437,6 +564,7 @@ mod tests {
             &cfg,
             &DatasetVersionId("ecg@1".to_string()),
             "file://pkg",
+            &mut EpisodeScale::default(),
         )
         .expect("window")
         .expect("kept");

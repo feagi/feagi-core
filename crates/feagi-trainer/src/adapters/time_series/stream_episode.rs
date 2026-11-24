@@ -18,6 +18,7 @@ pub fn episode_stream_sample(
     config: &TimeSeriesPackageConfig,
     dataset_version_id: &DatasetVersionId,
     source_uri: &str,
+    flat_skips: &mut u64,
 ) -> Result<Option<IRSample>, TrainerError> {
     if config.window.stream_ids.len() != 1 {
         return Err(TrainerError::Config(
@@ -39,13 +40,17 @@ pub fn episode_stream_sample(
     }
 
     let as_f64: Vec<f64> = series.iter().map(|v| f64::from(*v)).collect();
-    let samples = prepare_episode_samples(
+    let Some(samples) = prepare_episode_samples(
         &as_f64,
         episode,
         config.normalize,
         config.amplitude_offset,
         config.dataset_unit_range,
-    )?;
+    )?
+    else {
+        *flat_skips += 1;
+        return Ok(None);
+    };
     let mut hold_ends = Vec::new();
     let mut seen_ends = BTreeMap::new();
 
@@ -146,49 +151,42 @@ fn prepare_episode_samples(
     mode: TimeSeriesNormalize,
     amplitude_offset: f64,
     dataset_range: Option<(f64, f64)>,
-) -> Result<Vec<f64>, TrainerError> {
+) -> Result<Option<Vec<f64>>, TrainerError> {
     if values.iter().any(|value| !value.is_finite()) {
         return Err(TrainerError::Parse(format!(
             "episode '{}': non-finite analog value",
             episode.episode_id
         )));
     }
-    let scaled = match mode {
-        TimeSeriesNormalize::None => values.to_vec(),
-        TimeSeriesNormalize::MinMaxDataset => {
-            let (min, max) = dataset_range.ok_or_else(|| {
-                TrainerError::Config(
-                    "min_max_dataset requires the recording range before encoding".to_string(),
-                )
-            })?;
-            let span = max - min;
-            if span == 0.0 {
-                return Err(TrainerError::Parse(format!(
-                    "episode '{}': recording range is zero; population coding needs a span",
-                    episode.episode_id
-                )));
-            }
-            values.iter().map(|value| (value - min) / span).collect()
+    let (min, max) = match mode {
+        TimeSeriesNormalize::None => {
+            return apply_amplitude_offset(values, amplitude_offset)
+                .map(Some)
+                .map_err(TrainerError::Config);
         }
+        TimeSeriesNormalize::MinMaxDataset => dataset_range.ok_or_else(|| {
+            TrainerError::Config(
+                "min_max_dataset requires the recording range before encoding".to_string(),
+            )
+        })?,
         TimeSeriesNormalize::MinMaxPerWindow => {
             return Err(TrainerError::Config(
                 "stream infer cannot use min_max_per_window".to_string(),
             ));
         }
-        TimeSeriesNormalize::MinMaxPerEpisode => {
-            let min = values.iter().copied().fold(f64::INFINITY, f64::min);
-            let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let span = max - min;
-            if span == 0.0 {
-                return Err(TrainerError::Parse(format!(
-                    "episode '{}': constant episode cannot be min-max normalized",
-                    episode.episode_id
-                )));
-            }
-            values.iter().map(|v| (v - min) / span).collect()
-        }
+        TimeSeriesNormalize::MinMaxPerEpisode => (
+            values.iter().copied().fold(f64::INFINITY, f64::min),
+            values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        ),
     };
-    apply_amplitude_offset(&scaled, amplitude_offset).map_err(TrainerError::Config)
+    let span = max - min;
+    if span == 0.0 {
+        return Ok(None);
+    }
+    let scaled: Vec<f64> = values.iter().map(|v| (v - min) / span).collect();
+    apply_amplitude_offset(&scaled, amplitude_offset)
+        .map(Some)
+        .map_err(TrainerError::Config)
 }
 
 #[cfg(test)]
@@ -246,6 +244,7 @@ mod tests {
             &config(),
             &DatasetVersionId("v".to_string()),
             "/tmp/x",
+            &mut 0,
         )
         .expect("emit")
         .expect("present");
@@ -281,10 +280,15 @@ mod tests {
                 label: "N".to_string(),
             }],
         };
-        let sample =
-            episode_stream_sample(&episode, &cfg, &DatasetVersionId("v".to_string()), "/tmp/x")
-                .expect("emit")
-                .expect("present");
+        let sample = episode_stream_sample(
+            &episode,
+            &cfg,
+            &DatasetVersionId("v".to_string()),
+            "/tmp/x",
+            &mut 0,
+        )
+        .expect("emit")
+        .expect("present");
         match sample.payload {
             Payload::TimeSeries { samples, .. } => {
                 assert_eq!(samples, vec![-1.5, 0.0, 2.25, 3.0, 4.0]);

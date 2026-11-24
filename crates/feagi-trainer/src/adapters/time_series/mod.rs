@@ -6,6 +6,7 @@
 
 mod config;
 mod corpus;
+mod encoded_preview;
 mod package;
 mod preview;
 mod stream_episode;
@@ -16,6 +17,7 @@ pub use config::{
     IncompleteWindowPolicy, TimeSeriesNormalize, TimeSeriesPackageConfig, TimeSeriesPresentation,
     TimeSeriesSourceKind, TimeSeriesWindowConfig, UnknownLabelPolicy, WfdbChannelMap,
 };
+pub use encoded_preview::EncodedWindowPreview;
 pub use preview::{PreviewClassCount, TimeSeriesPreview, TimeSeriesPreviewFrame};
 pub use wfdb::write_test_record as write_wfdb_record;
 
@@ -24,14 +26,32 @@ use std::path::Path;
 
 use crate::adapters::time_series::corpus::AnalogEpisode;
 use crate::adapters::time_series::stream_episode::episode_stream_sample;
-use crate::adapters::time_series::window::window_event;
+use crate::adapters::time_series::window::{window_event, EpisodeScale};
 use crate::contracts::common::{
-    ContentHash, DatasetAssetId, DatasetVersionId, Modality, OutputType, PluginId, PluginRef,
+    ContentHash, DatasetAssetId, DatasetVersionId, MetadataValue, Modality, OutputType, PluginId,
+    PluginRef,
 };
 use crate::contracts::dataset_manifest::SCHEMA_VERSION as MANIFEST_SCHEMA_VERSION;
 use crate::contracts::{DatasetManifest, IRSample, SplitDescriptor};
 use crate::error::TrainerError;
 use crate::plugins::{AdapterPlugin, DatasetSource, ValidationReport};
+
+/// Manifest metadata key: how many samples were left out because the range used to scale them
+/// (window, episode or dataset, per the normalize mode) was flat. Stored as `MetadataValue::Int`.
+pub const SKIPPED_FLAT_WINDOWS_KEY: &str = "skipped_flat_windows";
+
+/// Per-episode range for `MinMaxPerEpisode`, `None` for other modes. Shared by ingest and the
+/// encoded preview.
+fn episode_range_for(
+    config: &TimeSeriesPackageConfig,
+    episode: &AnalogEpisode,
+) -> Result<Option<(f64, f64)>, TrainerError> {
+    if config.normalize != TimeSeriesNormalize::MinMaxPerEpisode {
+        return Ok(None);
+    }
+    preview::streamed_value_range(std::slice::from_ref(episode), &config.window.stream_ids)
+        .map(Some)
+}
 
 /// Adapter that windows annotated analog streams into classification `IRSample`s.
 #[derive(Debug, Clone)]
@@ -97,28 +117,36 @@ impl TimeSeriesPackageAdapter {
         format!("siphash64:{:016x}", hasher.finish())
     }
 
+    /// Config with the dataset-wide range resolved when the normalize mode needs it.
+    /// The one place the dataset range is set up, shared by ingest and the encoded preview.
+    fn config_with_dataset_range(
+        &self,
+        episodes: &[AnalogEpisode],
+    ) -> Result<TimeSeriesPackageConfig, TrainerError> {
+        let mut config = self.config.clone();
+        if config.normalize == TimeSeriesNormalize::MinMaxDataset {
+            config.dataset_unit_range = Some(preview::streamed_value_range(
+                episodes,
+                &config.window.stream_ids,
+            )?);
+        }
+        Ok(config)
+    }
+
     fn emit_samples(
         &self,
         source: &DatasetSource,
         episodes: &[AnalogEpisode],
         dataset_version_id: &DatasetVersionId,
-    ) -> Result<Vec<IRSample>, TrainerError> {
-        let mut config = self.config.clone();
-        if config.normalize
-            == crate::adapters::time_series::config::TimeSeriesNormalize::MinMaxDataset
-        {
-            let (min, max) = preview::streamed_value_range(episodes, &config.window.stream_ids)?;
-            if max == min {
-                return Err(TrainerError::Parse(
-                    "recording range is zero; population coding needs a span".to_string(),
-                ));
-            }
-            config.dataset_unit_range = Some((min, max));
-        }
+    ) -> Result<(Vec<IRSample>, u64), TrainerError> {
+        let config = self.config_with_dataset_range(episodes)?;
+        let mut scale = EpisodeScale::default();
+        let mut flat_skips = 0_u64;
         let mut samples = Vec::new();
         match config.presentation {
             TimeSeriesPresentation::Snapshot | TimeSeriesPresentation::StreamTrain => {
                 for episode in episodes {
+                    scale.episode_range = episode_range_for(&config, episode)?;
                     for (ordinal, event) in episode.events.iter().enumerate() {
                         if let Some(sample) = window_event(
                             episode,
@@ -127,6 +155,7 @@ impl TimeSeriesPackageAdapter {
                             &config,
                             dataset_version_id,
                             &source.uri,
+                            &mut scale,
                         )? {
                             samples.push(sample);
                         }
@@ -135,31 +164,37 @@ impl TimeSeriesPackageAdapter {
             }
             TimeSeriesPresentation::StreamInfer => {
                 for episode in episodes {
-                    if let Some(sample) =
-                        episode_stream_sample(episode, &config, dataset_version_id, &source.uri)?
-                    {
+                    if let Some(sample) = episode_stream_sample(
+                        episode,
+                        &config,
+                        dataset_version_id,
+                        &source.uri,
+                        &mut flat_skips,
+                    )? {
                         samples.push(sample);
                     }
                 }
             }
         }
         if samples.is_empty() {
-            return Err(TrainerError::Parse(
-                "time-series ingest produced no samples (check class_labels and window policies)"
-                    .to_string(),
-            ));
+            return Err(TrainerError::Parse(format!(
+                "time-series ingest produced no samples (check class_labels and window policies; \
+                 {} skipped for a flat normalization range)",
+                flat_skips + scale.flat_skips
+            )));
         }
         let samples = crate::adapters::class_keep::apply_class_keep_percents(
             samples,
             &self.config.class_keep_percents,
             &self.config.class_labels,
         )?;
-        crate::adapters::class_keep::apply_balanced_max_samples(
+        let samples = crate::adapters::class_keep::apply_balanced_max_samples(
             samples,
             self.config.max_samples,
             self.config.sample_draw_seed,
             crate::adapters::class_keep::ir_sample_class_id,
-        )
+        )?;
+        Ok((samples, flat_skips + scale.flat_skips))
     }
 }
 
@@ -175,7 +210,12 @@ impl AdapterPlugin for TimeSeriesPackageAdapter {
         let episodes = self.load_episodes(source)?;
         let fingerprint = Self::fingerprint(&episodes);
         let version_id = DatasetVersionId(format!("{}@{fingerprint}", self.config.dataset_name));
-        let samples = self.emit_samples(source, &episodes, &version_id)?;
+        let (samples, flat_skips) = self.emit_samples(source, &episodes, &version_id)?;
+        let mut metadata = std::collections::BTreeMap::new();
+        metadata.insert(
+            SKIPPED_FLAT_WINDOWS_KEY.to_string(),
+            MetadataValue::Int(flat_skips as i64),
+        );
         Ok(DatasetManifest {
             schema_version: MANIFEST_SCHEMA_VERSION,
             dataset_version_id: version_id,
@@ -191,7 +231,7 @@ impl AdapterPlugin for TimeSeriesPackageAdapter {
                 split: self.config.split.clone(),
                 sample_count: samples.len() as u64,
             }],
-            metadata: std::collections::BTreeMap::new(),
+            metadata,
         })
     }
 
@@ -230,6 +270,7 @@ impl AdapterPlugin for TimeSeriesPackageAdapter {
         let fingerprint = Self::fingerprint(&episodes);
         let version_id = DatasetVersionId(format!("{}@{fingerprint}", self.config.dataset_name));
         self.emit_samples(source, &episodes, &version_id)
+            .map(|(samples, _)| samples)
     }
 }
 
@@ -410,6 +451,34 @@ mod tests {
         assert_eq!(preview.frames.len(), 2);
         assert_eq!(preview.frames[0].label, "N");
         assert_eq!(preview.frames[0].values.len(), 5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn flat_windows_are_skipped_and_counted_in_manifest_metadata() {
+        let dir = temp_dir("flat");
+        let mut samples = vec![1.0_f32; 10];
+        samples.extend((0..10).map(|v| v as f32));
+        package::write_test_package(
+            &dir,
+            360.0,
+            "rec0",
+            "lead_0",
+            &samples,
+            &[(5, "N"), (15, "V")],
+        )
+        .expect("write package");
+        let adapter = TimeSeriesPackageAdapter::new(package_config());
+        let source = DatasetSource {
+            uri: dir.to_string_lossy().into_owned(),
+            bytes: Vec::new(),
+        };
+        let manifest = adapter.discover(&source).expect("discover");
+        assert_eq!(manifest.splits[0].sample_count, 1);
+        assert_eq!(
+            manifest.metadata.get(SKIPPED_FLAT_WINDOWS_KEY),
+            Some(&MetadataValue::Int(1))
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
