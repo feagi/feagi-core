@@ -316,11 +316,14 @@ impl RunConfig {
                         &spec.binding.encoder.coder_id,
                         SUPPORTED_ENCODER_CODER_ID,
                     )?;
-                    check(
-                        "decoder coder",
-                        &spec.binding.decoder.coder_id,
-                        SUPPORTED_DECODER_CODER_ID,
-                    )?;
+                    let decoder_id = spec.binding.decoder.coder_id.as_str();
+                    if decoder_id != SUPPORTED_DECODER_CODER_ID
+                        && decoder_id != SUPPORTED_MISC_CLASS_DECODER_CODER_ID
+                    {
+                        return Err(TrainerError::Config(format!(
+                            "unsupported decoder coder '{decoder_id}' for snapshot presentation (the CLI supports only '{SUPPORTED_DECODER_CODER_ID}' or '{SUPPORTED_MISC_CLASS_DECODER_CODER_ID}')"
+                        )));
+                    }
                     let teacher = self.encoder_profile.teacher.as_ref().ok_or_else(|| {
                         TrainerError::Config(
                             "ECG snapshot requires encoder_profile.teacher so the class IPU is created and written"
@@ -780,6 +783,28 @@ impl RunConfig {
                         data,
                         resume,
                     )
+                } else if self.run_spec.binding.decoder.coder_id
+                    == SUPPORTED_MISC_CLASS_DECODER_CODER_ID
+                {
+                    let mut encoder = PopulationEncoder::new();
+                    let mut decoder = MiscClassDecoder::new();
+                    run_rollout_with_events_from(
+                        &self.run_spec.run_id,
+                        samples,
+                        &mut runtime,
+                        &mut encoder,
+                        &self.encoder_profile,
+                        &mut decoder,
+                        &self.decoder_profile,
+                        &reward,
+                        &metric,
+                        &self.executor,
+                        events,
+                        cancel,
+                        data,
+                        repeat,
+                        resume,
+                    )
                 } else {
                     let mut encoder = PopulationEncoder::new();
                     let mut decoder = ClassDecoder::new();
@@ -1152,6 +1177,71 @@ mod tests {
         );
         let err = config.validate_supported().unwrap_err();
         assert!(err.to_string().contains("min_max_dataset"));
+    }
+
+    fn snapshot_time_series_config(decoder_coder_id: &str) -> RunConfig {
+        use crate::adapters::{
+            IncompleteWindowPolicy, TimeSeriesPackageConfig, TimeSeriesPresentation,
+            TimeSeriesSourceKind, TimeSeriesWindowConfig, UnknownLabelPolicy,
+        };
+        use crate::binding::ClassTeacherBinding;
+
+        let mut config = run_config();
+        config.run_spec.adapter.id = PluginId(TimeSeriesPackageAdapter::PLUGIN_ID.to_string());
+        config.run_spec.binding.decoder.coder_id = decoder_coder_id.to_string();
+        config.dataset.adapter = DatasetAdapterConfig::TimeSeries(TimeSeriesPackageConfig {
+            dataset_name: "series".to_string(),
+            source_kind: TimeSeriesSourceKind::Package,
+            window: TimeSeriesWindowConfig {
+                pre_samples: 1,
+                post_samples: 1,
+                stream_ids: vec!["lead_0".to_string()],
+                feature_count: 3,
+            },
+            class_labels: vec!["N".to_string()],
+            split: Split::Train,
+            split_id: SplitId("train".to_string()),
+            normalize: crate::adapters::TimeSeriesNormalize::MinMaxDataset,
+            incomplete_window_policy: IncompleteWindowPolicy::Exclude,
+            unknown_label_policy: UnknownLabelPolicy::Exclude,
+            annotation_suffix: None,
+            channel_map: None,
+            presentation: TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
+            class_keep_percents: std::collections::BTreeMap::new(),
+            max_samples: None,
+            sample_draw_seed: None,
+            dataset_unit_range: None,
+        });
+        config.encoder_profile.stream = None;
+        config.encoder_profile.teacher = Some(ClassTeacherBinding {
+            unit: 1,
+            cortical_area_id: "misc_input_teacher".to_string(),
+            cortical_name: None,
+            class_count: 1,
+        });
+        config.decoder_profile.class_count = 1;
+        config
+    }
+
+    #[test]
+    fn snapshot_time_series_accepts_percentage_decoder() {
+        let config = snapshot_time_series_config(SUPPORTED_DECODER_CODER_ID);
+        config.validate_supported().expect("snapshot config validates");
+    }
+
+    #[test]
+    fn snapshot_time_series_accepts_misc_class_decoder() {
+        let config = snapshot_time_series_config(SUPPORTED_MISC_CLASS_DECODER_CODER_ID);
+        config.validate_supported().expect("snapshot config validates");
+    }
+
+    #[test]
+    fn snapshot_time_series_rejects_other_decoder() {
+        let config = snapshot_time_series_config("regression_decoder");
+        let err = config.validate_supported().unwrap_err().to_string();
+        assert!(err.contains(SUPPORTED_DECODER_CODER_ID));
+        assert!(err.contains(SUPPORTED_MISC_CLASS_DECODER_CODER_ID));
     }
 
     #[test]
