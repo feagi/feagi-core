@@ -12,7 +12,10 @@ use feagi_api::amalgamation::{
     AmalgamationPending, AmalgamationPendingSummary, AmalgamationSource,
 };
 use feagi_api::common::{ApiError, Json, Query, State};
-use feagi_api::endpoints::genome::post_amalgamation_destination;
+use feagi_api::endpoints::block_wiring::{post_block_wiring, post_block_wiring_removal};
+use feagi_api::endpoints::genome::{
+    post_amalgamation_by_payload_with_fit, post_amalgamation_destination,
+};
 use feagi_api::transports::http::server::ApiState;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::templates::create_genome_with_core_areas;
@@ -346,8 +349,46 @@ impl TestBrain {
             },
             source,
             genome_json,
+            fit_plan: None,
+            fit_host_ends: HashMap::new(),
+            source_release_id: None,
+            source_catalog: None,
         });
         amalgamation_id
+    }
+
+    /// Queue `guest` with a fit plan through the real queue endpoint (validation, plan storage and
+    /// circuit sizing all run there). Returns the amalgamation id.
+    async fn queue_with_plan(
+        &self,
+        guest: &RuntimeGenome,
+        plan: Value,
+    ) -> Result<String, ApiError> {
+        let genome: Value = serde_json::from_str(
+            &feagi_evolutionary::save_genome_to_json(guest).expect("guest json"),
+        )
+        .expect("guest value");
+        post_amalgamation_by_payload_with_fit(
+            State(self.state.clone()),
+            Json(json!({ "genome": genome, "fit_plan": plan, "source_release_id": "release-1", "source_catalog": "staging" })),
+        )
+        .await
+        .map(|json| json.0["amalgamation_id"].clone())
+    }
+
+    fn pending_count(&self) -> usize {
+        usize::from(self.state.amalgamation_state.read().pending.is_some())
+    }
+
+    fn pending_circuit_size(&self) -> [i32; 3] {
+        self.state
+            .amalgamation_state
+            .read()
+            .pending
+            .as_ref()
+            .expect("pending")
+            .summary
+            .circuit_size
     }
 
     /// Queue `guest` and confirm it under the root region at the origin.
@@ -356,19 +397,41 @@ impl TestBrain {
         guest: &RuntimeGenome,
         source: AmalgamationSource,
     ) -> (String, Result<HandlerResponse, ApiError>) {
-        let id = self.queue(guest, source);
+        self.augment_with_plan(guest, source, None).await
+    }
+
+    /// As `augment`, with an optional fit plan carried on the queue call. A plan that the queue
+    /// endpoint refuses comes back as the error (nothing pending). The confirmation body is
+    /// always the unchanged Brain Visualizer shape.
+    async fn augment_with_plan(
+        &self,
+        guest: &RuntimeGenome,
+        source: AmalgamationSource,
+        fit_plan: Option<Value>,
+    ) -> (String, Result<HandlerResponse, ApiError>) {
+        let id = match fit_plan {
+            Some(plan) => match self.queue_with_plan(guest, plan).await {
+                Ok(id) => id,
+                Err(error) => return (String::new(), Err(error)),
+            },
+            None => self.queue(guest, source),
+        };
+        let result = self.confirm(&id).await;
+        (id, result)
+    }
+
+    /// Confirm the pending amalgamation `id` under the root region at the origin.
+    async fn confirm(&self, id: &str) -> Result<HandlerResponse, ApiError> {
         let params = HashMap::from([
-            ("amalgamation_id".to_string(), id.clone()),
+            ("amalgamation_id".to_string(), id.to_string()),
             ("circuit_origin_x".to_string(), "0".to_string()),
             ("circuit_origin_y".to_string(), "0".to_string()),
             ("circuit_origin_z".to_string(), "0".to_string()),
         ]);
         let body = HashMap::from([("brain_region_id".to_string(), json!(self.root_id))]);
-        let result =
-            post_amalgamation_destination(State(self.state.clone()), Query(params), Json(body))
-                .await
-                .map(|json| json.0);
-        (id, result)
+        post_amalgamation_destination(State(self.state.clone()), Query(params), Json(body))
+            .await
+            .map(|json| json.0)
     }
 
     fn pending_cleared(&self) -> bool {
@@ -427,6 +490,34 @@ impl TestBrain {
                 .into_iter()
                 .map(|c| c.classifier_id)
                 .collect(),
+            mappings: {
+                let mut mappings = std::collections::BTreeMap::new();
+                for id in &live_areas {
+                    let properties = connectome
+                        .get_cortical_area_properties(id)
+                        .await
+                        .expect("properties");
+                    let dst = properties
+                        .get("cortical_mapping_dst")
+                        .cloned()
+                        .unwrap_or(Value::Null);
+                    // An area with no mappings reads as null or as an empty object.
+                    let text = match dst.as_object() {
+                        Some(map) if map.is_empty() => "null".to_string(),
+                        _ => dst.to_string(),
+                    };
+                    mappings.insert(id.clone(), text);
+                }
+                mappings
+            },
+            outgoing_synapses: {
+                let mut counts = std::collections::BTreeMap::new();
+                for id in &live_areas {
+                    let info = connectome.get_cortical_area(id).await.expect("area");
+                    counts.insert(id.clone(), info.outgoing_synapse_count);
+                }
+                counts
+            },
         }
     }
 
@@ -467,6 +558,10 @@ struct HostSnapshot {
     modulators: BTreeSet<String>,
     morphologies: BTreeSet<String>,
     classifiers: BTreeSet<String>,
+    /// Each area's `cortical_mapping_dst`, as text.
+    mappings: std::collections::BTreeMap<String, String>,
+    /// Outgoing synapses of each live area.
+    outgoing_synapses: std::collections::BTreeMap<String, usize>,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1301,4 +1396,1081 @@ async fn port_encoding_arrives_on_the_host_region_with_sources_and_remapped_keys
         .or_else(|| saved_region["properties"].get("port_encoding"))
         .expect("saved genome keeps port_encoding");
     assert_eq!(*saved_encoding, expected, "saved genome");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fit plan (areas created at fitted sizes)
+// ---------------------------------------------------------------------------------------------
+
+/// `(name, dimensions)` of an area passed to `create_cortical_areas`.
+type CreatedArea = (String, (usize, usize, usize));
+
+/// Delegates to a real service and records what the import asks of it.
+struct RecordingGenomeService {
+    inner: Arc<dyn GenomeService + Send + Sync>,
+    /// `(name, dimensions)` of every area passed to `create_cortical_areas`.
+    created: parking_lot::Mutex<Vec<CreatedArea>>,
+    /// Ids passed to `update_cortical_area` (the only path that can resize or rebuild an area).
+    updated: parking_lot::Mutex<Vec<String>>,
+}
+
+#[async_trait::async_trait]
+impl GenomeService for RecordingGenomeService {
+    async fn load_genome(
+        &self,
+        params: feagi_services::types::LoadGenomeParams,
+    ) -> feagi_services::ServiceResult<feagi_services::types::GenomeInfo> {
+        self.inner.load_genome(params).await
+    }
+    async fn save_genome(
+        &self,
+        params: feagi_services::types::SaveGenomeParams,
+    ) -> feagi_services::ServiceResult<String> {
+        self.inner.save_genome(params).await
+    }
+    async fn export_region_genome(
+        &self,
+        region_id: String,
+    ) -> feagi_services::ServiceResult<String> {
+        self.inner.export_region_genome(region_id).await
+    }
+    async fn get_genome_info(
+        &self,
+    ) -> feagi_services::ServiceResult<feagi_services::types::GenomeInfo> {
+        self.inner.get_genome_info().await
+    }
+    async fn validate_genome(&self, json_str: String) -> feagi_services::ServiceResult<bool> {
+        self.inner.validate_genome(json_str).await
+    }
+    async fn reset_connectome(&self) -> feagi_services::ServiceResult<()> {
+        self.inner.reset_connectome().await
+    }
+    async fn update_cortical_area(
+        &self,
+        cortical_id: &str,
+        changes: HashMap<String, Value>,
+    ) -> feagi_services::ServiceResult<feagi_services::types::CorticalAreaInfo> {
+        self.updated.lock().push(cortical_id.to_string());
+        self.inner.update_cortical_area(cortical_id, changes).await
+    }
+    async fn create_cortical_areas(
+        &self,
+        params: Vec<CreateCorticalAreaParams>,
+    ) -> feagi_services::ServiceResult<Vec<feagi_services::types::CorticalAreaInfo>> {
+        self.created
+            .lock()
+            .extend(params.iter().map(|p| (p.name.clone(), p.dimensions)));
+        self.inner.create_cortical_areas(params).await
+    }
+    async fn list_modulator_types(&self) -> feagi_services::ServiceResult<Vec<String>> {
+        self.inner.list_modulator_types().await
+    }
+    async fn list_modulators(&self) -> feagi_services::ServiceResult<Value> {
+        self.inner.list_modulators().await
+    }
+    async fn get_modulator(&self, id: &str) -> feagi_services::ServiceResult<Value> {
+        self.inner.get_modulator(id).await
+    }
+    async fn create_modulator(
+        &self,
+        id: String,
+        write: ModulatorWrite,
+    ) -> feagi_services::ServiceResult<Value> {
+        self.inner.create_modulator(id, write).await
+    }
+    async fn update_modulator(
+        &self,
+        id: &str,
+        write: ModulatorWrite,
+    ) -> feagi_services::ServiceResult<Value> {
+        self.inner.update_modulator(id, write).await
+    }
+    async fn rename_modulator(
+        &self,
+        old_id: &str,
+        new_id: String,
+    ) -> feagi_services::ServiceResult<()> {
+        self.inner.rename_modulator(old_id, new_id).await
+    }
+    async fn modulator_usage(&self, id: &str) -> feagi_services::ServiceResult<Value> {
+        self.inner.modulator_usage(id).await
+    }
+    async fn delete_modulator(&self, id: &str, force: bool) -> feagi_services::ServiceResult<()> {
+        self.inner.delete_modulator(id, force).await
+    }
+    async fn set_simulation_timestep(&self, timestep_s: f64) -> feagi_services::ServiceResult<f64> {
+        self.inner.set_simulation_timestep(timestep_s).await
+    }
+}
+
+/// Wrap the host's genome service in a recorder; returns it for inspection.
+fn record_genome_service(brain: &mut TestBrain) -> Arc<RecordingGenomeService> {
+    let recorder = Arc::new(RecordingGenomeService {
+        inner: Arc::clone(&brain.state.genome_service),
+        created: parking_lot::Mutex::new(Vec::new()),
+        updated: parking_lot::Mutex::new(Vec::new()),
+    });
+    brain.state.genome_service = recorder.clone();
+    recorder
+}
+
+fn sized_area(id: CorticalID, name: &str, x: i32, width: u32) -> CorticalArea {
+    let mut area = guest_area(id, name, custom_kind(), x);
+    area.dimensions = CorticalAreaDimensions::new(width, 1, 1).expect("dimensions");
+    area
+}
+
+fn fit_plan_json(id: &CorticalID, dimensions: [u32; 3]) -> Value {
+    json!({ "areas": [{ "cortical_id": id.as_base_64(), "dimensions": dimensions }] })
+}
+
+/// Keys of the response that carry counts and messages (the rest are random ids).
+fn stable_summary(response: &HandlerResponse) -> BTreeSet<String> {
+    response
+        .iter()
+        .filter(|(key, value)| {
+            value.is_number() || *key == "message" || *key == "modulator_notices"
+        })
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect()
+}
+
+fn fit_guest() -> (RuntimeGenome, CorticalID) {
+    let port = cortical_id(b'c', b'p');
+    let other = cortical_id(b'c', b'q');
+    let mut guest = empty_guest();
+    add_area(&mut guest, sized_area(port, "port_area", 0, 12));
+    add_area(&mut guest, sized_area(other, "other_area", 16, 3));
+    add_mapping(&mut guest, &port, &other, "projector", &[]);
+    (guest, port)
+}
+
+/// (a) A 12x1x1 guest area with a 14x1x1 plan is created 14x1x1, and the import never calls
+/// `update_cortical_area` (the only route to a resize and its neuron/synapse rebuild).
+#[tokio::test]
+async fn fit_plan_creates_area_at_fitted_size_without_rebuild() {
+    let mut brain = build_host(1_000_000).await;
+    let recorder = record_genome_service(&mut brain);
+    let (guest, port) = fit_guest();
+
+    let (_, result) = brain
+        .augment_with_plan(
+            &guest,
+            AmalgamationSource::ExternalGenome,
+            Some(fit_plan_json(&port, [14, 1, 1])),
+        )
+        .await;
+    let response = result.expect("augment succeeds");
+    assert_eq!(count(&response, "imported_new_area_count"), 2);
+    assert_eq!(count(&response, "imported_cortical_mappings"), 1);
+
+    let created = recorder.created.lock().clone();
+    assert!(
+        created.contains(&("port_area".to_string(), (14, 1, 1))),
+        "created at fitted size: {created:?}"
+    );
+    assert!(
+        created.contains(&("other_area".to_string(), (3, 1, 1))),
+        "unplanned area keeps its size: {created:?}"
+    );
+    assert!(
+        recorder.updated.lock().is_empty(),
+        "no post-creation update (rebuild) path was entered: {:?}",
+        recorder.updated.lock()
+    );
+    let live = brain
+        .state
+        .connectome_service
+        .get_cortical_area(&brain.area_id("port_area").await)
+        .await
+        .unwrap();
+    assert_eq!(live.dimensions, (14, 1, 1));
+}
+
+/// (b) No plan: nothing about the import changes. The summary equals the one from an explicit
+/// empty plan, areas keep their published sizes, and the pending request is confirmed.
+#[tokio::test]
+async fn no_fit_plan_leaves_the_import_as_published() {
+    let (guest, _) = fit_guest();
+
+    let mut plain = build_host(1_000_000).await;
+    let plain_recorder = record_genome_service(&mut plain);
+    let (_, plain_result) = plain
+        .augment(&guest, AmalgamationSource::ExternalGenome)
+        .await;
+    let plain_response = plain_result.expect("augment succeeds");
+
+    let empty = build_host(1_000_000).await;
+    let (_, empty_result) = empty
+        .augment_with_plan(
+            &guest,
+            AmalgamationSource::ExternalGenome,
+            Some(json!({ "areas": [] })),
+        )
+        .await;
+    let empty_response = empty_result.expect("augment succeeds");
+
+    assert_eq!(
+        stable_summary(&plain_response),
+        stable_summary(&empty_response)
+    );
+    assert_eq!(count(&plain_response, "imported_new_area_count"), 2);
+    assert_eq!(count(&plain_response, "imported_cortical_mappings"), 1);
+    let created = plain_recorder.created.lock().clone();
+    assert!(
+        created.contains(&("port_area".to_string(), (12, 1, 1))),
+        "{created:?}"
+    );
+    assert!(plain.pending_cleared());
+    assert_eq!(plain.last_history_status().as_deref(), Some("confirmed"));
+}
+
+/// (c) An invalid plan is refused with a clear error and the host is left exactly as it was.
+#[tokio::test]
+async fn invalid_fit_plans_are_refused_and_change_nothing() {
+    let (mut guest, port) = fit_guest();
+    let io_id = feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::Boolean
+        .as_io_cortical_id(false, *b"tst", 0u8.into(), 0u8.into());
+    let mut io = guest_area(io_id, "io_area", custom_kind(), 24);
+    io.cortical_type = CorticalAreaType::BrainOutput(
+        feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::Boolean,
+    );
+    add_area(&mut guest, io);
+    let ghost = cortical_id(b'c', b'z');
+
+    let cases = [
+        (
+            "unknown",
+            fit_plan_json(&ghost, [2, 1, 1]),
+            "not in the guest genome",
+        ),
+        ("zero", fit_plan_json(&port, [14, 0, 1]), "zero dimension"),
+        ("io", fit_plan_json(&io_id, [6, 1, 1]), "IO area"),
+        (
+            "malformed",
+            json!({ "areas": [{ "cortical_id": 7 }] }),
+            "Invalid fit_plan",
+        ),
+    ];
+    for (label, plan, expected) in cases {
+        let brain = build_host(1_000_000).await;
+        let before = brain.snapshot().await;
+        let (_, result) = brain
+            .augment_with_plan(&guest, AmalgamationSource::ExternalGenome, Some(plan))
+            .await;
+        let error = result.expect_err(label);
+        assert!(
+            format!("{error:?}").contains(expected),
+            "{label}: expected '{expected}' in {error:?}"
+        );
+        assert_eq!(brain.pending_count(), 0, "{label}: nothing may be pending");
+        assert_eq!(brain.snapshot().await, before, "{label}: host changed");
+    }
+}
+
+/// The queued circuit footprint comes from the fitted genome. The guest circuit designates the
+/// planned area as an input, so its plate width follows the area width: 12 wide gives a 16 wide
+/// input plate, 14 wide gives 18 (input plate + gap + empty 5 wide output plate).
+#[tokio::test]
+async fn queued_circuit_size_is_derived_from_the_fitted_genome() {
+    let (mut guest, port) = fit_guest();
+    let root = add_guest_root(&mut guest, &[]);
+    let circuit_id = new_region_id();
+    let circuit = BrainRegion::new(
+        RegionID::from_string(&circuit_id).expect("circuit id"),
+        "guest_circuit".to_string(),
+        RegionType::Undefined,
+    )
+    .expect("circuit")
+    .with_areas([port])
+    .with_properties(HashMap::from([
+        ("parent_region_id".to_string(), json!(root)),
+        ("designated_inputs".to_string(), json!([port.as_base_64()])),
+    ]));
+    guest.brain_regions.insert(circuit_id, circuit);
+
+    let plain = build_host(1_000_000).await;
+    plain
+        .queue_with_plan(&guest, json!({ "areas": [] }))
+        .await
+        .expect("empty plan queues");
+    assert_eq!(plain.pending_circuit_size(), [22, 1, 5]);
+
+    let fitted = build_host(1_000_000).await;
+    fitted
+        .queue_with_plan(&guest, fit_plan_json(&port, [14, 1, 1]))
+        .await
+        .expect("plan queues");
+    assert_eq!(fitted.pending_circuit_size(), [24, 1, 5]);
+    assert_eq!(fitted.pending_count(), 1);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fit plan wiring: adapter region, morphologies, mappings
+// ---------------------------------------------------------------------------------------------
+
+const STRIP: &str = "strip_one_to_one";
+
+/// Host IO area of the given direction (`input` = sensor side) and width, in the root region.
+/// Returns its base64 id.
+async fn add_host_io(brain: &TestBrain, input: bool, width: usize) -> String {
+    use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::Boolean;
+    let id = Boolean.as_io_cortical_id(input, *b"tst", 0u8.into(), 0u8.into());
+    let mut params = host_area_params(&id, "host_io", &brain.root_id);
+    params.dimensions = (width, 1, 1);
+    brain
+        .state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("host io area");
+    id.as_base_64()
+}
+
+fn strip_rows(n: i32) -> Vec<Value> {
+    (0..n).map(|i| json!([[i, 0, 0], [i, 0, 0]])).collect()
+}
+
+fn adapter_id() -> CorticalID {
+    cortical_id(b'c', b'x')
+}
+
+fn rule() -> Value {
+    json!({ "morphology_id": STRIP })
+}
+
+/// Port widened to `width`, one adapter area `width` wide, a one-to-one strip morphology with
+/// `rows` rows, and mappings port -> adapter -> `io`.
+fn wiring_plan(port: &CorticalID, io: &str, width: u32, rows: i32) -> Value {
+    json!({
+        "areas": [{ "cortical_id": port.as_base_64(), "dimensions": [width, 1, 1] }],
+        "adapter": {
+            "region_name": "block_adapter",
+            "areas": [{
+                "cortical_id": adapter_id().as_base_64(),
+                "name": "adapter_a",
+                "dimensions": [width, 1, 1],
+            }],
+        },
+        "morphologies": [{ "name": STRIP, "patterns": strip_rows(rows) }],
+        "mappings": [
+            { "src": port.as_base_64(), "dst": adapter_id().as_base_64(), "rules": [rule()] },
+            { "src": adapter_id().as_base_64(), "dst": io, "rules": [rule()] },
+        ],
+    })
+}
+
+/// (a) A 12 wide guest port with a 14 wide plan, one adapter area and a one-to-one strip morphology
+/// of 14 rows, wired port -> adapter -> host IO: the port is created 14x1x1, no area is rebuilt,
+/// and the adapter -> IO mapping holds 14 synapses. The adapter lands in its own region next to
+/// the block's, not inside it.
+#[tokio::test]
+async fn plan_wiring_creates_adapter_and_wires_port_to_host_io() {
+    let mut brain = build_host(1_000_000).await;
+    let recorder = record_genome_service(&mut brain);
+    let io = add_host_io(&brain, false, 14).await;
+    let (guest, port) = fit_guest();
+
+    let (_, result) = brain
+        .augment_with_plan(
+            &guest,
+            AmalgamationSource::ExternalGenome,
+            Some(wiring_plan(&port, &io, 14, 14)),
+        )
+        .await;
+    let response = result.expect("augment succeeds");
+    assert_eq!(count(&response, "plan_adapter_area_count"), 1);
+    assert_eq!(count(&response, "plan_morphology_count"), 1);
+    assert_eq!(count(&response, "plan_mapping_count"), 2);
+    let reports = response["plan_mappings"].as_array().expect("reports");
+    assert_eq!(reports[1]["dst"], json!(io));
+    assert_eq!(reports[1]["synapse_count"], json!(14), "{reports:?}");
+
+    let created = recorder.created.lock().clone();
+    assert!(created.contains(&("port_area".to_string(), (14, 1, 1))));
+    assert!(created.contains(&("adapter_a".to_string(), (14, 1, 1))));
+    assert!(
+        recorder.updated.lock().is_empty(),
+        "no rebuild path entered"
+    );
+
+    let connectome = &brain.state.connectome_service;
+    let adapter = connectome
+        .get_cortical_area(&adapter_id().as_base_64())
+        .await
+        .expect("adapter area");
+    assert_eq!(adapter.dimensions, (14, 1, 1));
+    assert_eq!(adapter.outgoing_synapse_count, 14);
+    let port_info = connectome
+        .get_cortical_area(&brain.area_id("port_area").await)
+        .await
+        .unwrap();
+    assert_eq!(port_info.dimensions, (14, 1, 1));
+    assert_eq!(
+        reports[0]["synapse_count"],
+        json!(14),
+        "port -> adapter strip"
+    );
+    assert!(port_info.outgoing_synapse_count >= 14);
+
+    let adapter_region = brain.region_by_name("block_adapter").await;
+    assert_eq!(
+        adapter_region.cortical_areas,
+        vec![adapter_id().as_base_64()]
+    );
+    let block_region = brain.region_by_name(GUEST_TITLE).await;
+    assert!(!block_region
+        .cortical_areas
+        .contains(&adapter_id().as_base_64()));
+    assert_eq!(
+        adapter_region.parent_id.as_deref(),
+        Some(brain.root_id.as_str())
+    );
+}
+
+/// (b) Each bad plan is refused at queue with a 400 and nothing pending or changed.
+#[tokio::test]
+async fn invalid_wiring_plans_are_refused_at_queue() {
+    let (guest, port) = fit_guest();
+    let adapter = adapter_id().as_base_64();
+    let ghost = cortical_id(b'c', b'z').as_base_64();
+    let io_adapter = {
+        use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::Boolean;
+        Boolean
+            .as_io_cortical_id(true, *b"adp", 0u8.into(), 0u8.into())
+            .as_base_64()
+    };
+    type PlanEdit<'a> = Box<dyn Fn(&mut Value) + 'a>;
+    let cases: Vec<(&str, PlanEdit<'_>, &str)> = vec![
+        (
+            "unknown end",
+            Box::new(|plan| plan["mappings"][1]["dst"] = json!(ghost)),
+            "is not a guest area, an adapter area or an existing host area",
+        ),
+        (
+            "io adapter area",
+            Box::new(|plan| plan["adapter"]["areas"][0]["cortical_id"] = json!(io_adapter)),
+            "is an IO area",
+        ),
+        (
+            "duplicate morphology",
+            Box::new(|plan| {
+                let first = plan["morphologies"][0].clone();
+                plan["morphologies"].as_array_mut().unwrap().push(first);
+            }),
+            "defined twice",
+        ),
+        (
+            "guest morphology clash",
+            Box::new(|plan| plan["morphologies"][0]["name"] = json!("projector")),
+            "clashes with a guest or host morphology",
+        ),
+        (
+            "host morphology clash",
+            Box::new(|plan| plan["morphologies"][0]["name"] = json!("host_morph")),
+            "clashes with a guest or host morphology",
+        ),
+        (
+            "rows outside the host area (depth mismatch)",
+            Box::new(|plan| {
+                plan["mappings"][1]["dst"] = plan["mappings"][1]["dst"].clone();
+            }),
+            "is outside the destination area",
+        ),
+        (
+            "unknown morphology",
+            Box::new(|plan| plan["mappings"][0]["rules"] = json!([{ "morphology_id": "nope" }])),
+            "uses morphology 'nope'",
+        ),
+        (
+            "wildcard row",
+            Box::new(|plan| {
+                plan["morphologies"][0]["patterns"][0] = json!([["*", 0, 0], [0, 0, 0]])
+            }),
+            "Invalid fit_plan",
+        ),
+    ];
+    for (label, edit, expected) in cases {
+        let brain = build_host(1_000_000).await;
+        brain
+            .state
+            .connectome_service
+            .create_morphology("host_morph".to_string(), function_morphology())
+            .await
+            .expect("host morphology");
+        // The host IO is 13 wide: the 14 row strip does not fit it (used by the depth case).
+        let io = add_host_io(
+            &brain,
+            false,
+            if label.starts_with("rows") { 13 } else { 14 },
+        )
+        .await;
+        let mut plan = wiring_plan(&port, &io, 14, 14);
+        edit(&mut plan);
+        assert_ne!(adapter, io);
+        let before = brain.snapshot().await;
+        let (_, result) = brain
+            .augment_with_plan(&guest, AmalgamationSource::ExternalGenome, Some(plan))
+            .await;
+        let error = result.expect_err(label);
+        assert!(
+            format!("{error:?}").contains(expected),
+            "{label}: expected '{expected}' in {error:?}"
+        );
+        assert_eq!(brain.pending_count(), 0, "{label}: nothing may be pending");
+        assert_eq!(brain.snapshot().await, before, "{label}: host changed");
+    }
+}
+
+/// (c) A failure after areas, morphologies and the first mappings exist (a rule the mapping
+/// service rejects) rolls everything back: area, region, mapping and morphology sets, the host IO's
+/// outgoing mappings and the total synapse count are exactly as before.
+#[tokio::test]
+async fn failure_during_plan_wiring_rolls_everything_back() {
+    let brain = build_host(1_000_000).await;
+    let io_in = add_host_io(&brain, true, 14).await;
+    let io_out = add_host_io(&brain, false, 14).await;
+    let (guest, port) = fit_guest();
+    let mut plan = wiring_plan(&port, &io_out, 14, 14);
+    // Host IO (sensor side) -> adapter, then a mapping the service refuses (plasticity keys
+    // missing), after everything else of the plan exists.
+    plan["mappings"] = json!([
+        { "src": port.as_base_64(), "dst": adapter_id().as_base_64(), "rules": [rule()] },
+        { "src": io_in, "dst": adapter_id().as_base_64(), "rules": [rule()] },
+        {
+            "src": adapter_id().as_base_64(),
+            "dst": io_out,
+            "rules": [{ "morphology_id": STRIP, "plasticity_flag": true }],
+        },
+    ]);
+
+    let before = brain.snapshot().await;
+    let (_, result) = brain
+        .augment_with_plan(&guest, AmalgamationSource::ExternalGenome, Some(plan))
+        .await;
+    let error = result.expect_err("third mapping must fail");
+    assert!(format!("{error:?}").contains("plan mapping"), "{error:?}");
+    assert!(
+        !format!("{error:?}").contains("Rollback could not remove"),
+        "{error:?}"
+    );
+    assert!(brain.pending_cleared());
+    assert_eq!(brain.last_history_status().as_deref(), Some("cancelled"));
+    let after = brain.snapshot().await;
+    assert_eq!(after.areas.len() - before.areas.len(), 0, "area delta");
+    assert_eq!(
+        after.regions.len() - before.regions.len(),
+        0,
+        "region delta"
+    );
+    assert_eq!(
+        after.morphologies.len() - before.morphologies.len(),
+        0,
+        "morphology delta"
+    );
+    assert_eq!(
+        after.mappings, before.mappings,
+        "mappings (host IO outgoing)"
+    );
+    assert_eq!(
+        after.outgoing_synapses, before.outgoing_synapses,
+        "outgoing synapses of every host area"
+    );
+    assert_eq!(after, before);
+    let io = brain
+        .state
+        .connectome_service
+        .get_cortical_area(&io_in)
+        .await
+        .unwrap();
+    assert_eq!(io.outgoing_synapse_count, 0);
+}
+
+/// (d) A host area the wiring ends on changed size between queue and confirm: confirm is refused
+/// and nothing is created or changed.
+#[tokio::test]
+async fn host_io_resized_between_queue_and_confirm_is_refused() {
+    let brain = build_host(1_000_000).await;
+    let io = add_host_io(&brain, false, 14).await;
+    let (guest, port) = fit_guest();
+    let id = brain
+        .queue_with_plan(&guest, wiring_plan(&port, &io, 14, 14))
+        .await
+        .expect("queues");
+    brain
+        .state
+        .genome_service
+        .update_cortical_area(
+            &io,
+            HashMap::from([("cortical_dimensions".to_string(), json!([12, 1, 1]))]),
+        )
+        .await
+        .expect("resize host io");
+    assert_eq!(
+        brain
+            .state
+            .connectome_service
+            .get_cortical_area(&io)
+            .await
+            .unwrap()
+            .dimensions,
+        (12, 1, 1)
+    );
+
+    let before = brain.snapshot().await;
+    let error = brain.confirm(&id).await.expect_err("must be refused");
+    assert!(format!("{error:?}").contains("changed size"), "{error:?}");
+    assert_eq!(brain.snapshot().await, before);
+}
+
+/// (f) The region, areas, morphology and mappings a plan created are in the saved genome and come
+/// back from loading it.
+#[tokio::test]
+async fn plan_wiring_survives_genome_save_and_load() {
+    let brain = build_host(1_000_000).await;
+    let io = add_host_io(&brain, false, 14).await;
+    let (guest, port) = fit_guest();
+    let (_, result) = brain
+        .augment_with_plan(
+            &guest,
+            AmalgamationSource::ExternalGenome,
+            Some(wiring_plan(&port, &io, 14, 14)),
+        )
+        .await;
+    result.expect("augment succeeds");
+
+    let saved = brain
+        .state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let loaded = feagi_evolutionary::load_genome_from_json(&saved).expect("load");
+
+    let adapter = adapter_id();
+    let adapter_area = loaded.cortical_areas.get(&adapter).expect("adapter area");
+    assert_eq!(adapter_area.dimensions.width, 14);
+    let region = loaded
+        .brain_regions
+        .values()
+        .find(|r| r.name == "block_adapter")
+        .expect("adapter region");
+    assert!(region.cortical_areas.contains(&adapter));
+    let morphology = loaded.morphologies.get(STRIP).expect("morphology");
+    match &morphology.parameters {
+        MorphologyParameters::Patterns { patterns } => assert_eq!(patterns.len(), 14),
+        other => panic!("not a patterns morphology: {other:?}"),
+    }
+    let dst = adapter_area
+        .properties
+        .get("cortical_mapping_dst")
+        .and_then(Value::as_object)
+        .expect("adapter mapping");
+    assert!(dst.contains_key(&io), "{dst:?}");
+    let port_new = loaded
+        .cortical_areas
+        .values()
+        .find(|a| a.name == "port_area")
+        .expect("port area");
+    assert_eq!(port_new.dimensions.width, 14);
+    let into_adapter = port_new
+        .properties
+        .get("cortical_mapping_dst")
+        .and_then(Value::as_object)
+        .expect("port mapping");
+    assert!(
+        into_adapter.contains_key(&adapter.as_base_64()),
+        "{into_adapter:?}"
+    );
+}
+
+/// P2: a plan with no guest areas applies later as its own call: the block is already on the host
+/// (its areas are host areas), and the plan adds only the adapter and the wiring.
+#[tokio::test]
+async fn plan_without_guest_areas_wires_existing_host_areas_later() {
+    let brain = build_host(1_000_000).await;
+    let io = add_host_io(&brain, false, 14).await;
+    // The block was added earlier, sized but unwired: a 14 wide host port.
+    let port = host_area_id(b'p');
+    let host_region = brain.region_by_name("host_circuit").await.region_id;
+    let mut params = host_area_params(&port, "late_port", &host_region);
+    params.dimensions = (14, 1, 1);
+    brain
+        .state
+        .genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .expect("port");
+    let mut plan = wiring_plan(&port, &io, 14, 14);
+    plan["areas"] = json!([]);
+
+    let before = brain.snapshot().await;
+    let (_, result) = brain
+        .augment_with_plan(
+            &empty_guest(),
+            AmalgamationSource::ExternalGenome,
+            Some(plan),
+        )
+        .await;
+    let response = result.expect("later wiring applies");
+    assert_eq!(count(&response, "imported_new_area_count"), 0);
+    assert_eq!(count(&response, "plan_adapter_area_count"), 1);
+    assert_eq!(count(&response, "plan_mapping_count"), 2);
+    let after = brain.snapshot().await;
+    assert_eq!(
+        after.areas.len() - before.areas.len(),
+        1,
+        "only the adapter area"
+    );
+    assert_eq!(
+        brain
+            .state
+            .connectome_service
+            .get_cortical_area(&adapter_id().as_base_64())
+            .await
+            .unwrap()
+            .outgoing_synapse_count,
+        14
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Block wiring as its own call
+// ---------------------------------------------------------------------------------------------
+
+struct Added {
+    block_region_id: String,
+    port: String,
+    io: String,
+}
+
+/// Add the guest block with its port widened to 14 (dimensions-only plan) and a 14 wide host IO.
+async fn add_block(brain: &TestBrain) -> Added {
+    let io = add_host_io(brain, false, 14).await;
+    let (guest, port) = fit_guest();
+    let (_, result) = brain
+        .augment_with_plan(
+            &guest,
+            AmalgamationSource::ExternalGenome,
+            Some(fit_plan_json(&port, [14, 1, 1])),
+        )
+        .await;
+    result.expect("block added");
+    Added {
+        block_region_id: brain.region_by_name(GUEST_TITLE).await.region_id,
+        port: brain.area_id("port_area").await,
+        io,
+    }
+}
+
+fn stamp() -> Value {
+    json!({ "role": "body", "sizes": [14, 1] })
+}
+
+fn wiring_request(added: &Added, rows: Vec<Value>) -> Value {
+    json!({
+        "block_region_id": added.block_region_id,
+        "adapter": {
+            "region_name": "wired_adapter",
+            "areas": [{
+                "cortical_id": adapter_id().as_base_64(),
+                "name": "adapter_a",
+                "dimensions": [14, 1, 1],
+            }],
+        },
+        "morphologies": [{ "name": STRIP, "patterns": rows }],
+        "mappings": [
+            { "src": added.port, "dst": adapter_id().as_base_64(), "rules": [rule()] },
+            { "src": adapter_id().as_base_64(), "dst": added.io, "rules": [rule()] },
+        ],
+        "stamp": stamp(),
+    })
+}
+
+async fn wire(brain: &TestBrain, body: Value) -> Result<HandlerResponse, ApiError> {
+    post_block_wiring(
+        State(brain.state.clone()),
+        Json(serde_json::from_value(body).expect("request")),
+    )
+    .await
+    .map(|json| json.0)
+}
+
+async fn unwire(brain: &TestBrain, adapter_region_id: &str) -> Result<HandlerResponse, ApiError> {
+    post_block_wiring_removal(
+        State(brain.state.clone()),
+        Json(
+            serde_json::from_value(json!({ "adapter_region_id": adapter_region_id }))
+                .expect("request"),
+        ),
+    )
+    .await
+    .map(|json| json.0)
+}
+
+fn region_id_of(response: &HandlerResponse) -> String {
+    response["adapter_region_id"]
+        .as_str()
+        .expect("id")
+        .to_string()
+}
+
+fn permuted_rows() -> Vec<Value> {
+    (0..14)
+        .map(|i| json!([[i, 0, 0], [13 - i, 0, 0]]))
+        .collect()
+}
+
+/// (a) Wiring an added block creates exactly one region (the adapter), 14 adapter -> IO
+/// synapses, and the adapter region carries its marker and stamp, readable through the region API.
+#[tokio::test]
+async fn block_wiring_creates_only_the_adapter_region() {
+    let brain = build_host(1_000_000).await;
+    let added = add_block(&brain).await;
+    let before = brain.snapshot().await;
+
+    let response = wire(&brain, wiring_request(&added, strip_rows(14)))
+        .await
+        .expect("wired");
+    let after = brain.snapshot().await;
+    assert_eq!(after.regions.len() - before.regions.len(), 1, "regions");
+    assert_eq!(after.areas.len() - before.areas.len(), 1, "areas");
+    assert_eq!(response["mappings"][1]["synapse_count"], json!(14));
+    let adapter = brain
+        .state
+        .connectome_service
+        .get_cortical_area(&adapter_id().as_base_64())
+        .await
+        .unwrap();
+    assert_eq!(adapter.outgoing_synapse_count, 14);
+
+    let region = brain
+        .state
+        .connectome_service
+        .get_brain_region(&region_id_of(&response))
+        .await
+        .expect("adapter region");
+    assert_eq!(
+        region.properties["adapter_for"],
+        json!(added.block_region_id)
+    );
+    assert_eq!(region.properties["stamp"], stamp());
+    assert_eq!(region.name, "wired_adapter");
+    assert_eq!(region.cortical_areas, vec![adapter_id().as_base_64()]);
+}
+
+/// (b) Bad wiring plans are refused with a 400 and nothing changes.
+#[tokio::test]
+async fn invalid_block_wiring_is_refused_and_changes_nothing() {
+    let brain = build_host(1_000_000).await;
+    brain
+        .state
+        .connectome_service
+        .create_morphology("host_morph".to_string(), function_morphology())
+        .await
+        .expect("host morphology");
+    let added = add_block(&brain).await;
+    let io_adapter = {
+        use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::Boolean;
+        Boolean
+            .as_io_cortical_id(true, *b"adp", 0u8.into(), 0u8.into())
+            .as_base_64()
+    };
+    let ghost = cortical_id(b'c', b'z').as_base_64();
+    type Edit<'a> = Box<dyn Fn(&mut Value) + 'a>;
+    let cases: Vec<(&str, Edit<'_>, &str)> = vec![
+        (
+            "unknown end",
+            Box::new(|r| r["mappings"][1]["dst"] = json!(ghost)),
+            "is not a guest area, an adapter area or an existing host area",
+        ),
+        (
+            "io adapter area",
+            Box::new(|r| r["adapter"]["areas"][0]["cortical_id"] = json!(io_adapter)),
+            "is an IO area",
+        ),
+        (
+            "duplicate morphology",
+            Box::new(|r| {
+                let first = r["morphologies"][0].clone();
+                r["morphologies"].as_array_mut().unwrap().push(first);
+            }),
+            "defined twice",
+        ),
+        (
+            "morphology clash",
+            Box::new(|r| r["morphologies"][0]["name"] = json!("host_morph")),
+            "clashes with a guest or host morphology",
+        ),
+        (
+            "rows outside the end",
+            Box::new(|r| r["morphologies"][0]["patterns"][13] = json!([[13, 0, 0], [14, 0, 0]])),
+            "is outside the destination area",
+        ),
+        (
+            "unknown block",
+            Box::new(|r| r["block_region_id"] = json!(new_region_id())),
+            "does not exist",
+        ),
+    ];
+    for (label, edit, expected) in cases {
+        let mut body = wiring_request(&added, strip_rows(14));
+        edit(&mut body);
+        let before = brain.snapshot().await;
+        let error = wire(&brain, body).await.expect_err(label);
+        assert_eq!(error.code, 400, "{label}");
+        assert!(
+            format!("{error:?}").contains(expected),
+            "{label}: expected '{expected}' in {error:?}"
+        );
+        assert_eq!(brain.snapshot().await, before, "{label}: host changed");
+    }
+}
+
+/// (c) Rewire with a permuted row set replaces the old mappings and keeps the region count. A
+/// failure in the create part keeps the old adapter and changes nothing.
+#[tokio::test]
+async fn rewire_replaces_the_adapter_or_keeps_the_old_one() {
+    let brain = build_host(1_000_000).await;
+    let added = add_block(&brain).await;
+    let first = wire(&brain, wiring_request(&added, strip_rows(14)))
+        .await
+        .expect("wired");
+    let old_id = region_id_of(&first);
+    let wired = brain.snapshot().await;
+    let original_rows = format!(
+        "{:?}",
+        brain
+            .state
+            .connectome_service
+            .get_morphologies()
+            .await
+            .unwrap()[STRIP]
+            .parameters
+    );
+
+    // Injected failure: the second adapter mapping carries a rule the mapping service refuses.
+    let mut failing = wiring_request(&added, permuted_rows());
+    failing["replaces_adapter_region_id"] = json!(old_id);
+    failing["mappings"][1]["rules"] = json!([{ "morphology_id": STRIP, "plasticity_flag": true }]);
+    let error = wire(&brain, failing).await.expect_err("create part fails");
+    assert!(
+        format!("{error:?}").contains("The previous adapter was kept"),
+        "{error:?}"
+    );
+    assert_eq!(brain.snapshot().await, wired, "old adapter intact");
+    let kept = brain
+        .state
+        .connectome_service
+        .get_morphologies()
+        .await
+        .unwrap();
+    assert_eq!(
+        format!("{:?}", kept[STRIP].parameters),
+        original_rows,
+        "old morphology kept"
+    );
+    let old_region = brain
+        .state
+        .connectome_service
+        .get_brain_region(&old_id)
+        .await
+        .expect("old region kept");
+    assert_eq!(old_region.properties["stamp"], stamp());
+
+    let mut rewire = wiring_request(&added, permuted_rows());
+    rewire["replaces_adapter_region_id"] = json!(old_id);
+    let response = wire(&brain, rewire).await.expect("rewired");
+    let after = brain.snapshot().await;
+    assert_eq!(after.regions.len(), wired.regions.len(), "region count");
+    assert!(!after.regions.contains(&old_id), "old region gone");
+    assert!(after.regions.contains(&region_id_of(&response)));
+    assert_eq!(response["replaced_adapter_region_id"], json!(old_id));
+    assert_eq!(response["mappings"][1]["synapse_count"], json!(14));
+    let morphologies = brain
+        .state
+        .connectome_service
+        .get_morphologies()
+        .await
+        .unwrap();
+    let rows = format!("{:?}", morphologies[STRIP].parameters);
+    assert_ne!(rows, original_rows, "new row set replaced the old");
+}
+
+/// (d) Removing the adapter takes the area, region, morphology and mappings back to the state
+/// before the wiring.
+#[tokio::test]
+async fn removing_the_adapter_restores_the_pre_wiring_state() {
+    let brain = build_host(1_000_000).await;
+    let added = add_block(&brain).await;
+    let before = brain.snapshot().await;
+    let response = wire(&brain, wiring_request(&added, strip_rows(14)))
+        .await
+        .expect("wired");
+    assert_ne!(brain.snapshot().await, before);
+
+    let removed = unwire(&brain, &region_id_of(&response))
+        .await
+        .expect("removed");
+    assert_eq!(removed["removed_area_count"], json!(1));
+    assert_eq!(brain.snapshot().await, before);
+
+    let error = unwire(&brain, &added.block_region_id)
+        .await
+        .expect_err("a block region is not an adapter");
+    assert_eq!(error.code, 400);
+    assert_eq!(brain.snapshot().await, before);
+}
+
+/// (e) The adapter marker, the caller's stamp and the block's published-to-live id map are in the
+/// saved genome and identical after loading it.
+#[tokio::test]
+async fn adapter_marker_stamp_and_block_remap_survive_save_and_load() {
+    let brain = build_host(1_000_000).await;
+    let added = add_block(&brain).await;
+    let response = wire(&brain, wiring_request(&added, strip_rows(14)))
+        .await
+        .expect("wired");
+    let adapter_region_id = region_id_of(&response);
+    let live_block = brain
+        .state
+        .connectome_service
+        .get_brain_region(&added.block_region_id)
+        .await
+        .unwrap();
+    let published_to_live = live_block.properties["published_to_live"].clone();
+    assert_eq!(
+        published_to_live.as_object().map(|m| m.len()),
+        Some(2),
+        "both custom guest areas remapped: {published_to_live}"
+    );
+    assert_eq!(
+        live_block.properties["source_release_id"],
+        json!("release-1")
+    );
+    assert_eq!(live_block.properties["source_catalog"], json!("staging"));
+
+    let saved = brain
+        .state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let loaded = feagi_evolutionary::load_genome_from_json(&saved).expect("load");
+    let adapter = &loaded.brain_regions[&adapter_region_id];
+    assert_eq!(
+        adapter.properties["adapter_for"],
+        json!(added.block_region_id)
+    );
+    assert_eq!(adapter.properties["stamp"], stamp());
+    let block = &loaded.brain_regions[&added.block_region_id];
+    assert_eq!(block.properties["published_to_live"], published_to_live);
+    assert_eq!(block.properties["source_release_id"], json!("release-1"));
+    assert_eq!(block.properties["source_catalog"], json!("staging"));
 }

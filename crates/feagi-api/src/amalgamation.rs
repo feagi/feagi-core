@@ -52,6 +52,16 @@ pub struct AmalgamationPending {
     pub source: AmalgamationSource,
     /// Original genome JSON payload (as string) for deterministic replay on confirmation.
     pub genome_json: String,
+    /// Dimensions to create guest areas at, validated at queue time; `None` imports them as
+    /// published.
+    pub fit_plan: Option<feagi_evolutionary::FitPlan>,
+    /// Size of each existing host area the plan's mappings end on, as read when the plan was
+    /// queued. Confirmation refuses when one differs; empty without plan wiring.
+    pub fit_host_ends: std::collections::HashMap<String, [u32; 3]>,
+    /// Hub release the guest came from, when the caller named one; stamped on the block region.
+    pub source_release_id: Option<String>,
+    /// Which Hub catalog that release came from (opaque to core); stamped beside it.
+    pub source_catalog: Option<String>,
 }
 
 /// Historical record for completed/cancelled requests.

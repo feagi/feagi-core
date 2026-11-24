@@ -3071,6 +3071,69 @@ mod sensory_registration_frame_mode_tests {
             expected_incremental
         );
     }
+
+    fn servo_unit(group: u16, frame: &str, bundle: &str) -> serde_json::Value {
+        json!([
+            {
+                "cortical_unit_index": group,
+                "io_configuration_flags": {
+                    "frame_change_handling": frame,
+                    "percentage_neuron_positioning": "Linear"
+                },
+                "device_grouping": [
+                    {
+                        "friendly_name": bundle,
+                        "device_properties": { "bundle_id": bundle }
+                    }
+                ]
+            },
+            {}
+        ])
+    }
+
+    #[test]
+    fn absolute_and_incremental_servo_units_provision_two_distinct_areas() {
+        let registration = json!({
+            "input_units_and_encoder_properties": {
+                "Servo": [
+                    servo_unit(60, "Absolute", "position"),
+                    servo_unit(61, "Incremental", "velocity")
+                ]
+            }
+        });
+        let derived = derive_sensory_cortical_ids_from_device_registrations(&registration)
+            .expect("derive sensory IDs");
+        assert_eq!(derived.len(), 2, "one area per frame mode: {derived:?}");
+        let id_for = |frame, group: u16| {
+            SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+                frame,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(group),
+            )[0]
+            .as_base_64()
+        };
+        assert!(derived.contains(&id_for(FrameChangeHandling::Absolute, 60)));
+        assert!(derived.contains(&id_for(FrameChangeHandling::Incremental, 61)));
+    }
+
+    #[test]
+    fn same_index_absolute_and_incremental_servo_ids_differ() {
+        let registration = json!({
+            "input_units_and_encoder_properties": {
+                "Servo": [
+                    servo_unit(60, "Absolute", "position"),
+                    servo_unit(60, "Incremental", "velocity")
+                ]
+            }
+        });
+        let derived = derive_sensory_cortical_ids_from_device_registrations(&registration)
+            .expect("derive sensory IDs");
+        assert_eq!(
+            derived.len(),
+            2,
+            "frame flag must change the id: {derived:?}"
+        );
+    }
 }
 
 #[cfg(test)]

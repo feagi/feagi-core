@@ -42,6 +42,10 @@ fn queue_amalgamation_from_genome_json_str(
         summary: summary.clone(),
         source: amalgamation::AmalgamationSource::SameBrainClone,
         genome_json,
+        fit_plan: None,
+        fit_host_ends: HashMap::new(),
+        source_release_id: None,
+        source_catalog: None,
     };
 
     {

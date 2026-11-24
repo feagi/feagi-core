@@ -6,6 +6,7 @@
 
 #[path = "agent.rs.disabled"]
 pub mod agent; // ✅ COMPLETE - /v1/agent/* endpoints
+pub mod block_wiring; // /v1/genome/block_wiring* (adapter region for an added block)
 pub mod burst_engine; // ✅ COMPLETE - /v1/burst_engine/* (14 endpoints)
 pub mod connectome; // ✅ COMPLETE - /v1/connectome/* (3 endpoints)
 pub mod cortical_area; // ✅ COMPLETE - /v1/cortical_area/* (23 endpoints)

@@ -1222,6 +1222,19 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(genome::post_amalgamation_by_payload)
                 .layer(DefaultBodyLimit::disable()),
         )
+        .route(
+            "/genome/block_wiring",
+            axum::routing::post(crate::endpoints::block_wiring::post_block_wiring),
+        )
+        .route(
+            "/genome/block_wiring_removal",
+            axum::routing::post(crate::endpoints::block_wiring::post_block_wiring_removal),
+        )
+        .route(
+            "/genome/amalgamation_by_payload_with_fit",
+            axum::routing::post(genome::post_amalgamation_by_payload_with_fit)
+                .layer(DefaultBodyLimit::disable()),
+        )
         // Genome multipart / large JSON uploads exceed Axum's default 2 MiB body
         // limit. Size policy stays with genome validation, not HTTP framing.
         .route(

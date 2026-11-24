@@ -59,9 +59,101 @@ pub struct GenomeFileUploadForm {
     pub file: String,
 }
 
-fn queue_amalgamation_from_genome_json_str(
+/// The host data a plan's wiring is validated against.
+pub(crate) struct PlanHost {
+    /// Size of each id the plan names that exists on the host (mapping ends and adapter ids).
+    pub(crate) areas: HashMap<String, [u32; 3]>,
+    pub(crate) morphologies: std::collections::HashSet<String>,
+}
+
+pub(crate) async fn read_plan_host(
+    state: &ApiState,
+    plan: &feagi_evolutionary::FitPlan,
+    fitted_guest_areas: &HashMap<
+        feagi_structures::genomic::cortical_area::CorticalID,
+        feagi_structures::genomic::cortical_area::CorticalArea,
+    >,
+) -> Result<PlanHost, ApiError> {
+    let connectome = state.connectome_service.as_ref();
+    let mut areas: HashMap<String, [u32; 3]> = HashMap::new();
+    for id in feagi_evolutionary::plan_host_lookup_ids(fitted_guest_areas, plan) {
+        match connectome.get_cortical_area(&id).await {
+            Ok(info) => {
+                let (x, y, z) = info.dimensions;
+                areas.insert(id, [x as u32, y as u32, z as u32]);
+            }
+            Err(e) if is_not_found(&e) => {}
+            Err(e) => {
+                return Err(ApiError::internal(format!(
+                    "Failed to read host area {}: {}",
+                    id, e
+                )))
+            }
+        }
+    }
+    let morphologies = connectome
+        .get_morphologies()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list host morphologies: {}", e)))?
+        .into_keys()
+        .collect();
+    Ok(PlanHost {
+        areas,
+        morphologies,
+    })
+}
+
+/// Validate the plan's wiring against `host` (pure; see `feagi_evolutionary::validate_plan`) and
+/// check that every morphology its rules name, but the plan does not define, exists on the host
+/// or in the guest genome.
+pub(crate) fn check_plan_wiring(
+    plan: &feagi_evolutionary::FitPlan,
+    fitted_guest_areas: &HashMap<
+        feagi_structures::genomic::cortical_area::CorticalID,
+        feagi_structures::genomic::cortical_area::CorticalArea,
+    >,
+    guest_morphologies: &std::collections::HashSet<String>,
+    host: &PlanHost,
+) -> Result<(), ApiError> {
+    feagi_evolutionary::validate_plan(
+        &feagi_evolutionary::PlanContext {
+            guest_areas: fitted_guest_areas,
+            guest_morphologies,
+            host_areas: &host.areas,
+            host_morphologies: &host.morphologies,
+        },
+        plan,
+    )
+    .map_err(|e| ApiError::invalid_input(format!("Invalid fit_plan: {}", e)))?;
+    let defined: std::collections::HashSet<&str> =
+        plan.morphologies.iter().map(|m| m.name.as_str()).collect();
+    for mapping in &plan.mappings {
+        for rule in &mapping.rules {
+            let name = rule
+                .get("morphology_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            if !defined.contains(name)
+                && !host.morphologies.contains(name)
+                && !guest_morphologies.contains(name)
+            {
+                return Err(ApiError::invalid_input(format!(
+                    "Invalid fit_plan: mapping {} -> {} uses morphology '{}', which is not in the \
+                     plan, the guest genome or the host",
+                    mapping.src, mapping.dst, name
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn queue_amalgamation_from_genome_json_str(
     state: &ApiState,
     genome_json: String,
+    fit_plan: Option<feagi_evolutionary::FitPlan>,
+    source_release_id: Option<String>,
+    source_catalog: Option<String>,
 ) -> Result<String, ApiError> {
     // Only one pending amalgamation is supported per FEAGI session (matches BV workflow).
     {
@@ -73,8 +165,25 @@ fn queue_amalgamation_from_genome_json_str(
         }
     }
 
-    let genome = feagi_evolutionary::load_genome_from_json(&genome_json)
+    let mut genome = feagi_evolutionary::load_genome_from_json(&genome_json)
         .map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
+
+    // Validate the fit plan now so a bad plan is refused at queue time with nothing pending, and
+    // size the placement preview from the fitted areas (the footprint that will be created).
+    // The host ends the wiring names are read now and kept: confirmation refuses when their
+    // size changed in between.
+    let mut fit_host_ends: HashMap<String, [u32; 3]> = HashMap::new();
+    if let Some(plan) = &fit_plan {
+        genome.cortical_areas = feagi_evolutionary::fit_areas(&genome.cortical_areas, plan)
+            .map_err(|e| ApiError::invalid_input(format!("Invalid fit_plan: {}", e)))?;
+        if plan.has_wiring() {
+            let guest_morphologies: std::collections::HashSet<String> =
+                genome.morphologies.morphology_ids().into_iter().collect();
+            let host = read_plan_host(state, plan, &genome.cortical_areas).await?;
+            check_plan_wiring(plan, &genome.cortical_areas, &guest_morphologies, &host)?;
+            fit_host_ends = host.areas;
+        }
+    }
 
     let circuit_size = amalgamation::compute_circuit_size_from_runtime_genome(&genome);
 
@@ -91,6 +200,10 @@ fn queue_amalgamation_from_genome_json_str(
         summary: summary.clone(),
         source: amalgamation::AmalgamationSource::ExternalGenome,
         genome_json,
+        fit_plan,
+        fit_host_ends,
+        source_release_id,
+        source_catalog,
     };
 
     {
@@ -514,9 +627,12 @@ struct AmalgamationCreated {
     adopted_modulators: Vec<String>,
     morphologies: Vec<String>,
     classifiers: Vec<String>,
+    /// `(src, dst)` of every mapping a fit plan created, so a failure removes exactly those
+    /// (including ones whose source is an existing host area).
+    plan_mappings: Vec<(String, String)>,
 }
 
-fn is_not_found(error: &feagi_services::ServiceError) -> bool {
+pub(crate) fn is_not_found(error: &feagi_services::ServiceError) -> bool {
     matches!(error, feagi_services::ServiceError::NotFound { .. })
 }
 
@@ -539,6 +655,14 @@ async fn rollback_amalgamation(state: &ApiState, created: &AmalgamationCreated) 
         );
         failures.push(format!("{what} ({error})"));
     };
+    for (src, dst) in created.plan_mappings.iter().rev() {
+        if let Err(e) = connectome
+            .update_cortical_mapping(src.clone(), dst.clone(), Vec::new())
+            .await
+        {
+            note(format!("mapping {src} -> {dst}"), e);
+        }
+    }
     for id in created.classifiers.iter().rev() {
         if let Err(e) = connectome.delete_classifier(id).await {
             note(format!("classifier {id}"), e);
@@ -572,7 +696,8 @@ async fn rollback_amalgamation(state: &ApiState, created: &AmalgamationCreated) 
     if !created.regions.is_empty() || !created.areas.is_empty() {
         tracing::warn!(
             target: "feagi-api",
-            "🧬 [AMALGAMATION] Rolled back after a failure: {} classifiers, {} areas, {} modulators, {} morphologies, {} regions",
+            "🧬 [AMALGAMATION] Rolled back after a failure: {} plan mappings, {} classifiers, {} areas, {} modulators, {} morphologies, {} regions",
+            created.plan_mappings.len(),
             created.classifiers.len(),
             created.areas.len(),
             created.owned_modulators.len() + created.adopted_modulators.len(),
@@ -613,6 +738,80 @@ async fn apply_amalgamation(
             ))
         })?;
 
+    // Fit before any area is created (a later resize would rebuild the area). The plan was
+    // validated and stored when the amalgamation was queued; it names guest ids as published, so
+    // this runs before the Custom/Memory id remap below.
+    if let Some(plan) = &pending.fit_plan {
+        imported_genome.cortical_areas =
+            feagi_evolutionary::fit_areas(&imported_genome.cortical_areas, plan)
+                .map_err(|e| ApiError::invalid_input(format!("Invalid fit_plan: {}", e)))?;
+    }
+
+    // The plan's wiring was validated against the host when it was queued. The host may have
+    // changed since: read it again and refuse (nothing is created yet) when a host area the
+    // wiring ends on is gone or has another size, or when anything else no longer holds.
+    let wiring = pending.fit_plan.as_ref().filter(|plan| plan.has_wiring());
+    if let Some(plan) = wiring {
+        let guest_morphologies: std::collections::HashSet<String> = imported_genome
+            .morphologies
+            .morphology_ids()
+            .into_iter()
+            .collect();
+        let host_now = read_plan_host(state, plan, &imported_genome.cortical_areas).await?;
+        for (id, expected) in &pending.fit_host_ends {
+            match host_now.areas.get(id) {
+                Some(now) if now == expected => {}
+                Some(now) => {
+                    return Err(ApiError::invalid_input(format!(
+                        "Host area {} changed size since the plan was queued ({:?} -> {:?}); \
+                         queue the block again",
+                        id, expected, now
+                    )))
+                }
+                None => {
+                    return Err(ApiError::invalid_input(format!(
+                        "Host area {} no longer exists; queue the block again",
+                        id
+                    )))
+                }
+            }
+        }
+        check_plan_wiring(
+            plan,
+            &imported_genome.cortical_areas,
+            &guest_morphologies,
+            &host_now,
+        )?;
+        // A mapping out of an existing host area replaces any rule already there, which a
+        // rollback could not restore: refuse it.
+        let guest_ids: std::collections::HashSet<String> = imported_genome
+            .cortical_areas
+            .keys()
+            .map(|id| id.as_base_64())
+            .collect();
+        for mapping in &plan.mappings {
+            if guest_ids.contains(&mapping.src) || !host_now.areas.contains_key(&mapping.src) {
+                continue;
+            }
+            let properties = connectome_service
+                .get_cortical_area_properties(&mapping.src)
+                .await
+                .map_err(|e| {
+                    ApiError::internal(format!("Failed to read area {}: {}", mapping.src, e))
+                })?;
+            let wired = properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .is_some_and(|dsts| dsts.contains_key(&mapping.dst));
+            if wired {
+                return Err(ApiError::invalid_input(format!(
+                    "Invalid fit_plan: host mapping {} -> {} already exists",
+                    mapping.src, mapping.dst
+                )));
+            }
+        }
+    }
+
     let host_cortical_ids: std::collections::HashSet<String> = connectome_service
         .get_cortical_area_ids()
         .await
@@ -620,10 +819,15 @@ async fn apply_amalgamation(
         .into_iter()
         .collect();
 
+    // Adapter ids are not in the genome, so the remap must be told to keep clear of them.
+    let mut remap_reserved_ids = host_cortical_ids.clone();
+    if let Some(adapter) = wiring.and_then(|plan| plan.adapter.as_ref()) {
+        remap_reserved_ids.extend(adapter.areas.iter().map(|a| a.cortical_id.clone()));
+    }
     let remapped_guest_custom_memory_ids =
         feagi_evolutionary::remap_guest_custom_memory_cortical_ids_for_amalgamation(
             &mut imported_genome,
-            &host_cortical_ids,
+            &remap_reserved_ids,
         )
         .map_err(|e| {
             ApiError::internal(format!(
@@ -830,6 +1034,46 @@ async fn apply_amalgamation(
         created_sub_region_count,
         amalgamation_id
     );
+
+    // The plan's adapter gets its own region next to the block's (never inside it), so the block
+    // can be packaged without it. Its areas are created right after the guest areas below.
+    let adapter_plan = wiring.and_then(|plan| plan.adapter.as_ref());
+    let mut adapter_region_id: Option<String> = None;
+    if let Some(adapter) = adapter_plan {
+        let region_id = Uuid::new_v4().to_string();
+        let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
+        properties.insert(
+            "coordinate_3d".to_string(),
+            serde_json::json!([
+                origin_x
+                    .saturating_add(pending.summary.circuit_size[0])
+                    .saturating_add(4),
+                origin_y,
+                origin_z
+            ]),
+        );
+        properties.insert(
+            "amalgamation_id".to_string(),
+            serde_json::json!(pending.summary.amalgamation_id),
+        );
+        connectome_service
+            .create_brain_region(feagi_services::types::CreateBrainRegionParams {
+                region_id: region_id.clone(),
+                name: adapter
+                    .region_name
+                    .clone()
+                    .unwrap_or_else(|| format!("{} adapter", pending.summary.genome_title)),
+                region_type: "Custom".to_string(),
+                parent_id: Some(parent_region_id.clone()),
+                properties: Some(properties),
+            })
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!("Failed to create adapter brain region: {}", e))
+            })?;
+        created.regions.push(region_id.clone());
+        adapter_region_id = Some(region_id);
+    }
 
     // Own modulators: created through the service, which allocates each driver id (a guest
     // driver id is a serial that can collide with a host one). Then every reference to a guest
@@ -1043,6 +1287,57 @@ async fn apply_amalgamation(
             .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
     }
 
+    // Adapter areas, in the adapter region, at their planned sizes. Plain defaults; the plan
+    // names no neuron settings.
+    let mut adapter_area_count = 0_usize;
+    if let (Some(adapter), Some(region_id)) = (adapter_plan, adapter_region_id.as_ref()) {
+        let mut x_offset = origin_x
+            .saturating_add(pending.summary.circuit_size[0])
+            .saturating_add(4);
+        let mut params: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
+        for area in &adapter.areas {
+            let [w, h, d] = area.dimensions;
+            params.push(feagi_services::types::CreateCorticalAreaParams {
+                cortical_id: area.cortical_id.clone(),
+                name: area.name.clone(),
+                dimensions: (w as usize, h as usize, d as usize),
+                position: (x_offset, origin_y, origin_z),
+                area_type: "Custom".to_string(),
+                visible: Some(true),
+                sub_group: None,
+                neurons_per_voxel: None,
+                postsynaptic_current: None,
+                plasticity_constant: None,
+                degeneration: None,
+                psp_uniform_distribution: None,
+                firing_threshold_increment: None,
+                firing_threshold_limit: None,
+                consecutive_fire_count: None,
+                snooze_period: None,
+                refractory_period: None,
+                leak_coefficient: None,
+                leak_variability: None,
+                burst_engine_active: None,
+                properties: Some(HashMap::from([
+                    ("parent_region_id".to_string(), serde_json::json!(region_id)),
+                    (
+                        "amalgamation_source".to_string(),
+                        serde_json::json!("amalgamation_by_payload"),
+                    ),
+                ])),
+            });
+            x_offset = x_offset.saturating_add(w as i32).saturating_add(2);
+        }
+        adapter_area_count = params.len();
+        created
+            .areas
+            .extend(params.iter().map(|p| p.cortical_id.clone()));
+        genome_service
+            .create_cortical_areas(params)
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to create adapter areas: {}", e)))?;
+    }
+
     // Adopting modulators: their driver areas exist now.
     for adopted in &modulator_plan.adopted {
         genome_service
@@ -1118,6 +1413,19 @@ async fn apply_amalgamation(
 
                 if let Some(morph_id) = morphology_id {
                     required_morphologies.insert(morph_id.to_string());
+                }
+            }
+        }
+    }
+
+    // Plan rules may use a guest morphology the guest's own mappings do not.
+    if let Some(plan) = wiring {
+        let defined: std::collections::HashSet<&str> =
+            plan.morphologies.iter().map(|m| m.name.as_str()).collect();
+        for rule in plan.mappings.iter().flat_map(|m| m.rules.iter()) {
+            if let Some(name) = rule.get("morphology_id").and_then(|v| v.as_str()) {
+                if !defined.contains(name) {
+                    required_morphologies.insert(name.to_string());
                 }
             }
         }
@@ -1313,6 +1621,48 @@ async fn apply_amalgamation(
         );
     }
 
+    // 4a) The plan's morphologies and mappings. Unlike the guest's own wiring above, a failure
+    // here fails the whole import (rolled back by the caller): the block is only usable with it.
+    let mut plan_morphology_count = 0_usize;
+    let mut plan_mapping_reports: Vec<serde_json::Value> = Vec::new();
+    if let Some(plan) = wiring {
+        for morphology in &plan.morphologies {
+            connectome_service
+                .create_morphology(morphology.name.clone(), morphology.to_morphology())
+                .await
+                .map_err(|e| {
+                    ApiError::internal(format!(
+                        "Failed to create plan morphology '{}': {}",
+                        morphology.name, e
+                    ))
+                })?;
+            created.morphologies.push(morphology.name.clone());
+            plan_morphology_count += 1;
+        }
+        // Guest ids in the plan are as published; the import renamed its custom and memory areas.
+        let live_id = |id: &str| {
+            remapped_guest_custom_memory_ids
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| id.to_string())
+        };
+        for mapping in &plan.mappings {
+            let (src, dst) = (live_id(&mapping.src), live_id(&mapping.dst));
+            let synapse_count = connectome_service
+                .update_cortical_mapping(src.clone(), dst.clone(), mapping.rules.clone())
+                .await
+                .map_err(|e| {
+                    ApiError::internal(format!("Failed to create plan mapping {src} -> {dst}: {e}"))
+                })?;
+            created.plan_mappings.push((src.clone(), dst.clone()));
+            plan_mapping_reports.push(serde_json::json!({
+                "src": src,
+                "dst": dst,
+                "synapse_count": synapse_count,
+            }));
+        }
+    }
+
     // 4b) Classifiers last: their areas, reward modulators and mappings exist now. Each gets a
     // fresh id (the service overwrites a record with the same id). Area ids are already final in
     // the guest genome, so no further area remap is passed.
@@ -1382,6 +1732,30 @@ async fn apply_amalgamation(
         }
     }
 
+    // Record how the block's published area ids map to the live ones (and the Hub release it came
+    // from, when the caller named one) so later wiring can find the block's areas by their
+    // published ids. Stored on the block region, so it is saved with the genome.
+    if !remapped_guest_custom_memory_ids.is_empty()
+        || pending.source_release_id.is_some()
+        || pending.source_catalog.is_some()
+    {
+        let mut stamp: HashMap<String, serde_json::Value> = HashMap::new();
+        stamp.insert(
+            "published_to_live".to_string(),
+            serde_json::json!(remapped_guest_custom_memory_ids),
+        );
+        if let Some(release) = &pending.source_release_id {
+            stamp.insert("source_release_id".to_string(), serde_json::json!(release));
+        }
+        if let Some(catalog) = &pending.source_catalog {
+            stamp.insert("source_catalog".to_string(), serde_json::json!(catalog));
+        }
+        connectome_service
+            .update_brain_region(&amalgamation_id, stamp)
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to stamp the block region: {}", e)))?;
+    }
+
     // 5) Invalidate all relevant health_check hashes to force BV cache refresh.
     //
     // Amalgamation modifies:
@@ -1403,11 +1777,11 @@ async fn apply_amalgamation(
             .set_cortical_areas_hash(state_manager.get_cortical_areas_hash().wrapping_add(1));
         state_manager
             .set_brain_geometry_hash(state_manager.get_brain_geometry_hash().wrapping_add(1));
-        if imported_morphology_count > 0 {
+        if imported_morphology_count > 0 || plan_morphology_count > 0 {
             state_manager
                 .set_morphologies_hash(state_manager.get_morphologies_hash().wrapping_add(1));
         }
-        if imported_mapping_count > 0 {
+        if imported_mapping_count > 0 || !plan_mapping_reports.is_empty() {
             state_manager.set_cortical_mappings_hash(
                 state_manager.get_cortical_mappings_hash().wrapping_add(1),
             );
@@ -1510,7 +1884,7 @@ async fn apply_amalgamation(
         post_merge_cortical_area_total,
     );
 
-    Ok(HashMap::from([
+    let mut response = HashMap::from([
         (
             "message".to_string(),
             serde_json::Value::String("Amalgamation confirmed".to_string()),
@@ -1575,7 +1949,33 @@ async fn apply_amalgamation(
             "post_merge_cortical_area_total".to_string(),
             serde_json::json!(post_merge_cortical_area_total),
         ),
-    ]))
+    ]);
+    // Plan wiring is reported only when the plan had any, so a plain import answers as before.
+    if wiring.is_some() {
+        response.insert(
+            "plan_adapter_area_count".to_string(),
+            serde_json::json!(adapter_area_count),
+        );
+        response.insert(
+            "plan_morphology_count".to_string(),
+            serde_json::json!(plan_morphology_count),
+        );
+        response.insert(
+            "plan_mapping_count".to_string(),
+            serde_json::json!(plan_mapping_reports.len()),
+        );
+        response.insert(
+            "plan_mappings".to_string(),
+            serde_json::Value::Array(plan_mapping_reports),
+        );
+        if let Some(region_id) = adapter_region_id {
+            response.insert(
+                "plan_adapter_region_id".to_string(),
+                serde_json::json!(region_id),
+            );
+        }
+    }
+    Ok(response)
 }
 
 /// Cancel a pending genome amalgamation operation.
@@ -2697,7 +3097,8 @@ pub async fn post_amalgamation_by_filename(
         }
     };
 
-    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, genome_json)?;
+    let amalgamation_id =
+        queue_amalgamation_from_genome_json_str(&state, genome_json, None, None, None).await?;
 
     Ok(Json(HashMap::from([
         ("message".to_string(), "Amalgamation queued".to_string()),
@@ -2713,7 +3114,70 @@ pub async fn post_amalgamation_by_payload(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     let json_str = serde_json::to_string(&req)
         .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
-    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
+    let amalgamation_id =
+        queue_amalgamation_from_genome_json_str(&state, json_str, None, None, None).await?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Amalgamation queued".to_string()),
+        ("amalgamation_id".to_string(), amalgamation_id),
+    ])))
+}
+
+/// Queue a genome payload together with a fit plan (the dimensions to create its areas at).
+///
+/// Body: `{ "genome": <full genome document>, "fit_plan": { "areas": [...], "adapter": {...},
+/// "morphologies": [...], "mappings": [...] } }` (all plan fields optional). Behaves as
+/// `/v1/genome/amalgamation_by_payload` (which keeps the whole body as the genome), plus the plan
+/// is validated now (including the host areas its mappings end on) and applied when the
+/// amalgamation is confirmed: areas at their fitted size, then the adapter region and areas, the
+/// morphologies and the mappings, all or nothing. An invalid plan returns 400 and queues nothing.
+/// A plan with no guest areas (an empty genome) wires existing host areas later: the same path.
+#[utoipa::path(
+    post,
+    path = "/v1/genome/amalgamation_by_payload_with_fit",
+    tag = "genome"
+)]
+pub async fn post_amalgamation_by_payload_with_fit(
+    State(state): State<ApiState>,
+    Json(req): Json<serde_json::Value>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let genome = req
+        .get("genome")
+        .filter(|value| !value.is_null())
+        .ok_or_else(|| ApiError::invalid_input("Body must contain a 'genome' object"))?;
+    let fit_plan = match req.get("fit_plan") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => Some(
+            serde_json::from_value::<feagi_evolutionary::FitPlan>(value.clone())
+                .map_err(|e| ApiError::invalid_input(format!("Invalid fit_plan: {}", e)))?,
+        ),
+    };
+    let source_release_id = req
+        .get("source_release_id")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let source_catalog = match req.get("source_catalog") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => {
+            let catalog = value.as_str().map(str::trim).unwrap_or_default();
+            if catalog.is_empty() || catalog.len() > 128 {
+                return Err(ApiError::invalid_input(
+                    "source_catalog must be a non-empty string of at most 128 characters",
+                ));
+            }
+            Some(catalog.to_string())
+        }
+    };
+    let json_str = serde_json::to_string(genome)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let amalgamation_id = queue_amalgamation_from_genome_json_str(
+        &state,
+        json_str,
+        fit_plan,
+        source_release_id,
+        source_catalog,
+    )
+    .await?;
 
     Ok(Json(HashMap::from([
         ("message".to_string(), "Amalgamation queued".to_string()),
@@ -2758,7 +3222,8 @@ pub async fn post_amalgamation_by_upload(
 
     let json_str =
         genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
-    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
+    let amalgamation_id =
+        queue_amalgamation_from_genome_json_str(&state, json_str, None, None, None).await?;
 
     Ok(Json(HashMap::from([
         ("message".to_string(), "Amalgamation queued".to_string()),

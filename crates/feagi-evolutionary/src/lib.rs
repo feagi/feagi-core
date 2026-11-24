@@ -46,6 +46,7 @@ Licensed under the Apache License, Version 2.0
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
+mod amalgamation_fit;
 mod amalgamation_modulators;
 mod amalgamation_remap;
 pub mod circuit;
@@ -66,6 +67,10 @@ pub mod units;
 pub mod validator;
 
 // Re-export commonly used types
+pub use amalgamation_fit::{
+    fit_areas, plan_host_lookup_ids, validate_plan, AdapterArea, AdapterPlan, AreaFit, FitPlan,
+    FitPlanError, PatternBounds, PlanContext, PlanMapping, PlanMorphology,
+};
 pub use amalgamation_modulators::{
     apply_modulator_name_map, plan_amalgamation_classifiers, plan_amalgamation_modulators,
     AmalgamationModulatorPlan, HostModulator, ModulatorCollisionPolicy, PlannedAdoptedModulator,
