@@ -1,11 +1,11 @@
-//! Encoded preview: the first eligible window as the population encoder will see it.
+//! Encoded preview: one eligible window as the population encoder will see it.
 
 use serde::{Deserialize, Serialize};
 
 use crate::adapters::time_series::config::{TimeSeriesNormalize, TimeSeriesPackageConfig};
 use crate::adapters::time_series::corpus::AnalogEpisode;
 use crate::adapters::time_series::window::{raw_window_range, window_event, EpisodeScale};
-use crate::adapters::time_series::{episode_range_for, TimeSeriesPackageAdapter};
+use crate::adapters::time_series::{episode_range_for, LoadedTimeSeries, TimeSeriesPackageAdapter};
 use crate::binding::population_encoder::PopulationEncoder;
 use crate::contracts::ir_sample::Payload;
 use crate::contracts::DatasetVersionId;
@@ -42,7 +42,9 @@ pub struct EncodedWindowPreview {
 }
 
 impl TimeSeriesPackageAdapter {
-    /// Previews the FIRST eligible window of the source, encoded with the population code.
+    /// Previews the eligible window at `frame_index` of the source, encoded with the population
+    /// code. The index counts the same windows, in the same order, as the raw
+    /// [`Self::preview_from`] `frame_offset`, so frame `i` raw and frame `i` encoded are one window.
     ///
     /// "Eligible" means the window survives label and edge policies; it is taken before the
     /// class-keep percentages and the balanced sample draw, so it is not necessarily the first
@@ -53,30 +55,45 @@ impl TimeSeriesPackageAdapter {
         &self,
         source: &DatasetSource,
         encoder_bins: u32,
+        frame_index: usize,
     ) -> Result<EncodedWindowPreview, TrainerError> {
         if self.config.normalize == TimeSeriesNormalize::None {
-            return Err(TrainerError::Config(
-                "an encoded preview requires a [0,1] normalization (not none)".to_string(),
-            ));
+            return Err(none_error());
         }
-        let episodes = self.load_episodes(source)?;
-        let mut config = self.config_with_dataset_range(&episodes)?;
+        let loaded = self.load_series(source)?;
+        self.preview_encoded_from(&loaded, encoder_bins, frame_index)
+    }
+
+    /// Same as [`Self::preview_encoded`] on a corpus loaded earlier with
+    /// [`Self::load_series`]. Window, normalize and feature settings are read from this adapter's
+    /// config at call time, so one loaded corpus serves different settings.
+    pub fn preview_encoded_from(
+        &self,
+        loaded: &LoadedTimeSeries,
+        encoder_bins: u32,
+        frame_index: usize,
+    ) -> Result<EncodedWindowPreview, TrainerError> {
+        if self.config.normalize == TimeSeriesNormalize::None {
+            return Err(none_error());
+        }
+        self.check_loaded(loaded)?;
+        let episodes = &loaded.episodes;
+        let source_uri = loaded.key.uri.as_str();
+        let mut config = self.config_with_dataset_range(episodes)?;
         config.amplitude_offset = 0.0;
         let version = DatasetVersionId("preview".to_string());
-        for episode in &episodes {
+        // Windows seen so far, in raw order: every window that passes the label and edge
+        // policies counts, including ones the encoder leaves out for a flat range.
+        let mut seen = 0_usize;
+        for episode in episodes {
             let mut scale = EpisodeScale {
                 episode_range: episode_range_for(&config, episode)?,
                 flat_skips: 0,
             };
             for (ordinal, event) in episode.events.iter().enumerate() {
+                let flat_before = scale.flat_skips;
                 let sample = window_event(
-                    episode,
-                    event,
-                    ordinal,
-                    &config,
-                    &version,
-                    &source.uri,
-                    &mut scale,
+                    episode, event, ordinal, &config, &version, source_uri, &mut scale,
                 )?;
                 let identity = |skipped_flat: bool, range: (f64, f64)| EncodedWindowPreview {
                     stream_ids: config.window.stream_ids.clone(),
@@ -90,6 +107,14 @@ impl TimeSeriesPackageAdapter {
                     skipped_flat,
                     encoder_bins,
                 };
+                let is_flat = sample.is_none() && scale.flat_skips > flat_before;
+                if sample.is_none() && !is_flat {
+                    continue;
+                }
+                if seen != frame_index {
+                    seen += 1;
+                    continue;
+                }
                 match sample {
                     Some(sample) => {
                         let Payload::TimeSeries { samples, .. } = sample.payload else {
@@ -102,18 +127,21 @@ impl TimeSeriesPackageAdapter {
                         fill_values(&mut out, &samples)?;
                         return Ok(out);
                     }
-                    None if scale.flat_skips > 0 => {
+                    None => {
                         let range = range_used(&config, &scale, episode, event.sample_index)?;
                         return Ok(identity(true, range));
                     }
-                    None => {}
                 }
             }
         }
-        Err(TrainerError::Parse(
-            "no eligible window to preview (check class_labels and window policies)".to_string(),
-        ))
+        Err(TrainerError::Config(format!(
+            "preview frame_index {frame_index} is past the {seen} eligible frames"
+        )))
     }
+}
+
+fn none_error() -> TrainerError {
+    TrainerError::Config("an encoded preview requires a [0,1] normalization (not none)".to_string())
 }
 
 fn range_used(
@@ -223,7 +251,7 @@ mod tests {
         ] {
             let adapter = TimeSeriesPackageAdapter::new(config(mode));
             let src = source(&dir);
-            let preview = adapter.preview_encoded(&src, 16).expect("preview");
+            let preview = adapter.preview_encoded(&src, 16, 0).expect("preview");
             let first = adapter
                 .stream(&src, &SplitId("train".to_string()))
                 .expect("stream")
@@ -252,7 +280,9 @@ mod tests {
         let samples: Vec<f32> = (0..20).map(|v| v as f32).collect();
         write_ramp(&dir, &samples);
         let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxDataset));
-        let preview = adapter.preview_encoded(&source(&dir), 10).expect("preview");
+        let preview = adapter
+            .preview_encoded(&source(&dir), 10, 0)
+            .expect("preview");
         assert_eq!(preview.encoder_bins, 10);
         for (values, bins) in preview.values01.iter().zip(&preview.z_bins) {
             assert_eq!(values.len(), bins.len());
@@ -281,7 +311,9 @@ mod tests {
         )
         .expect("write package");
         let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxPerWindow));
-        let preview = adapter.preview_encoded(&source(&dir), 8).expect("preview");
+        let preview = adapter
+            .preview_encoded(&source(&dir), 8, 0)
+            .expect("preview");
         assert!(preview.skipped_flat);
         assert!(preview.values01.is_empty() && preview.z_bins.is_empty());
         assert_eq!(preview.range_used, (1.0, 1.0));
@@ -294,7 +326,7 @@ mod tests {
         let dir = temp_dir("none");
         write_ramp(&dir, &(0..20).map(|v| v as f32).collect::<Vec<_>>());
         let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::None));
-        let err = adapter.preview_encoded(&source(&dir), 8).unwrap_err();
+        let err = adapter.preview_encoded(&source(&dir), 8, 0).unwrap_err();
         assert!(matches!(err, TrainerError::Config(_)));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -323,7 +355,9 @@ mod tests {
             },
         ]);
         let adapter = TimeSeriesPackageAdapter::new(cfg);
-        let preview = adapter.preview_encoded(&source(&dir), 4).expect("preview");
+        let preview = adapter
+            .preview_encoded(&source(&dir), 4, 0)
+            .expect("preview");
         assert_eq!(preview.stream_ids, vec!["lead_0", "lead_1"]);
         let close = |got: &[f64], want: [f64; 5]| {
             assert!(
@@ -342,6 +376,161 @@ mod tests {
         }
         assert!(preview.z_bins[0][0] > preview.z_bins[0][4]);
         assert!(preview.z_bins[1][0] < preview.z_bins[1][4]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn encoded_from_loaded_equals_encoded_for_every_mode() {
+        let dir = temp_dir("from");
+        write_ramp(&dir, &(0..20).map(|v| (v * v) as f32).collect::<Vec<_>>());
+        let src = source(&dir);
+        for mode in [
+            TimeSeriesNormalize::MinMaxPerWindow,
+            TimeSeriesNormalize::MinMaxPerEpisode,
+            TimeSeriesNormalize::MinMaxDataset,
+        ] {
+            let adapter = TimeSeriesPackageAdapter::new(config(mode));
+            let loaded = adapter.load_series(&src).expect("load");
+            assert_eq!(
+                adapter.preview_encoded_from(&loaded, 16, 0).expect("from"),
+                adapter.preview_encoded(&src, 16, 0).expect("direct"),
+                "{mode:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_loaded_series_serves_different_window_and_normalize_settings() {
+        let dir = temp_dir("reuse");
+        write_ramp(&dir, &(0..20).map(|v| (v * v) as f32).collect::<Vec<_>>());
+        let src = source(&dir);
+        let first = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxPerWindow));
+        let mut wide = config(TimeSeriesNormalize::MinMaxDataset);
+        wide.window.pre_samples = 3;
+        wide.window.post_samples = 3;
+        wide.window.feature_count = 7;
+        let second = TimeSeriesPackageAdapter::new(wide);
+        let loaded = first.load_series(&src).expect("load");
+        let a = first.preview_encoded_from(&loaded, 16, 0).expect("a");
+        let b = second.preview_encoded_from(&loaded, 16, 0).expect("b");
+        assert_eq!(a, first.preview_encoded(&src, 16, 0).expect("a direct"));
+        assert_eq!(b, second.preview_encoded(&src, 16, 0).expect("b direct"));
+        assert_ne!(a.range_used, b.range_used);
+        assert_ne!(a.values01[0].len(), b.values01[0].len());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn loaded_series_from_another_source_kind_is_refused() {
+        let dir = temp_dir("kind");
+        write_ramp(&dir, &(0..20).map(|v| v as f32).collect::<Vec<_>>());
+        let src = source(&dir);
+        let loaded = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxDataset))
+            .load_series(&src)
+            .expect("load");
+        let mut other = config(TimeSeriesNormalize::MinMaxDataset);
+        other.source_kind = TimeSeriesSourceKind::Wfdb;
+        let adapter = TimeSeriesPackageAdapter::new(other);
+        assert!(matches!(
+            adapter.preview_encoded_from(&loaded, 8, 0),
+            Err(TrainerError::Config(_))
+        ));
+        assert!(matches!(
+            adapter.preview_from(&loaded, 0, 1),
+            Err(TrainerError::Config(_))
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn raw_preview_from_loaded_equals_raw_preview() {
+        let dir = temp_dir("raw");
+        write_ramp(&dir, &(0..20).map(|v| v as f32).collect::<Vec<_>>());
+        let src = source(&dir);
+        let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxDataset));
+        let loaded = adapter.load_series(&src).expect("load");
+        assert_eq!(
+            adapter.preview_from(&loaded, 0, 2).expect("from"),
+            adapter.preview(&src, 0, 2).expect("direct")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn encoded_frame_index_matches_raw_frame_in_every_mode() {
+        let dir = temp_dir("index");
+        let samples: Vec<f32> = (0..30).map(|v| (v * v) as f32).collect();
+        package::write_test_package(
+            &dir,
+            360.0,
+            "rec0",
+            "lead_0",
+            &samples,
+            &[(4, "N"), (10, "V"), (16, "N"), (22, "V")],
+        )
+        .expect("write package");
+        let src = source(&dir);
+        for mode in [
+            TimeSeriesNormalize::MinMaxPerWindow,
+            TimeSeriesNormalize::MinMaxPerEpisode,
+            TimeSeriesNormalize::MinMaxDataset,
+        ] {
+            let adapter = TimeSeriesPackageAdapter::new(config(mode));
+            let loaded = adapter.load_series(&src).expect("load");
+            for index in [0_usize, 1, 3] {
+                let raw = adapter.preview_from(&loaded, index, 1).expect("raw");
+                let frame = &raw.frames[0];
+                let enc = adapter
+                    .preview_encoded_from(&loaded, 16, index)
+                    .expect("encoded");
+                assert_eq!(enc.episode_id, frame.record_id, "{mode:?} {index}");
+                assert_eq!(
+                    enc.sample_index, frame.event_sample_index,
+                    "{mode:?} {index}"
+                );
+                assert_eq!(enc.class_label, frame.label, "{mode:?} {index}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn encoded_frame_index_past_the_end_names_the_total() {
+        let dir = temp_dir("range");
+        write_ramp(&dir, &(0..20).map(|v| v as f32).collect::<Vec<_>>());
+        let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxDataset));
+        let err = adapter.preview_encoded(&source(&dir), 8, 2).unwrap_err();
+        match err {
+            TrainerError::Config(msg) => assert!(msg.contains("2 eligible"), "{msg}"),
+            other => panic!("{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn flat_window_keeps_its_raw_index() {
+        let dir = temp_dir("flatindex");
+        let mut samples = vec![1.0_f32; 10];
+        samples.extend((0..10).map(|v| v as f32));
+        package::write_test_package(
+            &dir,
+            360.0,
+            "rec0",
+            "lead_0",
+            &samples,
+            &[(5, "N"), (15, "V")],
+        )
+        .expect("write package");
+        let adapter = TimeSeriesPackageAdapter::new(config(TimeSeriesNormalize::MinMaxPerWindow));
+        let second = adapter
+            .preview_encoded(&source(&dir), 8, 1)
+            .expect("second");
+        assert!(!second.skipped_flat);
+        assert_eq!(
+            (second.sample_index, second.class_label.as_str()),
+            (15, "V")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

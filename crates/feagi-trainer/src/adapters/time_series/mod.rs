@@ -53,6 +53,24 @@ fn episode_range_for(
         .map(Some)
 }
 
+/// What a load depends on. Window, normalize and feature settings are applied at preview time and
+/// are not part of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LoadKey {
+    source_kind: TimeSeriesSourceKind,
+    uri: String,
+    annotation_suffix: Option<String>,
+    channel_map: Option<Vec<WfdbChannelMap>>,
+}
+
+/// A corpus loaded once, reusable by every preview of an adapter whose config loads the same
+/// source (same source kind, uri, annotation suffix and channel map). Opaque by design.
+#[derive(Debug)]
+pub struct LoadedTimeSeries {
+    key: LoadKey,
+    episodes: Vec<AnalogEpisode>,
+}
+
 /// Adapter that windows annotated analog streams into classification `IRSample`s.
 #[derive(Debug, Clone)]
 pub struct TimeSeriesPackageAdapter {
@@ -77,6 +95,14 @@ impl TimeSeriesPackageAdapter {
         Ok(Path::new(&source.uri))
     }
 
+    /// Loads the corpus once so several previews can share it.
+    pub fn load_series(&self, source: &DatasetSource) -> Result<LoadedTimeSeries, TrainerError> {
+        Ok(LoadedTimeSeries {
+            key: self.load_key(&source.uri),
+            episodes: self.load_episodes(source)?,
+        })
+    }
+
     /// Loads the corpus and returns one page of raw event windows.
     pub fn preview(
         &self,
@@ -84,8 +110,40 @@ impl TimeSeriesPackageAdapter {
         frame_offset: usize,
         frame_count: usize,
     ) -> Result<TimeSeriesPreview, TrainerError> {
-        let episodes = self.load_episodes(source)?;
-        preview::preview_episodes(&episodes, &self.config, frame_offset, frame_count)
+        let loaded = self.load_series(source)?;
+        self.preview_from(&loaded, frame_offset, frame_count)
+    }
+
+    /// One page of raw event windows from an already loaded corpus.
+    pub fn preview_from(
+        &self,
+        loaded: &LoadedTimeSeries,
+        frame_offset: usize,
+        frame_count: usize,
+    ) -> Result<TimeSeriesPreview, TrainerError> {
+        self.check_loaded(loaded)?;
+        preview::preview_episodes(&loaded.episodes, &self.config, frame_offset, frame_count)
+    }
+
+    fn load_key(&self, uri: &str) -> LoadKey {
+        LoadKey {
+            source_kind: self.config.source_kind,
+            uri: uri.to_string(),
+            annotation_suffix: self.config.annotation_suffix.clone(),
+            channel_map: self.config.channel_map.clone(),
+        }
+    }
+
+    /// Refuses a corpus that this adapter's config would not have loaded itself.
+    fn check_loaded(&self, loaded: &LoadedTimeSeries) -> Result<(), TrainerError> {
+        if self.load_key(&loaded.key.uri) != loaded.key {
+            return Err(TrainerError::Config(
+                "the loaded time series came from a different source kind, channel map or \
+                 annotation suffix than this adapter's config needs; load it again"
+                    .to_string(),
+            ));
+        }
+        Ok(())
     }
 
     fn load_episodes(&self, source: &DatasetSource) -> Result<Vec<AnalogEpisode>, TrainerError> {
