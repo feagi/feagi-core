@@ -1227,13 +1227,17 @@ mod tests {
     #[test]
     fn snapshot_time_series_accepts_percentage_decoder() {
         let config = snapshot_time_series_config(SUPPORTED_DECODER_CODER_ID);
-        config.validate_supported().expect("snapshot config validates");
+        config
+            .validate_supported()
+            .expect("snapshot config validates");
     }
 
     #[test]
     fn snapshot_time_series_accepts_misc_class_decoder() {
         let config = snapshot_time_series_config(SUPPORTED_MISC_CLASS_DECODER_CODER_ID);
-        config.validate_supported().expect("snapshot config validates");
+        config
+            .validate_supported()
+            .expect("snapshot config validates");
     }
 
     #[test]
