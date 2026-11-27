@@ -11,6 +11,7 @@
 //! selectors and run execution (behind a runtime abstraction, remote/ZMQ first) land next.
 
 pub mod adapters;
+pub mod attempt_loop;
 pub mod balance_feet;
 pub mod balance_recovery;
 pub mod binding;
@@ -21,6 +22,7 @@ pub mod error;
 pub mod executor;
 pub mod executor_stream;
 pub mod genome_changes;
+pub mod grasp_hold;
 pub mod memory_counters;
 pub mod metrics;
 pub mod planned_samples;

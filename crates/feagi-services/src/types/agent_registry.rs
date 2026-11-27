@@ -117,6 +117,8 @@ pub enum SensoryUnit {
     Shock,
     Battery,
     Servo,
+    /// Signed force reading (effort, contact, touch) as a scalar in [-1, 1].
+    Force,
     AnalogGpio,
     DigitalGpio,
     MiscData,
@@ -138,6 +140,8 @@ pub enum SensoryUnit {
 pub enum MotorUnit {
     RotaryMotor,
     PositionalServo,
+    /// Muscle activation (absolute, firing-fraction drive of a muscle actuator).
+    Muscle,
     Gaze,
     MiscData,
     TextEnglishOutput,
@@ -633,5 +637,18 @@ fn hash_json_value(value: &serde_json::Value, hasher: &mut DefaultHasher) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod motor_unit_tests {
+    use super::MotorUnit;
+
+    #[test]
+    fn muscle_motor_unit_round_trips_as_snake_case() {
+        let json = serde_json::to_string(&MotorUnit::Muscle).unwrap();
+        assert_eq!(json, "\"muscle\"");
+        let back: MotorUnit = serde_json::from_str("\"muscle\"").unwrap();
+        assert_eq!(back, MotorUnit::Muscle);
     }
 }

@@ -8,12 +8,14 @@
 //! continues until the train and test seeds are done.
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::attempt_loop::{
+    run_attempt, run_phase_loop, AttemptFlow, AttemptRules, AttemptTerminal, CoachWrite,
+    HttpControl, PhaseSpec, ATTEMPTS_TABLE, STEPS_TABLE,
+};
 use crate::binding::reward::{AffectChannel, RewardSignal};
 use crate::contracts::{
     BackendFingerprint, BackendKind, ConnectomeHash, ContentHash, DatasetAssetId,
@@ -24,12 +26,12 @@ use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::resume::{ResumeExport, ResumeFrom};
-use crate::run_data::{name_of, ColumnSpec, EventTime, RunDataSink, RunDataValue, TableSpec};
+use crate::run_data::{name_of, ColumnSpec, RunDataSink, RunDataValue, TableSpec};
 
 /// Operator criterion for one reach-and-hold session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReachHoldCriterion {
-    /// Applied scene-object id. The controller rejects a dynamic object.
+    /// Applied scene-object id. The controller pins this object (a dynamic body too) at its seeded point in pinned mode.
     pub target_object_id: String,
     /// Model body whose position is scored against the target.
     pub reach_body: String,
@@ -76,35 +78,8 @@ impl ReachHoldCriterion {
     }
 }
 
-/// Bursts that cover `seconds` at the live FEAGI burst frequency.
-///
-/// One burst lasts `1 / frequency_hz` seconds, so the duration is
-/// `seconds * frequency_hz`. The product must already be a whole burst.
-/// `label` is the operator-facing name used in the error, such as `hold`.
-pub fn seconds_to_whole_bursts(
-    label: &str,
-    seconds: f64,
-    frequency_hz: f64,
-) -> Result<u32, TrainerError> {
-    if !seconds.is_finite() || seconds <= 0.0 {
-        return Err(TrainerError::Config(format!(
-            "{label} must be a finite value > 0 seconds"
-        )));
-    }
-    if !frequency_hz.is_finite() || frequency_hz <= 0.0 {
-        return Err(TrainerError::Config(
-            "burst frequency must be a finite value > 0 Hz".to_string(),
-        ));
-    }
-    let bursts = seconds * frequency_hz;
-    let whole = bursts.round();
-    if (bursts - whole).abs() > 1e-6 || whole < 1.0 || whole > f64::from(u32::MAX) {
-        return Err(TrainerError::Config(format!(
-            "{label} of {seconds} s at {frequency_hz} Hz is {bursts} bursts, which is not a whole burst count"
-        )));
-    }
-    Ok(whole as u32)
-}
+/// Bursts that cover `seconds` at the live FEAGI burst frequency (shared by every engine).
+pub use crate::attempt_loop::seconds_to_whole_bursts;
 
 /// Bursts that cover `hold_seconds` at the live FEAGI burst frequency.
 pub fn hold_bursts_from_seconds(hold_seconds: f64, frequency_hz: f64) -> Result<u32, TrainerError> {
@@ -181,16 +156,7 @@ pub struct ReachSample {
 }
 
 /// Controller-latched end cause. Hold success is decided here, not by the controller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReachTerminal {
-    /// `_death` fired.
-    Death,
-    /// Fingertip left the safety box.
-    Fence,
-    /// Misc reset fired while the attempt was active.
-    Interrupted,
-}
+pub type ReachTerminal = AttemptTerminal;
 
 /// In-progress attempt counters.
 #[derive(Debug, Clone, PartialEq)]
@@ -368,14 +334,9 @@ fn median_u32(values: &[u32]) -> f64 {
     }
 }
 
-/// One write the reach loop asks the caller to send to FEAGI.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ReachCoachWrite {
-    /// Advance one burst. The brain reads its own sensors for the object.
-    Step,
-    /// Train-phase pain or pleasure for a change in fingertip distance.
-    Affect(RewardSignal),
-}
+/// One write the reach loop asks the caller to send to FEAGI: advance one burst, or send
+/// train-phase pain or pleasure for a change in fingertip distance.
+pub type ReachCoachWrite = CoachWrite;
 
 /// Pain or pleasure for one distance change, or nothing when the distance is unchanged.
 ///
@@ -601,7 +562,6 @@ pub fn run_reach_phase(
     )
     .map(|(report, _)| report)
 }
-
 /// Run one phase from `resume.first_index` (the seeds before it ran in earlier segments).
 ///
 /// Returns the report of the attempts run in this segment and the [`ResumeExport`] for the next
@@ -616,7 +576,7 @@ pub fn run_reach_phase_from(
     coach: &mut dyn FnMut(ReachCoachWrite) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
-    mut data: Option<&mut (dyn RunDataSink + '_)>,
+    data: Option<&mut (dyn RunDataSink + '_)>,
 ) -> Result<(ReachPhaseReport, ResumeExport), TrainerError> {
     if run.phase != "train" && run.phase != "test" {
         return Err(TrainerError::Config(
@@ -633,85 +593,47 @@ pub fn run_reach_phase_from(
     if run.poll_timeout.is_zero() {
         return Err(TrainerError::Config("poll_timeout must be > 0".to_string()));
     }
-    let samples_total = run.seeds.len() as u64;
-    resume.check_within(samples_total, "attempt")?;
-    let first = resume.first_index as usize;
-    let mut attempts = Vec::with_capacity(run.seeds.len());
-    if let Some(sink) = data.as_deref_mut() {
-        sink.declare_table(&reach_steps_spec());
-        sink.declare_table(&reach_attempts_spec());
-        sink.event(EventTime::default(), "phase_start", run.phase);
-    }
-    let mut skipped = false;
-    for seed in &run.seeds[first..] {
-        // Park while paused at the attempt boundary (the attempt in progress is never cut;
-        // a skip wakes the park), then honor a cancel.
-        cancel.interrupt("reach-and-hold run cancelled".to_string())?;
-        if cancel.is_skipped() && !attempts.is_empty() {
-            skipped = true;
-            break;
-        }
-        let attempt_index = resume.first_index + attempts.len() as u64;
-        let record = run_attempt(
-            *seed,
-            run.criterion,
-            probe,
-            coach,
-            run.phase == "train",
-            run.poll_timeout,
-            cancel,
-            ReachDataContext {
-                sink: data.as_deref_mut(),
-                phase: run.phase,
-                attempt: attempt_index,
-            },
-        )?;
-        if let Some(sink) = data.as_deref_mut() {
-            sink.row(
-                REACH_ATTEMPTS_TABLE,
-                &[
-                    RunDataValue::text(run.phase),
-                    RunDataValue::count(attempt_index),
-                    RunDataValue::count(record.seed),
-                    RunDataValue::Text(name_of(&record.outcome)),
-                    RunDataValue::count(u64::from(record.bursts)),
-                    RunDataValue::Float(record.final_distance_mm),
-                ],
-            );
-        }
-        attempts.push(record);
-        events.emit(RunEvent::new(
-            run.run_id.clone(),
-            RunEventKind::Progress {
-                samples_done: resume.first_index + attempts.len() as u64,
-                samples_total,
-                repeat_index: 0,
-                repeat_total: 1,
-                sent_values: Vec::new(),
-                tick_index: None,
-                window_values: Vec::new(),
-                image_png_base64: None,
-                mask_png_base64: None,
-                preview_name: Some(format!("{} seed {seed}", run.phase)),
-                readout: None,
-                class_scores: Vec::new(),
-                stand: None,
-            },
-        ));
-    }
-    if let Some(sink) = data {
-        sink.event(
-            EventTime {
-                episode: Some(resume.first_index + attempts.len() as u64),
-                ..EventTime::default()
-            },
-            "phase_end",
-            run.phase,
-        );
-    }
-    let done = resume.first_index + attempts.len() as u64;
-    let mut report = ReachPhaseReport::from_attempts(attempts)?;
-    report.skipped = skipped;
+    let train_affect = run.phase == "train";
+    let mut rules = ReachRules {
+        probe,
+        criterion: run.criterion,
+    };
+    let outcome = run_phase_loop(
+        &PhaseSpec {
+            phase: run.phase,
+            seeds: run.seeds,
+            run_id: run.run_id,
+            label: "reach-and-hold",
+            tables: vec![reach_steps_spec(), reach_attempts_spec()],
+        },
+        resume,
+        events,
+        cancel,
+        data,
+        &mut |seed, attempt_data| {
+            run_attempt(
+                &mut rules,
+                seed,
+                train_affect,
+                run.poll_timeout,
+                coach,
+                cancel,
+                attempt_data,
+            )
+        },
+        &|phase, attempt_index, record| {
+            vec![
+                RunDataValue::text(phase),
+                RunDataValue::count(attempt_index),
+                RunDataValue::count(record.seed),
+                RunDataValue::Text(name_of(&record.outcome)),
+                RunDataValue::count(u64::from(record.bursts)),
+                RunDataValue::Float(record.final_distance_mm),
+            ]
+        },
+    )?;
+    let mut report = ReachPhaseReport::from_attempts(outcome.attempts)?;
+    report.skipped = outcome.skipped;
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
@@ -721,16 +643,8 @@ pub fn run_reach_phase_from(
             confusion: None,
         },
     ));
-    let export = ResumeExport {
-        units_done: done,
-        engine_state: serde_json::Value::Null,
-        partial: done < samples_total,
-    };
-    Ok((report, export))
+    Ok((report, outcome.export))
 }
-
-const REACH_STEPS_TABLE: &str = "steps";
-const REACH_ATTEMPTS_TABLE: &str = "attempts";
 
 fn reach_steps_spec() -> TableSpec {
     let mut columns = vec![
@@ -758,7 +672,7 @@ fn reach_steps_spec() -> TableSpec {
         "Latched end cause, when one was latched.",
     ));
     TableSpec {
-        name: REACH_STEPS_TABLE.to_string(),
+        name: STEPS_TABLE.to_string(),
         description: "One row per controller sample.".to_string(),
         columns,
     }
@@ -766,7 +680,7 @@ fn reach_steps_spec() -> TableSpec {
 
 fn reach_attempts_spec() -> TableSpec {
     TableSpec {
-        name: REACH_ATTEMPTS_TABLE.to_string(),
+        name: ATTEMPTS_TABLE.to_string(),
         description: "One row per finished attempt.".to_string(),
         columns: vec![
             ColumnSpec::unitless("phase", "Phase the attempt belongs to."),
@@ -778,160 +692,119 @@ fn reach_attempts_spec() -> TableSpec {
         ],
     }
 }
-
-/// Where one attempt writes its rows and events.
-struct ReachDataContext<'s, 'a> {
-    sink: Option<&'s mut (dyn RunDataSink + 'a)>,
-    phase: &'s str,
-    attempt: u64,
+/// Reach's rules for the shared attempt loop: distance to the target, held for a burst count.
+struct ReachRules<'p, 'c> {
+    probe: &'p mut dyn ReachProbe,
+    criterion: &'c ReachHoldCriterion,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_attempt(
-    seed: u64,
-    criterion: &ReachHoldCriterion,
-    probe: &mut dyn ReachProbe,
-    coach: &mut dyn FnMut(ReachCoachWrite) -> Result<(), TrainerError>,
-    train_affect: bool,
-    poll_timeout: Duration,
-    cancel: &CancelToken,
-    mut data: ReachDataContext<'_, '_>,
-) -> Result<ReachAttemptRecord, TrainerError> {
-    let placement =
-        probe.begin_attempt(seed, &criterion.target_object_id, &criterion.reach_body)?;
-    if placement.seed != seed {
-        return Err(TrainerError::Runtime(format!(
-            "controller placed seed {} for requested seed {seed}",
-            placement.seed
-        )));
+impl AttemptRules for ReachRules<'_, '_> {
+    type Sample = ReachSample;
+    type Open = OpenAttempt;
+    type Record = ReachAttemptRecord;
+
+    fn cancelled_message(&self) -> &'static str {
+        "reach-and-hold run cancelled"
     }
-    let attempt = data.attempt;
-    let at = |step: u64| EventTime {
-        sim_time_s: None,
-        step: Some(step),
-        episode: Some(attempt),
-    };
-    if let Some(sink) = data.sink.as_deref_mut() {
-        sink.event(at(0), "attempt_start", &format!("seed {seed}"));
+
+    fn begin(&mut self, seed: u64) -> Result<(), TrainerError> {
+        let placement = self.probe.begin_attempt(
+            seed,
+            &self.criterion.target_object_id,
+            &self.criterion.reach_body,
+        )?;
+        if placement.seed != seed {
+            return Err(TrainerError::Runtime(format!(
+                "controller placed seed {} for requested seed {seed}",
+                placement.seed
+            )));
+        }
+        Ok(())
     }
-    let mut open = OpenAttempt::fresh();
-    loop {
-        if cancel.is_cancelled() {
-            return Err(TrainerError::Cancelled(
-                "reach-and-hold run cancelled".to_string(),
-            ));
-        }
-        coach(ReachCoachWrite::Step)?;
-        let sample = probe.poll(open.last_seq, poll_timeout)?;
-        if let Some(sink) = data.sink.as_deref_mut() {
-            let mut row = vec![
-                RunDataValue::text(data.phase),
-                RunDataValue::count(attempt),
-                RunDataValue::count(sample.seed),
-                RunDataValue::count(sample.seq),
-                RunDataValue::Float(sample.distance_mm),
-            ];
-            row.extend(sample.ee_mm.iter().map(|v| RunDataValue::Float(*v)));
-            row.extend(sample.target_mm.iter().map(|v| RunDataValue::Float(*v)));
-            row.push(RunDataValue::Bool(sample.fence_violated));
-            row.push(
-                sample
-                    .terminal
-                    .as_ref()
-                    .map_or(RunDataValue::Null, |t| RunDataValue::Text(name_of(t))),
-            );
-            sink.row(REACH_STEPS_TABLE, &row);
-        }
+
+    fn fresh(&self) -> OpenAttempt {
+        OpenAttempt::fresh()
+    }
+
+    fn open_bursts(&self, open: &OpenAttempt) -> u32 {
+        open.bursts
+    }
+
+    fn open_seq(&self, open: &OpenAttempt) -> u64 {
+        open.last_seq
+    }
+
+    fn poll(&mut self, after_seq: u64, timeout: Duration) -> Result<ReachSample, TrainerError> {
+        self.probe.poll(after_seq, timeout)
+    }
+
+    fn step_row(&self, phase: &str, attempt: u64, sample: &ReachSample) -> Vec<RunDataValue> {
+        let mut row = vec![
+            RunDataValue::text(phase),
+            RunDataValue::count(attempt),
+            RunDataValue::count(sample.seed),
+            RunDataValue::count(sample.seq),
+            RunDataValue::Float(sample.distance_mm),
+        ];
+        row.extend(sample.ee_mm.iter().map(|v| RunDataValue::Float(*v)));
+        row.extend(sample.target_mm.iter().map(|v| RunDataValue::Float(*v)));
+        row.push(RunDataValue::Bool(sample.fence_violated));
+        row.push(
+            sample
+                .terminal
+                .as_ref()
+                .map_or(RunDataValue::Null, |t| RunDataValue::Text(name_of(t))),
+        );
+        row
+    }
+
+    fn observe(
+        &mut self,
+        open: &OpenAttempt,
+        sample: &ReachSample,
+        seed: u64,
+        train_affect: bool,
+    ) -> Result<
+        (
+            AttemptFlow<OpenAttempt, ReachAttemptRecord>,
+            Vec<RewardSignal>,
+        ),
+        TrainerError,
+    > {
+        let mut signals = Vec::new();
         if train_affect && open.bursts > 0 {
             if let Some(signal) = reach_distance_affect(open.last_distance_mm, sample.distance_mm)?
             {
-                if let Some(sink) = data.sink.as_deref_mut() {
-                    sink.event(
-                        at(u64::from(open.bursts)),
-                        "affect",
-                        &format!("{:?} {}", signal.channel, signal.magnitude).to_lowercase(),
-                    );
-                }
-                coach(ReachCoachWrite::Affect(signal))?;
+                signals.push(signal);
             }
         }
-        match observe_sample(&open, &sample, criterion, seed)? {
-            AttemptStep::Continue(next) => open = next,
-            AttemptStep::Finished(record) => {
-                if let Some(sink) = data.sink.as_deref_mut() {
-                    sink.event(
-                        at(u64::from(record.bursts)),
-                        "attempt_end",
-                        &name_of(&record.outcome),
-                    );
-                }
-                return Ok(record);
-            }
-        }
+        let flow = match observe_sample(open, sample, self.criterion, seed)? {
+            AttemptStep::Continue(next) => AttemptFlow::Continue(next),
+            AttemptStep::Finished(record) => AttemptFlow::Finished(record),
+        };
+        Ok((flow, signals))
+    }
+
+    fn record_bursts(&self, record: &ReachAttemptRecord) -> u32 {
+        record.bursts
+    }
+
+    fn record_outcome(&self, record: &ReachAttemptRecord) -> String {
+        name_of(&record.outcome)
     }
 }
 
 /// HTTP client for the neutral reach actions on a controller control server.
 pub struct HttpReachProbe {
-    host: String,
-    port: u16,
-    timeout: Duration,
+    control: HttpControl,
 }
 
 impl HttpReachProbe {
     /// `base_url` is `http://host:port` with no path.
     pub fn new(base_url: &str, timeout: Duration) -> Result<Self, TrainerError> {
-        if timeout.is_zero() {
-            return Err(TrainerError::Config(
-                "reach control timeout must be > 0".to_string(),
-            ));
-        }
-        let (host, port) = split_http_base(base_url)?;
         Ok(Self {
-            host,
-            port,
-            timeout,
+            control: HttpControl::new(base_url, timeout, "reach control")?,
         })
-    }
-
-    fn command(&self, body: &serde_json::Value) -> Result<serde_json::Value, TrainerError> {
-        let payload = serde_json::to_vec(body).map_err(|error| {
-            TrainerError::Runtime(format!("reach command encode failed: {error}"))
-        })?;
-        let request = format!(
-            "POST /command HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            self.host,
-            self.port,
-            payload.len()
-        );
-        let address = format!("{}:{}", self.host, self.port);
-        let socket = address
-            .to_socket_addrs()
-            .map_err(|error| TrainerError::Runtime(format!("reach control address: {error}")))?
-            .next()
-            .ok_or_else(|| {
-                TrainerError::Runtime(format!("reach control address {address} did not resolve"))
-            })?;
-        let mut stream = TcpStream::connect_timeout(&socket, self.timeout).map_err(|error| {
-            TrainerError::Runtime(format!("reach control connect failed: {error}"))
-        })?;
-        stream
-            .set_read_timeout(Some(self.timeout))
-            .map_err(|error| TrainerError::Runtime(format!("reach control timeout: {error}")))?;
-        stream
-            .set_write_timeout(Some(self.timeout))
-            .map_err(|error| TrainerError::Runtime(format!("reach control timeout: {error}")))?;
-        stream.write_all(request.as_bytes()).map_err(|error| {
-            TrainerError::Runtime(format!("reach control write failed: {error}"))
-        })?;
-        stream.write_all(&payload).map_err(|error| {
-            TrainerError::Runtime(format!("reach control write failed: {error}"))
-        })?;
-        let mut raw = Vec::new();
-        stream.read_to_end(&mut raw).map_err(|error| {
-            TrainerError::Runtime(format!("reach control read failed: {error}"))
-        })?;
-        parse_http_json(&raw)
     }
 }
 
@@ -942,7 +815,7 @@ impl ReachProbe for HttpReachProbe {
         target_object_id: &str,
         reach_body: &str,
     ) -> Result<ReachPlacement, TrainerError> {
-        let result = self.command(&serde_json::json!({
+        let result = self.control.command(&serde_json::json!({
             "action": "begin_reach_attempt",
             "seed": seed,
             "target_object_id": target_object_id,
@@ -959,7 +832,7 @@ impl ReachProbe for HttpReachProbe {
                 "reach poll timeout must be > 0".to_string(),
             ));
         }
-        let result = self.command(&serde_json::json!({
+        let result = self.control.command(&serde_json::json!({
             "action": "poll_reach_outcome",
             "after_seq": after_seq,
             "timeout_s": timeout_s,
@@ -967,61 +840,6 @@ impl ReachProbe for HttpReachProbe {
         serde_json::from_value(result)
             .map_err(|error| TrainerError::Runtime(format!("reach poll decode failed: {error}")))
     }
-}
-
-fn split_http_base(base_url: &str) -> Result<(String, u16), TrainerError> {
-    let rest = base_url.strip_prefix("http://").ok_or_else(|| {
-        TrainerError::Config("reach control URL must start with http://".to_string())
-    })?;
-    if rest.contains('/') {
-        return Err(TrainerError::Config(
-            "reach control URL must be http://host:port with no path".to_string(),
-        ));
-    }
-    let (host, port_text) = rest
-        .split_once(':')
-        .ok_or_else(|| TrainerError::Config("reach control URL must include a port".to_string()))?;
-    if host.is_empty() {
-        return Err(TrainerError::Config(
-            "reach control URL host is empty".to_string(),
-        ));
-    }
-    let port: u16 = port_text.parse().map_err(|_| {
-        TrainerError::Config(format!("reach control port {port_text} is not a u16"))
-    })?;
-    Ok((host.to_string(), port))
-}
-
-fn parse_http_json(raw: &[u8]) -> Result<serde_json::Value, TrainerError> {
-    let text = String::from_utf8_lossy(raw);
-    let (head, body) = text.split_once("\r\n\r\n").ok_or_else(|| {
-        TrainerError::Runtime("reach control response has no HTTP body".to_string())
-    })?;
-    let status_line = head.lines().next().unwrap_or("");
-    if !status_line.contains(" 200 ") {
-        return Err(TrainerError::Runtime(format!(
-            "reach control HTTP failed: {status_line}"
-        )));
-    }
-    let envelope: serde_json::Value = serde_json::from_str(body.trim())
-        .map_err(|error| TrainerError::Runtime(format!("reach control JSON failed: {error}")))?;
-    let ok = envelope
-        .get("ok")
-        .and_then(|value| value.as_bool())
-        .ok_or_else(|| {
-            TrainerError::Runtime("reach control response has no ok flag".to_string())
-        })?;
-    if !ok {
-        let message = envelope
-            .get("error")
-            .and_then(|value| value.as_str())
-            .unwrap_or("reach control command failed");
-        return Err(TrainerError::Runtime(message.to_string()));
-    }
-    envelope
-        .get("result")
-        .cloned()
-        .ok_or_else(|| TrainerError::Runtime("reach control response has no result".to_string()))
 }
 
 /// Run controls this engine's loop honours (pause, skip and cancel; at the attempt).

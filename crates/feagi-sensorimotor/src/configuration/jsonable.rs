@@ -513,6 +513,9 @@ pub enum JSONDecoderProperties {
     /// MIDI Output: Notes and Expression areas sized by the properties; the
     /// positioning is the Expression area's unsigned percentage coding.
     MidiOutput(MidiProperties, PercentageNeuronPositioning),
+    /// Unsigned 1D percentage where a channel without a spike reads zero on every decoded
+    /// frame (zero excitation), instead of holding its last value.
+    Muscle(NeuronDepth, PercentageNeuronPositioning),
 }
 
 impl JSONDecoderProperties {
@@ -690,6 +693,19 @@ impl JSONDecoderProperties {
                     number_channels,
                 )
             }
+            JSONDecoderProperties::Muscle(neuron_depth, percentage_neuron_positioning) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id!".to_string(),
+                    ));
+                }
+                PercentageNeuronVoxelXYZPDecoder::new_box_zero_when_silent(
+                    *cortical_ids.first().unwrap(),
+                    *neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning,
+                )
+            }
             JSONDecoderProperties::MidiOutput(midi_properties, positioning) => {
                 if cortical_ids.len() != 2 {
                     return Err(FeagiDataError::InternalError(
@@ -825,6 +841,9 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::AudioSpectrum(audio_properties) => Ok(
                 WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
             ),
+            JSONDecoderProperties::Muscle(_neuron_depth, _positioning) => {
+                Ok(WrappedIOData::Percentage(Percentage::new_zero()))
+            }
             JSONDecoderProperties::MidiOutput(midi_properties, _positioning) => {
                 Ok(WrappedIOData::MidiFrame(MidiFrame::new(midi_properties)?))
             }

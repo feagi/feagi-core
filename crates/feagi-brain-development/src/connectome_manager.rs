@@ -11115,8 +11115,15 @@ impl ConnectomeManager {
         for area_id in imported.keys() {
             let id = CorticalID::try_from_base_64(area_id)?;
             if !inputs.iter().chain(outputs.iter()).any(|d| *d == id) {
+                let area_name = crate::region_io_designation::area_label(self, &id);
+                let region_name = self
+                    .brain_regions
+                    .get_region(region_id)
+                    .map(|r| r.name.clone())
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or_else(|| region_id.to_string());
                 return Err(BduError::RegionIoPolicyViolation(format!(
-                    "Cannot import port_encoding for area {area_id}: it is not a designated input or output of brain region {region_id}"
+                    "Cannot import port_encoding for area {area_name}: it is not a designated input or output of brain region {region_name}"
                 )));
             }
         }
@@ -11179,6 +11186,7 @@ impl ConnectomeManager {
                 &merged_out,
             )?;
             crate::region_io_designation::validate_port_encoding_changes(
+                self,
                 &region_snapshot,
                 &port_encoding_changes,
                 &merged_in,

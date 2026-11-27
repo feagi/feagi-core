@@ -1685,6 +1685,23 @@ mod test_sensory_cortical_unit {
         assert_eq!(unit.channel_dimensions_default, [1, 1, 20]);
     }
 
+    #[test]
+    fn test_force_unit_id_name_and_data_type() {
+        let unit = SensoryCorticalUnit::Force;
+        assert_eq!(unit.get_cortical_id_unit_reference(), *b"frc");
+        assert_eq!(unit.get_friendly_name(), "Force Sensor");
+        assert_eq!(unit.get_accepted_wrapped_io_data_type(), "SignedPercentage");
+        assert!(unit.get_default_sensory_hold_last_frame());
+        let cortical_id = unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16));
+        assert_eq!(
+            SensoryCorticalUnit::try_from_cortical_id(&cortical_id),
+            Some(SensoryCorticalUnit::Force)
+        );
+        let topology = unit.get_unit_default_topology();
+        let area = topology.get(&0.into()).expect("Missing Force topology");
+        assert_eq!(area.channel_dimensions_default, [1, 1, 20]);
+    }
+
     mod test_basic_properties {
         use super::*;
 
@@ -2402,6 +2419,43 @@ mod test_sensory_cortical_unit {
                 MotorCorticalUnit::SpatialPointer.get_snake_case_name(),
                 "spatial_pointer"
             );
+        }
+    }
+
+    /// Tests for the `Muscle` motor unit: one absolute-only percentage area.
+    mod test_muscle_unit {
+        use super::*;
+
+        #[test]
+        fn test_muscle_id_and_template() {
+            let id = MotorCorticalUnit::get_cortical_ids_array_for_muscle_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u16),
+            )[0];
+            let bytes = id.as_bytes();
+            assert_eq!(bytes[0], b'o', "Muscle must be an OPU");
+            assert_eq!(&bytes[1..4], b"mus");
+            let from_b64 = CorticalID::try_from_base_64(&id.as_base_64()).unwrap();
+            assert_eq!(from_b64, id);
+            assert_eq!(MotorCorticalUnit::Muscle.get_number_cortical_areas(), 1);
+            assert_eq!(
+                MotorCorticalUnit::Muscle.get_friendly_name(),
+                "Muscle Activation"
+            );
+            assert_eq!(MotorCorticalUnit::Muscle.get_snake_case_name(), "muscle");
+            assert_eq!(
+                MotorCorticalUnit::try_from_legacy_subtype("mus"),
+                Some(
+                    MotorCorticalUnit::Muscle
+                        .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16))
+                )
+            );
+            let topology = MotorCorticalUnit::Muscle.get_unit_default_topology();
+            assert_eq!(topology.len(), 1);
+            let area = topology.get(&0.into()).expect("Missing Muscle topology");
+            assert_eq!(area.channel_dimensions_default, [1, 1, 20]);
+            assert_eq!(area.channel_dimensions_max, [1, 1, 1024]);
         }
     }
 

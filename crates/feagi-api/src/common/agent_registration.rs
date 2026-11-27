@@ -57,6 +57,7 @@ fn percentage_tuple_first_depth_u32(depth_json: &Value) -> Option<u32> {
 /// For [`MotorCorticalUnit::PositionalServo`], Z depth is taken from
 /// `PositionalServo` / `PositionalServoTargetSpeed` so absolute and incremental
 /// OPUs match the controller's registered servo resolution (xARM shared servo z).
+/// For [`MotorCorticalUnit::Muscle`], Z depth is taken from the `Muscle` decoder tuple.
 /// For [`MotorCorticalUnit::ObjectSegmentation`], all three dims may be taken from the
 /// agent's `JSONDecoderProperties::MiscData` block so the connectome matches whatever
 /// grid size the agent registered with (e.g. Vision Lab user-chosen oseg resolution).
@@ -78,6 +79,7 @@ fn per_channel_motor_dimensions_for_registration(
         && motor_unit != MotorCorticalUnit::SpatialPointer
         && motor_unit != MotorCorticalUnit::AngularPointer
         && motor_unit != MotorCorticalUnit::PositionalServo
+        && motor_unit != MotorCorticalUnit::Muscle
         && motor_unit != MotorCorticalUnit::AudioOutput
     {
         return (default_w, default_h, default_d);
@@ -147,6 +149,21 @@ fn per_channel_motor_dimensions_for_registration(
             return (default_w, default_h, depth);
         }
         return (default_w, default_h, default_d);
+    }
+    // Muscle: Z depth from the `Muscle` decoder tuple (first element = NeuronDepth).
+    if motor_unit == MotorCorticalUnit::Muscle {
+        let depth = decoder_properties
+            .and_then(|decode| decode.get("Muscle"))
+            .and_then(|payload| payload.as_array())
+            .and_then(|items| items.first())
+            .and_then(percentage_tuple_first_depth_u32)
+            .filter(|depth| *depth > 0)
+            .map(|depth| {
+                let d_min = unit_topology.channel_dimensions_min[2].max(1);
+                let d_max = unit_topology.channel_dimensions_max[2].max(1);
+                depth.clamp(d_min, d_max) as usize
+            });
+        return (default_w, default_h, depth.unwrap_or(default_d));
     }
     (default_w, default_h, default_d)
 }
@@ -335,6 +352,7 @@ fn sensory_sub_area_dimensions(
     if matches!(
         sensory_unit,
         SensoryCorticalUnit::Servo
+            | SensoryCorticalUnit::Force
             | SensoryCorticalUnit::Proximity
             | SensoryCorticalUnit::MiscData
             | SensoryCorticalUnit::RawIMU
@@ -2785,6 +2803,23 @@ mod count_output_registration_tests {
         // A MidiOutput block is not read as a MidiInput block.
         let output = midi_output_block(88, 20);
         assert_eq!(midi_input_area_dims(0, Some(&output)), (128, 1, 1));
+    }
+
+    #[test]
+    fn muscle_depth_is_read_from_the_muscle_decoder_block_and_clamped() {
+        let unit = MotorCorticalUnit::Muscle;
+        let topo = unit.get_unit_default_topology();
+        let ut = topo
+            .get(&CorticalSubUnitIndex::from(0u8))
+            .expect("muscle area 0");
+        let dims = |dec: Option<&serde_json::Value>| {
+            per_channel_motor_dimensions_for_registration(unit, ut, dec)
+        };
+        assert_eq!(dims(None), (1, 1, 20));
+        let dec = json!({"Muscle": [{"value": 50}, "Linear"]});
+        assert_eq!(dims(Some(&dec)), (1, 1, 50));
+        let huge = json!({"Muscle": [{"value": 99999}, "Linear"]});
+        assert_eq!(dims(Some(&huge)), (1, 1, 1024));
     }
 
     #[test]

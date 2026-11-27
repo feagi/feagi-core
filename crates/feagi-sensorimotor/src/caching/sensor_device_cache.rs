@@ -15,7 +15,7 @@ use crate::data_types::{AudioSpectrumFrame, AudioSpectrumProperties, MidiFrame, 
 // type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
     GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, RawIMU, SegmentedImageFrame,
-    SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
+    SignedPercentage, SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -305,6 +305,50 @@ macro_rules! sensor_unit_functions {
         }
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, Percentage3D);
+    };
+
+    // Arm for WrappedIOType::SignedPercentage (scalar, signed in [-1, 1])
+    //
+    // Sign encoding comes from the shared percentage encoder: Linear positioning uses one X
+    // column per channel with sign along Z (z = 0 is +1.0, z = depth - 1 is -1.0); Fractional
+    // positioning uses two X columns per channel (positive lobe, negative lobe).
+    (@generate_functions
+        $sensory_unit:ident,
+        SignedPercentage
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    true,
+                    PercentageChannelDimensionality::D1
+                )?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
+                // The cache slot must wrap SignedPercentage so later _write calls pass the type guard.
+                let initial_val: WrappedIOData = WrappedIOType::SignedPercentage.create_blank_data_of_type()?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, SignedPercentage);
     };
 
     // Arm for WrappedIOType::SignedPercentage_4D

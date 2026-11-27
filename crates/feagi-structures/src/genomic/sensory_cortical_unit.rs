@@ -389,7 +389,7 @@ impl SensoryCorticalUnit {
         }
         matches!(
             self.get_accepted_wrapped_io_data_type(),
-            "Percentage" | "Percentage_3D" | "SignedPercentage_4D" | "RawIMU"
+            "Percentage" | "Percentage_3D" | "SignedPercentage" | "SignedPercentage_4D" | "RawIMU"
         )
     }
 
@@ -445,6 +445,9 @@ impl SensoryCorticalUnit {
             }
             SensoryCorticalUnit::Servo => {
                 Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::Force => {
+                Self::get_cortical_ids_array_for_force_with_parameters(fh, pos, group_index)[0]
             }
             SensoryCorticalUnit::AnalogGPIO => {
                 Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
@@ -519,6 +522,7 @@ mod sensory_hold_default_tests {
             SensoryCorticalUnit::RawIMU,
             SensoryCorticalUnit::SmartIMU,
             SensoryCorticalUnit::Servo,
+            SensoryCorticalUnit::Force,
             SensoryCorticalUnit::Proximity,
             SensoryCorticalUnit::Battery,
             SensoryCorticalUnit::AnalogGPIO,

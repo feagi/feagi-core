@@ -33,6 +33,10 @@ pub struct PercentageNeuronVoxelXYZPDecoder {
     z_depth_scratch_space: Vec<Vec<u32>>,
     /// Only used for signed decoders
     z_depth_scratch_space_negative: Vec<Vec<u32>>,
+    /// When set, a channel without a spike decodes to zero (and is flagged changed) on every
+    /// decoded frame, including a frame that carries no data for the area at all. The default
+    /// holds the last value of a silent channel. Only supported for unsigned 1D percentages.
+    zero_when_silent: bool,
 }
 
 impl PercentageNeuronVoxelXYZPDecoder {
@@ -49,6 +53,49 @@ impl PercentageNeuronVoxelXYZPDecoder {
         interpolation: PercentageNeuronPositioning,
         is_signed: bool,
         number_percentages: PercentageChannelDimensionality,
+    ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+        Self::new_box_with_silence(
+            cortical_read_target,
+            z_resolution,
+            number_channels,
+            interpolation,
+            is_signed,
+            number_percentages,
+            false,
+        )
+    }
+
+    /// Unsigned 1D percentage decoder where a silent channel reads zero.
+    ///
+    /// On every decoded frame, every channel without a spike is written as 0.0 and flagged
+    /// changed, also when the frame has no data for the area. This is for activations that
+    /// are zero unless driven (the latest frame is the whole truth), unlike the default
+    /// decoder which holds a silent channel's last value.
+    pub fn new_box_zero_when_silent(
+        cortical_read_target: CorticalID,
+        z_resolution: NeuronDepth,
+        number_channels: CorticalChannelCount,
+        interpolation: PercentageNeuronPositioning,
+    ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+        Self::new_box_with_silence(
+            cortical_read_target,
+            z_resolution,
+            number_channels,
+            interpolation,
+            false,
+            PercentageChannelDimensionality::D1,
+            true,
+        )
+    }
+
+    fn new_box_with_silence(
+        cortical_read_target: CorticalID,
+        z_resolution: NeuronDepth,
+        number_channels: CorticalChannelCount,
+        interpolation: PercentageNeuronPositioning,
+        is_signed: bool,
+        number_percentages: PercentageChannelDimensionality,
+        zero_when_silent: bool,
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         let number_pairs_per_channel = number_percentages.as_u32();
@@ -87,6 +134,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
             number_percentages,
             z_depth_scratch_space: vec![Vec::new(); scratch_size],
             z_depth_scratch_space_negative,
+            zero_when_silent,
         };
         Ok(Box::new(decoder))
     }
@@ -137,6 +185,18 @@ impl PercentageNeuronVoxelXYZPDecoder {
         );
     }
 
+    /// Write 0.0 into a channel's cached 1D percentage and flag it changed.
+    fn write_zero(
+        pipeline: &mut MotorPipelineStageRunner,
+        changed_flag: &mut bool,
+    ) -> Result<(), FeagiDataError> {
+        let percentage: &mut Percentage =
+            pipeline.get_preprocessed_cached_value_mut().try_into()?;
+        *percentage = Percentage::new_zero();
+        *changed_flag = true;
+        Ok(())
+    }
+
     fn process_unsigned_channel(
         &self,
         base_index: usize,
@@ -154,6 +214,9 @@ impl PercentageNeuronVoxelXYZPDecoder {
         });
 
         if !has_data {
+            if self.zero_when_silent {
+                Self::write_zero(pipeline, changed_flag)?;
+            }
             return Ok(());
         }
 
@@ -375,6 +438,12 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
     }
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
+        if self.zero_when_silent {
+            return JSONDecoderProperties::Muscle(
+                NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
+                self.interpolation,
+            );
+        }
         JSONDecoderProperties::Percentage(
             NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
             self.interpolation,
@@ -393,14 +462,21 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         const ONLY_ALLOWED_Y: u32 = 0;
 
         let neuron_array = neurons_to_read.get_neurons_of(&self.cortical_read_target);
-        if neuron_array.is_none() {
-            return Ok(());
-        }
-
-        let neuron_array = neuron_array.unwrap();
-        if neuron_array.is_empty() {
-            return Ok(());
-        }
+        let neuron_array = match neuron_array {
+            Some(array) if !array.is_empty() => array,
+            _ => {
+                if self.zero_when_silent {
+                    // No spikes this frame: every channel is zero excitation.
+                    for (pipeline, changed_flag) in pipelines_with_data_to_update
+                        .iter_mut()
+                        .zip(channel_changed.iter_mut())
+                    {
+                        Self::write_zero(pipeline, changed_flag)?;
+                    }
+                }
+                return Ok(());
+            }
+        };
 
         self.clear_scratch_spaces();
 

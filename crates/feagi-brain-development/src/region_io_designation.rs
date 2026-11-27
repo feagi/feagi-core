@@ -9,8 +9,6 @@ Observed boundary traffic is still merged into `inputs`/`outputs` in
 `ConnectomeManager::recompute_brain_region_io_registry`.
 */
 
-use std::collections::HashSet;
-
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::{BduError, BduResult};
 use feagi_structures::genomic::brain_regions::{PortEncoding, PortEncodingSource};
@@ -134,8 +132,27 @@ pub fn parse_stored_port_encoding(
     .map_err(|e| BduError::InvalidArea(format!("Invalid port_encoding: {e}")))
 }
 
+/// Friendly name of a cortical area for messages; falls back to the id when no name is known.
+pub fn area_label(manager: &ConnectomeManager, id: &CorticalID) -> String {
+    manager
+        .get_cortical_area(id)
+        .map(|a| a.name.clone())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| id.as_base_64())
+}
+
+/// Friendly name of a brain region for messages; falls back to the region id.
+fn region_label(region: &BrainRegion) -> String {
+    if region.name.is_empty() {
+        region.region_id.to_string()
+    } else {
+        region.name.clone()
+    }
+}
+
 /// A set (not a clear) must name a port that is designated after the same PATCH.
 pub fn validate_port_encoding_changes(
+    manager: &ConnectomeManager,
     region: &BrainRegion,
     changes: &[PortEncodingChange],
     merged_inputs: &[CorticalID],
@@ -145,8 +162,8 @@ pub fn validate_port_encoding_changes(
         if entry.is_some() && !merged_inputs.iter().chain(merged_outputs).any(|d| d == id) {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Cannot set port_encoding for area {}: it is not a designated input or output of brain region {}",
-                id.as_base_64(),
-                region.region_id
+                area_label(manager, id),
+                region_label(region)
             )));
         }
     }
@@ -181,25 +198,9 @@ pub fn apply_port_encoding_changes(
     Ok(())
 }
 
-/// Reject duplicate ids across input and output designation.
-fn validate_no_overlap(inputs: &[CorticalID], outputs: &[CorticalID]) -> BduResult<()> {
-    let mut seen: HashSet<String> = HashSet::new();
-    for i in inputs {
-        seen.insert(i.as_base_64());
-    }
-    for o in outputs {
-        if seen.contains(&o.as_base_64()) {
-            return Err(BduError::RegionIoPolicyViolation(format!(
-                "Cortical area {} cannot appear in both designated_inputs and designated_outputs",
-                o.as_base_64()
-            )));
-        }
-    }
-    Ok(())
-}
-
 /// Every designated id must be a member of the region's cortical set.
 fn validate_membership(
+    manager: &ConnectomeManager,
     region: &BrainRegion,
     inputs: &[CorticalID],
     outputs: &[CorticalID],
@@ -208,8 +209,8 @@ fn validate_membership(
         if !region.contains_area(id) {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Designated area {} is not contained in brain region {}",
-                id.as_base_64(),
-                region.region_id
+                area_label(manager, id),
+                region_label(region)
             )));
         }
     }
@@ -223,22 +224,23 @@ pub fn validate_merged_designations_against_connectivity(
     inputs: &[CorticalID],
     outputs: &[CorticalID],
 ) -> BduResult<()> {
-    validate_no_overlap(inputs, outputs)?;
-    validate_membership(region, inputs, outputs)?;
+    validate_membership(manager, region, inputs, outputs)?;
 
+    // An area on both lists is a both-way port: it may map in and out, so it is exempt.
+    let is_both = |id: &CorticalID| inputs.contains(id) && outputs.contains(id);
     for id in inputs {
-        if manager.has_cross_region_outgoing(id) {
+        if !is_both(id) && manager.has_cross_region_outgoing(id) {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Cannot set designated_inputs for area {}: it has outgoing mapping(s) to another brain region; remove those mappings first",
-                id.as_base_64()
+                area_label(manager, id)
             )));
         }
     }
     for id in outputs {
-        if manager.has_cross_region_incoming(id) {
+        if !is_both(id) && manager.has_cross_region_incoming(id) {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Cannot set designated_outputs for area {}: it has incoming mapping(s) from another brain region; remove those mappings first",
-                id.as_base_64()
+                area_label(manager, id)
             )));
         }
     }
@@ -268,21 +270,21 @@ pub fn validate_cross_region_mapping_proposal(
     }
 
     if let Some(region) = manager.get_brain_region(&src_region_id) {
-        if area_is_designated_input(region, src)? {
+        if area_is_designated_input(region, src)? && !area_is_designated_output(region, src)? {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Mapping {} -> {} rejected: source area is designated as a region input and cannot project outside its brain region",
-                src.as_base_64(),
-                dst.as_base_64()
+                area_label(manager, src),
+                area_label(manager, dst)
             )));
         }
     }
 
     if let Some(region) = manager.get_brain_region(&dst_region_id) {
-        if area_is_designated_output(region, dst)? {
+        if area_is_designated_output(region, dst)? && !area_is_designated_input(region, dst)? {
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Mapping {} -> {} rejected: destination area is designated as a region output and cannot receive projections from outside its brain region",
-                src.as_base_64(),
-                dst.as_base_64()
+                area_label(manager, src),
+                area_label(manager, dst)
             )));
         }
     }
@@ -397,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn designated_lists_reject_overlap() {
+    fn designated_lists_accept_overlap() {
         ConnectomeManager::reset_for_testing();
         let inst = ConnectomeManager::instance();
         let mut m = inst.write();
@@ -420,8 +422,95 @@ mod tests {
             DESIGNATED_OUTPUTS_KEY.to_string(),
             serde_json::json!([id_a.as_base_64()]),
         );
-        let err = m.update_brain_region_properties(&r1, patch).unwrap_err();
-        assert!(matches!(err, BduError::RegionIoPolicyViolation(_)));
+        m.update_brain_region_properties(&r1, patch)
+            .expect("an area on both lists is a both-way port");
+    }
+
+    #[test]
+    fn both_way_area_maps_in_and_out_of_its_region() {
+        ConnectomeManager::reset_for_testing();
+        let inst = ConnectomeManager::instance();
+        let mut m = inst.write();
+
+        let (area_port, id_port) = make_custom_area(b"cst_bw01", "Relay", 0);
+        let (area_ext, id_ext) = make_custom_area(b"cst_bw02", "Ext", 1);
+        m.add_cortical_area(area_port).unwrap();
+        m.add_cortical_area(area_ext).unwrap();
+
+        let rid1 = RegionID::new();
+        let rid2 = RegionID::new();
+        let r1 = rid1.to_string();
+        let br1 = BrainRegion::new(rid1, "R1".to_string(), RegionType::Undefined)
+            .unwrap()
+            .with_areas([id_port]);
+        let br2 = BrainRegion::new(rid2, "R2".to_string(), RegionType::Undefined)
+            .unwrap()
+            .with_areas([id_ext]);
+        m.add_brain_region(br1, None).unwrap();
+        m.add_brain_region(br2, None).unwrap();
+
+        let mut patch = std::collections::HashMap::new();
+        patch.insert(
+            DESIGNATED_INPUTS_KEY.to_string(),
+            serde_json::json!([id_port.as_base_64()]),
+        );
+        patch.insert(
+            DESIGNATED_OUTPUTS_KEY.to_string(),
+            serde_json::json!([id_port.as_base_64()]),
+        );
+        m.update_brain_region_properties(&r1, patch).unwrap();
+
+        m.update_cortical_mapping(&id_ext, &id_port, vec![projector_rule()])
+            .expect("both-way port accepts a mapping from outside");
+        m.update_cortical_mapping(&id_port, &id_ext, vec![projector_rule()])
+            .expect("both-way port maps out to outside");
+
+        // Re-saving the lists with mappings in both directions still passes.
+        let mut patch = std::collections::HashMap::new();
+        patch.insert(
+            DESIGNATED_INPUTS_KEY.to_string(),
+            serde_json::json!([id_port.as_base_64()]),
+        );
+        patch.insert(
+            DESIGNATED_OUTPUTS_KEY.to_string(),
+            serde_json::json!([id_port.as_base_64()]),
+        );
+        m.update_brain_region_properties(&r1, patch).unwrap();
+    }
+
+    #[test]
+    fn policy_errors_name_the_area_not_the_id() {
+        ConnectomeManager::reset_for_testing();
+        let inst = ConnectomeManager::instance();
+        let mut m = inst.write();
+
+        let (area_in, id_in) = make_custom_area(b"cst_nm01", "Sensor Port", 0);
+        let (area_ext, id_ext) = make_custom_area(b"cst_nm02", "Outside", 1);
+        m.add_cortical_area(area_in).unwrap();
+        m.add_cortical_area(area_ext).unwrap();
+        let rid1 = RegionID::new();
+        let rid2 = RegionID::new();
+        let mut br1 = BrainRegion::new(rid1, "R1".to_string(), RegionType::Undefined)
+            .unwrap()
+            .with_areas([id_in]);
+        br1.properties.insert(
+            DESIGNATED_INPUTS_KEY.to_string(),
+            serde_json::json!([id_in.as_base_64()]),
+        );
+        let br2 = BrainRegion::new(rid2, "R2".to_string(), RegionType::Undefined)
+            .unwrap()
+            .with_areas([id_ext]);
+        m.add_brain_region(br1, None).unwrap();
+        m.add_brain_region(br2, None).unwrap();
+
+        let err = m
+            .update_cortical_mapping(&id_in, &id_ext, vec![projector_rule()])
+            .unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains("Sensor Port"), "{text}");
+        assert!(text.contains("Outside"), "{text}");
+        assert!(!text.contains(&id_in.as_base_64()), "{text}");
+        assert!(!text.contains(&id_ext.as_base_64()), "{text}");
     }
 
     #[test]

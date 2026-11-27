@@ -36,6 +36,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Muscle excitation 0–100%. A frame without a spike on a channel is zero excitation; the body relaxes with its own activation dynamics."]
+                Muscle => {
+                    friendly_name: "Muscle Activation",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"mus",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [-80, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
                 #[doc = "Gaze control, where the first 2 numbers are the XY center, and the last number is the relative size"]
                 Gaze => {
                     friendly_name: "Gaze Control",

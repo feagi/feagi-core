@@ -79,6 +79,21 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "Signed force reading: drive or actuator effort, contact, touch. Positive = pushing or gripping into the sensor, negative = pulled or pushed back. The area's own name says which source it reads."]
+                Force => {
+                    friendly_name: "Force Sensor",
+                    accepted_wrapped_io_data_type: SignedPercentage,
+                    cortical_id_unit_reference: *b"frc",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [50, 0, -20], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
                 #[doc = "Analog GPIO input, such as an input from the GPIO pins on a Raspberry pi"]
                 AnalogGPIO => {
                     friendly_name: "Analog GPIO Sensor",

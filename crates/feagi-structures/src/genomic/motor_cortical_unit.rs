@@ -353,6 +353,9 @@ impl MotorCorticalUnit {
                 Self::get_cortical_ids_array_for_midi_output_with_parameters(fh, pos, group_index)
                     [0]
             }
+            MotorCorticalUnit::Muscle => {
+                Self::get_cortical_ids_array_for_muscle_with_parameters(fh, pos, group_index)[0]
+            }
         }
     }
 }

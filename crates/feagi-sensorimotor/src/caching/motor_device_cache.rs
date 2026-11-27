@@ -258,6 +258,15 @@ macro_rules! motor_unit_functions {
                             percentage_neuron_positioning,
                         )?
                     }
+                    (Some(&id0), None) if MotorCorticalUnit::$motor_unit == MotorCorticalUnit::Muscle => {
+                        // Zero excitation unless driven: silent channels read 0.0 every frame.
+                        PercentageNeuronVoxelXYZPDecoder::new_box_zero_when_silent(
+                            id0,
+                            z_neuron_resolution,
+                            number_channels,
+                            percentage_neuron_positioning,
+                        )?
+                    }
                     (Some(&id0), None) => {
                         // Single-area percentage type (e.g., CountOutput)
                         PercentageNeuronVoxelXYZPDecoder::new_box(

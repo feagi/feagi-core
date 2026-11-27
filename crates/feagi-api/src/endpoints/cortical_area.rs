@@ -4305,8 +4305,8 @@ pub async fn get_ipu_types(
         let id_ref = unit.get_cortical_id_unit_reference();
         let key = format!("i{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
 
-        // All IPU types support both absolute and incremental encodings
-        let encodings = vec!["absolute".to_string(), "incremental".to_string()];
+        // Encodings the unit accepts (all when the template does not restrict them).
+        let encodings = encodings_for(unit.get_allowed_frame_change_handling());
 
         // Determine if formats are supported based on snake_case_name
         // Vision and SegmentedVision use CartesianPlane (no formats)
@@ -4370,6 +4370,24 @@ pub async fn get_ipu_types(
     Ok(Json(types))
 }
 
+/// Encoding names for an IO unit: the template's allowed frame-change handling, or both when
+/// the template does not restrict it.
+fn encodings_for(
+    allowed: Option<&[feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling]>,
+) -> Vec<String> {
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+    match allowed {
+        Some(list) if !list.is_empty() => list
+            .iter()
+            .map(|h| match h {
+                FrameChangeHandling::Absolute => "absolute".to_string(),
+                FrameChangeHandling::Incremental => "incremental".to_string(),
+            })
+            .collect(),
+        _ => vec!["absolute".to_string(), "incremental".to_string()],
+    }
+}
+
 /// Get metadata for all available OPU types (motors, servos, etc.). Includes encodings, formats, units, and topology.
 #[utoipa::path(
     get,
@@ -4390,8 +4408,8 @@ pub async fn get_opu_types(
         let id_ref = unit.get_cortical_id_unit_reference();
         let key = format!("o{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
 
-        // All OPU types support both absolute and incremental encodings
-        let encodings = vec!["absolute".to_string(), "incremental".to_string()];
+        // Encodings the unit accepts (all when the template does not restrict them).
+        let encodings = encodings_for(unit.get_allowed_frame_change_handling());
 
         // Determine if formats are supported based on snake_case_name
         // MiscData uses Misc (no formats)
@@ -5099,4 +5117,35 @@ pub async fn put_learning_frozen(
     response.insert("cortical_area".to_string(), serde_json::json!(area));
     response.insert("frozen".to_string(), serde_json::json!(frozen));
     Ok(Json(response))
+}
+
+#[cfg(test)]
+mod encodings_for_tests {
+    use super::encodings_for;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+    use feagi_structures::genomic::MotorCorticalUnit;
+
+    #[test]
+    fn restricted_unit_lists_only_its_encodings() {
+        assert_eq!(
+            encodings_for(Some(&[FrameChangeHandling::Absolute])),
+            vec!["absolute".to_string()]
+        );
+        assert_eq!(
+            encodings_for(None),
+            vec!["absolute".to_string(), "incremental".to_string()]
+        );
+    }
+
+    #[test]
+    fn muscle_is_absolute_only() {
+        let muscle = MotorCorticalUnit::list_all()
+            .iter()
+            .find(|u| u.get_snake_case_name() == "muscle")
+            .expect("muscle unit");
+        assert_eq!(
+            encodings_for(muscle.get_allowed_frame_change_handling()),
+            vec!["absolute".to_string()]
+        );
+    }
 }

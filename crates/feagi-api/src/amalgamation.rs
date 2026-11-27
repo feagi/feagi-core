@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct AmalgamationPendingSummary {
     pub amalgamation_id: String,
     pub genome_title: String,
-    /// Footprint of the imported circuit's input, output, and conflict plates (x, y, z).
+    /// Footprint of the imported circuit's input and output plates (x, y, z).
     pub circuit_size: [i32; 3],
 }
 
@@ -97,7 +97,7 @@ const PLATE_FRONT_BACK_MARGIN: i32 = 2;
 const PLATE_HEIGHT: i32 = 1;
 const PLATE_GAP: i32 = 1;
 
-/// Width, depth, and thickness of one input, output, or conflict plate.
+/// Width, depth, and thickness of one input or output plate.
 ///
 /// An empty plate is the placeholder. A plate with areas is wide enough for
 /// their widths plus the gaps and side margins, and deep enough for the
@@ -130,10 +130,10 @@ fn area_width_depth(
     Some((area.dimensions.width as i32, area.dimensions.depth as i32))
 }
 
-/// Import shadow size from the circuit's designated input, output, and conflict plates.
+/// Import shadow size from the circuit's designated input and output plates.
 ///
 /// Internal areas that are not designated inputs or outputs do not change the size.
-/// An area listed as both input and output is a conflict and is drawn on its own plate.
+/// An area listed as both input and output is a both-way port; it is counted on both the input and output plates.
 /// With no designated input or output, the size is the two empty plates side by side.
 pub fn compute_circuit_size_from_runtime_genome(
     genome: &feagi_evolutionary::RuntimeGenome,
@@ -147,7 +147,6 @@ pub fn compute_circuit_size_from_runtime_genome(
 
     let mut input_areas: Vec<(i32, i32)> = Vec::new();
     let mut output_areas: Vec<(i32, i32)> = Vec::new();
-    let mut conflict_areas: Vec<(i32, i32)> = Vec::new();
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
     for cortical_id in designated_inputs.iter().chain(designated_outputs.iter()) {
@@ -159,28 +158,20 @@ pub fn compute_circuit_size_from_runtime_genome(
         let Some(width_depth) = area_width_depth(genome, cortical_id) else {
             continue;
         };
-        if in_inputs && in_outputs {
-            conflict_areas.push(width_depth);
-        } else if in_inputs {
+        if in_inputs {
             input_areas.push(width_depth);
-        } else if in_outputs {
+        }
+        if in_outputs {
             output_areas.push(width_depth);
         }
     }
 
     let (input_width, input_depth) = plate_footprint(&input_areas);
     let (output_width, output_depth) = plate_footprint(&output_areas);
-    let mut width = input_width
+    let width = input_width
         .saturating_add(PLATE_GAP)
         .saturating_add(output_width);
-    let mut depth = input_depth.max(output_depth);
-    if !conflict_areas.is_empty() {
-        let (conflict_width, conflict_depth) = plate_footprint(&conflict_areas);
-        width = width
-            .saturating_add(PLATE_GAP)
-            .saturating_add(conflict_width);
-        depth = depth.max(conflict_depth);
-    }
+    let depth = input_depth.max(output_depth);
     [width, PLATE_HEIGHT, depth]
 }
 
@@ -302,10 +293,8 @@ mod tests {
     }
 
     #[test]
-    fn compute_circuit_size_puts_shared_area_on_conflict_plate() {
-        // The shared area leaves the input and output plates empty and adds a conflict plate.
-        // Empty + gap + empty + gap + conflict(width 2+4=6, depth 4+4=8)
-        // = 5+1+5+1+6 = 18 wide, depth 8.
+    fn compute_circuit_size_puts_both_way_area_on_input_plate() {
+        // A both-way area counts on both plates: 6 + 1 gap + 6 = 13 wide, depth 8.
         let genome = load_test_genome(serde_json::json!({
             "genome_id": "test",
             "genome_title": "Test Genome",
@@ -337,7 +326,11 @@ mod tests {
         }));
         assert_eq!(
             compute_circuit_size_from_runtime_genome(&genome),
-            [18, 1, 8]
+            [13, 1, 8]
         );
+        // The area counts on both plates: the same size results from listing it once on each.
+        let (inputs, outputs) = feagi_evolutionary::designated_io_lists_for_cloned_circuit(&genome);
+        assert_eq!(inputs, outputs);
+        assert_eq!(inputs.len(), 1);
     }
 }
